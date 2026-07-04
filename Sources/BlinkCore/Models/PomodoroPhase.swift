@@ -34,6 +34,13 @@ public enum PomodoroPhase: String, Codable, CaseIterable, Sendable {
         }
     }
 
+    public var isBreak: Bool {
+        switch self {
+        case .shortBreak, .longBreak: return true
+        default: return false
+        }
+    }
+
     public var glow: Color {
         switch self {
         case .focus:      return .paletteFocusStart

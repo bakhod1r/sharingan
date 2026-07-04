@@ -82,6 +82,48 @@ struct SettingsView: View {
                               isOn: $settings.floatingTimerEnabled)
                 }
 
+                Section("Break ambience") {
+                    ToggleRow(title: "Ambience sound during break",
+                              isOn: $settings.ambienceEnabled)
+                    Picker("Ambience", selection: $settings.ambienceSound) {
+                        ForEach(BreakAmbienceService.Ambience.allCases, id: \.rawValue) { a in
+                            Label(a.label, systemImage: a.systemImage).tag(a.rawValue)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .tint(.white)
+                    HStack(spacing: 8) {
+                        Button("Preview") {
+                            BreakAmbienceService.shared.preview(
+                                BreakAmbienceService.Ambience(rawValue: settings.ambienceSound) ?? .rain
+                            )
+                        }
+                        .buttonStyle(.bordered).tint(.white)
+                        Button("Stop") { BreakAmbienceService.shared.stop() }
+                            .buttonStyle(.bordered).tint(.white)
+                    }
+                }
+
+                Section("Reminders (posture / water / custom)") {
+                    ToggleRow(title: "Reminders enabled",
+                              isOn: $settings.reminderSettings.enabled)
+                    ToggleRow(title: "Only during focus phase",
+                              isOn: $settings.reminderSettings.duringFocusOnly)
+                    ForEach($settings.reminderSettings.reminders) { $item in
+                        ReminderRow(item: $item)
+                    }
+                    Button {
+                        settings.reminderSettings.reminders.append(
+                            .init(kind: .custom, intervalMinutes: 45,
+                                  message: "Custom reminder")
+                        )
+                    } label: {
+                        Label("Add reminder", systemImage: "plus.circle.fill")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .buttonStyle(.plain)
+                }
+
                 Section("Eye exercise sequence") {
                     ToggleRow(title: "20-20-20 rule",
                               isOn: $settings.exerciseSettings.twentyRuleEnabled)

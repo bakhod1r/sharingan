@@ -104,6 +104,8 @@ public final class BlinkCoordinator: ObservableObject {
         installShortcuts()
         syncCamera()
         syncTTS()
+        syncAmbience()
+        syncReminders()
         TTSKalibrator.shared.update(settings: timer.settings.ttsSettings,
                                     rate: timer.settings.ttsRate,
                                     pitch: timer.settings.ttsPitch)
@@ -117,6 +119,29 @@ public final class BlinkCoordinator: ObservableObject {
         }
     }
 
+    private func syncAmbience() {
+        BreakAmbienceService.shared.selected =
+            BreakAmbienceService.Ambience(rawValue: timer.settings.ambienceSound) ?? .rain
+        if timer.settings.ambienceEnabled, timer.phase.isBreak {
+            BreakAmbienceService.shared.start()
+        } else if !timer.settings.ambienceEnabled {
+            BreakAmbienceService.shared.stop()
+        }
+    }
+
+    private func syncReminders() {
+        let failures = timer.phase == .focus || timer.phase == .shortBreak
+        ReminderService.shared.update(timer.settings.reminderSettings,
+                                      focusPhase: timer.phase == .focus)
+    }
+
+    private func startAmbience() {
+        guard timer.settings.ambienceEnabled else { return }
+        BreakAmbienceService.shared.selected =
+            BreakAmbienceService.Ambience(rawValue: timer.settings.ambienceSound) ?? .rain
+        BreakAmbienceService.shared.start()
+    }
+
     private func handlePhaseComplete(_ note: Notification) {
         guard let phase = note.userInfo?["phase"] as? PomodoroPhase else { return }
         switch phase {
@@ -126,6 +151,7 @@ public final class BlinkCoordinator: ObservableObject {
                 body: "Focus complete. Starting break.",
                 identifier: "blink.focusDone")
             AlarmSoundService.shared.playSelected()
+            ReminderService.shared.pauseForBreak()
             floatingController?.hideFloating()
             if let p = breakPresenter, timer.settings.blockScreenDuringBreak {
                 p.presentBreak(
@@ -134,6 +160,7 @@ public final class BlinkCoordinator: ObservableObject {
                 )
             }
             speakBreakStart()
+            startAmbience()
             if timer.settings.cameraEyeTrackingEnabled {
                 EyeTracker.shared.resetBlinkWindow()
             }
@@ -144,7 +171,9 @@ public final class BlinkCoordinator: ObservableObject {
                 identifier: "blink.breakDone")
             AlarmSoundService.shared.playSelected()
             breakPresenter?.dismissAll()
+            BreakAmbienceService.shared.stop()
             speakFocusStart()
+            ReminderService.shared.resumeForFocus()
         case .paused:
             break
         }

@@ -24,6 +24,9 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var alarmSoundEnabled: Bool = true
     public var ttsSettings: TTSAnnouncementsSettings = .init()
     public var exerciseSettings: ExerciseSequenceSettings = .init()
+    public var reminderSettings: ReminderSettings = .init()
+    public var ambienceEnabled: Bool = false
+    public var ambienceSound: String = BreakAmbienceService.Ambience.rain.rawValue
 
     public init() {}
 

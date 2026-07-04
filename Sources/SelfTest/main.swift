@@ -41,6 +41,8 @@ testAlarmSoundEnum()
         testGazeDirection()
         testBreakExerciseModel()
         testStreakRewardCenter()
+        testReminders()
+        testAmbienceEnum()
 
         print("\nPassed: \(passed)  Failed: \(failures)")
         if failures > 0 {
@@ -460,6 +462,42 @@ testAlarmSoundEnum()
 
         center.resetForTesting()
         check(center.unlockedBadges.isEmpty, "reset clears unlocked")
+    }
+
+    static func testReminders() {
+        print("• Reminders")
+        let posture = ReminderItem(kind: .posture, intervalMinutes: 15)
+        check(posture.kind == .posture, "posture kind")
+        check(posture.intervalMinutes == 15, "interval 15")
+        check(posture.intervalSeconds == 900, "intervalSeconds 900")
+        check(posture.enabled == true, "enabled by default")
+        check(posture.resolvedMessage.contains("straight"), "posture default msg")
+        let water = ReminderItem(kind: .water, intervalMinutes: 10,
+                                  message: "Drink water please")
+        check(water.resolvedMessage == "Drink water please",
+              "custom message overrides default")
+        let custom = ReminderItem(kind: .custom, intervalMinutes: 0)
+        check(custom.intervalMinutes == 1, "0 floored to 1")
+
+        var s = ReminderSettings()
+        check(s.enabled == true, "settings enabled default")
+        check(s.duringFocusOnly == true, "focus-only default")
+        check(s.reminders.count == 2, "2 default reminders")
+        check(s.reminders[0].kind == .posture, "first is posture")
+        check(s.reminders[1].kind == .water, "second is water")
+        s.reminders.append(.init(kind: .custom, intervalMinutes: 30,
+                                   message: "Stretch"))
+        check(s.reminders.count == 3, "added custom reminder")
+    }
+
+    static func testAmbienceEnum() {
+        print("• Ambience enum")
+        check(BreakAmbienceService.Ambience.allCases.count == 5, "5 ambience cases")
+        check(BreakAmbienceService.Ambience(rawValue: "rain") == .rain, "rain rawValue")
+        check(BreakAmbienceService.Ambience(rawValue: "whiteNoise") == .whiteNoise, "whiteNoise")
+        check(BreakAmbienceService.Ambience.silent.label == "Silent", "silent label")
+        check(BreakAmbienceService.Ambience.rain.label == "Rain", "rain label")
+        check(BreakAmbienceService.Ambience.lofi.label.contains("Lo-fi"), "lofi label")
     }
 }
 Task { @MainActor in
