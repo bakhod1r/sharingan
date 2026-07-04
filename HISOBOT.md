@@ -157,10 +157,10 @@ d34dcf7 feat: Blink MVP — pomodoro + floating timer + NL parser + hotkeys
 - Hech narsa (gaze + blink + TTS yakunlangan).
 
 ### Phase 3 — qolgan
-- **Posture/water reminder** (#19) yo'q.
+- ~~Posture/water reminder (#19)~~ — **yakunlandi**: `ReminderService` (posture/water/custom) + interval-based UNNotification firing + break'da pause + Settings ReminderRows boshqaruvi.
 
 ### Phase 4 — qolgan features
-- **#14 Break music / white noise / nature sounds** — faqat alarm tone; fon musiqasi yo'q.
+- ~~#14 Break music / white noise / nature sounds~~ — **yakunlandi**: `BreakAmbienceService` (5 ambience) + 4 generated looping `.caf` files + Settings Preview/Stop buttons.
 - **#17 Screen brightness auto** (DisplayServices/gamma ramp) yo'q.
 - **#18 Night Shift scheduler** (CoreBrightness private) yo'q.
 - **#22 Raycast/Alfred/Stream Deck** yo'q.
