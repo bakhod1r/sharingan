@@ -6,7 +6,6 @@ struct BlinkApp: App {
     @StateObject private var timer: PomodoroTimer
     @StateObject private var coordinator: BlinkCoordinator
     @State private var settingsOpen = false
-    @Environment(\.colorScheme) private var colorScheme
 
     init() {
         let timer = PomodoroTimer()
@@ -49,9 +48,8 @@ struct BlinkApp: App {
     }
 
     private var menubarIcon: Image {
-        let theme = colorScheme == .dark ? "black" : "white"
-        let scale = Int(NSScreen.main?.backingScaleFactor ?? 1) == 2 ? 32 : 16
-        if let url = Bundle.module.url(forResource: "MenubarIcons/menubar_\(theme)_\(scale)", withExtension: "png"),
+        let scale = Int(NSScreen.main?.backingScaleFactor ?? 1) >= 2 ? 32 : 16
+        if let url = Bundle.module.url(forResource: "MenubarIcons/menubar_black_\(scale)", withExtension: "png"),
            let nsImage = NSImage(contentsOf: url) {
             nsImage.isTemplate = true
             return Image(nsImage: nsImage)

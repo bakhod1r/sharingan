@@ -10,7 +10,13 @@ public final class PomodoroTimer: ObservableObject {
     @Published public private(set) var isRunning: Bool = false
     @Published public private(set) var cyclesCompletedInRound: Int = 0
     @Published public private(set) var repeatIndex: Int = 0
-    @Published public private(set) var stats: PomodoroStats = .init()
+    @Published public private(set) var stats: PomodoroStats = .init() {
+        didSet { persist(stats) }
+    }
+
+    public func applyRemoteStats(_ value: PomodoroStats) {
+        stats = value
+    }
     @Published public private(set) var isFlashing: Bool = false
 
     @Published public var settings: PomodoroSettings {

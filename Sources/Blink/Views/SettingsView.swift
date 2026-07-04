@@ -257,6 +257,33 @@ struct SettingsView: View {
                               isOn: $settings.globalShortcutsEnabled)
                     shortcutLegend
                 }
+
+                Section("iCloud sync") {
+                    ToggleRow(title: "Sync settings & stats via iCloud",
+                              isOn: $settings.syncEnabled)
+                    HStack {
+                        Image(systemName: syncStatusIcon)
+                            .foregroundStyle(syncStatusColor)
+                        Text("Status: \(SyncService.shared.status.rawValue)")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Push") {
+                            Task { await SyncService.shared.push(timer.settings,
+                                                                  timer.stats) }
+                        }
+                        .buttonStyle(.bordered).tint(.white).disabled(!settings.syncEnabled)
+                        Button("Pull") {
+                            Task {
+                                if let (s, st) = await SyncService.shared.pull() {
+                                    timer.settings = s
+                                    timer.applyRemoteStats(st)
+                                }
+                            }
+                        }
+                        .buttonStyle(.bordered).tint(.white).disabled(!settings.syncEnabled)
+                    }
+                }
             }
             .padding(24)
         }
@@ -311,6 +338,28 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.plain)
             }
+        }
+    }
+
+    private var syncStatusIcon: String {
+        switch SyncService.shared.status {
+        case .idle:     return "checkmark.circle.fill"
+        case .syncing:  return "arrow.triangle.2.circlepath"
+        case .error:    return "exclamationmark.triangle.fill"
+        case .disabled: return "icloud.slash"
+        }
+    }
+
+    private var statusText: String {
+        SyncService.shared.status.rawValue
+    }
+
+    private var syncStatusColor: Color {
+        switch SyncService.shared.status {
+        case .idle:     return .green
+        case .syncing:  return .blue
+        case .error:    return .red
+        case .disabled: return .gray
         }
     }
 

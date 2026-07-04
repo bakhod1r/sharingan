@@ -30,6 +30,7 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var brightnessDimEnabled: Bool = false
     public var brightnessDimPercent: Int = 35
     public var brightnessSmooth: Bool = true
+    public var syncEnabled: Bool = false
 
     public init() {}
 

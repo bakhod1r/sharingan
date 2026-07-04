@@ -106,10 +106,19 @@ public final class BlinkCoordinator: ObservableObject {
         syncTTS()
         syncAmbience()
         syncReminders()
+        syncICloud()
         TTSKalibrator.shared.update(settings: timer.settings.ttsSettings,
                                     rate: timer.settings.ttsRate,
                                     pitch: timer.settings.ttsPitch)
         ExerciseValidator.shared.exercises = timer.settings.exerciseSettings.buildSequence()
+    }
+
+    private func syncICloud() {
+        if timer.settings.syncEnabled {
+            SyncService.shared.enable()
+        } else {
+            SyncService.shared.disable()
+        }
     }
 
     private func syncTTS() {
