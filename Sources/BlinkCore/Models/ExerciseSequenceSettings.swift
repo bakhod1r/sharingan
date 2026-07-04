@@ -11,6 +11,8 @@ public struct ExerciseSequenceSettings: Codable, Equatable, Sendable {
     /// Minimal/normal hold vaqt chegaralari.
     public var minHoldSeconds: Double = 1.0
     public var maxHoldSeconds: Double = 30.0
+    /// How many times the enabled-exercise sequence repeats during a break.
+    public var rounds: Int = 1
 
     public init() {}
 
@@ -29,11 +31,12 @@ public struct ExerciseSequenceSettings: Codable, Equatable, Sendable {
 
     /// Build qilingan exercise sequence — faqat yoqilgan mashqlar, ScaledHold bilan.
     public func buildSequence() -> [BreakExercise] {
-        var out: [BreakExercise] = []
-        if twentyRuleEnabled { out.append(scale(BreakExercise.twentyRule)) }
-        if gazeEnabled      { out.append(scale(BreakExercise.gaze)) }
-        if blinkEnabled     { out.append(scale(BreakExercise.blink)) }
-        return out
+        var one: [BreakExercise] = []
+        if twentyRuleEnabled { one.append(scale(BreakExercise.twentyRule)) }
+        if gazeEnabled      { one.append(scale(BreakExercise.gaze)) }
+        if blinkEnabled     { one.append(scale(BreakExercise.blink)) }
+        let n = max(1, rounds)
+        return n == 1 ? one : Array(repeating: one, count: n).flatMap { $0 }
     }
 
     private func scale(_ ex: BreakExercise) -> BreakExercise {

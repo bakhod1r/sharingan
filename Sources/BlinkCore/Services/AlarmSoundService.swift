@@ -50,10 +50,9 @@ public final class AlarmSoundService {
 
     private func bundledURL(for sound: Sound) -> URL? {
         let name = "alarm_\(sound.rawValue)"
-        if let url = Bundle.main.url(forResource: name, withExtension: "caf") {
-            return url
-        }
-        return Bundle(for: AlarmSoundService.self)
-            .url(forResource: name, withExtension: "caf")
+        // Sounds ship with the BlinkCore target, so resolve via Bundle.module.
+        return Bundle.module.url(forResource: name, withExtension: "caf",
+                                 subdirectory: "Sounds")
+            ?? Bundle.module.url(forResource: name, withExtension: "caf")
     }
 }

@@ -93,11 +93,14 @@ public final class ExerciseValidator: ObservableObject {
         ticker?.invalidate()
         ticker = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             guard let self else { return }
-            guard self.isHolding, let step = self.currentStep else { return }
-            self.heldSeconds += 0.1
-            // Auto-complete hold once full duration elapsed WITHOUT pending retry.
-            if self.heldSeconds >= step.holdSeconds && !self.needsRetry {
-                self.completeStep()
+            // Timer fires on the main run loop, so main-actor state is safe here.
+            MainActor.assumeIsolated {
+                guard self.isHolding, let step = self.currentStep else { return }
+                self.heldSeconds += 0.1
+                // Auto-complete hold once full duration elapsed WITHOUT pending retry.
+                if self.heldSeconds >= step.holdSeconds && !self.needsRetry {
+                    self.completeStep()
+                }
             }
         }
     }

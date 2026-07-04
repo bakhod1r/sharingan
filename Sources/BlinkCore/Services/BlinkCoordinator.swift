@@ -39,12 +39,19 @@ public final class BlinkCoordinator: ObservableObject {
                 self.floatingController?.toggleFloating(timer: self.timer)
             }
         ]
-        shortcuts.update(actions, enabled: true)
+        var bindings: [GlobalShortcut: ShortcutBinding] = [:]
+        for (key, binding) in timer.settings.shortcutBindings {
+            if let shortcut = GlobalShortcut(rawValue: key) { bindings[shortcut] = binding }
+        }
+        shortcuts.update(actions, bindings: bindings, enabled: true)
     }
 
     public func syncAlarm() {
-        AlarmSoundService.shared.selected =
-            AlarmSoundService.Sound(rawValue: timer.settings.alarmSound) ?? .glass
+        // Honor the "alarm sound" toggle centrally: a disabled alarm maps to `.silent`
+        // so every `playSelected()` call site stays a no-op without extra guards.
+        AlarmSoundService.shared.selected = timer.settings.alarmSoundEnabled
+            ? (AlarmSoundService.Sound(rawValue: timer.settings.alarmSound) ?? .glass)
+            : .silent
     }
 
     public func syncCamera() {
@@ -152,8 +159,11 @@ public final class BlinkCoordinator: ObservableObject {
             .receive(on: RunLoop.main)
             .sink { [weak self] running in
                 guard let self else { return }
+                // Floating timer is shown only while a pomodoro is actually running.
                 if running && self.timer.settings.floatingTimerEnabled {
                     self.floatingController?.showFloating(timer: self.timer)
+                } else {
+                    self.floatingController?.hideFloating()
                 }
             }
             .store(in: &cancellables)
@@ -185,19 +195,17 @@ public final class BlinkCoordinator: ObservableObject {
         syncTTS()
         syncAmbience()
         syncReminders()
-        syncICloud()
+        syncLaunchAtLogin()
         TTSKalibrator.shared.update(settings: timer.settings.ttsSettings,
                                     rate: timer.settings.ttsRate,
                                     pitch: timer.settings.ttsPitch)
         ExerciseValidator.shared.exercises = timer.settings.exerciseSettings.buildSequence()
     }
 
-    private func syncICloud() {
-        if timer.settings.syncEnabled {
-            SyncService.shared.enable()
-        } else {
-            SyncService.shared.disable()
-        }
+    private func syncLaunchAtLogin() {
+        let want = timer.settings.launchAtLogin
+        guard want != LaunchAtLoginService.shared.isEnabled else { return }
+        LaunchAtLoginService.shared.setEnabled(want)
     }
 
     private func syncTTS() {
@@ -218,7 +226,6 @@ public final class BlinkCoordinator: ObservableObject {
     }
 
     private func syncReminders() {
-        let failures = timer.phase == .focus || timer.phase == .shortBreak
         ReminderService.shared.update(timer.settings.reminderSettings,
                                       focusPhase: timer.phase == .focus)
     }
@@ -261,6 +268,9 @@ public final class BlinkCoordinator: ObservableObject {
                 title: "Blink",
                 body: "Focus complete. Starting break.",
                 identifier: "blink.focusDone")
+            if let taskID = TaskStore.shared.activeTaskID {
+                TaskStore.shared.incrementPomodoro(taskID)
+            }
             AlarmSoundService.shared.playSelected()
             ReminderService.shared.pauseForBreak()
             floatingController?.hideFloating()

@@ -77,6 +77,13 @@ public struct BreakExercise: Equatable, Sendable, Codable {
             .init(direction: "down_left",   holdSeconds: 4),
             .init(direction: "up_left",     holdSeconds: 4),
             .init(direction: "down_right",  holdSeconds: 4),
+            .init(direction: "center",      holdSeconds: 2),
+            .init(direction: "circle_cw",   holdSeconds: 6,
+                  instruction: "Roll your eyes slowly clockwise"),
+            .init(direction: "circle_ccw",  holdSeconds: 6,
+                  instruction: "Now roll them counter-clockwise"),
+            .init(direction: "figure8",     holdSeconds: 6,
+                  instruction: "Trace a figure 8 with your eyes"),
         ]
     )
 

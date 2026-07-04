@@ -57,6 +57,12 @@
 - **#23 iCloud sync** — `SyncService` CloudKit `CKContainer.default()` → `privateCloudDatabase` → `BlinkZone`. `push/pull` JSON blob, async shim wrappers, Settings Push/Pull UI.
 - **#24 App blocking** — `BlockedApp` (6 preset) + `AppBlockerSettings` + `AppBlockerService` `NSWorkspace.didActivateApplication` observer, hide/terminate on frontmost change, kill-existing sweep. Coordinator break-start/stop.
 
+### Phase 4 — CLI (PLAN'#27)
+
+- **#27 CLI `tired`** — Alohida `tired` executable target (`Sources/tired`). Komandalar: `start [duration]`, `pause`, `resume`, `skip`, `reset/stop`, `add [dur]`, `remove/rm [dur]`, `set [dur]`, `status`, `version`, `help`. `start`/`add`/`set` `NaturalLanguageParser`'ni ishlatadi (`5 min`, `2h 30m`, `5pm`, `15`).
+- **CLIBridge** — CLI ↔ app ko'prigi. CLI → app: `CFNotificationCenterGetDarwinNotifyCenter` Darwin notification'lar. App → CLI: `BlinkCoordinator` har phase/tick o'zgarishida `StateSnapshot` (phase/remaining/running/cycles/streak) `UserDefaults`'ga yozadi, `tired status` shundan o'qib stdout'ga chiqaradi.
+- **App-side wiring** — `BlinkCoordinator.installCLIBridge()` 8 ta komanda observer o'rnatadi (`BlinkApp` `onAppear`'da chaqiriladi).
+
 ### Assetlar
 - AppIcon 16→1024px (PIL) squircle + glass + ring + eye glyph.
 - Break icon (green palette) + menu bar templates.
@@ -79,12 +85,16 @@
 
 ### Git
 ```
-10d4ded feat(blocker): app blocking during break via NSWorkspace monitor
+0b0fa81 feat(cli): add CLI support for controlling Blink timer with `tired` command
+af5200a docs: update HISOBOT — app blocker complete, CLI next
+ddcfb87 feat(blocker): app blocking during break via NSWorkspace monitor
 1cdaed3 docs: update HISOBOT — brightness + iCloud done
-b6bb016 feat(sync): iCloud sync via CloudKit + brightness dim on break
+ccab5d7 feat(sync): iCloud sync via CloudKit + brightness dim on break
+5c57825 feat(brightness): screen dim on break via gamma ramp + settings
 b579bef docs: update HISOBOT.md — reminders + ambience done
+127724f feat(reminders): posture/water/custom reminders + break ambience sounds
 005c0c5 feat(rewards): streak milestones with badge reward banner + live settings sync
-3c4c1c0 docs: update HISOBOT.md
+3c4c1c0 docs: update HISOBOT.md with current state
 2c4dc03 feat(settings): full English localization + TTS kalib + exercise settings
 296283c feat(eye): gaze tracking, exercise validator, camera indicator, floating redesign
 2a62434 feat: camera indicator + exercise sequence view
@@ -95,13 +105,6 @@ d34dcf7 feat: Blink MVP — pomodoro + floating timer + NL parser + hotkeys
 ---
 
 ## ⏳ Qoldi
-
-### Hozirgi navbatda (CLI tool — boshlanmagan)
-- **#27 CLI `tired start 25`** — Terminal'dan pomodoro'ni boshqarish. Reja:
-  - Yangi `tired` executable target `Package.swift`'ga.
-  - Argument parser: `start 25`, `pause`, `resume`, `skip`, `reset`, `status`, `add 5m`.
-  - Inter-process comms: `Darwin Notification` + `UserDefaults`'dan state o'qish (no XPC complexity), yoki `NSXPCConnection` lite.
-  - stdout: `[Blink] Focus 25:00 ● 12 cycles today`.
 
 ### Bekor qilingan
 - ~~Slack/Discord break status~~ — scope'dan tashqari.
@@ -118,6 +121,14 @@ d34dcf7 feat: Blink MVP — pomodoro + floating timer + NL parser + hotkeys
 ---
 
 ## Keyingi navbat
-1. **#27 CLI tool** — `tired` executable + Darwin Notification comms.
-2. **Quality fixes** — Sendable ogohlantirishlari, custom hotkey UI.
-3. **Documentation** — README.md + AGENTS.md (build/test/lint kommandalar).
+
+> Rejalashtirilgan barcha feature'lar (#1–#27, bekor qilinganlardan tashqari) bajarildi.
+> Build ✅ · SelfTest 183/183 ✅. Qolgani — sifat va yetkazib berish.
+
+1. **Quality fixes** — `CameraService`/`EyeTracker` Swift 6 Sendable ogohlantirishlari
+   (`@preconcurrency`), custom hotkey combo UI, alarm `.caf` → `Bundle.module`,
+   `PomodoroSettings` eski flaglar audit.
+2. **`.app` bundle & tarqatish** — `LSUIElement` bundle, launch-at-login (SMAppService),
+   `tired` CLI'ni `PATH`'ga o'rnatish skripti/symlink.
+3. **XCTest** — hozircha `SelfTest` (183) qo'lda; `swift test` (XCTest) qamrovini kengaytirish.
+4. **Documentation** — README.md + AGENTS.md (build/test/lint kommandalar).

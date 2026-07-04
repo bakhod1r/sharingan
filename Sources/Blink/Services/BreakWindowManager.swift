@@ -10,6 +10,19 @@ final class BreakWindowManager: BreakPresenter {
 
     func presentBreak(timer: PomodoroTimer,
                       onTapSkip: @escaping () -> Void) {
+        present(timer: timer, forceExit: false, onTapSkip: onTapSkip)
+    }
+
+    /// Settings "Preview break screen" — always shows the Exit button so the
+    /// preview can be dismissed even when the setting is off.
+    func presentPreview(timer: PomodoroTimer,
+                        onTapSkip: @escaping () -> Void) {
+        present(timer: timer, forceExit: true, onTapSkip: onTapSkip)
+    }
+
+    private func present(timer: PomodoroTimer,
+                         forceExit: Bool,
+                         onTapSkip: @escaping () -> Void) {
         guard !isBlocking else { return }
         isBlocking = true
         NSApp.activate(ignoringOtherApps: true)
@@ -32,7 +45,8 @@ final class BreakWindowManager: BreakPresenter {
                                  onTapSkip: { [weak self] in
                                      self?.dismissAll()
                                      onTapSkip()
-                                 })
+                                 },
+                                 forceExit: forceExit)
                 .environmentObject(timer)
             let hosting = NSHostingView(rootView: view)
             hosting.translatesAutoresizingMaskIntoConstraints = false

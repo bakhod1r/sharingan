@@ -8,3 +8,5 @@
 xcuserdata/
 Pods/
 Package.resolved
+/dist/
+.vscode/

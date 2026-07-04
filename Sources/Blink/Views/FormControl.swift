@@ -5,13 +5,18 @@ struct ToggleRow: View {
     @Binding var isOn: Bool
 
     var body: some View {
-        HStack {
-            Text(title).foregroundStyle(.white)
-            Spacer()
-            Toggle("", isOn: $isOn).toggleStyle(.switch).tint(.white)
+        HStack(spacing: 12) {
+            Text(title)
+                .font(.system(.body, design: .rounded))
+                .foregroundStyle(.white)
+            Spacer(minLength: 8)
+            Toggle("", isOn: $isOn)
+                .toggleStyle(.switch)
+                .tint(.green)
                 .labelsHidden()
+                .controlSize(.small)
         }
-        .padding(.vertical, 8).padding(.horizontal, 12)
+        .frame(minHeight: 24)
     }
 }
 

@@ -54,11 +54,15 @@ struct StatsChartView: View {
                 }
             }
             .chartXAxis {
-                AxisMarks(values: .stride(by: .day)) { value in
+                // Cap the number of labels so 30-day mode doesn't overlap into mush.
+                AxisMarks(values: .automatic(desiredCount: range == .week ? 7 : 6)) { value in
                     if let d = value.as(Date.self) {
-                        let dayName = DateFormatter.shortDay.string(from: d)
-                        AxisValueLabel(dayName)
-                            .foregroundStyle(.white.opacity(0.7))
+                        AxisGridLine().foregroundStyle(Color.white.opacity(0.08))
+                        AxisValueLabel {
+                            Text(xLabel(d))
+                                .font(.system(size: 9, design: .rounded))
+                        }
+                        .foregroundStyle(.white.opacity(0.7))
                     }
                 }
             }
@@ -74,6 +78,12 @@ struct StatsChartView: View {
         .glassRounded(22, material: .regular)
         .liquidShadow(radius: 12, y: 6)
     }
+
+    private func xLabel(_ d: Date) -> String {
+        range == .week
+            ? DateFormatter.shortDay.string(from: d)   // Mon, Tue…
+            : DateFormatter.shortDate.string(from: d)   // 7/4
+    }
 }
 
 private extension DateFormatter {
@@ -81,6 +91,12 @@ private extension DateFormatter {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US")
         f.dateFormat = "EEE"
+        return f
+    }()
+    static let shortDate: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US")
+        f.dateFormat = "M/d"
         return f
     }()
 }

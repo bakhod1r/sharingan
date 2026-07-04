@@ -7,7 +7,10 @@ let package = Package(
     targets: [
         .target(
             name: "BlinkCore",
-            path: "Sources/BlinkCore"
+            path: "Sources/BlinkCore",
+            resources: [
+                .process("Resources")
+            ]
         ),
         .executableTarget(
             name: "Blink",
@@ -26,6 +29,11 @@ let package = Package(
             name: "tired",
             dependencies: ["BlinkCore"],
             path: "Sources/tired"
+        ),
+        .testTarget(
+            name: "BlinkTests",
+            dependencies: ["BlinkCore"],
+            path: "Tests/BlinkTests"
         )
     ]
 )

@@ -14,11 +14,17 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var ttsPitch: Float = 1.0
 
     public var timerMode: TimerMode = .countdown
+    public var timeFormat: TimeDisplayFormat = .minutesSeconds
+    public var showExitBreakButton: Bool = false
+    public var sharinganStyle: SharinganStyle = .classic
     public var theme: BlinkTheme = .liquidGlass
     public var repeatConfig: RepeatConfig = .init()
     public var flashAtFiveSecLeft: Bool = true
     public var floatingTimerEnabled: Bool = true
     public var globalShortcutsEnabled: Bool = true
+    /// Custom hotkey bindings keyed by `GlobalShortcut.rawValue`. Missing entries
+    /// fall back to each shortcut's default combo.
+    public var shortcutBindings: [String: ShortcutBinding] = [:]
     public var cameraEyeTrackingEnabled: Bool = false
     public var alarmSound: String = AlarmSoundService.Sound.glass.rawValue
     public var alarmSoundEnabled: Bool = true
@@ -30,7 +36,7 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var brightnessDimEnabled: Bool = false
     public var brightnessDimPercent: Int = 35
     public var brightnessSmooth: Bool = true
-    public var syncEnabled: Bool = false
+    public var launchAtLogin: Bool = false
     public var appBlockerSettings: AppBlockerSettings = .init()
 
     public init() {}

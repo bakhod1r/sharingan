@@ -1,5 +1,6 @@
 import Testing
-@testable import Blink
+import Foundation
+@testable import BlinkCore
 
 @Suite("Pomodoro models")
 struct PomodoroModelsTests {

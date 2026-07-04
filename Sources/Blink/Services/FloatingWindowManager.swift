@@ -20,17 +20,29 @@ final class FloatingWindowManager: FloatingTimerController {
         panel.level = .floating
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = true
+        // The card draws its own rounded shadow; the OS window shadow would be a
+        // rectangle around the transparent window, so disable it.
+        panel.hasShadow = false
         panel.hidesOnDeactivate = false
         panel.isMovable = true
+        // Borderless panels only drag from their body when this is set.
+        panel.isMovableByWindowBackground = true
         panel.ignoresMouseEvents = false
         panel.isFloatingPanel = true
 
         let view = FloatingTimerView(timer: timer)
             .environmentObject(timer)
         let hosting = NSHostingView(rootView: view)
-        hosting.translatesAutoresizingMaskIntoConstraints = false
         panel.contentView = hosting
+        // Size the panel to the view's intrinsic content (responsive to the
+        // chosen time format), keeping it anchored at its top-left corner.
+        let fitting = hosting.fittingSize
+        if fitting.width > 0, fitting.height > 0 {
+            let topLeft = NSPoint(x: panel.frame.minX,
+                                  y: panel.frame.maxY)
+            panel.setContentSize(fitting)
+            panel.setFrameTopLeftPoint(topLeft)
+        }
         panel.orderFrontRegardless()
         self.panel = panel
     }

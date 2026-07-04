@@ -1,8 +1,18 @@
 import SwiftUI
+import AppKit
 import BlinkCore
+
+/// Forces menu-bar-only behavior (no Dock icon) even when launched unbundled;
+/// the bundled `.app` also declares `LSUIElement` in its Info.plist.
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.accessory)
+    }
+}
 
 @main
 struct BlinkApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var timer: PomodoroTimer
     @StateObject private var coordinator: BlinkCoordinator
     @State private var settingsOpen = false
@@ -27,13 +37,22 @@ struct BlinkApp: App {
                 }
         } label: {
             Label {
-                Text(statusText)
+                Text(menuBarText)
             } icon: {
-                menubarIcon
+                MenuBarLabelIcon()
             }
             .labelStyle(.titleAndIcon)
         }
         .menuBarExtraStyle(.window)
+
+        Window("Blink", id: "main") {
+            MainWindowView(timer: timer)
+                .onAppear { NSApp.setActivationPolicy(.regular) }
+                .onDisappear { NSApp.setActivationPolicy(.accessory) }
+        }
+        .defaultSize(width: 1040, height: 720)
+        .windowResizability(.contentMinSize)
+        .windowStyle(.hiddenTitleBar)
 
         Settings {
             SettingsView(timer: timer, settings: $timer.settings)
@@ -43,18 +62,36 @@ struct BlinkApp: App {
         }
     }
 
+    /// Menu-bar title: just the time. The task name is intentionally omitted —
+    /// long titles overflow the status item.
+    private var menuBarText: String { statusText }
+
     private var statusText: String {
         let s = max(0, timer.remainingSeconds)
         return String(format: "%02d:%02d", Int(s) / 60, Int(s) % 60)
     }
 
-    private var menubarIcon: Image {
-        let scale = Int(NSScreen.main?.backingScaleFactor ?? 1) >= 2 ? 32 : 16
-        if let url = Bundle.module.url(forResource: "MenubarIcons/menubar_black_\(scale)", withExtension: "png"),
-           let nsImage = NSImage(contentsOf: url) {
-            nsImage.isTemplate = true
-            return Image(nsImage: nsImage)
+}
+
+/// Menu-bar glyph that swaps between the dark and light artwork the user
+/// supplied so the eye stays visible on both light and dark menu bars.
+private struct MenuBarLabelIcon: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        Image(nsImage: icon)
+    }
+
+    private var icon: NSImage {
+        // Dark menu bar → light (white) eye; light menu bar → dark (black) eye.
+        let name = colorScheme == .dark ? "menubar_dark" : "menubar_light"
+        if let url = Bundle.module.url(forResource: "MenubarIcons/\(name)", withExtension: "png"),
+           let img = NSImage(contentsOf: url) {
+            let height: CGFloat = 15
+            let aspect = img.size.width / max(img.size.height, 1)
+            img.size = NSSize(width: height * aspect, height: height)
+            return img
         }
-        return Image(systemName: timer.phase.systemImage)
+        return NSImage(systemSymbolName: "eye.fill", accessibilityDescription: "Blink") ?? NSImage()
     }
 }

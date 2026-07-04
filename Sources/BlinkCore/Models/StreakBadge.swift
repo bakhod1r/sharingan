@@ -15,14 +15,14 @@ public struct StreakBadge: Equatable, Sendable {
         self.emoji = emoji
     }
 
-    /// Statik milesstonelar — foydalanuvchi yetganda ochiladi.
+    /// Static milestones — unlocked as the user's streak grows.
     public static let milestones: [StreakBadge] = [
-        .init(id: "first",    title: "Birinchi qadam",  subtitle: "Ilk pomodoro",        days: 1,  emoji: "✨"),
-        .init(id: "week",     title: "Bir hafta",       subtitle: "7 ketma-ket kun",     days: 7,  emoji: "🔥"),
-        .init(id: "fortnight",title: "Ikki hafta",     subtitle: "14 kun",              days: 14, emoji: "⚡"),
-        .init(id: "month",    title: "Bir oy",          subtitle: "30 kun",              days: 30, emoji: "🏆"),
-        .init(id: "quarter",  title: "Chorak",         subtitle: "90 kun",              days: 90, emoji: "💎"),
-        .init(id: "year",     title: "Yil",             subtitle: "365 kun",             days: 365,emoji: "👑"),
+        .init(id: "first",    title: "First step",  subtitle: "First pomodoro",   days: 1,  emoji: "✨"),
+        .init(id: "week",     title: "One week",    subtitle: "7 days in a row",  days: 7,  emoji: "🔥"),
+        .init(id: "fortnight",title: "Two weeks",   subtitle: "14 days",          days: 14, emoji: "⚡"),
+        .init(id: "month",    title: "One month",   subtitle: "30 days",          days: 30, emoji: "🏆"),
+        .init(id: "quarter",  title: "A quarter",   subtitle: "90 days",          days: 90, emoji: "💎"),
+        .init(id: "year",     title: "One year",    subtitle: "365 days",         days: 365,emoji: "👑"),
     ]
 
     /// Berilgan streak uzunligi uchun barcha ochilgan badge'lar.

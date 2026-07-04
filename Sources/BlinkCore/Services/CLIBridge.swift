@@ -92,7 +92,7 @@ public final class DarwinObserver: @unchecked Sendable {
             }
         }
         CFNotificationCenterAddObserver(center,
-                                        Unmanaged.passUnretained(self).toOpaque(),
+                                        ptr,
                                         callback,
                                         name as CFString,
                                         nil,

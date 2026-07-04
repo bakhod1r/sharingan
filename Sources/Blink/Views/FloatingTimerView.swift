@@ -12,16 +12,19 @@ struct FloatingTimerView: View {
         let remaining = max(0, timer.remainingSeconds)
 
         VStack(spacing: 2) {
-            Text(formatted(remaining))
+            Text(timer.settings.timeFormat.string(remaining))
                 .font(.system(size: 30, weight: .semibold,
                               design: .rounded).monospacedDigit())
                 .foregroundStyle(.white)
                 .shadow(color: themeColors.first ?? .white.opacity(0.4),
                         radius: 4, y: 1)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
             Text(timer.phase.label.uppercased())
                 .font(.system(size: 10, weight: .heavy, design: .rounded))
                 .tracking(1.2)
                 .foregroundStyle(themeColors.first ?? .white)
+                .lineLimit(1)
         }
         .padding(.horizontal, 18).padding(.vertical, 12)
         .frame(minWidth: 132)
@@ -67,10 +70,9 @@ struct FloatingTimerView: View {
         }
         .onAppear { animate = true }
         .onChange(of: timer.isFlashing) { _ in animate = timer.isFlashing }
-    }
-
-    private func formatted(_ s: TimeInterval) -> String {
-        let m = Int(s) / 60, sec = Int(s) % 60
-        return String(format: "%02d:%02d", m, sec)
+        // Transparent margin so the card's rounded shadow isn't clipped by the
+        // window edge (which is what made the rectangle appear).
+        .padding(16)
+        .fixedSize()
     }
 }

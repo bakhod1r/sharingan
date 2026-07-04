@@ -9,7 +9,7 @@ public final class TTSService {
 
     public init() {}
 
-    public func speak(_ text: String, lang: String = "uz-UZ",
+    public func speak(_ text: String, lang: String = "en-US",
                rate: Float = 0.5, pitch: Float = 1.0) {
         guard synth.isSpeaking == false else { return }
         let utter = AVSpeechUtterance(string: text)

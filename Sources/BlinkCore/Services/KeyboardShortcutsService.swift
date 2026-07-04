@@ -22,13 +22,17 @@ public enum GlobalShortcut: String, CaseIterable, Sendable {
         UInt32(controlKey | optionKey)
     }
 
+    public var defaultBinding: ShortcutBinding {
+        ShortcutBinding(keyCode: defaultKeyCode, modifiers: defaultModifiers)
+    }
+
     public var label: String {
         switch self {
-        case .toggle:        return "Start / Pauza"
-        case .skip:         return "O'tkazib yubor"
+        case .toggle:        return "Start / Pause"
+        case .skip:         return "Skip"
         case .reset:        return "Reset"
-        case .addFive:      return "+5 daqiqa"
-        case .showFloating: return "Suzuvchi taymerni ko'rsat"
+        case .addFive:      return "+5 minutes"
+        case .showFloating: return "Show floating timer"
         }
     }
 }
@@ -53,11 +57,13 @@ public final class KeyboardShortcutsService {
 
     public init() {}
 
-    public func update(_ actions: [GlobalShortcut: Action], enabled: Bool) {
+    public func update(_ actions: [GlobalShortcut: Action],
+                       bindings: [GlobalShortcut: ShortcutBinding] = [:],
+                       enabled: Bool) {
         unregister()
         self.enabled = enabled
         guard enabled else { return }
-        register(actions)
+        register(actions, bindings: bindings)
     }
 
     public func unregister() {
@@ -80,7 +86,8 @@ public final class KeyboardShortcutsService {
 
     // MARK: - Registration
 
-    private func register(_ actions: [GlobalShortcut: Action]) {
+    private func register(_ actions: [GlobalShortcut: Action],
+                          bindings: [GlobalShortcut: ShortcutBinding]) {
         ensureEventHandlerInstalled()
 
         for shortcut in GlobalShortcut.allCases {
@@ -89,11 +96,15 @@ public final class KeyboardShortcutsService {
             nextID &+= 1
             actionsByID[actionID] = action
 
+            // Use the user's custom binding when present (and valid); otherwise default.
+            let binding = bindings[shortcut].flatMap { $0.isValid ? $0 : nil }
+                ?? shortcut.defaultBinding
+
             let id = EventHotKeyID(signature: fourCharCode("blnk"),
                                    id: actionID)
             var ref: EventHotKeyRef?
-            let status = RegisterEventHotKey(shortcut.defaultKeyCode,
-                                             shortcut.defaultModifiers,
+            let status = RegisterEventHotKey(binding.keyCode,
+                                             binding.modifiers,
                                              id,
                                              GetApplicationEventTarget(),
                                              0,

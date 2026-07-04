@@ -22,6 +22,6 @@ struct GlassButton: View {
             .opacity(isEnabled ? 1 : 0.45)
         }
         .disabled(!isEnabled)
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
     }
 }

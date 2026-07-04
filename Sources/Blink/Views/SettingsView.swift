@@ -1,17 +1,142 @@
 import SwiftUI
+import AppKit
 import BlinkCore
 
 struct SettingsView: View {
     @ObservedObject var timer: PomodoroTimer
     @Binding var settings: PomodoroSettings
-    @Environment(\.dismiss) private var dismiss
     @State private var editingInstructionDirection: String?
+    @State private var openCategory: SettingsCategory?
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                header
+        ZStack {
+            if let cat = openCategory {
+                categoryPage(cat)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            } else {
+                rootList
+                    .transition(.opacity)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .animation(.easeInOut(duration: 0.26), value: openCategory)
+    }
 
+    // MARK: - Root: category list (macOS System Settings style)
+
+    private var rootList: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                rootHeader
+                SettingsCard {
+                    categoryRow(.timer)
+                    categoryRow(.breaks)
+                    categoryRow(.focus)
+                    categoryRow(.eyeCare)
+                    categoryRow(.general)
+                    categoryRow(.voice)
+                    categoryRow(.shortcuts)
+                }
+            }
+            .frame(maxWidth: 600)
+            .frame(maxWidth: .infinity)
+            .padding(24)
+        }
+    }
+
+    private var rootHeader: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "eye.fill")
+                .font(.system(size: 26, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 62, height: 62)
+                .background(RoundedRectangle(cornerRadius: 15, style: .continuous)
+                    .fill(LinearGradient(colors: timer.settings.theme.gradient,
+                                         startPoint: .topLeading, endPoint: .bottomTrailing)))
+            Text("Settings")
+                .font(.system(.largeTitle, design: .rounded).weight(.bold))
+                .foregroundStyle(.white)
+            Text("Tune your focus sessions, breaks, and eye-care.")
+                .font(.system(.callout, design: .rounded))
+                .foregroundStyle(.white.opacity(0.6))
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 8).padding(.bottom, 6)
+    }
+
+    // MARK: - Category detail page
+
+    private func categoryPage(_ cat: SettingsCategory) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                categoryHeader(cat)
+                categorySections(cat)
+            }
+            .frame(maxWidth: 600)
+            .frame(maxWidth: .infinity)
+            .padding(24)
+        }
+    }
+
+    private func categoryHeader(_ cat: SettingsCategory) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Button { openCategory = nil } label: {
+                HStack(spacing: 3) {
+                    Image(systemName: "chevron.left").font(.system(size: 13, weight: .bold))
+                    Text("Settings").font(.system(.callout, design: .rounded).weight(.medium))
+                }
+                .foregroundStyle(.white.opacity(0.85))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.pressableSubtle)
+
+            HStack(spacing: 12) {
+                Image(systemName: cat.icon)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 34, height: 34)
+                    .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(cat.tint.gradient))
+                Text(cat.title)
+                    .font(.system(.largeTitle, design: .rounded).weight(.bold))
+                    .foregroundStyle(.white)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func categoryRow(_ cat: SettingsCategory) -> some View {
+        Button { openCategory = cat } label: {
+            HStack(spacing: 12) {
+                Image(systemName: cat.icon)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 30, height: 30)
+                    .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(cat.tint.gradient))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(cat.title)
+                        .font(.system(.body, design: .rounded).weight(.medium))
+                        .foregroundStyle(.white)
+                    Text(cat.subtitle)
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.5))
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.35))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.pressableSubtle)
+    }
+
+    @ViewBuilder
+    private func categorySections(_ cat: SettingsCategory) -> some View {
+        switch cat {
+        case .timer:
                 Section("Timer mode") {
                     Picker("Mode", selection: $settings.timerMode) {
                         ForEach(TimerMode.allCases, id: \.self) { mode in
@@ -23,6 +148,14 @@ struct SettingsView: View {
                     Picker("Theme", selection: $settings.theme) {
                         ForEach(BlinkTheme.allCases, id: \.self) { theme in
                             Text(theme.label).tag(theme)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .tint(.white)
+
+                    Picker("Time format", selection: $settings.timeFormat) {
+                        ForEach(TimeDisplayFormat.allCases, id: \.self) { f in
+                            Text(f.label).tag(f)
                         }
                     }
                     .pickerStyle(.menu)
@@ -68,6 +201,7 @@ struct SettingsView: View {
                     }
                 }
 
+        case .breaks:
                 Section("Break message") {
                     TextField("Break message text",
                               text: $settings.breakMessage, axis: .vertical)
@@ -75,11 +209,13 @@ struct SettingsView: View {
                         .lineLimit(2...4)
                 }
 
-                Section("Break tests") {
+                Section("Break") {
                     ToggleRow(title: "Block screen during break",
                               isOn: $settings.blockScreenDuringBreak)
-                    ToggleRow(title: "Floating timer",
+                    ToggleRow(title: "Floating timer (while running)",
                               isOn: $settings.floatingTimerEnabled)
+                    ToggleRow(title: "Show \"Exit break\" button",
+                              isOn: $settings.showExitBreakButton)
                 }
 
                 Section("Break ambience") {
@@ -120,6 +256,7 @@ struct SettingsView: View {
                               isOn: $settings.brightnessSmooth)
                 }
 
+        case .focus:
                 Section("App blocking (during break)") {
                     ToggleRow(title: "Block distracting apps on break",
                               isOn: $settings.appBlockerSettings.enabled)
@@ -178,6 +315,7 @@ struct SettingsView: View {
                     .buttonStyle(.plain)
                 }
 
+        case .eyeCare:
                 Section("Eye exercise sequence") {
                     ToggleRow(title: "20-20-20 rule",
                               isOn: $settings.exerciseSettings.twentyRuleEnabled)
@@ -185,6 +323,39 @@ struct SettingsView: View {
                               isOn: $settings.exerciseSettings.gazeEnabled)
                     ToggleRow(title: "Blink exercise",
                               isOn: $settings.exerciseSettings.blinkEnabled)
+
+                    StepperRow(title: "Exercise rounds",
+                               value: Binding(get: { settings.exerciseSettings.rounds },
+                                              set: { settings.exerciseSettings.rounds = max(1, $0) }),
+                               unit: "×")
+
+                    HStack {
+                        Text("Sharingan eye")
+                            .font(.system(.body, design: .rounded))
+                        Spacer()
+                        Image(nsImage: sharinganThumb(settings.sharinganStyle))
+                            .resizable().frame(width: 26, height: 26)
+                        Picker("", selection: $settings.sharinganStyle) {
+                            ForEach(SharinganStyle.allCases) { s in
+                                Text(s.label).tag(s)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .tint(.white)
+                        .fixedSize()
+                    }
+
+                    Button {
+                        BreakWindowManager.shared.presentPreview(timer: timer) {
+                            BreakWindowManager.shared.dismissAll()
+                        }
+                    } label: {
+                        Label("Preview break screen", systemImage: "eye.fill")
+                            .font(.system(.callout, design: .rounded).weight(.medium))
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.white)
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Step hold scale: \(String(format: "%.2f", settings.exerciseSettings.stepHoldScale))×")
                             .font(.caption.weight(.medium))
@@ -222,11 +393,19 @@ struct SettingsView: View {
                     }
                 }
 
+        case .general:
                 Section("Auto-start") {
                     ToggleRow(title: "Auto-start focus",
                               isOn: $settings.autoStartFocus)
                     ToggleRow(title: "Auto-start break",
                               isOn: $settings.autoStartBreak)
+                    ToggleRow(title: "Launch at login",
+                              isOn: $settings.launchAtLogin)
+                    if !LaunchAtLoginService.shared.isSupported {
+                        Text("Login item works only when running the packaged Blink.app.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 Section("Notifications") {
@@ -246,6 +425,7 @@ struct SettingsView: View {
                     .tint(.white)
                 }
 
+        case .voice:
                 Section("Voice guidance (TTS)") {
                     ToggleRow(title: "Spoken instructions",
                               isOn: $settings.ttsSettings.enabled)
@@ -290,71 +470,62 @@ struct SettingsView: View {
                     }
                 }
 
+        case .shortcuts:
                 Section("Global shortcuts") {
                     ToggleRow(title: "Global keyboard shortcuts",
                               isOn: $settings.globalShortcutsEnabled)
                     shortcutLegend
                 }
-
-                Section("iCloud sync") {
-                    ToggleRow(title: "Sync settings & stats via iCloud",
-                              isOn: $settings.syncEnabled)
-                    HStack {
-                        Image(systemName: syncStatusIcon)
-                            .foregroundStyle(syncStatusColor)
-                        Text("Status: \(SyncService.shared.status.rawValue)")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Button("Push") {
-                            Task { await SyncService.shared.push(timer.settings,
-                                                                  timer.stats) }
-                        }
-                        .buttonStyle(.bordered).tint(.white).disabled(!settings.syncEnabled)
-                        Button("Pull") {
-                            Task {
-                                if let (s, st) = await SyncService.shared.pull() {
-                                    timer.settings = s
-                                    timer.applyRemoteStats(st)
-                                }
-                            }
-                        }
-                        .buttonStyle(.bordered).tint(.white).disabled(!settings.syncEnabled)
-                    }
-                }
-            }
-            .padding(24)
-        }
-        .frame(width: 480, height: 760)
-        .liquidShadow(radius: 28)
-        .glassRounded(28, material: .regular)
-        .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Close") { dismiss() }
-                    .buttonStyle(.borderedProminent)
-            }
         }
     }
 
-    private var header: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                Circle().fill(Color.white.opacity(0.1))
-                    .frame(width: 48, height: 48)
-                Image(systemName: "slider.horizontal.3")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(.white)
-            }
-            .glassCapsule()
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Settings")
-                    .font(.system(.title2, design: .rounded).weight(.bold))
-                StreakBadgeView(streak: timer.stats.streak)
-                    .padding(.top, 4)
+    /// Groups of settings, shown as drill-down rows on the root Settings screen.
+    enum SettingsCategory: String, CaseIterable, Identifiable, Hashable {
+        case timer, breaks, focus, eyeCare, general, voice, shortcuts
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .timer:     return "Timer"
+            case .breaks:    return "Breaks"
+            case .focus:     return "Focus & Blocking"
+            case .eyeCare:   return "Eye Care"
+            case .general:   return "General"
+            case .voice:     return "Voice Guidance"
+            case .shortcuts: return "Shortcuts"
             }
         }
-        .onDisappear {
-            editingInstructionDirection = nil
+        var subtitle: String {
+            switch self {
+            case .timer:     return "Durations, mode, repeat"
+            case .breaks:    return "Break screen, ambience, brightness"
+            case .focus:     return "App blocking, reminders"
+            case .eyeCare:   return "Exercises, camera tracking"
+            case .general:   return "Auto-start, sound, notifications"
+            case .voice:     return "Spoken instructions"
+            case .shortcuts: return "Global keyboard shortcuts"
+            }
+        }
+        var icon: String {
+            switch self {
+            case .timer:     return "timer"
+            case .breaks:    return "cup.and.saucer.fill"
+            case .focus:     return "hand.raised.fill"
+            case .eyeCare:   return "eye.fill"
+            case .general:   return "gearshape.fill"
+            case .voice:     return "waveform"
+            case .shortcuts: return "keyboard.fill"
+            }
+        }
+        var tint: Color {
+            switch self {
+            case .timer:     return .blue
+            case .breaks:    return .teal
+            case .focus:     return .indigo
+            case .eyeCare:   return .green
+            case .general:   return Color(white: 0.5)
+            case .voice:     return .orange
+            case .shortcuts: return .purple
+            }
         }
     }
 
@@ -379,57 +550,50 @@ struct SettingsView: View {
         }
     }
 
-    private var syncStatusIcon: String {
-        switch SyncService.shared.status {
-        case .idle:     return "checkmark.circle.fill"
-        case .syncing:  return "arrow.triangle.2.circlepath"
-        case .error:    return "exclamationmark.triangle.fill"
-        case .disabled: return "icloud.slash"
-        }
-    }
-
-    private var statusText: String {
-        SyncService.shared.status.rawValue
-    }
-
-    private var syncStatusColor: Color {
-        switch SyncService.shared.status {
-        case .idle:     return .green
-        case .syncing:  return .blue
-        case .error:    return .red
-        case .disabled: return .gray
-        }
-    }
-
     private var shortcutLegend: some View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(GlobalShortcut.allCases, id: \.self) { sh in
-                HStack {
-                    Text(sh.label).foregroundStyle(.white.opacity(0.85))
-                    Spacer()
-                    Text(shortcutHint(sh))
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                }
+                ShortcutRecorderRow(
+                    title: sh.label,
+                    binding: effectiveBinding(sh),
+                    isCustom: settings.shortcutBindings[sh.rawValue] != nil,
+                    onCapture: { combo in
+                        settings.shortcutBindings[sh.rawValue] = combo
+                    },
+                    onReset: {
+                        settings.shortcutBindings[sh.rawValue] = nil
+                    })
+                .foregroundStyle(.white.opacity(0.85))
+                .disabled(!settings.globalShortcutsEnabled)
+                .opacity(settings.globalShortcutsEnabled ? 1 : 0.5)
             }
+            Text("Click a combo, then press the new keys (needs at least one modifier). Esc cancels.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
         .glassRounded(18, material: .thin)
         .padding(14)
     }
 
-    private func shortcutHint(_ sh: GlobalShortcut) -> String {
-        "⌃⌥\(sh.rawValue.uppercased())"
+    private func effectiveBinding(_ sh: GlobalShortcut) -> ShortcutBinding {
+        if let b = settings.shortcutBindings[sh.rawValue], b.isValid { return b }
+        return sh.defaultBinding
+    }
+
+    private func sharinganThumb(_ style: SharinganStyle) -> NSImage {
+        SharinganAssets.image(style)
+            ?? NSImage(systemSymbolName: "eye.fill", accessibilityDescription: nil)
+            ?? NSImage()
     }
 
     private func Section<C: View>(_ title: LocalizedStringKey,
                                   @ViewBuilder content: () -> C) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 7) {
             Text(title)
-                .font(.system(.headline, design: .rounded).weight(.semibold))
-                .foregroundStyle(.white.opacity(0.75))
-            VStack(spacing: 4) { content() }
-                .glassRounded(18, material: .thin)
-                .padding(8)
+                .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                .foregroundStyle(.white.opacity(0.5))
+                .padding(.leading, 6)
+            SettingsCard { content() }
         }
     }
 }
@@ -464,12 +628,17 @@ private struct StepperRow: View {
     let unit: String
 
     var body: some View {
-        HStack {
-            Text(title).foregroundStyle(.white)
-            Spacer()
-            Stepper("\(value) \(unit)", value: $value, in: 1...600)
-                .tint(.white)
+        HStack(spacing: 12) {
+            Text(title)
+                .font(.system(.body, design: .rounded))
+                .foregroundStyle(.white)
+            Spacer(minLength: 8)
+            Text("\(value) \(unit)")
+                .font(.system(.body, design: .rounded).monospacedDigit())
+                .foregroundStyle(.white.opacity(0.6))
+            Stepper("", value: $value, in: 1...600)
+                .labelsHidden()
         }
-        .padding(.vertical, 8).padding(.horizontal, 12)
+        .frame(minHeight: 24)
     }
 }

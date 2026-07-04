@@ -27,8 +27,8 @@
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSCameraUsageDescription</key>
-    <string>Blink ko'z mashqlarini bajarishni tekshirish uchun kamera ishlatadi (faqat tanaffus vaqtida, privat).</string>
+    <string>Blink uses the camera to check your eye exercises during breaks (break time only, private).</string>
     <key>NSUserNotificationsUsageDescription</key>
-    <string>Blink pomodoro va tanaffus boshlanishini eslatish uchun bildirishnomalar yuboradi.</string>
+    <string>Blink sends notifications to remind you when pomodoros and breaks start.</string>
 </dict>
 </plist>
