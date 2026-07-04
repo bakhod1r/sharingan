@@ -40,6 +40,7 @@ testRepeatConfig()
 testAlarmSoundEnum()
         testGazeDirection()
         testBreakExerciseModel()
+        testStreakRewardCenter()
 
         print("\nPassed: \(passed)  Failed: \(failures)")
         if failures > 0 {
@@ -403,6 +404,62 @@ testAlarmSoundEnum()
         check(BreakExercise.library().count == 3, "library has 3 exercises")
         check(BreakExercise.library() == [.twentyRule, .gaze, .blink],
               "library ordering")
+    }
+
+    static func testStreakRewardCenter() {
+        print("• StreakRewardCenter")
+        let center = StreakRewardCenter.shared
+        center.resetForTesting()
+
+        center.evaluate(streak: 0)
+        check(center.pendingReward == nil, "no reward at streak 0")
+        check(center.unlockedBadges.isEmpty, "no unlocked at streak 0")
+
+        center.evaluate(streak: 1)
+        check(center.pendingReward != nil, "reward at streak 1")
+        check(center.pendingReward?.badge.id == "first", "first badge id")
+        check(center.unlockedBadges.count == 1, "1 unlocked after streak 1")
+
+        center.dismiss()
+        check(center.pendingReward == nil, "dismissed clears pending")
+
+        // Re-evaluating same streak should not re-fire.
+        center.evaluate(streak: 1)
+        check(center.pendingReward == nil, "no re-fire on same streak")
+
+        // Jump to 7 → week badge unlocked.
+        center.evaluate(streak: 7)
+        check(center.pendingReward != nil, "reward at streak 7")
+        check(center.pendingReward?.badge.id == "week", "week badge id")
+        check(center.unlockedBadges.count == 2, "2 unlocked after streak 7")
+
+        center.dismiss()
+
+        // Jump to 30 → month badge unlocked, skipping 14 is fine but only
+        // the highest newly-unlocked milestone shows.
+        center.evaluate(streak: 30)
+        check(center.pendingReward != nil, "reward at streak 30")
+        check(center.pendingReward?.badge.id == "month", "month badge id")
+
+        // Verify all milestones earned for streak 30.
+        let earned30 = StreakBadge.earned(forStreak: 30)
+        check(earned30.map { $0.id } == ["first", "week", "fortnight", "month"],
+              "30-day earns 4 badges")
+
+        // Next milestone after 30 is quarter (90).
+        check(StreakBadge.next(forStreak: 30)?.id == "quarter",
+              "next after 30 is quarter")
+
+        // Next milestone after 0 is first (1).
+        check(StreakBadge.next(forStreak: 0)?.id == "first",
+              "next after 0 is first")
+
+        // No next after 365.
+        check(StreakBadge.next(forStreak: 400) == nil,
+              "no next after 365+")
+
+        center.resetForTesting()
+        check(center.unlockedBadges.isEmpty, "reset clears unlocked")
     }
 }
 Task { @MainActor in

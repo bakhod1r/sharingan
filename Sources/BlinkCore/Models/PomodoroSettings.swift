@@ -10,7 +10,6 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var notifyFiveMinLeft: Bool = true
     public var blockScreenDuringBreak: Bool = true
     public var breakMessage: String = "Close your eyes, breathe, look far away."
-    public var ttsEnabled: Bool = true
     public var ttsRate: Float = 0.5
     public var ttsPitch: Float = 1.0
 

@@ -78,19 +78,43 @@ public final class BlinkCoordinator: ObservableObject {
             .sink { _ in NotificationService.shared.focusFiveMinLeft() }
             .store(in: &cancellables)
 
+        NotificationCenter.default.publisher(for: .streakUpdated)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] note in self?.handleStreakUpdate(note) }
+            .store(in: &cancellables)
+
         timer.$isRunning
             .receive(on: RunLoop.main)
             .sink { [weak self] running in
                 guard let self else { return }
                 if running && self.timer.settings.floatingTimerEnabled {
                     self.floatingController?.showFloating(timer: self.timer)
-                } else if !running {
-                    // Keep floating visible while paused so the user can
-                    // re-resume at a glance; hide only when stopped via
-                    // floating toggle.
                 }
             }
             .store(in: &cancellables)
+
+        timer.$settings
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.syncAll() }
+            .store(in: &cancellables)
+    }
+
+    private func syncAll() {
+        syncAlarm()
+        installShortcuts()
+        syncCamera()
+        syncTTS()
+        TTSKalibrator.shared.update(settings: timer.settings.ttsSettings,
+                                    rate: timer.settings.ttsRate,
+                                    pitch: timer.settings.ttsPitch)
+        ExerciseValidator.shared.exercises = timer.settings.exerciseSettings.buildSequence()
+    }
+
+    private func syncTTS() {
+        guard timer.settings.ttsSettings.enabled else {
+            TTSService.shared.stop()
+            return
+        }
     }
 
     private func handlePhaseComplete(_ note: Notification) {
@@ -127,7 +151,7 @@ public final class BlinkCoordinator: ObservableObject {
     }
 
     private func speakBreakStart() {
-        guard timer.settings.ttsEnabled else { return }
+        guard timer.settings.ttsSettings.enabled else { return }
         TTSService.shared.speak(
             "Break started. \(timer.settings.breakMessage)",
             rate: timer.settings.ttsRate,
@@ -135,10 +159,28 @@ public final class BlinkCoordinator: ObservableObject {
     }
 
     private func speakFocusStart() {
-        guard timer.settings.ttsEnabled else { return }
+        guard timer.settings.ttsSettings.enabled else { return }
         TTSService.shared.speak(
             "Break complete. You can return to focus.",
             rate: timer.settings.ttsRate,
             pitch: timer.settings.ttsPitch)
+    }
+
+    private func handleStreakUpdate(_ note: Notification) {
+        guard let streak = note.userInfo?["streak"] as? StreakStore else { return }
+        StreakRewardCenter.shared.evaluate(streak: streak.currentStreak)
+        if let reward = StreakRewardCenter.shared.pendingReward {
+            NotificationService.shared.notify(
+                title: "Blink — Milestone achieved",
+                body: "\(reward.badge.emoji) \(reward.badge.title): \(reward.badge.subtitle)",
+                identifier: "blink.streak.\(reward.badge.id)"
+            )
+            if timer.settings.ttsSettings.enabled {
+                TTSService.shared.speak(
+                    "Achievement unlocked: \(reward.badge.title). \(reward.badge.subtitle)",
+                    rate: timer.settings.ttsRate,
+                    pitch: timer.settings.ttsPitch)
+            }
+        }
     }
 }
