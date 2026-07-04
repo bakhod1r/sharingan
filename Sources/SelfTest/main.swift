@@ -404,7 +404,7 @@ testBrightnessSettings()
         check(BreakExerciseStep(direction: "unknown", holdSeconds: 1).targetGaze == .center,
               "unknown → .center fallback")
         check(BreakExercise.twentyRule.steps.count == 2, "20-20-20 has 2 steps")
-        check(BreakExercise.gaze.steps.count == 12, "gaze has 12 steps")
+        check(BreakExercise.gaze.steps.count == 16, "gaze has 16 steps")
         check(BreakExercise.blink.steps.count == 2, "blink has 2 steps")
         check(BreakExercise.library().count == 3, "library has 3 exercises")
         check(BreakExercise.library() == [.twentyRule, .gaze, .blink],

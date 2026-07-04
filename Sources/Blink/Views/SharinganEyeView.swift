@@ -2,6 +2,8 @@ import SwiftUI
 import AppKit
 import BlinkCore
 
+// MARK: - Asset cache
+
 /// Loads and caches the bundled Sharingan iris PNGs (chosen in Settings).
 enum SharinganAssets {
     private static var cache: [SharinganStyle: NSImage] = [:]
@@ -16,6 +18,8 @@ enum SharinganAssets {
         return img
     }
 }
+
+// MARK: - Almond eye shape
 
 /// A sharp, tilted almond eye — drawn as the LEFT eye: the outer corner sits at
 /// `minX` (high) and the inner/nasal corner at `maxX` (low), so a mirrored pair
@@ -36,92 +40,11 @@ struct AlmondEyeShape: Shape {
     }
 }
 
-/// A single Sharingan eye drawn in SwiftUI — almond sclera, red iris, black
-/// pupil, three rotating tomoe, on a dark eyelid surround (matches the video).
-/// The iris translates within the almond to "look" toward `gaze`.
-struct SharinganEyeView: View {
-    /// Normalized look direction (-1…1 on each axis).
-    var gaze: GazeDirection
-    /// Tomoe rotation, degrees.
-    var spin: Double
-    /// Eye height; the almond is ~2× as wide.
-    var size: CGFloat = 96
-    /// Mirror horizontally (for the right eye).
-    var mirrored: Bool = false
-    /// Which Sharingan artwork to show as the iris.
-    var style: SharinganStyle = .classic
-
-    var body: some View {
-        let w = size * 1.7
-        ZStack {
-            // Bold black eyelid surround, so the eye reads on any background.
-            AlmondEyeShape()
-                .fill(Color.black)
-                .blur(radius: size * 0.05)
-                .scaleEffect(1.14)
-
-            // Sclera + iris, clipped to the almond. Pure white interior.
-            ZStack {
-                AlmondEyeShape().fill(Color.white)
-                // Small iris that travels across the sclera — the wider swing
-                // makes the exercise's look-direction unmistakable.
-                iris
-                    .offset(x: -w * 0.06 + CGFloat(gaze.dx) * size * 0.42,
-                            y:  CGFloat(gaze.dy) * size * 0.22)
-            }
-            .clipShape(AlmondEyeShape())
-
-            // Crisp dark rim.
-            AlmondEyeShape()
-                .stroke(Color.black, lineWidth: size * 0.05)
-        }
-        .frame(width: w, height: size)
-        .scaleEffect(x: mirrored ? -1 : 1, y: 1)
-        .shadow(color: .black.opacity(0.4), radius: 8, y: 4)
-    }
-
-    @ViewBuilder
-    private var iris: some View {
-        // Small iris — a compact Sharingan dot with plenty of sclera around it.
-        let d = size * 0.40
-        if let img = SharinganAssets.image(style) {
-            Image(nsImage: img)
-                .resizable()
-                .interpolation(.high)
-                .scaledToFit()
-                .rotationEffect(.degrees(spin * 0.12))
-                .frame(width: d, height: d)
-        } else {
-            drawnIris(d)
-        }
-    }
-
-    /// Vector fallback if the PNG can't be loaded.
-    private func drawnIris(_ d: CGFloat) -> some View {
-        ZStack {
-            Circle()
-                .fill(RadialGradient(colors: [Color(red: 0.90, green: 0.14, blue: 0.14),
-                                              Color(red: 0.52, green: 0.02, blue: 0.02)],
-                                     center: .center, startRadius: 1, endRadius: d * 0.55))
-            Circle().stroke(Color.black.opacity(0.95), lineWidth: d * 0.06)
-            ForEach(0..<3, id: \.self) { i in
-                Tomoe()
-                    .fill(Color.black)
-                    .frame(width: d * 0.32, height: d * 0.32)
-                    .offset(y: -d * 0.30)
-                    .rotationEffect(.degrees(Double(i) * 120 + spin))
-            }
-            Circle().fill(Color.black).frame(width: d * 0.24, height: d * 0.24)
-            Circle().fill(Color.white.opacity(0.8))
-                .frame(width: d * 0.09, height: d * 0.09)
-                .offset(x: -d * 0.11, y: -d * 0.11)
-        }
-        .frame(width: d, height: d)
-    }
-}
+// MARK: - Tomoe shape
 
 /// A comma-shaped tomoe (magatama): a round head with a curled tail.
-struct Tomoe: Shape {
+/// One of three sits at 120° intervals around the pupil.
+struct TomoeShape: Shape {
     func path(in rect: CGRect) -> Path {
         var p = Path()
         let w = rect.width
@@ -140,6 +63,191 @@ struct Tomoe: Shape {
         return p
     }
 }
+
+// MARK: - Sharingan iris
+
+/// The red Sharingan iris: radial red gradient, black pupil, three rotating
+/// tomoe, glossy highlight, soft inner shadow. Falls back to PNG if bundled.
+struct SharinganIris: View {
+    /// Iris diameter.
+    var diameter: CGFloat
+    /// Tomoe rotation angle (degrees) — driven externally for continuous spin.
+    var spin: Double
+    /// Which Sharingan artwork to show.
+    var style: SharinganStyle = .classic
+
+    var body: some View {
+        if let img = SharinganAssets.image(style) {
+            // Bundled artwork — overlay glossy highlight on top.
+            Image(nsImage: img)
+                .resizable()
+                .interpolation(.high)
+                .scaledToFit()
+                .rotationEffect(.degrees(spin * 0.12))
+                .frame(width: diameter, height: diameter)
+                .overlay(glossHighlight)
+                .overlay(innerShadow)
+        } else {
+            drawnIris
+        }
+    }
+
+    /// Vector-drawn iris used when no PNG is bundled.
+    private var drawnIris: some View {
+        ZStack {
+            // Red radial gradient base
+            Circle()
+                .fill(RadialGradient(
+                    colors: [
+                        Color(red: 0.95, green: 0.18, blue: 0.18),
+                        Color(red: 0.78, green: 0.06, blue: 0.06),
+                        Color(red: 0.52, green: 0.02, blue: 0.02),
+                    ],
+                    center: .center,
+                    startRadius: 0,
+                    endRadius: diameter * 0.55
+                ))
+
+            // Black ring around iris edge
+            Circle()
+                .stroke(Color.black.opacity(0.95), lineWidth: diameter * 0.06)
+
+            // Three rotating tomoe
+            ForEach(0..<3, id: \.self) { i in
+                TomoeShape()
+                    .fill(Color.black)
+                    .frame(width: diameter * 0.32, height: diameter * 0.32)
+                    .offset(y: -diameter * 0.30)
+                    .rotationEffect(.degrees(Double(i) * 120 + spin))
+            }
+
+            // Black pupil
+            Circle()
+                .fill(Color.black)
+                .frame(width: diameter * 0.24, height: diameter * 0.24)
+
+            // Glossy highlight (upper-left)
+            glossHighlight
+
+            // Soft inner shadow (lower-right darkening)
+            innerShadow
+        }
+        .frame(width: diameter, height: diameter)
+    }
+
+    /// Glossy specular highlight — a soft white blob in the upper-left.
+    private var glossHighlight: some View {
+        Circle()
+            .fill(
+                RadialGradient(
+                    colors: [Color.white.opacity(0.85), Color.white.opacity(0)],
+                    center: .center,
+                    startRadius: 0,
+                    endRadius: diameter * 0.18
+                )
+            )
+            .frame(width: diameter * 0.35, height: diameter * 0.35)
+            .offset(x: -diameter * 0.18, y: -diameter * 0.18)
+            .blendMode(.screen)
+            .allowsHitTesting(false)
+    }
+
+    /// Soft inner shadow — darkens the lower-right rim slightly for depth.
+    private var innerShadow: some View {
+        Circle()
+            .stroke(Color.black.opacity(0.35), lineWidth: diameter * 0.04)
+            .blur(radius: diameter * 0.03)
+            .mask(
+                Circle().fill(Color.white)
+                    .overlay(Circle().fill(Color.black).frame(width: diameter * 0.92,
+                                                               height: diameter * 0.92))
+                    .asymmetricInset()
+            )
+            .frame(width: diameter, height: diameter)
+            .allowsHitTesting(false)
+    }
+}
+
+// MARK: - Single Sharingan eye
+
+/// A single Sharingan eye: almond sclera, red iris, thick black outline,
+/// red glow around the eye, blink animation, breathing scale, floating offset.
+struct SharinganEye: View {
+    /// Normalized look direction (-1…1 on each axis).
+    var gaze: GazeDirection
+    /// Tomoe rotation, degrees.
+    var spin: Double
+    /// Eye height; the almond is ~1.7× as wide.
+    var size: CGFloat = 96
+    /// Mirror horizontally (for the right eye).
+    var mirrored: Bool = false
+    /// Which Sharingan artwork to show as the iris.
+    var style: SharinganStyle = .classic
+    /// Eyelid openness 0…1 (1 = fully open).
+    var openness: CGFloat = 1.0
+
+    @State private var breathe: Bool = false
+    @State private var float: Bool = false
+
+    private let bgColor = Color(red: 0.05, green: 0.05, blue: 0.05)
+
+    var body: some View {
+        let w = size * 1.7
+        ZStack {
+            // Bold black eyelid surround, so the eye reads on any background.
+            AlmondEyeShape()
+                .fill(Color.black)
+                .blur(radius: size * 0.05)
+                .scaleEffect(1.14)
+
+            // Sclera + iris, clipped to the almond. Pure white interior.
+            ZStack {
+                AlmondEyeShape().fill(Color.white)
+                // Iris that travels across the sclera toward gaze direction.
+                SharinganIris(diameter: size * 0.40, spin: spin, style: style)
+                    .offset(x: -w * 0.06 + CGFloat(gaze.dx) * size * 0.42,
+                            y: CGFloat(gaze.dy) * size * 0.22)
+            }
+            .clipShape(AlmondEyeShape())
+
+            // Crisp dark rim.
+            AlmondEyeShape()
+                .stroke(Color.black, lineWidth: size * 0.05)
+
+            // Eyelid blink overlay — scales vertically from center.
+            AlmondEyeShape()
+                .fill(Color(red: 0.05, green: 0.05, blue: 0.05))
+                .scaleEffect(y: 1.0 - openness, anchor: .center)
+                .opacity(openness < 1.0 ? 1 : 0)
+        }
+        .frame(width: w, height: size)
+        .scaleEffect(x: mirrored ? -1 : 1, y: 1)
+        // Red glow around the eye
+        .shadow(color: Color(red: 0.85, green: 0.10, blue: 0.10).opacity(0.55),
+                radius: size * 0.20, x: 0, y: 0)
+        // Breathing animation
+        .scaleEffect(breathe ? 1.02 : 0.98)
+        // Floating offset
+        .offset(y: float ? -size * 0.04 : size * 0.04)
+        .animation(.easeInOut(duration: 3.2).repeatForever(autoreverses: true),
+                   value: breathe)
+        .animation(.easeInOut(duration: 4.0).repeatForever(autoreverses: true),
+                   value: float)
+        .onAppear {
+            breathe = true
+            float = true
+        }
+    }
+}
+
+private extension View {
+    /// Asymmetric inset helper for the inner shadow mask.
+    func asymmetricInset() -> some View {
+        self
+    }
+}
+
+// MARK: - Sharingan pair (break exercise guide)
 
 /// A pair of Sharingan eyes used as the break-time eye-movement guide.
 ///
@@ -165,8 +273,9 @@ struct SharinganEyePair: View {
             let off = offset(at: t)
             let live = GazeDirection(dx: off.x, dy: off.y)
             HStack(spacing: eyeSize * 0.35) {
-                SharinganEyeView(gaze: live, spin: t * 70, size: eyeSize, style: style)
-                SharinganEyeView(gaze: live, spin: t * 70, size: eyeSize, mirrored: true, style: style)
+                SharinganEye(gaze: live, spin: t * 70, size: eyeSize, style: style)
+                SharinganEye(gaze: live, spin: t * 70, size: eyeSize,
+                             mirrored: true, style: style)
             }
             .animation(isPath ? nil : .easeInOut(duration: 0.5), value: gaze)
         }
@@ -192,5 +301,70 @@ struct SharinganEyePair: View {
         default:           return (gaze.dx, gaze.dy)
         }
     }
+}
 
+// MARK: - Full Sharingan view (standalone showcase)
+
+/// The full Sharingan showcase view: near-black background, two large eyes,
+/// automatic blink every 4–6 seconds, continuous tomoe rotation, breathing
+/// and floating animations. Responsive — eye size scales to container.
+struct SharinganView: View {
+    var style: SharinganStyle = .classic
+    var eyeSize: CGFloat = 120
+    @State private var openness: CGFloat = 1.0
+    @State private var nextBlink: Double = 4.0
+
+    private let bgColor = Color(red: 0.05, green: 0.05, blue: 0.05)
+
+    var body: some View {
+        ZStack {
+            // Near-black background (#0D0D0D)
+            bgColor.ignoresSafeArea()
+
+            // Eyes centered horizontally
+            TimelineView(.animation) { ctx in
+                let t = ctx.date.timeIntervalSinceReferenceDate
+                HStack(spacing: eyeSize * 0.35) {
+                    SharinganEye(gaze: .center,
+                                 spin: t * 60,
+                                 size: eyeSize,
+                                 style: style,
+                                 openness: openness)
+                    SharinganEye(gaze: .center,
+                                 spin: t * 60,
+                                 size: eyeSize,
+                                 mirrored: true,
+                                 style: style,
+                                 openness: openness)
+                }
+            }
+        }
+        .onAppear { scheduleBlink() }
+    }
+
+    /// Schedule a blink at a random interval between 4 and 6 seconds.
+    private func scheduleBlink() {
+        let delay = Double.random(in: 4.0...6.0)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            blink()
+        }
+    }
+
+    /// One blink cycle: close (0.15s) → open (0.15s) → schedule next.
+    private func blink() {
+        withAnimation(.easeInOut(duration: 0.15)) { openness = 0.0 }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            withAnimation(.easeInOut(duration: 0.15)) { openness = 1.0 }
+            DispatchQueue.main.mainAsyncAfterSafe(deadline: .now() + 0.2) {
+                scheduleBlink()
+            }
+        }
+    }
+}
+
+private extension DispatchQueue {
+    /// Helper to avoid repeating the same name; semantically identical.
+    func mainAsyncAfterSafe(deadline: DispatchTime, execute: @escaping () -> Void) {
+        asyncAfter(deadline: deadline, execute: execute)
+    }
 }
