@@ -21,6 +21,11 @@ let package = Package(
             name: "SelfTest",
             dependencies: ["BlinkCore"],
             path: "Sources/SelfTest"
+        ),
+        .executableTarget(
+            name: "tired",
+            dependencies: ["BlinkCore"],
+            path: "Sources/tired"
         )
     ]
 )

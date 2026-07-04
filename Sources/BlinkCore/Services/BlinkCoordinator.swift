@@ -16,6 +16,8 @@ public final class BlinkCoordinator: ObservableObject {
     public var floatingController: FloatingTimerController?
     public var shortcuts: KeyboardShortcutsService = .shared
     private var cancellables: Set<AnyCancellable> = []
+    private var cliObservers: [String: Any] = [:]
+    private var snapshotCancellable: AnyCancellable?
 
     public init(timer: PomodoroTimer) {
         self.timer = timer
@@ -67,6 +69,69 @@ public final class BlinkCoordinator: ObservableObject {
         if timer.isRunning { floatingController?.showFloating(timer: timer) }
     }
 
+    public func installCLIBridge() {
+        cliObservers.removeAll()
+        cliObservers["start"]    = CLIBridge.observe(CLIBridge.darwinCommandStart)    { [weak self] p in self?.cliStart(payload: p) }
+        cliObservers["pause"]    = CLIBridge.observe(CLIBridge.darwinCommandPause)   { [weak self] _ in self?.timer.pause() }
+        cliObservers["resume"]   = CLIBridge.observe(CLIBridge.darwinCommandResume)  { [weak self] _ in self?.timer.start() }
+        cliObservers["skip"]     = CLIBridge.observe(CLIBridge.darwinCommandSkip)    { [weak self] _ in self?.timer.skip() }
+        cliObservers["stop"]     = CLIBridge.observe(CLIBridge.darwinCommandStop)    { [weak self] _ in self?.timer.stop() }
+        cliObservers["add"]      = CLIBridge.observe(CLIBridge.darwinCommandAdd)     { [weak self] p in self?.cliAdjust(payload: p, negative: false) }
+        cliObservers["remove"]   = CLIBridge.observe(CLIBridge.darwinCommandRemove)  { [weak self] p in self?.cliAdjust(payload: p, negative: true) }
+        cliObservers["setDur"]   = CLIBridge.observe(CLIBridge.darwinCommandSetDuration) { [weak self] p in self?.cliSetDuration(p) }
+        publishSnapshot()
+    }
+
+    private func cliStart(payload: String?) {
+        let p = payload ?? ""
+        if p.isEmpty {
+            if !timer.isRunning { timer.start() }
+        } else if let parsed = NaturalLanguageParser.parse(p) {
+            timer.applyParsed(parsed)
+            if case .setDuration = parsed.kind, !timer.isRunning { timer.start() }
+        } else if let mins = Int(p) {
+            timer.setCustomDuration(TimeInterval(mins) * 60)
+            if !timer.isRunning { timer.start() }
+        }
+        publishSnapshot()
+    }
+
+    private func cliAdjust(payload: String?, negative: Bool) {
+        let p = payload ?? "5m"
+        let parsed = NaturalLanguageParser.parse(p)
+        if case .addTime(let d) = parsed?.kind {
+            timer.addTime(negative ? -d : d)
+        } else if case .removeTime(let d) = parsed?.kind {
+            timer.addTime(negative ? d : -d)
+        } else if let mins = Int(p.trimmingCharacters(in: .letters).trimmingCharacters(in: .whitespaces)),
+                  mins > 0 {
+            timer.addTime(Double(negative ? -mins : mins) * 60)
+        }
+        publishSnapshot()
+    }
+
+    private func cliSetDuration(_ p: String?) {
+        guard let p = p, !p.isEmpty else { return }
+        if let parsed = NaturalLanguageParser.parse(p), case .setDuration(let d) = parsed.kind {
+            timer.setCustomDuration(d)
+        } else if let mins = Int(p.trimmingCharacters(in: .letters).trimmingCharacters(in: .whitespaces)), mins > 0 {
+            timer.setCustomDuration(TimeInterval(mins) * 60)
+        }
+        publishSnapshot()
+    }
+
+    public func publishSnapshot() {
+        let snap = CLIBridge.StateSnapshot(
+            phase: timer.phase,
+            remainingSeconds: timer.remainingSeconds,
+            totalSeconds: timer.totalSeconds,
+            isRunning: timer.isRunning,
+            cyclesCompletedToday: timer.stats.completedToday,
+            streak: timer.stats.streak.currentStreak
+        )
+        CLIBridge.writeSnapshot(snap)
+    }
+
     private func observe() {
         NotificationCenter.default.publisher(for: .phaseDidComplete)
             .receive(on: RunLoop.main)
@@ -96,6 +161,20 @@ public final class BlinkCoordinator: ObservableObject {
         timer.$settings
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.syncAll() }
+            .store(in: &cancellables)
+
+        timer.$phase
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.publishSnapshot() }
+            .store(in: &cancellables)
+        timer.$remainingSeconds
+            .receive(on: RunLoop.main)
+            .dropFirst()
+            .sink { [weak self] _ in self?.publishSnapshot() }
+            .store(in: &cancellables)
+        timer.$isRunning
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.publishSnapshot() }
             .store(in: &cancellables)
     }
 

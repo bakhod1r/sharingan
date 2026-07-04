@@ -23,6 +23,7 @@ struct BlinkApp: App {
                     coordinator.syncAlarm()
                     coordinator.installShortcuts()
                     coordinator.syncCamera()
+                    coordinator.installCLIBridge()
                 }
         } label: {
             Label {
