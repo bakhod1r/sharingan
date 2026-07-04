@@ -51,8 +51,11 @@ struct BreakView: View {
 
                     if timer.settings.cameraEyeTrackingEnabled,
                        CameraService.shared.isAuthorized {
-                        ExerciseSequenceView(validator: ExerciseValidator.shared,
+ExerciseSequenceView(validator: ExerciseValidator.shared,
                                              eyeTracker: EyeTracker.shared)
+                        .onAppear {
+                            TTSKalibrator.shared.attach(to: ExerciseValidator.shared)
+                        }
                         CameraIndicatorBadge(camera: CameraService.shared)
                     } else {
                         EyeExerciseAnimation()
@@ -61,7 +64,7 @@ struct BreakView: View {
                     }
                 }
 
-                GlassButton(label: "Tanaffusni chiqar",
+                GlassButton(label: "Exit break",
                             systemImage: "xmark.circle.fill",
                             tint: .white.opacity(0.9),
                             action: onTapSkip)
@@ -69,12 +72,15 @@ struct BreakView: View {
             }
         }
         .onAppear {
-            if timer.settings.ttsEnabled {
-                TTSService.shared.speak("Tanaffus vaqtini boshladik. " +
-                                        timer.settings.breakMessage,
+            TTSKalibrator.shared.update(settings: timer.settings.ttsSettings,
+                                        rate: timer.settings.ttsRate,
+                                        pitch: timer.settings.ttsPitch)
+            if timer.settings.ttsSettings.enabled {
+                TTSService.shared.speak("Starting break. " + timer.settings.breakMessage,
                                         rate: timer.settings.ttsRate,
                                         pitch: timer.settings.ttsPitch)
             }
+            ExerciseValidator.shared.exercises = timer.settings.exerciseSettings.buildSequence()
             if timer.settings.cameraEyeTrackingEnabled {
                 ExerciseValidator.shared.reset()
             }
@@ -84,6 +90,7 @@ struct BreakView: View {
         }
         .onDisappear {
             TTSService.shared.stop()
+            TTSKalibrator.shared.stop()
             ExerciseValidator.shared.stop()
         }
     }

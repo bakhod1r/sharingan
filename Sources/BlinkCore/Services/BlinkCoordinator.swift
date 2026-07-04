@@ -99,7 +99,7 @@ public final class BlinkCoordinator: ObservableObject {
         case .focus:
             NotificationService.shared.notify(
                 title: "Blink",
-                body: "Diqqat tugadi. Tanaffus boshlanadi.",
+                body: "Focus complete. Starting break.",
                 identifier: "blink.focusDone")
             AlarmSoundService.shared.playSelected()
             floatingController?.hideFloating()
@@ -116,7 +116,7 @@ public final class BlinkCoordinator: ObservableObject {
         case .shortBreak, .longBreak:
             NotificationService.shared.notify(
                 title: "Blink",
-                body: "Tanaffus tugadi. Diqqatga qaytamiz.",
+                body: "Break complete. Back to focus.",
                 identifier: "blink.breakDone")
             AlarmSoundService.shared.playSelected()
             breakPresenter?.dismissAll()
@@ -129,7 +129,7 @@ public final class BlinkCoordinator: ObservableObject {
     private func speakBreakStart() {
         guard timer.settings.ttsEnabled else { return }
         TTSService.shared.speak(
-            "Tanaffus boshlandi. \(timer.settings.breakMessage)",
+            "Break started. \(timer.settings.breakMessage)",
             rate: timer.settings.ttsRate,
             pitch: timer.settings.ttsPitch)
     }
@@ -137,7 +137,7 @@ public final class BlinkCoordinator: ObservableObject {
     private func speakFocusStart() {
         guard timer.settings.ttsEnabled else { return }
         TTSService.shared.speak(
-            "Tanaffus tugadi. Diqqatga qaytashingiz mumkin.",
+            "Break complete. You can return to focus.",
             rate: timer.settings.ttsRate,
             pitch: timer.settings.ttsPitch)
     }

@@ -30,18 +30,17 @@ public struct GazeDirection: Equatable, Sendable {
     }
 
     public var label: String {
-        if magnitude < 0.25 { return "markaz" }
-        // angle in degrees: 0 = right, 90 = up (screen coords flip)
+        if magnitude < 0.25 { return "center" }
         let angle = atan2(-dy, dx) * 180 / .pi
         switch angle {
-        case -22.5..<22.5:     return "o'ng"
-        case 22.5..<67.5:      return "yuqori o'ng"
-        case 67.5..<112.5:     return "yuqori"
-        case 112.5..<157.5:    return "yuqori chap"
-        case 157.5...180, -180..<(-157.5): return "chap"
-        case -157.5..<(-112.5):return "past chap"
-        case -112.5..<(-67.5): return "past"
-        case -67.5..<(-22.5):  return "past o'ng"
+        case -22.5..<22.5:     return "right"
+        case 22.5..<67.5:      return "up right"
+        case 67.5..<112.5:     return "up"
+        case 112.5..<157.5:    return "up left"
+        case 157.5...180, -180..<(-157.5): return "left"
+        case -157.5..<(-112.5):return "down left"
+        case -112.5..<(-67.5): return "down"
+        case -67.5..<(-22.5):  return "down right"
         default:               return "?"
         }
     }

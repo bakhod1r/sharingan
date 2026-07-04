@@ -9,10 +9,10 @@ public enum PomodoroPhase: String, Codable, CaseIterable, Sendable {
 
     public var label: String {
         switch self {
-        case .focus:      return "Diqqat"
-        case .shortBreak: return "Tanaffus"
-        case .longBreak:  return "Uzun tanaffus"
-        case .paused:     return "Pauza"
+        case .focus:      return "Focus"
+        case .shortBreak: return "Break"
+        case .longBreak:  return "Long break"
+        case .paused:     return "Paused"
         }
     }
 

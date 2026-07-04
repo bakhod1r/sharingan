@@ -16,7 +16,7 @@ public final class AlarmSoundService {
             case .glass:    return "Glass"
             case .chime:    return "Chime"
             case .softBell: return "Soft bell"
-            case .silent:   return "Ovozsiz"
+            case .silent:   return "Silent"
             }
         }
     }

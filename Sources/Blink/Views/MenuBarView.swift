@@ -11,9 +11,11 @@ struct MenuBarView: View {
             controls
             Divider().overlay(Color.white.opacity(0.15))
             statsStrip
+            StreakBadgeView(streak: timer.stats.streak)
+            StatsChartView(stats: timer.stats)
         }
         .padding(18)
-        .frame(width: 320)
+        .frame(width: 340)
     }
 
     private var statusHeader: some View {
@@ -40,11 +42,11 @@ struct MenuBarView: View {
 
     private var controls: some View {
         VStack(spacing: 8) {
-            GlassButton(label: timer.isRunning ? "Pauza" : "Boshlash",
+            GlassButton(label: timer.isRunning ? "Pause" : "Start",
                         systemImage: timer.isRunning ? "pause.fill" : "play.fill",
                         action: { timer.toggle() })
             HStack(spacing: 8) {
-                GlassButton(label: "O'tkazish",
+                GlassButton(label: "Skip",
                             systemImage: "forward.end.fill",
                             action: { timer.skip() })
                 GlassButton(label: "Reset",
@@ -67,14 +69,14 @@ struct MenuBarView: View {
 
     private var statsStrip: some View {
         HStack(spacing: 14) {
-            stat(value: "\(timer.stats.completedToday)", label: "Bugun")
+            stat(value: "\(timer.stats.completedToday)", label: "Today")
             stat(value: "\(timer.cyclesCompletedInRound)/\(timer.settings.longBreakEvery)",
-                 label: "Bosqich")
+                 label: "Cycle")
             if timer.settings.repeatConfig.enabled {
                 stat(value: "\(timer.repeatIndex + 1)/\(timer.settings.repeatConfig.count)",
-                     label: "Takror")
+                     label: "Repeat")
             }
-            stat(value: "\(timer.stats.streak.currentStreak)", label: "Ketma-ket")
+            stat(value: "\(timer.stats.streak.currentStreak)", label: "Streak")
         }
         .frame(maxWidth: .infinity)
     }

@@ -5,21 +5,22 @@ struct SettingsView: View {
     @ObservedObject var timer: PomodoroTimer
     @Binding var settings: PomodoroSettings
     @Environment(\.dismiss) private var dismiss
+    @State private var editingInstructionDirection: String?
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 header
 
-                Section("Taymer rejimi") {
-                    Picker("Rejim", selection: $settings.timerMode) {
+                Section("Timer mode") {
+                    Picker("Mode", selection: $settings.timerMode) {
                         ForEach(TimerMode.allCases, id: \.self) { mode in
                             Text(mode.label).tag(mode)
                         }
                     }
                     .pickerStyle(.segmented)
 
-                    Picker("Tema", selection: $settings.theme) {
+                    Picker("Theme", selection: $settings.theme) {
                         ForEach(BlinkTheme.allCases, id: \.self) { theme in
                             Text(theme.label).tag(theme)
                         }
@@ -27,39 +28,39 @@ struct SettingsView: View {
                     .pickerStyle(.menu)
                     .tint(.white)
 
-                    ToggleRow(title: "5 soniyada flesh",
+                    ToggleRow(title: "Flash at 5 seconds left",
                               isOn: $settings.flashAtFiveSecLeft)
                 }
 
-                Section("Vaqt") {
-                    StepperRow(title: "Diqqat",
+                Section("Durations") {
+                    StepperRow(title: "Focus",
                                value: Binding(get: { settings.focusMinutes },
                                               set: { settings.focusMinutes = $0 }),
                                unit: "min")
-                    StepperRow(title: "Qisqa tanaffus",
+                    StepperRow(title: "Short break",
                                value: Binding(get: { settings.shortBreakMinutes },
                                               set: { settings.shortBreakMinutes = $0 }),
                                unit: "min")
-                    StepperRow(title: "Uzun tanaffus",
+                    StepperRow(title: "Long break",
                                value: Binding(get: { settings.longBreakMinutes },
                                               set: { settings.longBreakMinutes = $0 }),
                                unit: "min")
-                    StepperRow(title: "Uzun tanaffus har",
+                    StepperRow(title: "Long break every",
                                value: Binding(get: { settings.longBreakEvery },
                                               set: { settings.longBreakEvery = $0 }),
-                               unit: "pomodoro")
+                               unit: "pomodoros")
                 }
 
-                Section("Takrorlash") {
-                    ToggleRow(title: "Takrorlash yoqilgan",
+                Section("Repeat") {
+                    ToggleRow(title: "Repeat enabled",
                               isOn: $settings.repeatConfig.enabled)
                     if settings.repeatConfig.enabled {
-                        StepperRow(title: "Takrorlar soni",
+                        StepperRow(title: "Repeat count",
                                    value: Binding(
                                        get: { settings.repeatConfig.count },
                                        set: { settings.repeatConfig.count = $0 }),
                                    unit: "×")
-                        StepperRow(title: "Kutish",
+                        StepperRow(title: "Delay",
                                    value: Binding(
                                        get: { Int(settings.repeatConfig.delaySeconds / 60) },
                                        set: { settings.repeatConfig.delaySeconds = TimeInterval($0) * 60 }),
@@ -67,22 +68,80 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("Avtomatik") {
-                    ToggleRow(title: "Tanaffus avtomatik",
-                              isOn: $settings.autoStartBreak)
-                    ToggleRow(title: "Diqqat avtomatik",
-                              isOn: $settings.autoStartFocus)
+                Section("Break message") {
+                    TextField("Break message text",
+                              text: $settings.breakMessage, axis: .vertical)
+                        .textFieldStyle(DarkGlassFieldStyle())
+                        .lineLimit(2...4)
                 }
 
-                Section("Bildirishnomalar") {
-                    ToggleRow(title: "5 daqiqa qoldi ogohlantirish",
+                Section("Break tests") {
+                    ToggleRow(title: "Block screen during break",
+                              isOn: $settings.blockScreenDuringBreak)
+                    ToggleRow(title: "Floating timer",
+                              isOn: $settings.floatingTimerEnabled)
+                }
+
+                Section("Eye exercise sequence") {
+                    ToggleRow(title: "20-20-20 rule",
+                              isOn: $settings.exerciseSettings.twentyRuleEnabled)
+                    ToggleRow(title: "Gaze exercise",
+                              isOn: $settings.exerciseSettings.gazeEnabled)
+                    ToggleRow(title: "Blink exercise",
+                              isOn: $settings.exerciseSettings.blinkEnabled)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Step hold scale: \(String(format: "%.2f", settings.exerciseSettings.stepHoldScale))×")
+                            .font(.caption.weight(.medium))
+                        Slider(value: $settings.exerciseSettings.stepHoldScale,
+                               in: 0.5...2.0)
+                            .tint(.white)
+                    }
+                    Text("Step length in seconds: \(String(format: "%.0f", settings.exerciseSettings.scaledHold(4)))")
+                        .font(.caption2)
+                        .foregroundStyle(.white.opacity(0.7))
+
+                    if let selected = editingInstructionDirection {
+                        instructionEditor(for: selected)
+                    }
+                    StepsInstructionEditor(
+                        instructions: $settings.ttsSettings.instructions,
+                        onSelect: { editingInstructionDirection = $0 }
+                    )
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Kalib interval: \(Int(settings.ttsSettings.kalibIntervalSeconds))s")
+                            .font(.caption.weight(.medium))
+                        Slider(value: $settings.ttsSettings.kalibIntervalSeconds,
+                               in: 0...60)
+                            .tint(.white)
+                    }
+                }
+
+                Section("Camera & Vision") {
+                    ToggleRow(title: "Eye tracking via camera",
+                              isOn: $settings.cameraEyeTrackingEnabled)
+                    if settings.cameraEyeTrackingEnabled {
+                        Text("Works during breaks only. Alerts when blink rate is low.")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.65))
+                    }
+                }
+
+                Section("Auto-start") {
+                    ToggleRow(title: "Auto-start focus",
+                              isOn: $settings.autoStartFocus)
+                    ToggleRow(title: "Auto-start break",
+                              isOn: $settings.autoStartBreak)
+                }
+
+                Section("Notifications") {
+                    ToggleRow(title: "Notify 5 minutes left",
                               isOn: $settings.notifyFiveMinLeft)
                 }
 
-                Section("Ovoz") {
-                    ToggleRow(title: "Alarm ovozi yoqilgan",
+                Section("Sound") {
+                    ToggleRow(title: "Alarm sound enabled",
                               isOn: $settings.alarmSoundEnabled)
-                    Picker("Alarm tovushi", selection: $settings.alarmSound) {
+                    Picker("Alarm sound", selection: $settings.alarmSound) {
                         ForEach(AlarmSoundService.Sound.allCases, id: \.rawValue) { s in
                             Text(s.label).tag(s.rawValue)
                         }
@@ -91,55 +150,64 @@ struct SettingsView: View {
                     .tint(.white)
                 }
 
-                Section("Ko'z kuzatuvi") {
-                    ToggleRow(title: "Kamera orqali blink detection",
-                              isOn: $settings.cameraEyeTrackingEnabled)
-                    if settings.cameraEyeTrackingEnabled {
-                        Text("Faqat tanaffus vaqtida ishlaydi. Blink kam bo'lsa ogohlantiradi.")
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.65))
+                Section("Voice guidance (TTS)") {
+                    ToggleRow(title: "Spoken instructions",
+                              isOn: $settings.ttsSettings.enabled)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Voice rate: \(String(format: "%.2f", settings.ttsRate))")
+                            .font(.caption.weight(.medium))
+                        Slider(value: $settings.ttsRate, in: 0...1).tint(.white)
+                    }
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Voice pitch: \(String(format: "%.2f", settings.ttsPitch))")
+                            .font(.caption.weight(.medium))
+                        Slider(value: $settings.ttsPitch, in: 0.5...1.5).tint(.white)
+                    }
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Global kalib pool")
+                            .font(.caption.weight(.medium))
+                        ForEach(settings.ttsSettings.globalKalib.indices, id: \.self) { idx in
+                            HStack {
+                                TextField("Reminder", text: Binding(
+                                    get: { settings.ttsSettings.globalKalib[idx] },
+                                    set: { settings.ttsSettings.globalKalib[idx] = $0 }
+                                ))
+                                .textFieldStyle(DarkGlassFieldStyle())
+                                if settings.ttsSettings.globalKalib.count > 1 {
+                                    Button {
+                                        settings.ttsSettings.globalKalib.remove(at: idx)
+                                    } label: {
+                                        Image(systemName: "minus.circle.fill")
+                                            .foregroundStyle(.red.opacity(0.85))
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                        Button {
+                            settings.ttsSettings.globalKalib.append("")
+                        } label: {
+                            Label("Add reminder", systemImage: "plus.circle.fill")
+                                .font(.caption.weight(.semibold))
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
 
-                Section("Ko'rinish") {
-                    ToggleRow(title: "Suzuvchi taymer",
-                              isOn: $settings.floatingTimerEnabled)
-                    ToggleRow(title: "Ekran bloklash (tanaffus)",
-                              isOn: $settings.blockScreenDuringBreak)
-                    ToggleRow(title: "Global klaviatura yorliqlari",
+                Section("Global shortcuts") {
+                    ToggleRow(title: "Global keyboard shortcuts",
                               isOn: $settings.globalShortcutsEnabled)
+                    shortcutLegend
                 }
-
-                Section("Sintez") {
-                    ToggleRow(title: "Ovozli yo'riqnoma (TTS)",
-                              isOn: $settings.ttsEnabled)
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Tezlik").font(.caption.weight(.medium))
-                        Slider(value: $settings.ttsRate, in: 0...1)
-                    }
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Pitch").font(.caption.weight(.medium))
-                        Slider(value: $settings.ttsPitch, in: 0.5...1.5)
-                    }
-                }
-
-                Section("Xabar") {
-                    TextField("Tanaffus xabar matni",
-                              text: $settings.breakMessage, axis: .vertical)
-                        .textFieldStyle(DarkGlassFieldStyle())
-                        .lineLimit(2...4)
-                }
-
-                shortcutLegend
             }
             .padding(24)
         }
-        .frame(width: 440, height: 680)
+        .frame(width: 480, height: 760)
         .liquidShadow(radius: 28)
         .glassRounded(28, material: .regular)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button("Yopish") { dismiss() }
+                Button("Close") { dismiss() }
                     .buttonStyle(.borderedProminent)
             }
         }
@@ -155,16 +223,41 @@ struct SettingsView: View {
                     .foregroundStyle(.white)
             }
             .glassCapsule()
-            Text("Sozlamalar")
-                .font(.system(.title2, design: .rounded).weight(.bold))
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Settings")
+                    .font(.system(.title2, design: .rounded).weight(.bold))
+                StreakBadgeView(streak: timer.stats.streak)
+                    .padding(.top, 4)
+            }
+        }
+        .onDisappear {
+            editingInstructionDirection = nil
+        }
+    }
+
+    private func instructionEditor(for direction: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Spoken instruction: \(direction)")
+                .font(.caption.weight(.semibold))
+            HStack {
+                TextField("Instruction", text: Binding(
+                    get: { settings.ttsSettings.instruction(forDirection: direction)?.text ?? "" },
+                    set: { settings.ttsSettings.updateInstruction(text: $0, forDirection: direction) }
+                ))
+                .textFieldStyle(DarkGlassFieldStyle())
+                Button {
+                    editingInstructionDirection = nil
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+                .buttonStyle(.plain)
+            }
         }
     }
 
     private var shortcutLegend: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Klaviatura yorliqlari")
-                .font(.system(.headline, design: .rounded).weight(.semibold))
-                .foregroundStyle(.white.opacity(0.75))
             ForEach(GlobalShortcut.allCases, id: \.self) { sh in
                 HStack {
                     Text(sh.label).foregroundStyle(.white.opacity(0.85))
@@ -192,6 +285,30 @@ struct SettingsView: View {
             VStack(spacing: 4) { content() }
                 .glassRounded(18, material: .thin)
                 .padding(8)
+        }
+    }
+}
+
+struct StepsInstructionEditor: View {
+    @Binding var instructions: [TTSInstruction]
+    let onSelect: (String) -> Void
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(instructions) { ins in
+                    Button {
+                        onSelect(ins.direction)
+                    } label: {
+                        Text(ins.direction.replacingOccurrences(of: "_", with: " "))
+                            .font(.system(.caption, design: .rounded).weight(.semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 10).padding(.vertical, 6)
+                            .glassCapsule(material: .regular)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
         }
     }
 }

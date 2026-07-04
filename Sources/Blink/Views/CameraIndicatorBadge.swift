@@ -35,8 +35,8 @@ struct CameraIndicatorBadge: View {
     }
 
     private var label: String {
-        if !camera.isAuthorized { return "Kamera rad" }
-        if camera.isRunning { return "Kamera yoqilgan" }
-        return "Kamera o'chirilgan"
+        if !camera.isAuthorized { return "Camera denied" }
+        if camera.isRunning { return "Camera on" }
+        return "Camera off"
     }
 }

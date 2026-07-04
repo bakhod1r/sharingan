@@ -11,13 +11,13 @@ struct ExerciseSequenceView: View {
             currentStepCard
             progressSteps
             if eyeTracker.state.faceDetected == false {
-                Text("Yuzingizni kameraga to'g'rilang")
+                Text("Align your face with the camera")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.white.opacity(0.72))
                     .transition(.opacity)
             }
             if validator.needsRetry {
-                Text("Qayta urinib ko'ring — ko'zing noto'g'ri yo'nalishda")
+                Text("Try again — your gaze is off-target")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.red.opacity(0.92))
                     .transition(.opacity)
@@ -42,7 +42,7 @@ struct ExerciseSequenceView: View {
                 .font(.system(.headline, design: .rounded).weight(.bold))
                 .foregroundStyle(.white)
             Spacer()
-            Text("Mashq \(validator.currentExerciseIndex + 1)/\(validator.exercises.count)")
+            Text("Exercise \(validator.currentExerciseIndex + 1)/\(validator.exercises.count)")
                 .font(.system(.caption, design: .rounded).weight(.semibold).monospacedDigit())
                 .foregroundStyle(.white.opacity(0.7))
         }
@@ -58,12 +58,12 @@ struct ExerciseSequenceView: View {
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.white)
                     .padding(.horizontal, 18)
-                Text("Qolgan: \(validator.formattedHoldRemaining())")
+                Text("Remaining: \(validator.formattedHoldRemaining())")
                     .font(.system(.title2, design: .rounded).monospacedDigit().weight(.bold))
                     .foregroundStyle(stepAccent)
                 gauge(for: step)
             } else {
-                Text("Bajarildi ✓")
+                Text("Done ✓")
                     .font(.system(.title, design: .rounded).weight(.bold))
                     .foregroundStyle(.green)
             }

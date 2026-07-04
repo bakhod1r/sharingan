@@ -357,7 +357,7 @@ testAlarmSoundEnum()
         check(AlarmSoundService.Sound(rawValue: "softBell") == .softBell, "rawValue softBell")
         check(AlarmSoundService.Sound(rawValue: "silent") == .silent, "rawValue silent")
         check(AlarmSoundService.Sound(rawValue: "invalid") == nil, "invalid rawValue → nil")
-        check(AlarmSoundService.Sound.silent.label == "Ovozsiz", "silent label localized")
+        check(AlarmSoundService.Sound.silent.label == "Silent", "silent label")
     }
 
     static func testGazeDirection() {
@@ -375,15 +375,15 @@ testAlarmSoundEnum()
               "near-center matches center")
         check(GazeDirection(dx: 1.2, dy: 1.5).dx == 1, "dx clamped to 1")
         check(GazeDirection(dx: -1.2, dy: 0).dx == -1, "dx clamped to -1")
-        check(GazeDirection.center.label == "markaz", "center label")
-        check(GazeDirection.right.label == "o'ng", "right label")
-        check(GazeDirection.up.label == "yuqori", "up label")
+        check(GazeDirection.center.label == "center", "center label")
+        check(GazeDirection.right.label == "right", "right label")
+        check(GazeDirection.up.label == "up", "up label")
     }
 
     static func testBreakExerciseModel() {
         print("• BreakExercise model")
-        check(BreakExerciseStep(direction: "up", holdSeconds: 3).instruction.contains("yuqoriga"),
-              "auto instruktsiya 'yuqoriga' bilan")
+        check(BreakExerciseStep(direction: "up", holdSeconds: 3).instruction.contains("up"),
+              "auto instruction contains 'up'")
         check(BreakExerciseStep(direction: "down", holdSeconds: 0.1).holdSeconds == 0.5,
               "holdSeconds floor 0.5")
         check(BreakExerciseStep(direction: "left", holdSeconds: 4,

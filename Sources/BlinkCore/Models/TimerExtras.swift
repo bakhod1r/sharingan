@@ -6,8 +6,8 @@ public enum TimerMode: String, Codable, CaseIterable, Sendable {
 
     public var label: String {
         switch self {
-        case .countdown: return "Hisob teskari"
-        case .countUp:   return "Hisob oldinga"
+        case .countdown: return "Countdown"
+        case .countUp:   return "Count up"
         }
     }
 }

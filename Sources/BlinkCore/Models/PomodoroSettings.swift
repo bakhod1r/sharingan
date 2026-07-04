@@ -9,7 +9,7 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var autoStartBreak: Bool = true
     public var notifyFiveMinLeft: Bool = true
     public var blockScreenDuringBreak: Bool = true
-    public var breakMessage: String = "Ko'zingni yum, nafas ol, uzoqqa qarang."
+    public var breakMessage: String = "Close your eyes, breathe, look far away."
     public var ttsEnabled: Bool = true
     public var ttsRate: Float = 0.5
     public var ttsPitch: Float = 1.0
@@ -23,6 +23,8 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var cameraEyeTrackingEnabled: Bool = false
     public var alarmSound: String = AlarmSoundService.Sound.glass.rawValue
     public var alarmSoundEnabled: Bool = true
+    public var ttsSettings: TTSAnnouncementsSettings = .init()
+    public var exerciseSettings: ExerciseSequenceSettings = .init()
 
     public init() {}
 

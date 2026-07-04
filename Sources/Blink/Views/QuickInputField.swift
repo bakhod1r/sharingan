@@ -42,7 +42,7 @@ struct QuickInputField: View {
 
     private func submit() {
         guard let parsed = NaturalLanguageParser.parse(text) else {
-            error = "Tushunarsiz: \(text)"
+            error = "Unrecognized: \(text)"
             return
         }
         error = nil

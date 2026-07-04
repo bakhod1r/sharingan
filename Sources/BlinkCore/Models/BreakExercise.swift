@@ -9,36 +9,36 @@ public struct BreakExerciseStep: Equatable, Sendable, Codable {
         self.direction = direction
         self.holdSeconds = max(0.5, holdSeconds)
         self.instruction = instruction.isEmpty
-            ? "Ko'zingni \(Self.directionLabel(direction)) qarating"
+            ? "Look \(Self.directionLabel(direction))"
             : instruction
     }
 
     public var targetGaze: GazeDirection {
         switch direction.lowercased() {
-        case "up", "yuqori", "y":           return .up
-        case "down", "past", "p":           return .down
-        case "left", "chap", "l":           return .left
-        case "right", "o'ng", "ong", "r":   return .right
-        case "up_left", "upleft":           return .upLeft
-        case "up_right", "upright":        return .upRight
-        case "down_left", "downleft":      return .downLeft
-        case "down_right", "downright":     return .downRight
+        case "up", "y":           return .up
+        case "down", "p":         return .down
+        case "left", "l":         return .left
+        case "right", "r":        return .right
+        case "up_left", "upleft": return .upLeft
+        case "up_right", "upright": return .upRight
+        case "down_left", "downleft": return .downLeft
+        case "down_right", "downright": return .downRight
         default:                            return .center
         }
     }
 
     private static func directionLabel(_ key: String) -> String {
         switch key.lowercased() {
-        case "up":       return "yuqoriga"
-        case "down":     return "pastga"
-        case "left":     return "chapga"
-        case "right":    return "o'ngga"
-        case "center":   return "markazga"
-        case "up_left":  return "yuqori chapga"
-        case "up_right": return "yuqori o'ngga"
-        case "down_left": return "past chapga"
-        case "down_right": return "past o'ngga"
-        default:         return "\(key) tomon"
+        case "up":       return "up"
+        case "down":     return "down"
+        case "left":     return "left"
+        case "right":    return "right"
+        case "center":   return "center"
+        case "up_left":  return "up and to the left"
+        case "up_right": return "up and to the right"
+        case "down_left": return "down and to the left"
+        case "down_right": return "down and to the right"
+        default:         return key
         }
     }
 }
@@ -56,14 +56,14 @@ public struct BreakExercise: Equatable, Sendable, Codable {
         name: "20-20-20",
         steps: [
             .init(direction: "far", holdSeconds: 20,
-                  instruction: "6 metr (~20 fut) uzoqdagi narsaga 20 soniya qarang"),
+                  instruction: "Look at something 20 feet away for 20 seconds"),
             .init(direction: "center", holdSeconds: 5,
-                  instruction: "Ko'zingni yum, nafas ol"),
+                  instruction: "Close your eyes and breathe"),
         ]
     )
 
     public static let gaze = BreakExercise(
-        name: "Gaze mashqi",
+        name: "Gaze exercise",
         steps: [
             .init(direction: "right",       holdSeconds: 4),
             .init(direction: "center",      holdSeconds: 2),
@@ -81,12 +81,12 @@ public struct BreakExercise: Equatable, Sendable, Codable {
     )
 
     public static let blink = BreakExercise(
-        name: "Blink mashqi",
+        name: "Blink exercise",
         steps: [
             .init(direction: "blink",       holdSeconds: 8,
-                  instruction: "8 marta tez ko'zingni yum och"),
+                  instruction: "Blink quickly 8 times"),
             .init(direction: "center",      holdSeconds: 4,
-                  instruction: "Endi yuming sokin 4 soniya"),
+                  instruction: "Now keep your eyes softly closed for 4 seconds"),
         ]
     )
 
