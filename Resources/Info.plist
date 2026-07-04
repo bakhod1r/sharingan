@@ -3,22 +3,32 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>TiredEyes</string>
+    <string>Blink</string>
+    <key>CFBundleDisplayName</key>
+    <string>Blink</string>
     <key>CFBundleIdentifier</key>
-    <string>com.tiredeyes.app</string>
+    <string>com.blink.app</string>
     <key>CFBundleVersion</key>
-    <string>1.0</string>
+    <string>1</string>
     <key>CFBundleShortVersionString</key>
     <string>1.0.0</string>
     <key>CFBundleExecutable</key>
-    <string>TiredEyes</string>
+    <string>Blink</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>CFBundleIconName</key>
+    <string>AppIcon</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
     <key>LSUIElement</key>
     <true/>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSCameraUsageDescription</key>
+    <string>Blink ko'z mashqlarini bajarishni tekshirish uchun kamera ishlatadi (faqat tanaffus vaqtida, privat).</string>
+    <key>NSUserNotificationsUsageDescription</key>
+    <string>Blink pomodoro va tanaffus boshlanishini eslatish uchun bildirishnomalar yuboradi.</string>
 </dict>
 </plist>

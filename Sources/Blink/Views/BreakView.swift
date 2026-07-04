@@ -49,7 +49,9 @@ struct BreakView: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, 64)
 
-                    eyeAnimation()
+                    EyeExerciseAnimation()
+                        .glassRounded(28, material: .regular)
+                        .padding(20)
                 }
 
                 GlassButton(label: "Tanaffusni chiqar",
@@ -88,47 +90,9 @@ struct BreakView: View {
         .padding(.horizontal, 20).padding(.vertical, 10)
     }
 
-    private func eyeAnimation() -> some View {
-        HStack(spacing: 28) {
-            eyeShape(direction: .top)
-            eyeShape(direction: .center)
-            eyeShape(direction: .right)
-        }
-        .glassRounded(28, material: .regular)
-        .padding(20)
-    }
-
-    private enum Gaze { case top, center, right }
-    private func eyeShape(direction: Gaze) -> some View {
-        ZStack {
-            EyeOutline()
-                .fill(Color.white.opacity(0.12))
-                .overlay(EyeOutline().stroke(Color.white.opacity(0.5), lineWidth: 2))
-            Circle()
-                .fill(Color.white)
-                .frame(width: 14, height: 14)
-                .shadow(color: .white.opacity(0.6), radius: 8)
-                .offset(x: direction == .right ? 14 : 0,
-                        y: direction == .top ? -8 : 0)
-                .animation(.easeInOut(duration: 1.4)
-                            .repeatForever(autoreverses: true),
-                           value: animateBlobs)
-        }
-        .frame(width: 72, height: 72)
-    }
-
     private func formatted(_ s: TimeInterval) -> String {
         let m = Int(s) / 60
         let sec = Int(s) % 60
         return String(format: "%02d:%02d", m, sec)
-    }
-}
-
-private struct EyeOutline: Shape {
-    func path(in rect: CGRect) -> Path {
-        var p = Path()
-        p.addRoundedRect(in: rect, cornerSize: CGSize(width: rect.height*0.5,
-                                                      height: rect.height*0.55))
-        return p
     }
 }
