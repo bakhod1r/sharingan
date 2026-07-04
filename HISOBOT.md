@@ -161,10 +161,10 @@ d34dcf7 feat: Blink MVP — pomodoro + floating timer + NL parser + hotkeys
 
 ### Phase 4 — qolgan features
 - ~~#14 Break music / white noise / nature sounds~~ — **yakunlandi**: `BreakAmbienceService` (5 ambience) + 4 generated looping `.caf` files + Settings Preview/Stop buttons.
-- **#17 Screen brightness auto** (DisplayServices/gamma ramp) yo'q.
+- ~~#17 Screen brightness auto~~ — **yakunlandi**: `BrightnessService` (CGSetDisplayTransferByFormula gamma ramp, 1.2s smooth cubic ease) + Settings toggle/slider/smooth.
 - **#18 Night Shift scheduler** (CoreBrightness private) yo'q.
 - **#22 Raycast/Alfred/Stream Deck** yo'q.
-- **#23 iCloud sync + multi-device** (CloudKit) — faqat local `UserDefaults`.
+- ~~#23 iCloud sync + multi-device~~ — **yakunlandi**: `SyncService` CloudKit CKContainer + BlinkZone + CKRecord JSON blob sync (push/pull) + Settings status/trigger UI.
 - **#24 App bloklash break'da** (Telegram/YouTube force quit) — faqat window bloklaydi.
 - **#27 CLI `tired start 25`** yo'q.
 - ~~Slack/Discord~~ — bekor qilindi.
