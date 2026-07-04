@@ -43,6 +43,7 @@ testAlarmSoundEnum()
         testStreakRewardCenter()
         testReminders()
         testAmbienceEnum()
+        testBrightnessSettings()
 
         print("\nPassed: \(passed)  Failed: \(failures)")
         if failures > 0 {
@@ -498,6 +499,37 @@ testAlarmSoundEnum()
         check(BreakAmbienceService.Ambience.silent.label == "Silent", "silent label")
         check(BreakAmbienceService.Ambience.rain.label == "Rain", "rain label")
         check(BreakAmbienceService.Ambience.lofi.label.contains("Lo-fi"), "lofi label")
+    }
+
+    static func testBrightnessSettings() {
+        print("• Brightness settings")
+        let s = PomodoroSettings()
+        check(s.brightnessDimEnabled == false, "brightness disabled by default")
+        check(s.brightnessDimPercent == 35, "default 35% dim")
+        check(s.brightnessSmooth == true, "smooth default true")
+
+        let svc = BrightnessService.shared
+        check(svc.isDimming == false, "not dimming initially")
+        check(svc.enabled == false, "service disabled initially")
+        svc.enabled = true
+        svc.levelPercent = 50
+        check(svc.levelPercent == 50, "levelPercent set")
+
+        // applyFactor clamning testlash (via dim)
+        let target = BrightnessService.shared
+        target.smooth = false
+        target.enabled = true
+        target.levelPercent = 30
+        target.dimToBreak() // shouldn't crash; will set system gamma
+        check(target.isDimming == true, "isDimming true after dim")
+        target.restore()
+        check(target.isDimming == false, "isDimming false after restore")
+
+        // Disabled flag forbids dimying
+        target.enabled = false
+        target.dimToBreak()
+        check(target.isDimming == false, "disabled does not dim")
+        target.enabled = true
     }
 }
 Task { @MainActor in

@@ -27,6 +27,9 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var reminderSettings: ReminderSettings = .init()
     public var ambienceEnabled: Bool = false
     public var ambienceSound: String = BreakAmbienceService.Ambience.rain.rawValue
+    public var brightnessDimEnabled: Bool = false
+    public var brightnessDimPercent: Int = 35
+    public var brightnessSmooth: Bool = true
 
     public init() {}
 

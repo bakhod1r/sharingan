@@ -142,6 +142,17 @@ public final class BlinkCoordinator: ObservableObject {
         BreakAmbienceService.shared.start()
     }
 
+    private func startBrightnessDim() {
+        BrightnessService.shared.enabled = timer.settings.brightnessDimEnabled
+        BrightnessService.shared.levelPercent = Float(timer.settings.brightnessDimPercent)
+        BrightnessService.shared.smooth = timer.settings.brightnessSmooth
+        BrightnessService.shared.dimToBreak()
+    }
+
+    private func restoreBrightness() {
+        BrightnessService.shared.restore()
+    }
+
     private func handlePhaseComplete(_ note: Notification) {
         guard let phase = note.userInfo?["phase"] as? PomodoroPhase else { return }
         switch phase {
@@ -161,6 +172,7 @@ public final class BlinkCoordinator: ObservableObject {
             }
             speakBreakStart()
             startAmbience()
+            startBrightnessDim()
             if timer.settings.cameraEyeTrackingEnabled {
                 EyeTracker.shared.resetBlinkWindow()
             }
@@ -172,6 +184,7 @@ public final class BlinkCoordinator: ObservableObject {
             AlarmSoundService.shared.playSelected()
             breakPresenter?.dismissAll()
             BreakAmbienceService.shared.stop()
+            restoreBrightness()
             speakFocusStart()
             ReminderService.shared.resumeForFocus()
         case .paused:

@@ -104,6 +104,22 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("Screen brightness") {
+                    ToggleRow(title: "Dim screen on break",
+                              isOn: $settings.brightnessDimEnabled)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Dim level: \(settings.brightnessDimPercent)%")
+                            .font(.caption.weight(.medium))
+                        Slider(value: Binding(
+                                get: { Double(settings.brightnessDimPercent) },
+                                set: { settings.brightnessDimPercent = Int($0) }
+                              ), in: 5...95)
+                            .tint(.white)
+                    }
+                    ToggleRow(title: "Smooth transition",
+                              isOn: $settings.brightnessSmooth)
+                }
+
                 Section("Reminders (posture / water / custom)") {
                     ToggleRow(title: "Reminders enabled",
                               isOn: $settings.reminderSettings.enabled)
