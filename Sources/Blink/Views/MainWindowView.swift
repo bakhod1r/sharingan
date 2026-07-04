@@ -19,7 +19,7 @@ struct MainWindowView: View {
     // through) — the floating look from the CleanMyMac reference.
     private let sidebarWidth: CGFloat = 232
     private let cardLeftInset: CGFloat = 58   // main card starts this far from the window edge
-    private let sidebarLeftInset: CGFloat = 12 // sidebar's own distance from the window edge
+    private let sidebarLeftInset: CGFloat = 18 // sidebar's own distance from the window edge
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -307,10 +307,8 @@ private struct TimerDetailView: View {
                                 tint: .red.opacity(0.95),
                                 action: { timer.stop() })
             }
-
-            Spacer(minLength: 24)
         }
-        .padding(40)
+        .padding(EdgeInsets(top: 40, leading: 40, bottom: 50, trailing: 40))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .sheet(isPresented: $showTaskPicker) {
             TaskPickerSheet(timer: timer)
