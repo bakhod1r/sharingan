@@ -31,6 +31,7 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var brightnessDimPercent: Int = 35
     public var brightnessSmooth: Bool = true
     public var syncEnabled: Bool = false
+    public var appBlockerSettings: AppBlockerSettings = .init()
 
     public init() {}
 

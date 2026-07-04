@@ -162,6 +162,18 @@ public final class BlinkCoordinator: ObservableObject {
         BrightnessService.shared.restore()
     }
 
+    private func startAppBlocker() {
+        guard timer.settings.appBlockerSettings.enabled, timer.settings.blockScreenDuringBreak else {
+            return
+        }
+        AppBlockerService.shared.update(timer.settings.appBlockerSettings)
+        AppBlockerService.shared.activate()
+    }
+
+    private func stopAppBlocker() {
+        AppBlockerService.shared.deactivate()
+    }
+
     private func handlePhaseComplete(_ note: Notification) {
         guard let phase = note.userInfo?["phase"] as? PomodoroPhase else { return }
         switch phase {
@@ -182,6 +194,7 @@ public final class BlinkCoordinator: ObservableObject {
             speakBreakStart()
             startAmbience()
             startBrightnessDim()
+            startAppBlocker()
             if timer.settings.cameraEyeTrackingEnabled {
                 EyeTracker.shared.resetBlinkWindow()
             }
@@ -194,6 +207,7 @@ public final class BlinkCoordinator: ObservableObject {
             breakPresenter?.dismissAll()
             BreakAmbienceService.shared.stop()
             restoreBrightness()
+            stopAppBlocker()
             speakFocusStart()
             ReminderService.shared.resumeForFocus()
         case .paused:

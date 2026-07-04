@@ -43,7 +43,9 @@ testAlarmSoundEnum()
         testStreakRewardCenter()
         testReminders()
         testAmbienceEnum()
-        testBrightnessSettings()
+testBrightnessSettings()
+        testAppBlocker()
+        testBlockedAppPresets()
 
         print("\nPassed: \(passed)  Failed: \(failures)")
         if failures > 0 {
@@ -530,6 +532,39 @@ testAlarmSoundEnum()
         target.dimToBreak()
         check(target.isDimming == false, "disabled does not dim")
         target.enabled = true
+    }
+
+    static func testAppBlocker() {
+        print("• AppBlocker settings")
+        let s = AppBlockerSettings()
+        check(s.enabled == false, "blocker disabled by default")
+        check(s.onlyDuringBreak == true, "break-only default")
+        check(s.killOnFrontmost == false, "hide by default")
+        check(s.blockedApps.count == 6, "6 preset apps")
+        check(s.matches(bundleID: "com.apple.Safari") == false,
+              "disabled does not match")
+        var on = s
+        on.enabled = true
+        check(on.matches(bundleID: "com.apple.Safari") == true, "Safari matches when enabled")
+        check(on.matches(bundleID: "com.example.unknown") == false, "unknown no match")
+        check(on.matches(bundleID: "") == false, "empty bundleID no match")
+    }
+
+    static func testBlockedAppPresets() {
+        print("• BlockedApp presets")
+        check(BlockedApp.presets.count == 6, "6 presets")
+        check(BlockedApp.presets.contains { $0.bundleID == "ru.keepcoder.Telegram" },
+              "Telegram in presets")
+        check(BlockedApp.presets.contains { $0.name == "Chrome" }, "Chrome in presets")
+        let chrome = BlockedApp(bundleID: "com.google.Chrome", name: "Chrome")
+        check(chrome.id == "com.google.Chrome", "id = bundleID")
+        check(chrome == .init(bundleID: "com.google.Chrome", name: "Chrome"),
+              "equality")
+        var s = AppBlockerSettings()
+        s.blockedApps.removeAll { $0.bundleID == "com.apple.Safari" }
+        s.enabled = true
+        check(s.matches(bundleID: "com.apple.Safari") == false, "removed Safari")
+        check(s.matches(bundleID: "ru.keepcoder.Telegram") == true, "Telegram still set")
     }
 }
 Task { @MainActor in

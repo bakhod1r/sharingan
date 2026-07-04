@@ -120,6 +120,44 @@ struct SettingsView: View {
                               isOn: $settings.brightnessSmooth)
                 }
 
+                Section("App blocking (during break)") {
+                    ToggleRow(title: "Block distracting apps on break",
+                              isOn: $settings.appBlockerSettings.enabled)
+                    ToggleRow(title: "Force quit (not just hide)",
+                              isOn: $settings.appBlockerSettings.killOnFrontmost)
+                    ForEach($settings.appBlockerSettings.blockedApps) { $app in
+                        HStack {
+                            Image(systemName: "app.dashed")
+                                .foregroundStyle(.white.opacity(0.85))
+                            Text(app.name).foregroundStyle(.white)
+                            Spacer()
+                            Toggle("", isOn: Binding(
+                                get: { settings.appBlockerSettings.blockedApps.contains(app) },
+                                set: { on in
+                                    if !on, let idx = settings.appBlockerSettings.blockedApps.firstIndex(of: app) {
+                                        settings.appBlockerSettings.blockedApps.remove(at: idx)
+                                    } else if on, !settings.appBlockerSettings.blockedApps.contains(app) {
+                                        settings.appBlockerSettings.blockedApps.append(app)
+                                    }
+                                }
+                            ))
+                            .tint(.white)
+                            .labelsHidden()
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    Button {
+                        let preset = BlockedApp.presets[0]
+                        if !settings.appBlockerSettings.blockedApps.contains(preset) {
+                            settings.appBlockerSettings.blockedApps.append(preset)
+                        }
+                    } label: {
+                        Label("Reset presets", systemImage: "arrow.counterclockwise.circle.fill")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .buttonStyle(.plain)
+                }
+
                 Section("Reminders (posture / water / custom)") {
                     ToggleRow(title: "Reminders enabled",
                               isOn: $settings.reminderSettings.enabled)
