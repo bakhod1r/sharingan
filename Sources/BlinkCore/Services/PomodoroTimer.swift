@@ -169,6 +169,9 @@ public final class PomodoroTimer: ObservableObject {
             stats.registerFocusCompletion()
             persist(stats)
             cyclesCompletedInRound += 1
+            NotificationCenter.default.post(name: .streakUpdated,
+                                            object: self,
+                                            userInfo: ["streak": stats.streak])
         }
         NotificationCenter.default.post(name: .phaseDidComplete, object: self,
                                         userInfo: ["phase": phase])
@@ -284,4 +287,5 @@ extension Notification.Name {
     static let focusFiveMinLeft = Notification.Name("blink.focusFiveMinLeft")
     static let breakShouldStart = Notification.Name("blink.breakShouldStart")
     static let breakShouldEnd   = Notification.Name("blink.breakShouldEnd")
+    static let streakUpdated    = Notification.Name("blink.streakUpdated")
 }

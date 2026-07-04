@@ -49,9 +49,16 @@ struct BreakView: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, 64)
 
-                    EyeExerciseAnimation()
-                        .glassRounded(28, material: .regular)
-                        .padding(20)
+                    if timer.settings.cameraEyeTrackingEnabled,
+                       CameraService.shared.isAuthorized {
+                        ExerciseSequenceView(validator: ExerciseValidator.shared,
+                                             eyeTracker: EyeTracker.shared)
+                        CameraIndicatorBadge(camera: CameraService.shared)
+                    } else {
+                        EyeExerciseAnimation()
+                            .glassRounded(28, material: .regular)
+                            .padding(20)
+                    }
                 }
 
                 GlassButton(label: "Tanaffusni chiqar",
@@ -68,12 +75,16 @@ struct BreakView: View {
                                         rate: timer.settings.ttsRate,
                                         pitch: timer.settings.ttsPitch)
             }
+            if timer.settings.cameraEyeTrackingEnabled {
+                ExerciseValidator.shared.reset()
+            }
             withAnimation(.easeInOut(duration: 6).repeatForever(autoreverses: true)) {
                 animateBlobs = true
             }
         }
         .onDisappear {
             TTSService.shared.stop()
+            ExerciseValidator.shared.stop()
         }
     }
 

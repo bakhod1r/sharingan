@@ -40,6 +40,25 @@ public final class BlinkCoordinator: ObservableObject {
         shortcuts.update(actions, enabled: true)
     }
 
+    public func syncAlarm() {
+        AlarmSoundService.shared.selected =
+            AlarmSoundService.Sound(rawValue: timer.settings.alarmSound) ?? .glass
+    }
+
+    public func syncCamera() {
+        let wantCamera = timer.settings.cameraEyeTrackingEnabled
+        Task { @MainActor in
+            if wantCamera {
+                _ = await CameraService.shared.requestPermission()
+                CameraService.shared.start()
+                EyeTracker.shared.start()
+            } else {
+                EyeTracker.shared.stop()
+                CameraService.shared.stop()
+            }
+        }
+    }
+
     public func syncFloating() {
         guard timer.settings.floatingTimerEnabled else {
             floatingController?.hideFloating()
@@ -82,6 +101,7 @@ public final class BlinkCoordinator: ObservableObject {
                 title: "Blink",
                 body: "Diqqat tugadi. Tanaffus boshlanadi.",
                 identifier: "blink.focusDone")
+            AlarmSoundService.shared.playSelected()
             floatingController?.hideFloating()
             if let p = breakPresenter, timer.settings.blockScreenDuringBreak {
                 p.presentBreak(
@@ -90,11 +110,15 @@ public final class BlinkCoordinator: ObservableObject {
                 )
             }
             speakBreakStart()
+            if timer.settings.cameraEyeTrackingEnabled {
+                EyeTracker.shared.resetBlinkWindow()
+            }
         case .shortBreak, .longBreak:
             NotificationService.shared.notify(
                 title: "Blink",
                 body: "Tanaffus tugadi. Diqqatga qaytamiz.",
                 identifier: "blink.breakDone")
+            AlarmSoundService.shared.playSelected()
             breakPresenter?.dismissAll()
             speakFocusStart()
         case .paused:

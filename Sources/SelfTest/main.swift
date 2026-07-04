@@ -34,7 +34,10 @@ struct SelfTest {
             failures += 1
             print("  ✗ Codable threw: \(error)")
         }
-        testRepeatConfig()
+testRepeatConfig()
+        testStreakStore()
+        testStatsWithStreak()
+        testAlarmSoundEnum()
 
         print("\nPassed: \(passed)  Failed: \(failures)")
         if failures > 0 {
@@ -291,6 +294,68 @@ struct SelfTest {
         let sdecoded = try JSONDecoder().decode(PomodoroStats.self, from: sdata)
         check(sdecoded == stats, "stats encode/decode equal")
         check(sdecoded.completedFocus == 7, "decoded stats count")
+    }
+
+    // MARK: Streak
+
+    static func testStreakStore() {
+        print("• StreakStore")
+        var streak = StreakStore()
+        check(streak.currentStreak == 0, "fresh streak 0")
+        check(streak.longestStreak == 0, "fresh longest 0")
+        check(streak.completedToday() == false, "nothing completed today")
+
+        let cal = Calendar.current
+        let today = Date()
+        streak.registerFocus(on: today, calendar: cal)
+        check(streak.currentStreak == 1, "first completion → streak 1")
+        check(streak.longestStreak == 1, "longest updated to 1")
+        check(streak.completedToday(on: today, calendar: cal) == true,
+              "completedToday true after first")
+
+        let yesterday = cal.date(byAdding: .day, value: -1, to: today)!
+        var s2 = StreakStore()
+        s2.registerFocus(on: yesterday, calendar: cal)
+        s2.registerFocus(on: today, calendar: cal)
+        check(s2.currentStreak == 2, "consecutive days → streak 2")
+        check(s2.longestStreak == 2, "longest = 2")
+
+        // Gap of 3 days resets streak to 1
+        let threeDaysAgo = cal.date(byAdding: .day, value: -3, to: today)!
+        var s3 = StreakStore()
+        s3.registerFocus(on: threeDaysAgo, calendar: cal)
+        check(s3.currentStreak == 1, "streak 1 after first day")
+        s3.registerFocus(on: today, calendar: cal)
+        check(s3.currentStreak == 1, "gap resets streak to 1 (not continued)")
+        check(s3.longestStreak == 1, "longest stays 1 after gap reset")
+
+        // Same-day re-registration does not increase streak
+        var s4 = StreakStore()
+        s4.registerFocus(on: today, calendar: cal)
+        s4.registerFocus(on: today, calendar: cal)
+        check(s4.currentStreak == 1, "same-day re-register keeps streak 1")
+    }
+
+    static func testStatsWithStreak() {
+        print("• PomodoroStats with streak")
+        var stats = PomodoroStats()
+        let cal = Calendar.current
+        let yesterday = cal.date(byAdding: .day, value: -1, to: Date())!
+        stats.registerFocusCompletion(on: yesterday)
+        stats.registerFocusCompletion(on: Date())
+        check(stats.streak.currentStreak == 2, "stats streak 2 via registerFocusCompletion")
+        check(stats.streakDays == 2, "streakDays mirrors currentStreak")
+        check(stats.completedFocus == 2, "completedFocus increments")
+    }
+
+    static func testAlarmSoundEnum() {
+        print("• AlarmSoundService.Sound")
+        check(AlarmSoundService.Sound.allCases.count == 4, "4 sound cases")
+        check(AlarmSoundService.Sound(rawValue: "glass") == .glass, "rawValue glass")
+        check(AlarmSoundService.Sound(rawValue: "softBell") == .softBell, "rawValue softBell")
+        check(AlarmSoundService.Sound(rawValue: "silent") == .silent, "rawValue silent")
+        check(AlarmSoundService.Sound(rawValue: "invalid") == nil, "invalid rawValue → nil")
+        check(AlarmSoundService.Sound.silent.label == "Ovozsiz", "silent label localized")
     }
 }
 Task { @MainActor in

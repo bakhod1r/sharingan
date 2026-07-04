@@ -79,6 +79,28 @@ struct SettingsView: View {
                               isOn: $settings.notifyFiveMinLeft)
                 }
 
+                Section("Ovoz") {
+                    ToggleRow(title: "Alarm ovozi yoqilgan",
+                              isOn: $settings.alarmSoundEnabled)
+                    Picker("Alarm tovushi", selection: $settings.alarmSound) {
+                        ForEach(AlarmSoundService.Sound.allCases, id: \.rawValue) { s in
+                            Text(s.label).tag(s.rawValue)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .tint(.white)
+                }
+
+                Section("Ko'z kuzatuvi") {
+                    ToggleRow(title: "Kamera orqali blink detection",
+                              isOn: $settings.cameraEyeTrackingEnabled)
+                    if settings.cameraEyeTrackingEnabled {
+                        Text("Faqat tanaffus vaqtida ishlaydi. Blink kam bo'lsa ogohlantiradi.")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.65))
+                    }
+                }
+
                 Section("Ko'rinish") {
                     ToggleRow(title: "Suzuvchi taymer",
                               isOn: $settings.floatingTimerEnabled)

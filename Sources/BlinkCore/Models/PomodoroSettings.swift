@@ -20,6 +20,9 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var flashAtFiveSecLeft: Bool = true
     public var floatingTimerEnabled: Bool = true
     public var globalShortcutsEnabled: Bool = true
+    public var cameraEyeTrackingEnabled: Bool = false
+    public var alarmSound: String = AlarmSoundService.Sound.glass.rawValue
+    public var alarmSoundEnabled: Bool = true
 
     public init() {}
 

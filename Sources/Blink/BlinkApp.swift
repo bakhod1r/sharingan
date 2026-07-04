@@ -14,11 +14,16 @@ struct BlinkApp: App {
         coord.breakPresenter = BreakWindowManager.shared
         coord.floatingController = FloatingWindowManager.shared
         _coordinator = StateObject(wrappedValue: coord)
-    }
-
+}
+ 
     var body: some Scene {
         MenuBarExtra {
             MenuBarView(timer: timer)
+                .onAppear {
+                    coordinator.syncAlarm()
+                    coordinator.installShortcuts()
+                    coordinator.syncCamera()
+                }
         } label: {
             Label {
                 Text(statusText)
@@ -31,6 +36,9 @@ struct BlinkApp: App {
 
         Settings {
             SettingsView(timer: timer, settings: $timer.settings)
+                .onChange(of: timer.settings.alarmSound) { _ in coordinator.syncAlarm() }
+                .onChange(of: timer.settings.globalShortcutsEnabled) { _ in coordinator.installShortcuts() }
+                .onChange(of: timer.settings.cameraEyeTrackingEnabled) { _ in coordinator.syncCamera() }
         }
     }
 

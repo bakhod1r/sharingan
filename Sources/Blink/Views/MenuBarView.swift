@@ -13,7 +13,7 @@ struct MenuBarView: View {
             statsStrip
         }
         .padding(18)
-        .frame(width: 300)
+        .frame(width: 320)
     }
 
     private var statusHeader: some View {
@@ -74,6 +74,7 @@ struct MenuBarView: View {
                 stat(value: "\(timer.repeatIndex + 1)/\(timer.settings.repeatConfig.count)",
                      label: "Takror")
             }
+            stat(value: "\(timer.stats.streak.currentStreak)", label: "Ketma-ket")
         }
         .frame(maxWidth: .infinity)
     }
