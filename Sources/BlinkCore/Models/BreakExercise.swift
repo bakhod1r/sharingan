@@ -9,7 +9,7 @@ public struct BreakExerciseStep: Equatable, Sendable, Codable {
         self.direction = direction
         self.holdSeconds = max(0.5, holdSeconds)
         self.instruction = instruction.isEmpty
-            ? "Ko'zingni \(directionLabel(direction)) qarating"
+            ? "Ko'zingni \(Self.directionLabel(direction)) qarating"
             : instruction
     }
 
@@ -27,7 +27,7 @@ public struct BreakExerciseStep: Equatable, Sendable, Codable {
         }
     }
 
-    private func directionLabel(_ key: String) -> String {
+    private static func directionLabel(_ key: String) -> String {
         switch key.lowercased() {
         case "up":       return "yuqoriga"
         case "down":     return "pastga"

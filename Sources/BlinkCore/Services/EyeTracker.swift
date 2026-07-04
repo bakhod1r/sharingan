@@ -118,14 +118,14 @@ public final class EyeTracker: ObservableObject {
     }
 
     private func process(_ buffer: CVImageBuffer) {
-        let request = VNDetectFaceLandmarksRequest { [weak self] req, _ in
+        let faceReq = VNDetectFaceLandmarksRequest { [weak self] req, _ in
             MainActor.assumeIsolated {
                 self?.handleResult(req)
             }
         }
-        request.revision = VNDetectFaceLandmarksRequestRevision2
+        faceReq.revision = VNDetectFaceLandmarksRequestRevision2
         do {
-            try sequenceHandler?.perform([request], on: buffer, orientation: rotation)
+            try sequenceHandler?.perform([faceReq], on: buffer, orientation: rotation)
         } catch {
             // Vision error — drop frame quietly.
         }
@@ -141,7 +141,10 @@ public final class EyeTracker: ObservableObject {
                              faceDetected: false)
             return
         }
-        faceBoundsCache = observation.boundingBox
+        // VNFaceLandmarks2D itself has no boundingBox; derive face bounds
+        // from the union of all available landmark points.
+        let bounds = boundsFromLandmarks(observation)
+        faceBoundsCache = bounds
         let left = openRatio(for: observation.leftEye)
         let right = openRatio(for: observation.rightEye)
         let avg = (left + right) / 2
@@ -149,7 +152,7 @@ public final class EyeTracker: ObservableObject {
 
         let gaze = gazeDirection(leftEye: observation.leftEye,
                                   rightEye: observation.rightEye,
-                                  faceBounds: observation.boundingBox)
+                                  faceBounds: bounds)
 
         var total = state.blinkCountTotal
         if blinking, let last = lastBlinkDate, Date().timeIntervalSince(last) > 0.15 {
@@ -169,6 +172,28 @@ public final class EyeTracker: ObservableObject {
         lastGazeDirection = gaze
         state = EyeState(left: left, right: right, blinking: blinking, total: total,
                          gaze: gaze, faceDetected: true)
+    }
+
+    private func boundsFromLandmarks(_ lm: VNFaceLandmarks2D) -> CGRect {
+        let regions: [VNFaceLandmarkRegion2D?] = [
+            lm.faceContour, lm.leftEye, lm.rightEye,
+            lm.leftEyebrow, lm.rightEyebrow, lm.nose, lm.outerLips, lm.innerLips,
+            lm.medianLine
+        ]
+        var allX: [CGFloat] = []
+        var allY: [CGFloat] = []
+        for region in regions {
+            guard let r = region else { continue }
+            for p in r.normalizedPoints {
+                allX.append(p.x); allY.append(p.y)
+            }
+        }
+        guard let minX = allX.min(), let maxX = allX.max(),
+              let minY = allY.min(), let maxY = allY.max(),
+              maxX > minX, maxY > minY else {
+            return CGRect(x: 0.3, y: 0.3, width: 0.4, height: 0.4)
+        }
+        return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
     }
 
     /// Eye openness ratio in [0,1]. Lower values = more closed eye.

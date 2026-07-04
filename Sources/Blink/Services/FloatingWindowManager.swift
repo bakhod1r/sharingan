@@ -9,7 +9,7 @@ final class FloatingWindowManager: FloatingTimerController {
 
     func showFloating(timer: PomodoroTimer) {
         if panel != nil { return }
-        let size = NSSize(width: 220, height: 96)
+        let size = NSSize(width: 168, height: 86)
         let panel = FloatingMiniPanel(
             contentRect: NSRect(x: 0, y: 0, width: size.width, height: size.height),
             styleMask: [.borderless, .fullSizeContentView, .nonactivatingPanel],
@@ -31,7 +31,6 @@ final class FloatingWindowManager: FloatingTimerController {
         let hosting = NSHostingView(rootView: view)
         hosting.translatesAutoresizingMaskIntoConstraints = false
         panel.contentView = hosting
-        panel.center()
         panel.orderFrontRegardless()
         self.panel = panel
     }

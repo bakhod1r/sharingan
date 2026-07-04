@@ -37,7 +37,9 @@ struct SelfTest {
 testRepeatConfig()
         testStreakStore()
         testStatsWithStreak()
-        testAlarmSoundEnum()
+testAlarmSoundEnum()
+        testGazeDirection()
+        testBreakExerciseModel()
 
         print("\nPassed: \(passed)  Failed: \(failures)")
         if failures > 0 {
@@ -356,6 +358,51 @@ testRepeatConfig()
         check(AlarmSoundService.Sound(rawValue: "silent") == .silent, "rawValue silent")
         check(AlarmSoundService.Sound(rawValue: "invalid") == nil, "invalid rawValue → nil")
         check(AlarmSoundService.Sound.silent.label == "Ovozsiz", "silent label localized")
+    }
+
+    static func testGazeDirection() {
+        print("• GazeDirection")
+        check(GazeDirection.center.magnitude == 0, "center magnitude 0")
+        check(GazeDirection.right.magnitude == 1, "right magnitude 1")
+        check(GazeDirection.upLeft.magnitude - 0.9899 < 0.01, "upLeft ~0.99")
+        check(GazeDirection.center.matches(.center), "center matches itself")
+        check(GazeDirection.right.matches(.right), "right matches itself")
+        check(GazeDirection.right.matches(GazeDirection(dx: 0.85, dy: 0.1)),
+              "right matches near-right")
+        check(!GazeDirection.right.matches(.left), "right does not match left")
+        check(!GazeDirection.up.matches(.down), "up does not match down")
+        check(GazeDirection(dx: 0, dy: 0).matches(.center, tolerance: 0.1),
+              "near-center matches center")
+        check(GazeDirection(dx: 1.2, dy: 1.5).dx == 1, "dx clamped to 1")
+        check(GazeDirection(dx: -1.2, dy: 0).dx == -1, "dx clamped to -1")
+        check(GazeDirection.center.label == "markaz", "center label")
+        check(GazeDirection.right.label == "o'ng", "right label")
+        check(GazeDirection.up.label == "yuqori", "up label")
+    }
+
+    static func testBreakExerciseModel() {
+        print("• BreakExercise model")
+        check(BreakExerciseStep(direction: "up", holdSeconds: 3).instruction.contains("yuqoriga"),
+              "auto instruktsiya 'yuqoriga' bilan")
+        check(BreakExerciseStep(direction: "down", holdSeconds: 0.1).holdSeconds == 0.5,
+              "holdSeconds floor 0.5")
+        check(BreakExerciseStep(direction: "left", holdSeconds: 4,
+                                instruction: "Custom").instruction == "Custom",
+              "custom instruktsiya saqlanadi")
+        check(BreakExerciseStep(direction: "up", holdSeconds: 1).targetGaze == .up,
+              "up → .up gaze")
+        check(BreakExerciseStep(direction: "right", holdSeconds: 1).targetGaze == .right,
+              "right → .right gaze")
+        check(BreakExerciseStep(direction: "center", holdSeconds: 1).targetGaze == .center,
+              "center → .center gaze")
+        check(BreakExerciseStep(direction: "unknown", holdSeconds: 1).targetGaze == .center,
+              "unknown → .center fallback")
+        check(BreakExercise.twentyRule.steps.count == 2, "20-20-20 has 2 steps")
+        check(BreakExercise.gaze.steps.count == 12, "gaze has 12 steps")
+        check(BreakExercise.blink.steps.count == 2, "blink has 2 steps")
+        check(BreakExercise.library().count == 3, "library has 3 exercises")
+        check(BreakExercise.library() == [.twentyRule, .gaze, .blink],
+              "library ordering")
     }
 }
 Task { @MainActor in
