@@ -16,6 +16,13 @@ struct TasksView: View {
     @State private var hasDue = false
     @State private var newDue = Date().addingTimeInterval(3600)
 
+    // Inline "add category" form state.
+    @State private var showNewCategory = false
+    @State private var newCatName = ""
+    @State private var newCatColor = TaskCategory.palette[0]
+
+    private var newCategoryAccent: Color { Color(hex: store.color(for: newCategory)) }
+
     var body: some View {
         VStack(spacing: 12) {
             composer
@@ -60,12 +67,19 @@ struct TasksView: View {
             }
             HStack(spacing: 8) {
                 Menu {
-                    ForEach(TaskCategory.presets) { c in
+                    ForEach(store.allCategories) { c in
                         Button(c.name) { newCategory = c.name }
+                    }
+                    Divider()
+                    Button {
+                        newCatName = ""
+                        showNewCategory = true
+                    } label: {
+                        Label("Add category…", systemImage: "plus")
                     }
                 } label: {
                     HStack(spacing: 6) {
-                        Circle().fill(Color(hex: TaskCategory.color(for: newCategory)))
+                        Circle().fill(newCategoryAccent)
                             .frame(width: 9, height: 9)
                         Text(newCategory)
                             .font(.system(.caption, design: .rounded).weight(.medium))
@@ -79,6 +93,8 @@ struct TasksView: View {
                     .font(.system(.caption, design: .rounded))
                     .foregroundStyle(.secondary)
             }
+
+            if showNewCategory { newCategoryForm }
             HStack(spacing: 8) {
                 Toggle(isOn: $hasDue) {
                     Text("Due")
@@ -108,6 +124,48 @@ struct TasksView: View {
         .glassRounded(16, material: .thin)
     }
 
+    /// Inline form to create a custom, color-coded category.
+    private var newCategoryForm: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Circle().fill(Color(hex: newCatColor)).frame(width: 10, height: 10)
+                TextField("New category name", text: $newCatName, onCommit: addCategory)
+                    .textFieldStyle(.plain)
+                    .font(.system(.caption, design: .rounded).weight(.medium))
+                Button("Add", action: addCategory)
+                    .buttonStyle(.borderless)
+                    .disabled(newCatName.trimmingCharacters(in: .whitespaces).isEmpty)
+                Button {
+                    showNewCategory = false
+                } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+            HStack(spacing: 6) {
+                ForEach(TaskCategory.palette, id: \.self) { hex in
+                    Circle()
+                        .fill(Color(hex: hex))
+                        .frame(width: 18, height: 18)
+                        .overlay(
+                            Circle().stroke(Color.white,
+                                            lineWidth: newCatColor == hex ? 2 : 0)
+                        )
+                        .onTapGesture { newCatColor = hex }
+                }
+            }
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.05)))
+    }
+
+    private func addCategory() {
+        guard let name = store.addCategory(name: newCatName, colorHex: newCatColor) else { return }
+        newCategory = name
+        newCatName = ""
+        showNewCategory = false
+    }
+
     private var emptyState: some View {
         VStack(spacing: 8) {
             Image(systemName: "checklist")
@@ -130,7 +188,7 @@ struct TasksView: View {
     private func section(_ category: String, _ items: [TaskItem]) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                Circle().fill(Color(hex: TaskCategory.color(for: category)))
+                Circle().fill(Color(hex: store.color(for: category)))
                     .frame(width: 8, height: 8)
                 Text(category.uppercased())
                     .font(.system(.caption2, design: .rounded).weight(.heavy))
@@ -149,6 +207,7 @@ struct TasksView: View {
 
     private func row(_ task: TaskItem) -> some View {
         let isActive = store.activeTaskID == task.id
+        let accent = Color(hex: store.color(for: task.category))
         return HStack(spacing: 10) {
             Button {
                 store.toggleDone(task.id)
@@ -170,8 +229,8 @@ struct TasksView: View {
                         Text("#\(tag)")
                             .font(.system(size: 9, weight: .semibold, design: .rounded))
                             .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(Color.white.opacity(0.1), in: Capsule())
-                            .foregroundStyle(.secondary)
+                            .background(accent.opacity(0.22), in: Capsule())
+                            .foregroundStyle(accent)
                     }
                     if let due = task.dueDate {
                         Label(dueText(due), systemImage: "calendar")
@@ -249,19 +308,5 @@ struct TasksView: View {
         store.setActive(task.id)
         if timer.phase != .focus { timer.stop() }
         timer.start()
-    }
-}
-
-fileprivate extension Color {
-    init(hex: String) {
-        var s = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
-        if s.count == 3 { s = s.map { "\($0)\($0)" }.joined() }
-        var rgb: UInt64 = 0
-        Scanner(string: s).scanHexInt64(&rgb)
-        self.init(.sRGB,
-                  red: Double((rgb >> 16) & 0xFF) / 255,
-                  green: Double((rgb >> 8) & 0xFF) / 255,
-                  blue: Double(rgb & 0xFF) / 255,
-                  opacity: 1)
     }
 }

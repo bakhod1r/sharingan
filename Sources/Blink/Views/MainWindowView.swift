@@ -23,9 +23,10 @@ struct MainWindowView: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // Transparent base — the window itself is clear (see WindowConfigurator),
-            // so the corners and left gutter reveal the desktop behind.
-            Color.clear
+            // Dark, theme-tinted backdrop that fills the whole window, so the
+            // floating card and the overhanging sidebar sit on a clean surface
+            // (no desktop bleed-through), CleanMyMac-style.
+            backdrop
 
             // Main content card: the gradient + detail, inset from the window
             // edges so it reads as a floating rounded panel.
@@ -64,14 +65,13 @@ struct MainWindowView: View {
         // Extend content under the (hidden) title bar so the window buttons
         // rest on the sidebar instead of hovering in an empty top strip.
         .ignoresSafeArea()
-        .background(WindowConfigurator())
         .animation(.easeInOut(duration: 0.24), value: section)
     }
 
     // MARK: - Sidebar (custom glass panel, CleanMyMac-style)
 
     private var sidebar: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 4) {
             brand
             sectionHeader("Main")
             navRow(.timer)
@@ -84,10 +84,12 @@ struct MainWindowView: View {
         .frame(maxHeight: .infinity, alignment: .top)
         .background(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(.regularMaterial)
+                .fill(.ultraThinMaterial)
                 .overlay(
+                    // Faint theme tint so the panel reads as colored glass —
+                    // the window color glows through, CleanMyMac-style.
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .fill(Color.white.opacity(0.06))
+                        .fill((timer.settings.theme.gradient.first ?? .blue).opacity(0.14))
                 )
         )
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
@@ -104,16 +106,28 @@ struct MainWindowView: View {
 
     private var brand: some View {
         HStack(spacing: 10) {
-            Image(systemName: "eye.fill")
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(.tint)
+            appIcon
+                .resizable()
+                .frame(width: 28, height: 28)
+                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
             Text("Blink")
                 .font(.system(.title2, design: .rounded).weight(.bold))
                 .foregroundStyle(.white)
             Spacer()
         }
         // Leave room for the traffic-light buttons over the hidden title bar.
-        .padding(.horizontal, 14).padding(.top, 30).padding(.bottom, 10)
+        .padding(.horizontal, 14).padding(.top, 36).padding(.bottom, 10)
+    }
+
+    /// The real app icon, bundled at `Sources/Blink/Resources/AppIcon.png`,
+    /// falling back to an SF Symbol if it can't be loaded.
+    private var appIcon: Image {
+        if let url = Bundle.module.url(forResource: "AppIcon", withExtension: "png"),
+           let ns = NSImage(contentsOf: url) {
+            return Image(nsImage: ns)
+        }
+        return Image(systemName: "eye.fill")
     }
 
     private func sectionHeader(_ title: String) -> some View {
@@ -149,7 +163,7 @@ struct MainWindowView: View {
                 }
             }
             .foregroundStyle(selected ? Color.white : .white.opacity(0.62))
-            .padding(.horizontal, 10).padding(.vertical, 7)
+            .padding(.horizontal, 10).padding(.vertical, 9)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(selected ? Color.white.opacity(0.16) : .clear)
@@ -202,6 +216,17 @@ struct MainWindowView: View {
         }
     }
 
+    /// Dark, theme-tinted surface behind the floating card + sidebar. Heavily
+    /// darkened so the brighter card panel pops against it.
+    private var backdrop: some View {
+        let colors = timer.settings.theme.gradient
+        return ZStack {
+            LinearGradient(colors: colors,
+                           startPoint: .topLeading, endPoint: .bottomTrailing)
+            Color.black.opacity(0.74)
+        }
+    }
+
     /// Deep, colored gradient for the main content card (CleanMyMac-style),
     /// tinted by the current theme and darkened for text contrast.
     private var windowBackground: some View {
@@ -214,30 +239,6 @@ struct MainWindowView: View {
             RadialGradient(colors: [(colors.first ?? .blue).opacity(0.45), .clear],
                            center: .topLeading, startRadius: 0, endRadius: 620)
                 .blendMode(.screen)
-        }
-    }
-}
-
-/// Makes the host `NSWindow` transparent so the content card and the
-/// overhanging sidebar float over the desktop, with the window's own square
-/// shadow removed (our SwiftUI cards cast their own).
-private struct WindowConfigurator: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        DispatchQueue.main.async {
-            guard let window = view.window else { return }
-            window.isOpaque = false
-            window.backgroundColor = .clear
-            window.hasShadow = false
-        }
-        return view
-    }
-    func updateNSView(_ nsView: NSView, context: Context) {
-        DispatchQueue.main.async {
-            guard let window = nsView.window else { return }
-            window.isOpaque = false
-            window.backgroundColor = .clear
-            window.hasShadow = false
         }
     }
 }
@@ -271,25 +272,22 @@ private struct TimerDetailView: View {
                 }
             }
 
-            // Tappable task selector — pick a task before focusing.
+            // Tappable task selector — pick a task before focusing. Sized to
+            // read as a primary control that matches the timer's scale.
             Button {
                 showTaskPicker = true
             } label: {
-                if let active = tasks.activeTask {
-                    Label(active.title, systemImage: "target")
-                        .font(.system(.callout, design: .rounded).weight(.medium))
-                        .foregroundStyle(.white.opacity(0.9))
-                        .padding(.horizontal, 16).padding(.vertical, 8)
-                        .glassCapsule(material: .thin)
-                } else {
-                    Label("Choose a task", systemImage: "plus.circle")
-                        .font(.system(.callout, design: .rounded).weight(.medium))
-                        .foregroundStyle(.white.opacity(0.75))
-                        .padding(.horizontal, 16).padding(.vertical, 8)
-                        .glassCapsule(material: .thin)
-                }
+                let active = tasks.activeTask
+                Label(active?.title ?? "Choose a task",
+                      systemImage: active != nil ? "target" : "plus.circle.fill")
+                    .font(.system(.title3, design: .rounded).weight(.semibold))
+                    .foregroundStyle(active != nil ? .white : .white.opacity(0.85))
+                    .lineLimit(1)
+                    .padding(.horizontal, 26).padding(.vertical, 14)
+                    .frame(minWidth: 240)
+                    .glassCapsule(material: .regular)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressableSubtle)
 
             Spacer(minLength: 12)
 
@@ -320,9 +318,10 @@ private struct TimerDetailView: View {
     /// Big run button: if a task is already active, just toggle the timer.
     /// Otherwise, prompt the user to pick a task first.
     private func runTapped() {
-        if timer.isRunning || tasks.activeTask != nil {
+        if timer.isRunning || tasks.activeTask != nil || !timer.settings.requireTaskForFocus {
             timer.toggle()
         } else {
+            // No task and the rule is on — make the user pick one first.
             showTaskPicker = true
         }
     }

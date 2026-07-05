@@ -23,6 +23,7 @@ struct BlinkApp: App {
         let coord = BlinkCoordinator(timer: timer)
         coord.breakPresenter = BreakWindowManager.shared
         coord.floatingController = FloatingWindowManager.shared
+        coord.quickAddController = QuickAddWindowManager.shared
         _coordinator = StateObject(wrappedValue: coord)
 }
  

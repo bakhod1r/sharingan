@@ -7,6 +7,7 @@ public enum GlobalShortcut: String, CaseIterable, Sendable {
     case reset
     case addFive
     case showFloating
+    case quickAddTask
 
     public var defaultKeyCode: UInt32 {
         switch self {
@@ -15,6 +16,7 @@ public enum GlobalShortcut: String, CaseIterable, Sendable {
         case .reset:        return UInt32(kVK_ANSI_R)
         case .addFive:      return UInt32(kVK_ANSI_Equal)
         case .showFloating: return UInt32(kVK_ANSI_L)
+        case .quickAddTask: return UInt32(kVK_ANSI_N)
         }
     }
 
@@ -33,6 +35,7 @@ public enum GlobalShortcut: String, CaseIterable, Sendable {
         case .reset:        return "Reset"
         case .addFive:      return "+5 minutes"
         case .showFloating: return "Show floating timer"
+        case .quickAddTask: return "Quick add task"
         }
     }
 }

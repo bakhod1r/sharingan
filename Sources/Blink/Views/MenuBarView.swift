@@ -7,6 +7,7 @@ struct MenuBarView: View {
     @ObservedObject private var tasks = TaskStore.shared
     @Environment(\.openWindow) private var openWindow
     @State private var tab: Tab = .timer
+    @State private var quickTitle = ""
 
     private enum Tab: Hashable { case timer, tasks, stats }
 
@@ -41,15 +42,133 @@ struct MenuBarView: View {
         VStack(alignment: .leading, spacing: 14) {
             StreakRewardBanner(center: StreakRewardCenter.shared)
             statusHeader
-            if let active = tasks.activeTask {
-                activeTaskChip(active)
-            } else {
-                chooseTaskButton
-            }
+            // Task list is the primary plan here — an inline mini list to add,
+            // pick, and run tasks without leaving the Timer tab. The pomodoro
+            // controls sit below as a secondary layer.
+            taskList
             controls
             Divider().overlay(Color.white.opacity(0.15))
             statsStrip
         }
+    }
+
+    // MARK: - Inline task list
+
+    /// Open (unfinished) tasks, the active one floated to the top.
+    private var openTasks: [TaskItem] {
+        tasks.tasks
+            .filter { !$0.isDone }
+            .sorted { a, b in
+                if (tasks.activeTaskID == a.id) != (tasks.activeTaskID == b.id) {
+                    return tasks.activeTaskID == a.id
+                }
+                return a.createdAt < b.createdAt
+            }
+    }
+
+    private var taskList: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Quick add
+            HStack(spacing: 8) {
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(.tint)
+                TextField("Add a task…", text: $quickTitle, onCommit: quickAdd)
+                    .textFieldStyle(.plain)
+                    .font(.system(.callout, design: .rounded))
+                    .onSubmit(quickAdd)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 9)
+            .glassCapsule(material: .thin)
+
+            if openTasks.isEmpty {
+                HStack {
+                    Spacer()
+                    Text("No tasks yet — add one above")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+                .padding(.vertical, 10)
+            } else {
+                ScrollView {
+                    VStack(spacing: 6) {
+                        ForEach(openTasks) { task in miniRow(task) }
+                    }
+                    .padding(.vertical, 1)
+                }
+                .frame(maxHeight: min(CGFloat(openTasks.count) * 44, 176))
+            }
+        }
+    }
+
+    private func miniRow(_ task: TaskItem) -> some View {
+        let isActive = tasks.activeTaskID == task.id
+        let accent = Color(hex: tasks.color(for: task.category))
+        return HStack(spacing: 10) {
+            Button {
+                tasks.toggleDone(task.id)
+            } label: {
+                Image(systemName: "circle")
+                    .font(.system(size: 17))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+
+            Circle().fill(accent).frame(width: 7, height: 7)
+
+            Text(task.title)
+                .font(.system(.callout, design: .rounded).weight(.medium))
+                .lineLimit(1)
+            Spacer(minLength: 6)
+
+            if task.pomodorosDone > 0 {
+                Text("🍅\(task.pomodorosDone)")
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+            Button {
+                startFocus(on: task)
+            } label: {
+                Image(systemName: isActive && timer.isRunning
+                      ? "pause.circle.fill" : "play.circle.fill")
+                    .font(.system(size: 22))
+                    .foregroundStyle(isActive ? Color.accentColor : .secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Run a focus pomodoro on this task")
+        }
+        .padding(.horizontal, 10).padding(.vertical, 7)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(isActive ? accent.opacity(0.16) : Color.white.opacity(0.04))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(isActive ? accent.opacity(0.5) : .clear, lineWidth: 1)
+        )
+        .contextMenu {
+            Button(role: .destructive) { tasks.delete(task.id) } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
+    }
+
+    private func quickAdd() {
+        let trimmed = quickTitle.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        tasks.add(title: trimmed)
+        quickTitle = ""
+    }
+
+    private func startFocus(on task: TaskItem) {
+        if tasks.activeTaskID == task.id, timer.isRunning {
+            timer.toggle()
+            return
+        }
+        tasks.setActive(task.id)
+        if timer.phase != .focus { timer.stop() }
+        timer.start()
     }
 
     private var statsTab: some View {
@@ -64,28 +183,6 @@ struct MenuBarView: View {
     }
 
     // MARK: - Pieces
-
-    private func activeTaskChip(_ task: TaskItem) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: "target")
-                .foregroundStyle(.tint)
-            Text(task.title)
-                .font(.system(.callout, design: .rounded).weight(.medium))
-                .lineLimit(1)
-            Spacer()
-            Text("🍅 \(task.pomodorosDone)")
-                .font(.system(.caption, design: .rounded))
-                .foregroundStyle(.secondary)
-            Button {
-                tasks.setActive(nil)
-            } label: {
-                Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 12).padding(.vertical, 8)
-        .glassCapsule(material: .thin)
-    }
 
     private var statusHeader: some View {
         HStack(spacing: 14) {
@@ -107,28 +204,6 @@ struct MenuBarView: View {
             }
             Spacer()
         }
-    }
-
-    /// Prompt shown on the timer tab when no task is active: jumps to the
-    /// Tasks tab so the user picks one before starting a focus session.
-    private var chooseTaskButton: some View {
-        Button {
-            tab = .tasks
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "plus.circle")
-                    .foregroundStyle(.tint)
-                Text("Choose a task")
-                    .font(.system(.callout, design: .rounded).weight(.medium))
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 12).padding(.vertical, 8)
-            .glassCapsule(material: .thin)
-        }
-        .buttonStyle(.plain)
     }
 
     private var controls: some View {
@@ -158,14 +233,17 @@ struct MenuBarView: View {
         }
     }
 
-    /// Start requires a task: if none is active, switch to the Tasks tab so the
-    /// user selects one first; otherwise just toggle the running timer.
+    /// Start requires a task: toggle the running timer if one is active,
+    /// otherwise kick off a focus session on the top task in the inline list.
     private func startTapped() {
         if timer.isRunning || tasks.activeTask != nil {
             timer.toggle()
-        } else {
-            tab = .tasks
+        } else if let first = openTasks.first {
+            startFocus(on: first)
+        } else if !timer.settings.requireTaskForFocus {
+            timer.toggle()
         }
+        // Otherwise: no task + rule on → nothing runs.
     }
 
     private var statsStrip: some View {
