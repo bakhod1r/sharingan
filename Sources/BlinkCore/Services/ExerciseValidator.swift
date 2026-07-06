@@ -78,7 +78,11 @@ public final class ExerciseValidator: ObservableObject {
         switch step.direction.lowercased() {
         case "blink": matched = isBlinking
         case "far", "center": matched = true
-        default: matched = gaze.matches(target, tolerance: gazeTolerance)
+        // Match on the 8-way direction label so the requirement is literally the
+        // same as the on-screen eye: the detected gaze must point the same way the
+        // Sharingan iris does. Comparing distance to the unit target was too strict
+        // — a real gaze rarely reaches full magnitude, so steps never completed.
+        default: matched = gaze.label == target.label
         }
 
         if matched {

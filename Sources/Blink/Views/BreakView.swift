@@ -142,11 +142,22 @@ struct BreakView: View {
         validator.exercises = timer.settings.exerciseSettings.buildSequence()
         validator.reset()
         validator.start()
+        // Camera runs only for the duration of this break screen, never in focus.
+        if timer.settings.cameraEyeTrackingEnabled {
+            Task { @MainActor in
+                _ = await CameraService.shared.requestPermission()
+                CameraService.shared.start()
+                EyeTracker.shared.resetBlinkWindow()
+                EyeTracker.shared.start()
+            }
+        }
     }
 
     private func endBreak() {
         TTSService.shared.stop()
         TTSKalibrator.shared.stop()
         validator.stop()
+        EyeTracker.shared.stop()
+        CameraService.shared.stop()
     }
 }

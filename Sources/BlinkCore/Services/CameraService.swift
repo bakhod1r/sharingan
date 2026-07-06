@@ -47,6 +47,9 @@ public final class CameraService: NSObject, ObservableObject {
 
     public func requestPermission() async -> Bool {
         guard permissionStatus == .notDetermined else {
+            // Already decided — keep `isAuthorized` in sync (e.g. permission was
+            // granted in a previous launch) so the break badge reflects reality.
+            isAuthorized = (permissionStatus == .authorized)
             return permissionStatus == .authorized
         }
         let granted = await AVCaptureDevice.requestAccess(for: .video)
@@ -117,6 +120,16 @@ public final class CameraService: NSObject, ObservableObject {
                 kCVPixelFormatType_32BGRA
         ]
         if session.canAddOutput(videoOutput) { session.addOutput(videoOutput) }
+
+        // Mirror the front camera so it behaves like a mirror: when the user looks
+        // to *their* right, the detected gaze reads right — matching the on-screen
+        // Sharingan eye. Without this the raw front-camera buffer is un-mirrored and
+        // the horizontal gaze axis is inverted relative to the guide.
+        if let connection = videoOutput.connection(with: .video),
+           connection.isVideoMirroringSupported {
+            connection.automaticallyAdjustsVideoMirroring = false
+            connection.isVideoMirrored = true
+        }
 
         session.commitConfiguration()
     }
