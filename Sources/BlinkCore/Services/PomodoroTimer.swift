@@ -102,14 +102,15 @@ public final class PomodoroTimer: ObservableObject {
 
     public func addTime(_ seconds: TimeInterval) {
         // Extend the session total too, otherwise count-up recomputes remaining
-        // from settings every tick and the adjustment vanishes.
+        // from settings every tick and the adjustment vanishes. Updating both
+        // keeps them consistent (next count-up tick recomputes to the same value).
         durationOverride = max(1, totalSeconds + seconds)
-        if !isCountUpMode { remainingSeconds = max(0, remainingSeconds + seconds) }
+        remainingSeconds = max(0, remainingSeconds + seconds)
     }
 
     public func removeTime(_ seconds: TimeInterval) {
         durationOverride = max(1, totalSeconds - seconds)
-        if !isCountUpMode { remainingSeconds = max(0, remainingSeconds - seconds) }
+        remainingSeconds = max(0, remainingSeconds - seconds)
     }
 
     public func setCustomDuration(_ seconds: TimeInterval) {
@@ -191,12 +192,15 @@ public final class PomodoroTimer: ObservableObject {
                                             object: self,
                                             userInfo: ["streak": stats.streak])
         }
+        // A repetition restarts focus WITHOUT an intervening break, so tell the
+        // coordinator not to run the break sequence (overlay/dim/ambience) for it.
+        let willRepeat = settings.repeatConfig.enabled
+            && phase == .focus
+            && repeatIndex < settings.repeatConfig.count - 1
         NotificationCenter.default.post(name: .phaseDidComplete, object: self,
-                                        userInfo: ["phase": phase])
+                                        userInfo: ["phase": phase, "willRepeat": willRepeat])
 
-        if settings.repeatConfig.enabled,
-           phase == .focus,
-           repeatIndex < settings.repeatConfig.count - 1 {
+        if willRepeat {
             scheduleRepeat()
             return
         }

@@ -18,6 +18,10 @@ public final class ExerciseValidator: ObservableObject {
     public var exercises: [BreakExercise] = BreakExercise.library()
     public var gazeTolerance: Double = 0.40
     public var minHoldSeconds: Double = 0.6
+    /// Extra time beyond a step's hold after which it auto-advances even if the
+    /// gaze never validated — so a mis-detected/unsupported step can't wedge the
+    /// whole exercise on "Try again" for the rest of the break.
+    public var maxRetryGrace: Double = 5.0
 
     private var cancellable: AnyCancellable?
     private var ticker: Timer?
@@ -101,8 +105,13 @@ public final class ExerciseValidator: ObservableObject {
             MainActor.assumeIsolated {
                 guard self.isHolding, let step = self.currentStep else { return }
                 self.heldSeconds += 0.1
-                // Auto-complete hold once full duration elapsed WITHOUT pending retry.
+                // Auto-complete the hold once its full duration elapsed without a
+                // pending retry…
                 if self.heldSeconds >= step.holdSeconds && !self.needsRetry {
+                    self.completeStep()
+                } else if self.heldSeconds >= step.holdSeconds + self.maxRetryGrace {
+                    // …or, as a fail-safe, after an extra grace period regardless of
+                    // match, so detection errors never permanently stall the flow.
                     self.completeStep()
                 }
             }

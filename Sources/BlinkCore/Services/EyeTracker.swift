@@ -83,7 +83,9 @@ public final class EyeTracker: ObservableObject {
     public var gazeTolerance: Double = 0.35
 
     private var sequenceHandler: VNSequenceRequestHandler?
-    private var lastBlinkDate: Date?
+    /// Previous frame's blink state — a blink is counted once on the open→closed
+    /// edge, not repeatedly while the eyes stay shut.
+    private var wasBlinking: Bool = false
     private var binksInWindow: [Date] = []
     private var rotation: CGImagePropertyOrientation = .up
     private var faceBoundsCache: CGRect = .null
@@ -149,22 +151,16 @@ public final class EyeTracker: ObservableObject {
         let avg = (left + right) / 2
         let blinking = avg < blinkThreshold
 
-        let gaze = gazeDirection(leftEye: observation.leftEye,
-                                  rightEye: observation.rightEye,
-                                  faceBounds: bounds)
+        let gaze = gazeDirection(observation)
 
+        // Count exactly one blink per open→closed transition. Holding the eyes
+        // shut no longer inflates the count (the old timer re-fired every 0.15s).
         var total = state.blinkCountTotal
-        if blinking, let last = lastBlinkDate, Date().timeIntervalSince(last) > 0.15 {
+        if blinking && !wasBlinking {
             total += 1
             binksInWindow.append(Date())
-            lastBlinkDate = Date()
-        } else if blinking, lastBlinkDate == nil {
-            total += 1
-            binksInWindow.append(Date())
-            lastBlinkDate = Date()
-        } else if !blinking, let last = lastBlinkDate, Date().timeIntervalSince(last) > 0.15 {
-            lastBlinkDate = nil
         }
+        wasBlinking = blinking
 
         binksInWindow = binksInWindow.filter { Date().timeIntervalSince($0) < 60 }
 
@@ -205,46 +201,48 @@ public final class EyeTracker: ObservableObject {
         return max(0, min(1, Double(maxY - minY) * 14.0))
     }
 
-    /// Estimate gaze direction by comparing iris/eye center against face center.
+    /// Estimate gaze from the pupil's position WITHIN each eye's own opening,
+    /// averaged over both eyes. Measuring relative to the eye — not the face box —
+    /// removes the structural upward bias of the old method (the eyes always sit
+    /// above the face-box center, so "look down" could never validate).
     /// Vision returns normalized points in image coords (origin bottom-left).
-    private func gazeDirection(leftEye: VNFaceLandmarkRegion2D?,
-                                rightEye: VNFaceLandmarkRegion2D?,
-                                faceBounds: CGRect) -> GazeDirection {
-        guard !faceBounds.isNull,
-              let lc = centroid(leftEye),
-              let rc = centroid(rightEye) else {
-            return .center
-        }
-        let eyeMidX = (lc.x + rc.x) / 2
-        let eyeMidY = (lc.y + rc.y) / 2
-        // Face center
-        let faceCenterX = faceBounds.midX
-        let faceCenterY = faceBounds.midY
-        // faceHalfWidth/Height for normalization
-        let halfW = max(0.001, faceBounds.width / 2)
-        let halfH = max(0.001, faceBounds.height / 2)
-
-        // dx: positive when eyes shifted right of face center (looking right)
-        let dx = (eyeMidX - faceCenterX) / halfW
-        // dy: Vision image coords have origin bottom-left, so up = +y.
-        // We map screen-down (gaze down) to +dy, hence negate.
-        let dy = -(eyeMidY - faceCenterY) / halfH
-
-        // Eye-vs-eye asymmetry leans the gaze slightly L/R; combine for stability.
-        let asym = (rc.x - lc.x) - (faceBounds.width * 0.36)
-        let lean = asym / max(0.001, faceBounds.width)
-
-        let combined = GazeDirection(dx: dx * 1.6 + lean * 0.6,
-                                      dy: dy * 1.6)
-        return combined
+    private func gazeDirection(_ lm: VNFaceLandmarks2D) -> GazeDirection {
+        let samples = [eyeGaze(eye: lm.leftEye, pupil: lm.leftPupil),
+                       eyeGaze(eye: lm.rightEye, pupil: lm.rightPupil)].compactMap { $0 }
+        guard !samples.isEmpty else { return .center }
+        let nx = samples.map(\.0).reduce(0, +) / Double(samples.count)
+        let ny = samples.map(\.1).reduce(0, +) / Double(samples.count)
+        // Gain so a moderate eye movement reaches the 8-way target labels; the
+        // pupil rarely travels to the eye's edge. dy negated: Vision up = +y,
+        // but a downward gaze should map to +dy (screen-down).
+        let gain = 2.2
+        return GazeDirection(dx: nx * gain, dy: -ny * gain)
     }
 
-    private func centroid(_ region: VNFaceLandmarkRegion2D?) -> CGPoint? {
-        guard let region, !region.normalizedPoints.isEmpty else { return nil }
-        let p = region.normalizedPoints
-        let x = p.reduce(0) { $0 + $1.x } / CGFloat(p.count)
-        let y = p.reduce(0) { $0 + $1.y } / CGFloat(p.count)
-        return CGPoint(x: x, y: y)
+    /// Pupil offset from the eye's center, normalized to the eye's half-extents,
+    /// giving roughly -1…1 per axis. Falls back to the eye centroid (≈0 offset)
+    /// when no pupil landmark is available.
+    private func eyeGaze(eye: VNFaceLandmarkRegion2D?,
+                         pupil: VNFaceLandmarkRegion2D?) -> (Double, Double)? {
+        guard let eye, !eye.normalizedPoints.isEmpty else { return nil }
+        let xs = eye.normalizedPoints.map { $0.x }
+        let ys = eye.normalizedPoints.map { $0.y }
+        guard let minX = xs.min(), let maxX = xs.max(),
+              let minY = ys.min(), let maxY = ys.max(),
+              maxX > minX, maxY > minY else { return nil }
+
+        let pupilPt: CGPoint
+        if let p = pupil?.normalizedPoints.first {
+            pupilPt = p
+        } else {
+            pupilPt = CGPoint(x: xs.reduce(0, +) / CGFloat(xs.count),
+                              y: ys.reduce(0, +) / CGFloat(ys.count))
+        }
+        let cx = (minX + maxX) / 2
+        let cy = (minY + maxY) / 2
+        let nx = Double((pupilPt.x - cx) / ((maxX - minX) / 2))
+        let ny = Double((pupilPt.y - cy) / ((maxY - minY) / 2))
+        return (nx, ny)
     }
 
     public var binksLastMinute: Int { binksInWindow.count }

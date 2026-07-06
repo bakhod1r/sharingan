@@ -37,16 +37,37 @@ public enum CLIBridge {
         }
     }
 
+    // MARK: - Shared storage
+    //
+    // The app and the `tired` CLI are separate processes with separate
+    // `UserDefaults.standard` domains, so state written by one is invisible to
+    // the other. Communicate through files in a shared directory instead —
+    // deterministic across processes, no App Group entitlement required.
+
+    private static var sharedDir: URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory,
+                                            in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        let dir = base.appendingPathComponent("Blink/cli", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    private static var snapshotURL: URL { sharedDir.appendingPathComponent("snapshot.json") }
+    private static func payloadURL(_ name: String) -> URL {
+        sharedDir.appendingPathComponent(name + ".payload")
+    }
+
     // MARK: - Snapshot I/O
 
     public static func writeSnapshot(_ s: StateSnapshot) {
         if let d = try? JSONEncoder().encode(s) {
-            UserDefaults.standard.set(d, forKey: snapshotKey)
+            try? d.write(to: snapshotURL, options: .atomic)
         }
     }
 
     public static func readSnapshot() -> StateSnapshot? {
-        guard let d = UserDefaults.standard.data(forKey: snapshotKey) else { return nil }
+        guard let d = try? Data(contentsOf: snapshotURL) else { return nil }
         return try? JSONDecoder().decode(StateSnapshot.self, from: d)
     }
 
@@ -55,11 +76,17 @@ public enum CLIBridge {
     public static func postCommand(_ name: String, payload: String? = nil) {
         let center = CFNotificationCenterGetDarwinNotifyCenter()
         if let p = payload {
-            UserDefaults.standard.set(p, forKey: name + ".payload")
+            try? Data(p.utf8).write(to: payloadURL(name), options: .atomic)
         }
         CFNotificationCenterPostNotification(center,
                                               CFNotificationName(name as CFString),
                                               nil, nil, true)
+    }
+
+    /// Reads the last payload written for a command (app side).
+    static func readPayload(_ name: String) -> String? {
+        guard let d = try? Data(contentsOf: payloadURL(name)) else { return nil }
+        return String(decoding: d, as: UTF8.self)
     }
 
     // MARK: - Listen (app side)
@@ -86,7 +113,7 @@ public final class DarwinObserver: @unchecked Sendable {
         let callback: CFNotificationCallback = { _, observer, _, _, _ in
             guard let observer else { return }
             let me = Unmanaged<DarwinObserver>.fromOpaque(observer).takeUnretainedValue()
-            let payload = UserDefaults.standard.string(forKey: me.name + ".payload")
+            let payload = CLIBridge.readPayload(me.name)
             DispatchQueue.main.async {
                 me.handler?(payload)
             }

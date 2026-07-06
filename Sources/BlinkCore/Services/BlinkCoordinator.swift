@@ -281,16 +281,26 @@ public final class BlinkCoordinator: ObservableObject {
     /// (when "block during focus" is on).
     func refreshAppBlocker() {
         let s = timer.settings
-        guard s.appBlockerSettings.enabled else {
+        let blocker = s.appBlockerSettings
+        guard blocker.enabled else {
             AppBlockerService.shared.deactivate()
             return
         }
+        // "Always block" mode (onlyDuringBreak == false): keep distracting apps
+        // blocked the whole time the app runs, regardless of phase.
+        if !blocker.onlyDuringBreak {
+            AppBlockerService.shared.update(blocker)
+            AppBlockerService.shared.activate()
+            return
+        }
+        // Otherwise blocking is phase-driven: during a break (when "block screen"
+        // is on) and/or during a running focus session (when "block during focus").
         let isBreak = (timer.phase == .shortBreak || timer.phase == .longBreak)
         let isFocus = (timer.phase == .focus)
         let shouldBlock = (isBreak && s.blockScreenDuringBreak)
             || (isFocus && s.blockAppsDuringFocus && timer.isRunning)
         if shouldBlock {
-            AppBlockerService.shared.update(s.appBlockerSettings)
+            AppBlockerService.shared.update(blocker)
             AppBlockerService.shared.activate()
         } else {
             AppBlockerService.shared.deactivate()
@@ -299,16 +309,29 @@ public final class BlinkCoordinator: ObservableObject {
 
     private func handlePhaseComplete(_ note: Notification) {
         guard let phase = note.userInfo?["phase"] as? PomodoroPhase else { return }
+        let willRepeat = note.userInfo?["willRepeat"] as? Bool ?? false
         switch phase {
         case .focus:
-            NotificationService.shared.notify(
-                title: "Blink",
-                body: "Focus complete. Starting break.",
-                identifier: "blink.focusDone")
+            // A completed focus still counts as a pomodoro for the active task.
             if let taskID = TaskStore.shared.activeTaskID {
                 TaskStore.shared.incrementPomodoro(taskID)
             }
             AlarmSoundService.shared.playSelected()
+
+            // Repetition: no break happens, so skip the entire break sequence
+            // (overlay, dim, ambience, blocker) — just note the rep and return.
+            if willRepeat {
+                NotificationService.shared.notify(
+                    title: "Blink",
+                    body: "Focus session done — next repetition starting.",
+                    identifier: "blink.repeat")
+                return
+            }
+
+            NotificationService.shared.notify(
+                title: "Blink",
+                body: "Focus complete. Starting break.",
+                identifier: "blink.focusDone")
             ReminderService.shared.pauseForBreak()
             floatingController?.hideFloating()
             if let p = breakPresenter, timer.settings.blockScreenDuringBreak {
