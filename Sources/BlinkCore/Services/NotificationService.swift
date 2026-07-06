@@ -47,9 +47,11 @@ public final class NotificationService {
         content.title = title
         content.body = body
         content.sound = .default
-        let comps = Calendar.current.dateComponents(
-            [.year, .month, .day, .hour, .minute], from: date)
-        let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
+        // Fire at the exact interval from now. A calendar trigger truncated to
+        // minute precision would misfire a "20 s from now" reminder to the next
+        // matching minute — potentially ~24h later.
+        let trigger = UNTimeIntervalNotificationTrigger(
+            timeInterval: max(1, date.timeIntervalSinceNow), repeats: false)
         let req = UNNotificationRequest(identifier: identifier, content: content,
                                         trigger: trigger)
         center.add(req)

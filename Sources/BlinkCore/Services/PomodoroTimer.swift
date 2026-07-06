@@ -37,14 +37,20 @@ public final class PomodoroTimer: ObservableObject {
         }
     }
 
+    /// When set (by CLI/quick commands), overrides the phase's settings duration
+    /// for the current session so custom lengths survive count-up recomputation
+    /// and progress stays in sync. Cleared on any phase transition.
+    private var durationOverride: TimeInterval?
+
     public var totalSeconds: TimeInterval {
-        settings.duration(for: phase == .paused ? previousPhase : phase)
+        durationOverride ?? settings.duration(for: phase == .paused ? previousPhase : phase)
     }
 
     public var isCountUpMode: Bool { mode == .countUp }
 
     private var previousPhase: PomodoroPhase = .focus
     private var fiveMinSent = false
+    private var flashSent = false
 
     public init() {
         let saved = Self.loadSettings()
@@ -60,6 +66,7 @@ public final class PomodoroTimer: ObservableObject {
         if phase == .paused { phase = previousPhase }
         isRunning = true
         fiveMinSent = false
+        flashSent = false
         isFlashing = false
         runLoop()
     }
@@ -76,6 +83,7 @@ public final class PomodoroTimer: ObservableObject {
         isRunning = false
         cancelLoop()
         cancelRepeatJob()
+        durationOverride = nil
         remainingSeconds = settings.duration(for: .focus)
         elapsedSeconds = 0
         phase = .focus
@@ -93,15 +101,20 @@ public final class PomodoroTimer: ObservableObject {
     }
 
     public func addTime(_ seconds: TimeInterval) {
-        remainingSeconds = max(0, remainingSeconds + seconds)
+        // Extend the session total too, otherwise count-up recomputes remaining
+        // from settings every tick and the adjustment vanishes.
+        durationOverride = max(1, totalSeconds + seconds)
+        if !isCountUpMode { remainingSeconds = max(0, remainingSeconds + seconds) }
     }
 
     public func removeTime(_ seconds: TimeInterval) {
-        remainingSeconds = max(0, remainingSeconds - seconds)
+        durationOverride = max(1, totalSeconds - seconds)
+        if !isCountUpMode { remainingSeconds = max(0, remainingSeconds - seconds) }
     }
 
     public func setCustomDuration(_ seconds: TimeInterval) {
         guard seconds > 0 else { return }
+        durationOverride = seconds
         remainingSeconds = seconds
         elapsedSeconds = 0
         isRunning = false
@@ -170,7 +183,6 @@ public final class PomodoroTimer: ObservableObject {
     private func phaseComplete() {
         isRunning = false
         cancelLoop()
-        if settings.flashAtFiveSecLeft { triggerFlash() }
         if phase == .focus {
             stats.registerFocusCompletion()
             persist(stats)
@@ -199,6 +211,7 @@ public final class PomodoroTimer: ObservableObject {
                 try? await Task.sleep(for: .seconds(delay))
                 guard !Task.isCancelled else { return }
             }
+            self?.durationOverride = nil
             self?.repeatIndex += 1
             self?.remainingSeconds = self?.settings.duration(for: .focus) ?? 0
             self?.elapsedSeconds = 0
@@ -221,9 +234,14 @@ public final class PomodoroTimer: ObservableObject {
     }
 
     private func transitionToNext(auto: Bool = false) {
+        // A new phase always uses its own settings duration.
+        durationOverride = nil
         switch phase {
         case .focus:
-            let isLong = cyclesCompletedInRound % settings.longBreakEvery == 0
+            // Guard the divisor: a user-entered `longBreakEvery` of 0 would trap
+            // on `% 0` and crash the whole app.
+            let every = max(1, settings.longBreakEvery)
+            let isLong = cyclesCompletedInRound % every == 0
                 && cyclesCompletedInRound > 0
             let next: PomodoroPhase = isLong ? .longBreak : .shortBreak
             remainingSeconds = settings.duration(for: next)
@@ -254,6 +272,15 @@ public final class PomodoroTimer: ObservableObject {
            phase == .focus {
             fiveMinSent = true
             NotificationCenter.default.post(name: .focusFiveMinLeft, object: self)
+        }
+        // Flash a warning when ~5 seconds remain — as the setting name promises —
+        // not at 0 (which gave no advance warning).
+        if settings.flashAtFiveSecLeft,
+           !flashSent,
+           remainingSeconds <= 5,
+           remainingSeconds > 0 {
+            flashSent = true
+            triggerFlash()
         }
     }
 

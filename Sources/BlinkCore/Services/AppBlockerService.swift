@@ -13,6 +13,8 @@ public final class AppBlockerService: ObservableObject {
     @Published public private(set) var lastBlockedApp: String?
 
     private var workspaceObserver: NSObjectProtocol?
+    /// Apps we hid during the block, so they can be un-hidden when it ends.
+    private var hiddenApps: [NSRunningApplication] = []
 
     public init() {}
 
@@ -28,6 +30,12 @@ public final class AppBlockerService: ObservableObject {
         guard isActive else { return }
         isActive = false
         stopWatching()
+        // Un-hide everything we hid, otherwise the user's apps stay stuck hidden
+        // after the break with no automatic recovery.
+        for app in hiddenApps where !app.isTerminated {
+            app.unhide()
+        }
+        hiddenApps.removeAll()
     }
 
     public func update(_ s: AppBlockerSettings) {
@@ -74,6 +82,9 @@ public final class AppBlockerService: ObservableObject {
     // MARK: - App control
 
     private func hideApp(_ app: NSRunningApplication) {
+        if !hiddenApps.contains(where: { $0.processIdentifier == app.processIdentifier }) {
+            hiddenApps.append(app)
+        }
         app.hide()
     }
 

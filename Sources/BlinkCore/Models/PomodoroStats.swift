@@ -18,16 +18,27 @@ public struct PomodoroStats: Codable, Equatable, Sendable {
     public var streakDays: Int = 0
     public var streak: StreakStore = .init()
     public var history: [DailyCount] = []
+    /// Day (start-of-day) the stored `completedToday` counter belongs to, used to
+    /// roll it over when a new day begins. `nil` for pre-migration data.
+    public var lastCountedDay: Date?
 
     public init() {}
 
     public mutating func registerFocusCompletion(on date: Date = Date()) {
         completedFocus += 1
+
+        let day = Calendar.current.startOfDay(for: date)
+        // Roll `completedToday` over at the day boundary instead of accumulating
+        // yesterday's count forever.
+        if let last = lastCountedDay, !Calendar.current.isDate(last, inSameDayAs: day) {
+            completedToday = 0
+        }
+        lastCountedDay = day
         completedToday += 1
+
         streak.registerFocus(on: date)
         streakDays = streak.currentStreak
 
-        let day = Calendar.current.startOfDay(for: date)
         if let idx = history.firstIndex(where: { Calendar.current.isDate($0.day, inSameDayAs: day) }) {
             history[idx].count += 1
         } else {
@@ -36,8 +47,25 @@ public struct PomodoroStats: Codable, Equatable, Sendable {
         }
     }
 
-    public mutating func resetTodayIfNeeded() {
-        completedToday = 0
+    /// Zeroes `completedToday` only when the stored counter is from an earlier
+    /// day (call cheaply on launch / periodically). Same-day calls are a no-op,
+    /// so a legitimate running count is never wiped.
+    public mutating func resetTodayIfNeeded(now: Date = Date()) {
+        let today = Calendar.current.startOfDay(for: now)
+        if let last = lastCountedDay, !Calendar.current.isDate(last, inSameDayAs: today) {
+            completedToday = 0
+            lastCountedDay = today
+        }
+    }
+
+    /// Day-aware read of today's completions — returns 0 if the stored counter
+    /// belongs to a previous day, so UI stays correct across midnight without a
+    /// mutation.
+    public func completedTodayCount(now: Date = Date()) -> Int {
+        guard let last = lastCountedDay,
+              Calendar.current.isDate(last, inSameDayAs: Calendar.current.startOfDay(for: now))
+        else { return 0 }
+        return completedToday
     }
 
     /// Faqat oxirgi `days` kun saqlanadi (default 90).

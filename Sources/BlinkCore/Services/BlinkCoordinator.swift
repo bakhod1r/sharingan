@@ -153,7 +153,7 @@ public final class BlinkCoordinator: ObservableObject {
             remainingSeconds: timer.remainingSeconds,
             totalSeconds: timer.totalSeconds,
             isRunning: timer.isRunning,
-            cyclesCompletedToday: timer.stats.completedToday,
+            cyclesCompletedToday: timer.stats.completedTodayCount(),
             streak: timer.stats.streak.currentStreak
         )
         CLIBridge.writeSnapshot(snap)

@@ -12,6 +12,7 @@ struct MenuBarView: View {
     /// Task currently being renamed inline, and its working text.
     @State private var editingTaskID: UUID?
     @State private var editingText = ""
+    @FocusState private var editFieldFocused: Bool
 
     private enum Tab: Hashable { case timer, tasks, stats }
 
@@ -113,7 +114,9 @@ struct MenuBarView: View {
         let order = tasks.allCategories.map(\.name)
         let byCat = Dictionary(grouping: openTasks, by: { $0.category })
         return byCat.keys
-            .sorted { (order.firstIndex(of: $0) ?? .max) < (order.firstIndex(of: $1) ?? .max) }
+            // Secondary key on the name keeps ordering stable for categories not
+            // in `allCategories` (both map to .max otherwise → reshuffle).
+            .sorted { (order.firstIndex(of: $0) ?? .max, $0) < (order.firstIndex(of: $1) ?? .max, $1) }
             .map { name in (name, tasks.color(for: name), byCat[name] ?? []) }
     }
 
@@ -200,8 +203,10 @@ struct MenuBarView: View {
                 TextField("Task name", text: $editingText, onCommit: { commitEdit(task) })
                     .textFieldStyle(.plain)
                     .font(.system(.callout, design: .rounded).weight(.medium))
+                    .focused($editFieldFocused)
                     .onSubmit { commitEdit(task) }
                     .onExitCommand { editingTaskID = nil }
+                    .onAppear { editFieldFocused = true }
                 Spacer(minLength: 6)
             } else {
                 Text(task.title)
@@ -249,7 +254,10 @@ struct MenuBarView: View {
         )
         .contextMenu {
             Button {
-                editingText = task.title
+                // Prefill with title + existing #tags so the rename round-trips
+                // (what you see is what gets saved, and tags can be edited/cleared).
+                let tagText = task.tags.map { "#\($0)" }.joined(separator: " ")
+                editingText = ([task.title, tagText].filter { !$0.isEmpty }).joined(separator: " ")
                 editingTaskID = task.id
             } label: {
                 Label("Edit", systemImage: "pencil")
@@ -327,7 +335,10 @@ struct MenuBarView: View {
         guard !title.isEmpty else { return }
         var updated = task
         updated.title = title
-        if !tagList.isEmpty { updated.tags = tagList }
+        // Tags always reflect the edited text: adding #tags sets them, removing
+        // all hashtags clears them (prefill includes existing tags so nothing is
+        // lost accidentally).
+        updated.tags = tagList
         tasks.update(updated)
     }
 
@@ -436,7 +447,7 @@ struct MenuBarView: View {
 
     private var statsStrip: some View {
         HStack(spacing: 14) {
-            stat(value: "\(timer.stats.completedToday)", label: "Today")
+            stat(value: "\(timer.stats.completedTodayCount())", label: "Today")
             stat(value: "\(timer.cyclesCompletedInRound)/\(timer.settings.longBreakEvery)",
                  label: "Cycle")
             if timer.settings.repeatConfig.enabled {

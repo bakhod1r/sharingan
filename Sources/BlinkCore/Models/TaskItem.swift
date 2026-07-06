@@ -29,6 +29,23 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         self.dueDate = dueDate
     }
 
+    // Defensive decoding: several fields (category, tags, pomodorosDone) were
+    // added after the first release. Without this, an older tasks.json missing
+    // any of them throws `keyNotFound`, TaskStore.load() swallows it, and the
+    // next mutation persists an EMPTY list — silently wiping every task.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        title = try c.decode(String.self, forKey: .title)
+        category = try c.decodeIfPresent(String.self, forKey: .category)
+            ?? TaskCategory.presets[0].name
+        tags = try c.decodeIfPresent([String].self, forKey: .tags) ?? []
+        isDone = try c.decodeIfPresent(Bool.self, forKey: .isDone) ?? false
+        pomodorosDone = try c.decodeIfPresent(Int.self, forKey: .pomodorosDone) ?? 0
+        createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        dueDate = try c.decodeIfPresent(Date.self, forKey: .dueDate)
+    }
+
     /// True when the task has a past deadline and isn't finished.
     public func isOverdue(now: Date = Date()) -> Bool {
         guard let dueDate, !isDone else { return false }

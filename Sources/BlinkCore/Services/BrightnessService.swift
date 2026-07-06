@@ -19,7 +19,16 @@ public final class BrightnessService: ObservableObject {
     private var dimTask: Task<Void, Never>?
     private var currentFactor: Double = 1.0
 
-    public init() {}
+    public init() {
+        // Gamma is process-global system state: if the app quits while dimmed,
+        // the display stays dark. Restore the system color settings on terminate
+        // as a fail-safe so a break can never leave the screen darkened.
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification,
+            object: nil, queue: .main) { _ in
+            CGDisplayRestoreColorSyncSettings()
+        }
+    }
 
     // MARK: - Dim / Restore
 

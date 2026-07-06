@@ -116,14 +116,24 @@ testBrightnessSettings()
     static func testStatsFlow() {
         print("• PomodoroStats flow")
         var stats = PomodoroStats()
-        stats.registerFocusCompletion()
-        stats.registerFocusCompletion()
-        stats.registerFocusCompletion()
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let yesterday = cal.date(byAdding: .day, value: -1, to: today)!
+        stats.registerFocusCompletion(on: today)
+        stats.registerFocusCompletion(on: today)
+        stats.registerFocusCompletion(on: today)
         check(stats.completedFocus == 3, "completedFocus accumulates")
         check(stats.completedToday == 3, "completedToday accumulates")
-        stats.resetTodayIfNeeded()
-        check(stats.completedToday == 0, "resetToday clears today")
-        check(stats.completedFocus == 3, "global retained")
+        // Same-day reset is a no-op — a live count is never wiped.
+        stats.resetTodayIfNeeded(now: today)
+        check(stats.completedToday == 3, "same-day resetToday keeps count")
+        // A completion on a new day rolls the today-counter over.
+        var rolled = PomodoroStats()
+        rolled.registerFocusCompletion(on: yesterday)
+        rolled.registerFocusCompletion(on: yesterday)
+        rolled.registerFocusCompletion(on: today)
+        check(rolled.completedToday == 1, "completedToday rolls over at midnight")
+        check(rolled.completedFocus == 3, "global retained across days")
     }
 
     // MARK: New timer API

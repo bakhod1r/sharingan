@@ -125,7 +125,12 @@ public final class TaskStore: ObservableObject {
     public func toggleDone(_ id: UUID) {
         guard let i = tasks.firstIndex(where: { $0.id == id }) else { return }
         tasks[i].isDone.toggle()
-        if tasks[i].isDone { NotificationService.shared.cancel(identifier: dueNoteID(id)) }
+        if tasks[i].isDone {
+            NotificationService.shared.cancel(identifier: dueNoteID(id))
+        } else {
+            // Un-completing restores the deadline reminder that toggling done cancelled.
+            scheduleDueNotification(tasks[i])
+        }
         persist()
     }
 
@@ -139,6 +144,10 @@ public final class TaskStore: ObservableObject {
     public func update(_ item: TaskItem) {
         guard let i = tasks.firstIndex(where: { $0.id == item.id }) else { return }
         tasks[i] = item
+        // Re-sync the deadline reminder: a due date added/changed via edit would
+        // otherwise never fire (it was only scheduled at creation time).
+        NotificationService.shared.cancel(identifier: dueNoteID(item.id))
+        scheduleDueNotification(item)
         persist()
     }
 
