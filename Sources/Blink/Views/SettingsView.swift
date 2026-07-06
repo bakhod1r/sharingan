@@ -196,11 +196,15 @@ struct SettingsView: View {
                     ToggleRow(title: "Repeat enabled",
                               isOn: $settings.repeatConfig.enabled)
                     if settings.repeatConfig.enabled {
-                        StepperRow(title: "Repeat count",
-                                   value: Binding(
-                                       get: { settings.repeatConfig.count },
-                                       set: { settings.repeatConfig.count = $0 }),
-                                   unit: "×")
+                        ToggleRow(title: "Endless (repeat forever)",
+                                  isOn: $settings.repeatConfig.endless)
+                        if !settings.repeatConfig.endless {
+                            StepperRow(title: "Repeat count",
+                                       value: Binding(
+                                           get: { settings.repeatConfig.count },
+                                           set: { settings.repeatConfig.count = $0 }),
+                                       unit: "×")
+                        }
                         StepperRow(title: "Delay",
                                    value: Binding(
                                        get: { Int(settings.repeatConfig.delaySeconds / 60) },

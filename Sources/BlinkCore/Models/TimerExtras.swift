@@ -46,12 +46,26 @@ public struct RepeatConfig: Codable, Equatable, Sendable {
     public var enabled: Bool = false
     public var count: Int = 1
     public var delaySeconds: TimeInterval = 0
+    /// Repeat forever (ignores `count`) until the user stops.
+    public var endless: Bool = false
 
     public init() {}
-    public init(enabled: Bool, count: Int = 1, delaySeconds: TimeInterval = 0) {
+    public init(enabled: Bool, count: Int = 1, delaySeconds: TimeInterval = 0,
+                endless: Bool = false) {
         self.enabled = enabled
         self.count = max(1, count)
         self.delaySeconds = max(0, delaySeconds)
+        self.endless = endless
+    }
+
+    // `endless` was added later — decode defensively so older saved settings
+    // (without the key) still load instead of failing the whole decode.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
+        count = try c.decodeIfPresent(Int.self, forKey: .count) ?? 1
+        delaySeconds = try c.decodeIfPresent(TimeInterval.self, forKey: .delaySeconds) ?? 0
+        endless = try c.decodeIfPresent(Bool.self, forKey: .endless) ?? false
     }
 
     public var delaysTotal: TimeInterval {
