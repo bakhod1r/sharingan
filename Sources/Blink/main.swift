@@ -2,17 +2,11 @@ import AppKit
 import SwiftUI
 import BlinkCore
 
-print("STEP 1: main started")
-
+// Explicit AppKit entry point. A SwiftUI `@main App` with MenuBarExtra proved
+// unreliable to register at runtime under the CLI toolchain (no full Xcode), so
+// the app bootstraps NSApplication directly and does its setup in AppDelegate.
 let app = NSApplication.shared
-print("STEP 2: NSApplication.shared")
-
 let delegate = AppDelegate()
 app.delegate = delegate
-print("STEP 3: delegate created")
-
 app.setActivationPolicy(.accessory)
-print("STEP 4: activation policy set")
-
 app.run()
-print("STEP 5: app.run() returned (should not happen)")

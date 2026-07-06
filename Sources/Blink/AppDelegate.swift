@@ -75,8 +75,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let coord = BlinkCoordinator(timer: timer)
         coord.breakPresenter = BreakWindowManager.shared
         coord.floatingController = FloatingWindowManager.shared
+        coord.quickAddController = QuickAddWindowManager.shared
         self.timer = timer
         self.coordinator = coord
+
+        // Feed the AppKit-managed main window its SwiftUI content, otherwise
+        // MainWindowManager.show() (used by the popover's "Open window" button
+        // and the settings gear) bails at its `guard let content` and nothing
+        // appears. This wiring was lost in the AppKit restructure.
+        MainWindowManager.shared.content = { AnyView(MainWindowView(timer: timer)) }
 
         MenuBarController.shared.install(timer: timer, coordinator: coord)
     }
