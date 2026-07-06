@@ -45,6 +45,9 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var appBlockerSettings: AppBlockerSettings = .init()
     /// When on, a focus pomodoro cannot start unless a task is selected.
     public var requireTaskForFocus: Bool = true
+    /// When on, distracting apps are blocked during the focus session too
+    /// (not just during breaks).
+    public var blockAppsDuringFocus: Bool = false
 
     public init() {}
 

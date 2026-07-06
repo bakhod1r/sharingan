@@ -185,6 +185,9 @@ public final class BlinkCoordinator: ObservableObject {
                 } else {
                     self.floatingController?.hideFloating()
                 }
+                // Blocking distracting apps follows the running state so pausing
+                // a focus session releases them, resuming re-blocks.
+                self.refreshAppBlocker()
             }
             .store(in: &cancellables)
 
@@ -195,7 +198,10 @@ public final class BlinkCoordinator: ObservableObject {
 
         timer.$phase
             .receive(on: RunLoop.main)
-            .sink { [weak self] _ in self?.publishSnapshot() }
+            .sink { [weak self] _ in
+                self?.publishSnapshot()
+                self?.refreshAppBlocker()
+            }
             .store(in: &cancellables)
         timer.$remainingSeconds
             .receive(on: RunLoop.main)
@@ -213,6 +219,7 @@ public final class BlinkCoordinator: ObservableObject {
         installShortcuts()
         syncCamera()
         syncFloating()
+        refreshAppBlocker()
         syncTTS()
         syncAmbience()
         syncReminders()
@@ -269,16 +276,25 @@ public final class BlinkCoordinator: ObservableObject {
         BrightnessService.shared.restore()
     }
 
-    private func startAppBlocker() {
-        guard timer.settings.appBlockerSettings.enabled, timer.settings.blockScreenDuringBreak else {
+    /// Drive the app blocker from the current phase + settings: block during a
+    /// break (when "block screen" is on) and/or during a running focus session
+    /// (when "block during focus" is on).
+    func refreshAppBlocker() {
+        let s = timer.settings
+        guard s.appBlockerSettings.enabled else {
+            AppBlockerService.shared.deactivate()
             return
         }
-        AppBlockerService.shared.update(timer.settings.appBlockerSettings)
-        AppBlockerService.shared.activate()
-    }
-
-    private func stopAppBlocker() {
-        AppBlockerService.shared.deactivate()
+        let isBreak = (timer.phase == .shortBreak || timer.phase == .longBreak)
+        let isFocus = (timer.phase == .focus)
+        let shouldBlock = (isBreak && s.blockScreenDuringBreak)
+            || (isFocus && s.blockAppsDuringFocus && timer.isRunning)
+        if shouldBlock {
+            AppBlockerService.shared.update(s.appBlockerSettings)
+            AppBlockerService.shared.activate()
+        } else {
+            AppBlockerService.shared.deactivate()
+        }
     }
 
     private func handlePhaseComplete(_ note: Notification) {
@@ -304,7 +320,7 @@ public final class BlinkCoordinator: ObservableObject {
             speakBreakStart()
             startAmbience()
             startBrightnessDim()
-            startAppBlocker()
+            refreshAppBlocker()
         case .shortBreak, .longBreak:
             NotificationService.shared.notify(
                 title: "Blink",
@@ -314,7 +330,7 @@ public final class BlinkCoordinator: ObservableObject {
             breakPresenter?.dismissAll()
             BreakAmbienceService.shared.stop()
             restoreBrightness()
-            stopAppBlocker()
+            refreshAppBlocker()
             // Belt-and-suspenders: BreakView.onDisappear stops the camera, but make
             // sure it's released even if the break was dismissed some other way.
             EyeTracker.shared.stop()

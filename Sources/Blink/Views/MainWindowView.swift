@@ -14,58 +14,26 @@ struct MainWindowView: View {
         nonmutating set { router.section = newValue }
     }
 
-    // The sidebar overhangs the main content card's left edge by this much,
-    // sticking "out of the window" over the transparent gutter (desktop shows
-    // through) — the floating look from the CleanMyMac reference.
-    private let sidebarWidth: CGFloat = 232
-    private let cardLeftInset: CGFloat = 58   // main card starts this far from the window edge
-    private let sidebarLeftInset: CGFloat = 18 // sidebar's own distance from the window edge
-
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            // Dark, theme-tinted backdrop that fills the whole window, so the
-            // floating card and the overhanging sidebar sit on a clean surface
-            // (no desktop bleed-through), CleanMyMac-style.
-            backdrop
-
-            // Main content card: the gradient + detail, inset from the window
-            // edges so it reads as a floating rounded panel.
+        ZStack {
             windowBackground
-                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                )
-                .shadow(color: .black.opacity(0.45), radius: 30, x: 0, y: 16)
-                .padding(EdgeInsets(top: 14, leading: cardLeftInset,
-                                    bottom: 14, trailing: 14))
-
-            // Detail content lives inside the card, pushed right so it clears the
-            // overhanging sidebar.
-            detail
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.leading, sidebarLeftInset + sidebarWidth + 18)
-                .padding(.trailing, 14)
-                .padding(.vertical, 14)
-                .id(section)
-                .transition(.asymmetric(
-                    insertion: .opacity.combined(with: .offset(y: 8)),
-                    removal: .opacity))
-
-            // Floating sidebar, overhanging the card's left edge and sticking out
-            // over the transparent gutter. It reaches to the very top so the
-            // traffic-light buttons sit ON it (attached), not floating above.
-            sidebar
-                .frame(width: sidebarWidth)
-                .padding(.leading, sidebarLeftInset)
-                .padding(.top, 0)
-                .padding(.bottom, 24)
+            HStack(spacing: 0) {
+                // Normal in-window glass sidebar with margins.
+                sidebar
+                    .frame(width: 232)
+                    .padding(.leading, 16)
+                    .padding(.top, 14)
+                    .padding(.bottom, 18)
+                detail
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .id(section)
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .offset(y: 8)),
+                        removal: .opacity))
+            }
+            .animation(.easeInOut(duration: 0.24), value: section)
         }
         .frame(minWidth: 920, minHeight: 620)
-        // Extend content under the (hidden) title bar so the window buttons
-        // rest on the sidebar instead of hovering in an empty top strip.
-        .ignoresSafeArea()
-        .animation(.easeInOut(duration: 0.24), value: section)
     }
 
     // MARK: - Sidebar (custom glass panel, CleanMyMac-style)
@@ -117,7 +85,7 @@ struct MainWindowView: View {
             Spacer()
         }
         // Leave room for the traffic-light buttons over the hidden title bar.
-        .padding(.horizontal, 14).padding(.top, 36).padding(.bottom, 10)
+        .padding(.horizontal, 14).padding(.top, 30).padding(.bottom, 10)
     }
 
     /// The real app icon, bundled at `Sources/Blink/Resources/AppIcon.png`,
@@ -216,19 +184,8 @@ struct MainWindowView: View {
         }
     }
 
-    /// Dark, theme-tinted surface behind the floating card + sidebar. Heavily
-    /// darkened so the brighter card panel pops against it.
-    private var backdrop: some View {
-        let colors = timer.settings.theme.gradient
-        return ZStack {
-            LinearGradient(colors: colors,
-                           startPoint: .topLeading, endPoint: .bottomTrailing)
-            Color.black.opacity(0.74)
-        }
-    }
-
-    /// Deep, colored gradient for the main content card (CleanMyMac-style),
-    /// tinted by the current theme and darkened for text contrast.
+    /// Deep, colored gradient that fills the whole window, tinted by the theme
+    /// and darkened for text contrast.
     private var windowBackground: some View {
         let colors = timer.settings.theme.gradient
         return ZStack {
@@ -240,6 +197,7 @@ struct MainWindowView: View {
                            center: .topLeading, startRadius: 0, endRadius: 620)
                 .blendMode(.screen)
         }
+        .ignoresSafeArea()
     }
 }
 

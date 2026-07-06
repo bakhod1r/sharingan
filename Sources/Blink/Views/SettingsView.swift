@@ -283,9 +283,11 @@ struct SettingsView: View {
                 }
 
         case .focus:
-                Section("App blocking (during break)") {
+                Section("App blocking") {
                     ToggleRow(title: "Block distracting apps on break",
                               isOn: $settings.appBlockerSettings.enabled)
+                    ToggleRow(title: "Also block during focus session",
+                              isOn: $settings.blockAppsDuringFocus)
                     ToggleRow(title: "Force quit (not just hide)",
                               isOn: $settings.appBlockerSettings.killOnFrontmost)
                     ForEach($settings.appBlockerSettings.blockedApps) { $app in
