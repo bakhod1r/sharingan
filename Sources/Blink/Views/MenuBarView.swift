@@ -40,11 +40,11 @@ struct MenuBarView: View {
     private var timerTab: some View {
         VStack(alignment: .leading, spacing: 14) {
             StreakRewardBanner(center: StreakRewardCenter.shared)
-            statusHeader
-            // Task list is the primary plan here — an inline mini list to add,
-            // pick, and run tasks without leaving the Timer tab. The pomodoro
-            // controls sit below as a secondary layer.
+            // Task list is the primary plan — it sits at the very top so the
+            // user's added todos are the first thing shown. The pomodoro status
+            // and controls sit below as a secondary layer.
             taskList
+            statusHeader
             controls
             Divider().overlay(Color.white.opacity(0.15))
             statsStrip
@@ -96,7 +96,8 @@ struct MenuBarView: View {
                     }
                     .padding(.vertical, 1)
                 }
-                .frame(maxHeight: min(CGFloat(openTasks.count) * 44, 176))
+                // Show up to 5 rows; the rest scroll.
+                .frame(maxHeight: CGFloat(min(openTasks.count, 5)) * 46)
             }
         }
     }
