@@ -194,10 +194,14 @@ public final class PomodoroTimer: ObservableObject {
         }
         // A repetition restarts focus WITHOUT an intervening break, so tell the
         // coordinator not to run the break sequence (overlay/dim/ambience) for it.
+        // Finite repeat runs focus sessions back-to-back (no break between them);
+        // endless runs the normal focus↔break cycle forever, so it must NOT skip
+        // the break — it just keeps auto-advancing (see transitionToNext).
         let repeatCfg = settings.repeatConfig
         let willRepeat = repeatCfg.enabled
+            && !repeatCfg.endless
             && phase == .focus
-            && (repeatCfg.endless || repeatIndex < repeatCfg.count - 1)
+            && repeatIndex < repeatCfg.count - 1
         NotificationCenter.default.post(name: .phaseDidComplete, object: self,
                                         userInfo: ["phase": phase, "willRepeat": willRepeat])
 
@@ -261,7 +265,11 @@ public final class PomodoroTimer: ObservableObject {
             break
         }
         repeatIndex = 0
-        let shouldAutoStart = phase == .focus ? settings.autoStartFocus : settings.autoStartBreak
+        // Endless repeat loops the focus↔break cycle forever, so it auto-advances
+        // every phase regardless of the individual auto-start toggles.
+        let endlessLoop = settings.repeatConfig.enabled && settings.repeatConfig.endless
+        let shouldAutoStart = endlessLoop
+            || (phase == .focus ? settings.autoStartFocus : settings.autoStartBreak)
         if auto && shouldAutoStart {
             start()
         } else {
