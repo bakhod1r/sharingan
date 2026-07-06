@@ -47,13 +47,17 @@ final class FloatingMotion: ObservableObject {
     }
 }
 
-/// A body of water filling `rect` from the bottom up to `progress`, with a sine
-/// surface (animated via `phase`) that can tilt to one side (`tilt`).
+/// A body of water filling `rect` from the bottom up to `progress`. The surface
+/// is a SUM of several sine waves at incommensurate wavelengths and speeds, so it
+/// never visibly repeats and reads like real water rather than a single ripple.
+/// `time` drives the motion; `tilt` leans the surface when the window is dragged.
 struct WaterShape: Shape {
     var progress: Double
-    var phase: Double
+    var time: Double
     var amplitude: CGFloat
     var tilt: CGFloat
+    /// Phase offset so stacked layers don't move in lockstep.
+    var seed: Double = 0
 
     // Interpolate the water level and tilt so changes glide rather than jump.
     var animatableData: AnimatablePair<Double, Double> {
@@ -65,17 +69,21 @@ struct WaterShape: Shape {
         var p = Path()
         let clamped = max(0, min(1, progress))
         // A little headroom so even a full timer shows a moving surface.
-        let level = rect.height * (1 - CGFloat(clamped) * 0.94) - 2
-        let steps = 48
+        let level = Double(rect.height) * (1 - clamped * 0.94) - 2
+        let a = Double(amplitude)
+        let steps = 64
         p.move(to: CGPoint(x: rect.minX, y: rect.maxY))
-        p.addLine(to: CGPoint(x: rect.minX, y: level))
+        p.addLine(to: CGPoint(x: rect.minX, y: CGFloat(level)))
         for i in 0...steps {
-            let rel = CGFloat(i) / CGFloat(steps)
-            let x = rect.minX + rect.width * rel
-            let wave = sin(Double(rel) * .pi * 2 + phase) * Double(amplitude)
-            let tiltOffset = (rel - 0.5) * tilt * rect.height * 0.35
-            let y = level + CGFloat(wave) + tiltOffset
-            p.addLine(to: CGPoint(x: x, y: y))
+            let rel = Double(i) / Double(steps)
+            let x = rect.minX + rect.width * CGFloat(rel)
+            // Three components: a primary ripple, a shorter chop, and a slow swell.
+            let s1 = sin(rel * .pi * 2.0 + time * 1.05 + seed) * a
+            let s2 = sin(rel * .pi * 3.3 - time * 0.72 + seed * 1.7) * a * 0.45
+            let s3 = sin(rel * .pi * 1.15 + time * 0.4) * a * 0.7
+            let wave = s1 + s2 + s3
+            let tiltOffset = (rel - 0.5) * Double(tilt) * Double(rect.height) * 0.35
+            p.addLine(to: CGPoint(x: x, y: CGFloat(level + wave + tiltOffset)))
         }
         p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
         p.closeSubpath()
@@ -83,7 +91,8 @@ struct WaterShape: Shape {
     }
 }
 
-/// Two offset waves stacked for depth, tinted by the phase color.
+/// Layered waves tinted by the phase color, giving the liquid depth. Waves grow
+/// with the slosh so a faster drag makes bigger, more natural swells.
 private struct LiquidFill: View {
     var progress: Double
     var tilt: CGFloat
@@ -92,27 +101,32 @@ private struct LiquidFill: View {
     var body: some View {
         TimelineView(.animation) { ctx in
             let t = ctx.date.timeIntervalSinceReferenceDate
+            // Calmer at rest, choppier while sloshing.
+            let amp = 2.6 + abs(tilt) * 6.0
+            let back = colors.last ?? .blue
+            let front = colors.first ?? .blue
             ZStack {
-                WaterShape(progress: progress, phase: t * 1.5,
-                           amplitude: 3.5, tilt: tilt)
+                // Back layer — darker, slower, for depth.
+                WaterShape(progress: progress, time: t * 0.8,
+                           amplitude: amp * 0.8, tilt: tilt * 0.6, seed: 2.1)
                     .fill(
-                        LinearGradient(colors: colors,
+                        LinearGradient(colors: [back.opacity(0.85), front.opacity(0.45)],
+                                       startPoint: .top, endPoint: .bottom)
+                    )
+                    .opacity(0.5)
+                // Front layer — the main body.
+                WaterShape(progress: progress, time: t,
+                           amplitude: amp, tilt: tilt, seed: 0)
+                    .fill(
+                        LinearGradient(colors: [front.opacity(0.9), back.opacity(0.75)],
                                        startPoint: .top, endPoint: .bottom)
                     )
                     .opacity(0.75)
-                WaterShape(progress: progress, phase: t * 2.1 + .pi,
-                           amplitude: 2.5, tilt: tilt * 0.7)
-                    .fill(
-                        LinearGradient(colors: [(colors.last ?? .blue).opacity(0.9),
-                                                (colors.first ?? .blue).opacity(0.5)],
-                                       startPoint: .top, endPoint: .bottom)
-                    )
-                    .opacity(0.45)
-                // Bright meniscus line on the surface.
-                WaterShape(progress: progress, phase: t * 1.5,
-                           amplitude: 3.5, tilt: tilt)
-                    .stroke(Color.white.opacity(0.35), lineWidth: 1.2)
-                    .blur(radius: 0.4)
+                // Soft meniscus highlight riding the front surface.
+                WaterShape(progress: progress, time: t,
+                           amplitude: amp, tilt: tilt, seed: 0)
+                    .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                    .blur(radius: 0.5)
             }
         }
     }
