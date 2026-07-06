@@ -12,11 +12,12 @@ set -euo pipefail
 
 CONFIG="release"
 [[ "${1:-}" == "--debug" ]] && CONFIG="debug"
+[[ "${1:-}" == "--universal" ]] && CONFIG="release"
 
-# Release builds are universal (arm64 + x86_64) so the app runs on both Apple
-# Silicon and Intel Macs. Debug builds stay host-only for speed.
+# Release builds stay host-arch (no Xcode/xcbuild required). If you have
+# Xcode installed and want a universal binary, pass --universal.
 ARCH_FLAGS=()
-[[ "$CONFIG" == "release" ]] && ARCH_FLAGS=(--arch arm64 --arch x86_64)
+[[ "${1:-}" == "--universal" ]] && ARCH_FLAGS=(--arch arm64 --arch x86_64)
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
