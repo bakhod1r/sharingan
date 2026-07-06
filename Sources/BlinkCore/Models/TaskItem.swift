@@ -59,4 +59,10 @@ public struct TaskCategory: Identifiable, Codable, Equatable, Sendable {
     public static func color(for name: String) -> String {
         presets.first { $0.name == name }?.colorHex ?? "#9AA3AF"
     }
+
+    /// Swatches offered when creating a custom category.
+    public static let palette: [String] = [
+        "#4F8DFD", "#A66BFF", "#3FD07F", "#FF6FA5",
+        "#FFB020", "#22C3B8", "#FF6B5E", "#9AA3AF",
+    ]
 }

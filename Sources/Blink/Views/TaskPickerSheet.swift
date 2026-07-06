@@ -63,7 +63,7 @@ struct TaskPickerSheet: View {
         } label: {
             HStack(spacing: 10) {
                 Circle()
-                    .fill(Color(hex: TaskCategory.color(for: task.category)))
+                    .fill(Color(hex: store.color(for: task.category)))
                     .frame(width: 10, height: 10)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(task.title)
@@ -175,19 +175,5 @@ struct TaskPickerSheet: View {
         if timer.phase != .focus { timer.stop() }
         timer.start()
         dismiss()
-    }
-}
-
-fileprivate extension Color {
-    init(hex: String) {
-        var s = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
-        if s.count == 3 { s = s.map { "\($0)\($0)" }.joined() }
-        var rgb: UInt64 = 0
-        Scanner(string: s).scanHexInt64(&rgb)
-        self.init(.sRGB,
-                  red: Double((rgb >> 16) & 0xFF) / 255,
-                  green: Double((rgb >> 8) & 0xFF) / 255,
-                  blue: Double(rgb & 0xFF) / 255,
-                  opacity: 1)
     }
 }

@@ -21,6 +21,11 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var repeatConfig: RepeatConfig = .init()
     public var flashAtFiveSecLeft: Bool = true
     public var floatingTimerEnabled: Bool = true
+    /// Floating timer appearance (position is remembered separately, in
+    /// UserDefaults, to avoid churning settings on every drag).
+    public var floatingOpacity: Double = 1.0        // 0.3…1.0
+    public var floatingCompact: Bool = false        // smaller pill
+    public var floatingAlwaysOnTop: Bool = true      // above other apps
     public var globalShortcutsEnabled: Bool = true
     /// Custom hotkey bindings keyed by `GlobalShortcut.rawValue`. Missing entries
     /// fall back to each shortcut's default combo.
@@ -38,6 +43,8 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var brightnessSmooth: Bool = true
     public var launchAtLogin: Bool = false
     public var appBlockerSettings: AppBlockerSettings = .init()
+    /// When on, a focus pomodoro cannot start unless a task is selected.
+    public var requireTaskForFocus: Bool = true
 
     public init() {}
 

@@ -13,4 +13,18 @@ extension Color {
     public static let glassTint = Color.white.opacity(0.06)
     public static let glassStroke = Color.white.opacity(0.18)
     public static let glassHighlight = Color.white.opacity(0.55)
+
+    /// Parse a `#RRGGBB` (or `#RGB`) hex string into a Color. Shared so task
+    /// category colors render consistently across every view.
+    public init(hex: String) {
+        var s = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+        if s.count == 3 { s = s.map { "\($0)\($0)" }.joined() }
+        var rgb: UInt64 = 0
+        Scanner(string: s).scanHexInt64(&rgb)
+        self.init(.sRGB,
+                  red: Double((rgb >> 16) & 0xFF) / 255,
+                  green: Double((rgb >> 8) & 0xFF) / 255,
+                  blue: Double(rgb & 0xFF) / 255,
+                  opacity: 1)
+    }
 }

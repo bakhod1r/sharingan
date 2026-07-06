@@ -7,6 +7,14 @@ public protocol FloatingTimerController: AnyObject {
     func showFloating(timer: PomodoroTimer)
     func hideFloating()
     func toggleFloating(timer: PomodoroTimer)
+    /// Re-apply appearance settings (opacity, size, level) to a visible panel.
+    func refreshFloating(timer: PomodoroTimer)
+}
+
+@MainActor
+public protocol QuickAddController: AnyObject {
+    /// Pop up the global quick-add-task window.
+    func showQuickAdd()
 }
 
 @MainActor
@@ -14,6 +22,7 @@ public final class BlinkCoordinator: ObservableObject {
     public let timer: PomodoroTimer
     public var breakPresenter: BreakPresenter?
     public var floatingController: FloatingTimerController?
+    public var quickAddController: QuickAddController?
     public var shortcuts: KeyboardShortcutsService = .shared
     private var cancellables: Set<AnyCancellable> = []
     private var cliObservers: [String: Any] = [:]
@@ -30,20 +39,35 @@ public final class BlinkCoordinator: ObservableObject {
             return
         }
         let actions: [GlobalShortcut: () -> Void] = [
-            .toggle:        { [weak self] in self?.timer.toggle() },
+            .toggle:        { [weak self] in self?.toggleRespectingTaskGuard() },
             .skip:         { [weak self] in self?.timer.skip() },
             .reset:        { [weak self] in self?.timer.stop() },
             .addFive:      { [weak self] in self?.timer.addTime(300) },
             .showFloating: { [weak self] in
                 guard let self else { return }
                 self.floatingController?.toggleFloating(timer: self.timer)
-            }
+            },
+            .quickAddTask: { [weak self] in self?.quickAddController?.showQuickAdd() }
         ]
         var bindings: [GlobalShortcut: ShortcutBinding] = [:]
         for (key, binding) in timer.settings.shortcutBindings {
             if let shortcut = GlobalShortcut(rawValue: key) { bindings[shortcut] = binding }
         }
         shortcuts.update(actions, bindings: bindings, enabled: true)
+    }
+
+    /// Toggle the timer, but refuse to *start* a focus session when the
+    /// "require a task" rule is on and nothing is selected — pop the quick-add
+    /// window instead so the user can capture one.
+    public func toggleRespectingTaskGuard() {
+        if !timer.isRunning,
+           timer.phase == .focus,
+           timer.settings.requireTaskForFocus,
+           TaskStore.shared.activeTask == nil {
+            quickAddController?.showQuickAdd()
+            return
+        }
+        timer.toggle()
     }
 
     public func syncAlarm() {
@@ -55,17 +79,12 @@ public final class BlinkCoordinator: ObservableObject {
     }
 
     public func syncCamera() {
-        let wantCamera = timer.settings.cameraEyeTrackingEnabled
-        Task { @MainActor in
-            if wantCamera {
-                _ = await CameraService.shared.requestPermission()
-                CameraService.shared.start()
-                EyeTracker.shared.start()
-            } else {
-                EyeTracker.shared.stop()
-                CameraService.shared.stop()
-            }
-        }
+        // The camera runs ONLY during a break (started/stopped by BreakView), never
+        // during focus. So we don't start anything here — we only tear it down if
+        // the feature was switched off while a break happens to be active.
+        guard !timer.settings.cameraEyeTrackingEnabled else { return }
+        EyeTracker.shared.stop()
+        CameraService.shared.stop()
     }
 
     public func syncFloating() {
@@ -74,6 +93,7 @@ public final class BlinkCoordinator: ObservableObject {
             return
         }
         if timer.isRunning { floatingController?.showFloating(timer: timer) }
+        floatingController?.refreshFloating(timer: timer)
     }
 
     public func installCLIBridge() {
@@ -192,6 +212,7 @@ public final class BlinkCoordinator: ObservableObject {
         syncAlarm()
         installShortcuts()
         syncCamera()
+        syncFloating()
         syncTTS()
         syncAmbience()
         syncReminders()
@@ -284,9 +305,6 @@ public final class BlinkCoordinator: ObservableObject {
             startAmbience()
             startBrightnessDim()
             startAppBlocker()
-            if timer.settings.cameraEyeTrackingEnabled {
-                EyeTracker.shared.resetBlinkWindow()
-            }
         case .shortBreak, .longBreak:
             NotificationService.shared.notify(
                 title: "Blink",
@@ -297,6 +315,10 @@ public final class BlinkCoordinator: ObservableObject {
             BreakAmbienceService.shared.stop()
             restoreBrightness()
             stopAppBlocker()
+            // Belt-and-suspenders: BreakView.onDisappear stops the camera, but make
+            // sure it's released even if the break was dismissed some other way.
+            EyeTracker.shared.stop()
+            CameraService.shared.stop()
             speakFocusStart()
             ReminderService.shared.resumeForFocus()
         case .paused:

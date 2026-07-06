@@ -184,6 +184,14 @@ struct SettingsView: View {
                                unit: "pomodoros")
                 }
 
+                Section("Tasks") {
+                    ToggleRow(title: "Require a task to start focus",
+                              isOn: $settings.requireTaskForFocus)
+                    Text("A focus pomodoro won't start until you pick a task. The quick-add hotkey (below, in Global shortcuts) pops up a capture window.")
+                        .font(.caption2)
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+
                 Section("Repeat") {
                     ToggleRow(title: "Repeat enabled",
                               isOn: $settings.repeatConfig.enabled)
@@ -212,10 +220,28 @@ struct SettingsView: View {
                 Section("Break") {
                     ToggleRow(title: "Block screen during break",
                               isOn: $settings.blockScreenDuringBreak)
-                    ToggleRow(title: "Floating timer (while running)",
-                              isOn: $settings.floatingTimerEnabled)
                     ToggleRow(title: "Show \"Exit break\" button",
                               isOn: $settings.showExitBreakButton)
+                }
+
+                Section("Floating timer") {
+                    ToggleRow(title: "Floating timer (while running)",
+                              isOn: $settings.floatingTimerEnabled)
+                    if settings.floatingTimerEnabled {
+                        ToggleRow(title: "Compact size",
+                                  isOn: $settings.floatingCompact)
+                        ToggleRow(title: "Always on top",
+                                  isOn: $settings.floatingAlwaysOnTop)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Opacity: \(Int(settings.floatingOpacity * 100))%")
+                                .font(.caption.weight(.medium))
+                            Slider(value: $settings.floatingOpacity, in: 0.3...1.0)
+                                .tint(.white)
+                        }
+                        Text("Drag the floating timer to reposition — its spot is remembered.")
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
                 }
 
                 Section("Break ambience") {

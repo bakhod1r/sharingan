@@ -12,12 +12,16 @@ public final class TaskStore: ObservableObject {
 
     @Published public private(set) var tasks: [TaskItem] = []
     @Published public var activeTaskID: UUID?
+    /// User-created categories, persisted alongside (and merged after) the presets.
+    @Published public private(set) var customCategories: [TaskCategory] = []
 
     private let fileURL: URL
+    private let categoriesURL: URL
 
     public init(fileURL: URL? = nil) {
+        let resolved: URL
         if let fileURL {
-            self.fileURL = fileURL
+            resolved = fileURL
         } else {
             let base = FileManager.default.urls(for: .applicationSupportDirectory,
                                                 in: .userDomainMask).first
@@ -25,9 +29,43 @@ public final class TaskStore: ObservableObject {
             let dir = base.appendingPathComponent("Blink", isDirectory: true)
             try? FileManager.default.createDirectory(at: dir,
                                                      withIntermediateDirectories: true)
-            self.fileURL = dir.appendingPathComponent("tasks.json")
+            resolved = dir.appendingPathComponent("tasks.json")
         }
+        self.fileURL = resolved
+        self.categoriesURL = resolved.deletingLastPathComponent()
+            .appendingPathComponent("categories.json")
         load()
+        loadCategories()
+    }
+
+    // MARK: - Categories
+
+    /// Presets followed by custom categories (custom entries that shadow a preset
+    /// name are dropped so lookups stay unambiguous).
+    public var allCategories: [TaskCategory] {
+        let presetNames = Set(TaskCategory.presets.map(\.name))
+        return TaskCategory.presets + customCategories.filter { !presetNames.contains($0.name) }
+    }
+
+    /// Hex color for a category name, consulting custom categories then presets.
+    public func color(for name: String) -> String {
+        allCategories.first { $0.name == name }?.colorHex ?? "#9AA3AF"
+    }
+
+    /// Adds (or recolors) a custom category and returns its resolved name.
+    @discardableResult
+    public func addCategory(name: String, colorHex: String) -> String? {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        // A preset with this name already exists — nothing to store.
+        if TaskCategory.presets.contains(where: { $0.name == trimmed }) { return trimmed }
+        if let i = customCategories.firstIndex(where: { $0.name == trimmed }) {
+            customCategories[i].colorHex = colorHex
+        } else {
+            customCategories.append(.init(name: trimmed, colorHex: colorHex))
+        }
+        persistCategories()
+        return trimmed
     }
 
     // MARK: - Derived
@@ -106,6 +144,19 @@ public final class TaskStore: ObservableObject {
     private func persist() {
         guard let data = try? JSONEncoder().encode(tasks) else { return }
         try? data.write(to: fileURL, options: .atomic)
+    }
+
+    private func loadCategories() {
+        guard let data = try? Data(contentsOf: categoriesURL),
+              let decoded = try? JSONDecoder().decode([TaskCategory].self, from: data) else {
+            return
+        }
+        customCategories = decoded
+    }
+
+    private func persistCategories() {
+        guard let data = try? JSONEncoder().encode(customCategories) else { return }
+        try? data.write(to: categoriesURL, options: .atomic)
     }
 
     // MARK: - Deadlines
