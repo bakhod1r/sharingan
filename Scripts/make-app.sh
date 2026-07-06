@@ -31,7 +31,7 @@ build() { swift build -c "$CONFIG" ${ARCH_FLAGS[@]+"${ARCH_FLAGS[@]}"} "$@"; }
 
 BINDIR="$(build --show-bin-path)"
 
-label="$CONFIG"; [[ "$UNIVERSAL" == true ]] && label="$label, universal"
+label="$CONFIG"; [[ "${1:-}" == "--universal" ]] && label="$label, universal"
 echo "▸ Building ($label)…"
 build --product "$APP_NAME"
 
