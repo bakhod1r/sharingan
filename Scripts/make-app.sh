@@ -13,16 +13,21 @@ set -euo pipefail
 CONFIG="release"
 [[ "${1:-}" == "--debug" ]] && CONFIG="debug"
 
+# Release builds are universal (arm64 + x86_64) so the app runs on both Apple
+# Silicon and Intel Macs. Debug builds stay host-only for speed.
+ARCH_FLAGS=()
+[[ "$CONFIG" == "release" ]] && ARCH_FLAGS=(--arch arm64 --arch x86_64)
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 APP_NAME="Blink"
 DIST="$ROOT/dist"
 APP="$DIST/$APP_NAME.app"
-BINDIR="$(swift build -c "$CONFIG" --show-bin-path)"
+BINDIR="$(swift build -c "$CONFIG" "${ARCH_FLAGS[@]}" --show-bin-path)"
 
-echo "▸ Building ($CONFIG)…"
-swift build -c "$CONFIG" --product "$APP_NAME"
+echo "▸ Building ($CONFIG${ARCH_FLAGS:+, universal})…"
+swift build -c "$CONFIG" "${ARCH_FLAGS[@]}" --product "$APP_NAME"
 
 echo "▸ Assembling $APP …"
 rm -rf "$APP"

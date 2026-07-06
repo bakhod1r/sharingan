@@ -2,11 +2,19 @@ import SwiftUI
 import AppKit
 import BlinkCore
 
-/// Forces menu-bar-only behavior (no Dock icon) even when launched unbundled;
-/// the bundled `.app` also declares `LSUIElement` in its Info.plist.
+/// On launch, show the main window (via `MainWindowManager`) so the app is
+/// discoverable on every Mac — double-clicking always shows a window. Closing
+/// the window drops back to menu-bar-only (`.accessory`). Clicking the Dock icon
+/// re-shows it.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.accessory)
+        MainWindowManager.shared.show()
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication,
+                                       hasVisibleWindows flag: Bool) -> Bool {
+        if !flag { MainWindowManager.shared.show() }
+        return true
     }
 }
 
@@ -25,6 +33,8 @@ struct BlinkApp: App {
         coord.floatingController = FloatingWindowManager.shared
         coord.quickAddController = QuickAddWindowManager.shared
         _coordinator = StateObject(wrappedValue: coord)
+        // Feed the AppKit-managed main window its SwiftUI content.
+        MainWindowManager.shared.content = { AnyView(MainWindowView(timer: timer)) }
 }
  
     var body: some Scene {
@@ -46,15 +56,9 @@ struct BlinkApp: App {
         }
         .menuBarExtraStyle(.window)
 
-        Window("Blink", id: "main") {
-            MainWindowView(timer: timer)
-                .onAppear { NSApp.setActivationPolicy(.regular) }
-                .onDisappear { NSApp.setActivationPolicy(.accessory) }
-        }
-        .defaultSize(width: 1040, height: 720)
-        .windowResizability(.contentMinSize)
-        .windowStyle(.hiddenTitleBar)
-
+        // The main window is managed by AppKit (MainWindowManager), not a
+        // SwiftUI Window scene — see that file for why. Settings still live in
+        // the standard Settings scene.
         Settings {
             SettingsView(timer: timer, settings: $timer.settings)
                 .onChange(of: timer.settings.alarmSound) { _ in coordinator.syncAlarm() }

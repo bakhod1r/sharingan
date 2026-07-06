@@ -5,7 +5,6 @@ import BlinkCore
 struct MenuBarView: View {
     @ObservedObject var timer: PomodoroTimer
     @ObservedObject private var tasks = TaskStore.shared
-    @Environment(\.openWindow) private var openWindow
     @State private var tab: Tab = .timer
     @State private var quickTitle = ""
 
@@ -272,8 +271,7 @@ struct MenuBarView: View {
     private var footer: some View {
         HStack(spacing: 14) {
             Button {
-                NSApp.activate(ignoringOtherApps: true)
-                openWindow(id: "main")
+                MainWindowManager.shared.show()
             } label: {
                 Label("Open window", systemImage: "macwindow")
                     .font(.system(.callout, design: .rounded).weight(.medium))
@@ -309,7 +307,6 @@ struct MenuBarView: View {
     /// `.accessory` menu-bar app on recent macOS.
     private func openAppSettings() {
         AppRouter.shared.section = .settings
-        NSApp.activate(ignoringOtherApps: true)
-        openWindow(id: "main")
+        MainWindowManager.shared.show()
     }
 }
