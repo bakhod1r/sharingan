@@ -28,11 +28,14 @@ struct BreakView: View {
 
                     Spacer()
 
-                    // Center — big Sharingan eyes.
-                    SharinganEyePair(direction: validator.currentStep?.direction ?? "center",
-                                     gaze: validator.currentStep?.targetGaze ?? .center,
-                                     eyeSize: eyeH,
-                                     style: timer.settings.sharinganStyle)
+                    // Center — big Sharingan eyes over a slow breathing halo.
+                    ZStack {
+                        breathingGuide(size: min(geo.size.width, geo.size.height) * 0.5)
+                        SharinganEyePair(direction: validator.currentStep?.direction ?? "center",
+                                         gaze: validator.currentStep?.targetGaze ?? .center,
+                                         eyeSize: eyeH,
+                                         style: timer.settings.sharinganStyle)
+                    }
 
                     Spacer()
 
@@ -69,6 +72,26 @@ struct BreakView: View {
     }
 
     private var showExit: Bool { timer.settings.showExitBreakButton || forceExit }
+
+    /// A soft ring that expands and contracts on a ~5s cycle — a gentle
+    /// breathe-in / breathe-out pacer behind the eyes.
+    private func breathingGuide(size: CGFloat) -> some View {
+        TimelineView(.animation) { ctx in
+            let t = ctx.date.timeIntervalSinceReferenceDate
+            let phase = (sin(t * (2 * .pi / 5.0)) + 1) / 2   // 0…1
+            let scale = 0.82 + phase * 0.5
+            Circle()
+                .stroke(
+                    RadialGradient(colors: [Color.white.opacity(0.14), .clear],
+                                   center: .center, startRadius: 0, endRadius: size * 0.7),
+                    lineWidth: size * 0.14)
+                .frame(width: size, height: size)
+                .scaleEffect(scale)
+                .opacity(0.35 + phase * 0.45)
+                .blur(radius: 6)
+        }
+        .allowsHitTesting(false)
+    }
 
     private func titleRow(remaining: TimeInterval) -> some View {
         HStack(alignment: .center) {

@@ -12,6 +12,8 @@ struct GlassButton: View {
             HStack(spacing: 10) {
                 Image(systemName: systemImage)
                     .font(.system(size: 16, weight: .semibold))
+                    // Cross-fade between glyphs (e.g. play ↔ pause) instead of a hard swap.
+                    .contentTransition(.opacity)
                 Text(label)
                     .font(.system(.headline, design: .rounded).weight(.semibold))
             }

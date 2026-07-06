@@ -33,6 +33,7 @@ struct StreakRewardBanner: View {
                 )
                 .glassRounded(24, material: .regular)
                 .liquidShadow(color: .orange.opacity(0.6), radius: 22, y: 10)
+                .overlay { if show { ConfettiBurst() } }
 
                 Button {
                     withAnimation(.spring(response: 0.4)) { show = false }
@@ -56,5 +57,33 @@ struct StreakRewardBanner: View {
                 }
             }
         }
+    }
+}
+
+/// A one-shot radial confetti pop for the milestone banner.
+private struct ConfettiBurst: View {
+    @State private var go = false
+    private let pieces = 22
+    private let palette: [Color] = [.orange, .yellow, .pink, .white, .green, .cyan]
+
+    var body: some View {
+        ZStack {
+            ForEach(0..<pieces, id: \.self) { i in
+                let angle = Double(i) / Double(pieces) * 2 * .pi
+                let dist: CGFloat = go ? CGFloat(80 + (i % 5) * 14) : 0
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(palette[i % palette.count])
+                    .frame(width: 6, height: 9)
+                    .rotationEffect(.degrees(go ? Double(i) * 47 : 0))
+                    .offset(x: cos(angle) * dist,
+                            y: sin(angle) * dist + (go ? 40 : 0))
+                    .opacity(go ? 0 : 1)
+                    .scaleEffect(go ? 0.5 : 1)
+            }
+        }
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.95)) { go = true }
+        }
+        .allowsHitTesting(false)
     }
 }

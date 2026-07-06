@@ -13,6 +13,8 @@ struct MenuBarView: View {
     @State private var editingTaskID: UUID?
     @State private var editingText = ""
     @FocusState private var editFieldFocused: Bool
+    /// Drives the gentle running-state pulse on the Start button.
+    @State private var heartbeat = false
 
     private enum Tab: Hashable { case timer, tasks, stats }
 
@@ -37,6 +39,7 @@ struct MenuBarView: View {
             Divider().overlay(Color.white.opacity(0.15))
             footer
         }
+        .onAppear { heartbeat = true }
         .padding(18)
         .frame(width: 360)
     }
@@ -103,6 +106,8 @@ struct MenuBarView: View {
                         }
                     }
                     .padding(.vertical, 1)
+                    .animation(.spring(response: 0.35, dampingFraction: 0.82),
+                               value: groupedOpen.map(\.category))
                 }
                 .frame(maxHeight: 300)
             }
@@ -180,8 +185,15 @@ struct MenuBarView: View {
 
             if !isCollapsed {
                 VStack(spacing: 6) {
-                    ForEach(group.items) { task in miniRow(task, showCategory: false) }
+                    ForEach(group.items) { task in
+                        miniRow(task, showCategory: false)
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .top).combined(with: .opacity),
+                                removal: .opacity.combined(with: .scale(scale: 0.9))))
+                    }
                 }
+                .animation(.spring(response: 0.35, dampingFraction: 0.82),
+                           value: group.items.map(\.id))
             }
         }
     }
@@ -390,6 +402,7 @@ struct MenuBarView: View {
                 Image(systemName: timer.phase.systemImage)
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(timer.phase.glow)
+                    .contentTransition(.opacity)
             }
             .frame(width: 46, height: 46)
             .glassCapsule()
@@ -397,12 +410,17 @@ struct MenuBarView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(timer.phase.label)
                     .font(.system(.headline, design: .rounded).weight(.bold))
+                    .contentTransition(.opacity)
                 Text(timer.settings.timeFormat.string(timer.remainingSeconds))
                     .font(.system(.title3, design: .rounded).weight(.semibold).monospacedDigit())
                     .foregroundStyle(.secondary)
+                    .contentTransition(.numericText())
+                    .animation(.snappy(duration: 0.3), value: timer.remainingSeconds)
             }
             Spacer()
         }
+        // Icon, label and glow cross-fade when the phase changes.
+        .animation(.easeInOut(duration: 0.4), value: timer.phase)
     }
 
     private var controls: some View {
@@ -410,6 +428,10 @@ struct MenuBarView: View {
             GlassButton(label: timer.isRunning ? "Pause" : "Start",
                         systemImage: timer.isRunning ? "pause.fill" : "play.fill",
                         action: startTapped)
+                // Gentle breathing pulse while the timer runs.
+                .scaleEffect(timer.isRunning && heartbeat ? 1.012 : 1.0)
+                .animation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true),
+                           value: heartbeat)
             HStack(spacing: 8) {
                 GlassButton(label: "Skip",
                             systemImage: "forward.end.fill",

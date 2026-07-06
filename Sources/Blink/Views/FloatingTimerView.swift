@@ -136,6 +136,7 @@ struct FloatingTimerView: View {
     @ObservedObject var timer: PomodoroTimer
     @ObservedObject private var motion = FloatingMotion.shared
     @State private var animate = false
+    @State private var phasePulse = false
 
     private var themeColors: [Color] { timer.settings.theme.gradient }
     private var phaseColors: [Color] { timer.phase.gradient }
@@ -151,6 +152,8 @@ struct FloatingTimerView: View {
                 .shadow(color: .black.opacity(0.35), radius: 4, y: 1)
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
+                .contentTransition(.numericText())
+                .animation(.snappy(duration: 0.3), value: remaining)
             Text(timer.phase.label.uppercased())
                 .font(.system(size: 10, weight: .heavy, design: .rounded))
                 .tracking(1.2)
@@ -194,8 +197,16 @@ struct FloatingTimerView: View {
                     .allowsHitTesting(false)
             }
         }
+        .scaleEffect(phasePulse ? 1.06 : 1.0)
         .onAppear { animate = true }
         .onChange(of: timer.isFlashing) { _ in animate = timer.isFlashing }
+        .onChange(of: timer.phase) { _ in
+            // A quick springy pop when focus↔break flips.
+            withAnimation(.spring(response: 0.26, dampingFraction: 0.5)) { phasePulse = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.7)) { phasePulse = false }
+            }
+        }
         // Transparent margin so the card's rounded shadow isn't clipped by the
         // window edge (which is what made the rectangle appear).
         .padding(16)
