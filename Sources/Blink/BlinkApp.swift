@@ -8,7 +8,12 @@ import BlinkCore
 /// re-shows it.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
-        MainWindowManager.shared.show()
+        // Defer to the next run-loop turn so SwiftUI finishes setting up its
+        // scenes first; creating the AppKit window synchronously here suppresses
+        // the UI when launched via LaunchServices (Finder/Dock/`open`).
+        DispatchQueue.main.async {
+            MainWindowManager.shared.show()
+        }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication,

@@ -11,12 +11,21 @@
 set -euo pipefail
 
 CONFIG="release"
-[[ "${1:-}" == "--debug" ]] && CONFIG="debug"
+UNIVERSAL=false
+for arg in "$@"; do
+  case "$arg" in
+    --debug)     CONFIG="debug" ;;
+    --universal) UNIVERSAL=true ;;
+  esac
+done
 
-# Release builds are universal (arm64 + x86_64) so the app runs on both Apple
-# Silicon and Intel Macs. Debug builds stay host-only for speed.
+# Host-native by default so the build works with just the Command Line Tools.
+# A universal (arm64 + x86_64) binary — needed for Intel Macs — requires FULL
+# Xcode (xcbuild); opt in with `--universal` only when Xcode is installed.
 ARCH_FLAGS=()
-[[ "$CONFIG" == "release" ]] && ARCH_FLAGS=(--arch arm64 --arch x86_64)
+if [[ "$UNIVERSAL" == true ]]; then
+  ARCH_FLAGS=(--arch arm64 --arch x86_64)
+fi
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -24,10 +33,15 @@ cd "$ROOT"
 APP_NAME="Blink"
 DIST="$ROOT/dist"
 APP="$DIST/$APP_NAME.app"
-BINDIR="$(swift build -c "$CONFIG" "${ARCH_FLAGS[@]}" --show-bin-path)"
 
-echo "▸ Building ($CONFIG${ARCH_FLAGS:+, universal})…"
-swift build -c "$CONFIG" "${ARCH_FLAGS[@]}" --product "$APP_NAME"
+# Safe empty-array expansion for bash 3.2 (macOS default) under `set -u`.
+build() { swift build -c "$CONFIG" ${ARCH_FLAGS[@]+"${ARCH_FLAGS[@]}"} "$@"; }
+
+BINDIR="$(build --show-bin-path)"
+
+label="$CONFIG"; [[ "$UNIVERSAL" == true ]] && label="$label, universal"
+echo "▸ Building ($label)…"
+build --product "$APP_NAME"
 
 echo "▸ Assembling $APP …"
 rm -rf "$APP"
