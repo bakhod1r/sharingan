@@ -66,6 +66,11 @@ final class FloatingWindowManager: FloatingTimerController {
             let d = UserDefaults.standard
             d.set(Double(origin.x), forKey: "blink.floating.x")
             d.set(Double(origin.y), forKey: "blink.floating.y")
+            // Feed the drag into the liquid so the water sloshes as it moves.
+            // didMoveNotification is delivered on the main queue.
+            MainActor.assumeIsolated {
+                FloatingMotion.shared.moved(to: origin.x)
+            }
         }
     }
 
