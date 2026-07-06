@@ -383,19 +383,22 @@ public final class BlinkCoordinator: ObservableObject {
 
     private func handleStreakUpdate(_ note: Notification) {
         guard let streak = note.userInfo?["streak"] as? StreakStore else { return }
-        StreakRewardCenter.shared.evaluate(streak: streak.currentStreak)
-        if let reward = StreakRewardCenter.shared.pendingReward {
-            NotificationService.shared.notify(
-                title: "Blink — Milestone achieved",
-                body: "\(reward.badge.emoji) \(reward.badge.title): \(reward.badge.subtitle)",
-                identifier: "blink.streak.\(reward.badge.id)"
-            )
-            if timer.settings.ttsSettings.enabled {
-                TTSService.shared.speak(
-                    "Achievement unlocked: \(reward.badge.title). \(reward.badge.subtitle)",
-                    rate: timer.settings.ttsRate,
-                    pitch: timer.settings.ttsPitch)
-            }
+        // Announce ONLY a newly-unlocked milestone. Reading the lingering
+        // pendingReward instead made it re-speak "First pomodoro" on every
+        // pomodoro until the banner was dismissed.
+        guard let reward = StreakRewardCenter.shared.evaluate(streak: streak.currentStreak) else {
+            return
+        }
+        NotificationService.shared.notify(
+            title: "Blink — Milestone achieved",
+            body: "\(reward.badge.emoji) \(reward.badge.title): \(reward.badge.subtitle)",
+            identifier: "blink.streak.\(reward.badge.id)"
+        )
+        if timer.settings.ttsSettings.enabled {
+            TTSService.shared.speak(
+                "Achievement unlocked: \(reward.badge.title). \(reward.badge.subtitle)",
+                rate: timer.settings.ttsRate,
+                pitch: timer.settings.ttsPitch)
         }
     }
 }

@@ -11,7 +11,11 @@ public final class TTSService {
 
     public func speak(_ text: String, lang: String = "en-US",
                rate: Float = 0.5, pitch: Float = 1.0) {
-        guard synth.isSpeaking == false else { return }
+        // Interrupt any in-progress speech instead of dropping the new line, so
+        // the voice always matches the CURRENT eye-exercise step — otherwise a
+        // still-speaking cue would swallow the next one and the audio would drift
+        // out of sync with the eyes.
+        if synth.isSpeaking { synth.stopSpeaking(at: .immediate) }
         let utter = AVSpeechUtterance(string: text)
         utter.voice = AVSpeechSynthesisVoice(language: lang)
             ?? AVSpeechSynthesisVoice(language: "en-US")
