@@ -25,10 +25,15 @@ cd "$ROOT"
 APP_NAME="Blink"
 DIST="$ROOT/dist"
 APP="$DIST/$APP_NAME.app"
-BINDIR="$(swift build -c "$CONFIG" "${ARCH_FLAGS[@]}" --show-bin-path)"
 
-echo "▸ Building ($CONFIG${ARCH_FLAGS:+, universal})…"
-swift build -c "$CONFIG" "${ARCH_FLAGS[@]}" --product "$APP_NAME"
+# Safe empty-array expansion for bash 3.2 (macOS default) under `set -u`.
+build() { swift build -c "$CONFIG" ${ARCH_FLAGS[@]+"${ARCH_FLAGS[@]}"} "$@"; }
+
+BINDIR="$(build --show-bin-path)"
+
+label="$CONFIG"; [[ "$UNIVERSAL" == true ]] && label="$label, universal"
+echo "▸ Building ($label)…"
+build --product "$APP_NAME"
 
 echo "▸ Assembling $APP …"
 rm -rf "$APP"
