@@ -40,11 +40,18 @@ public final class TaskStore: ObservableObject {
 
     // MARK: - Categories
 
-    /// Presets followed by custom categories (custom entries that shadow a preset
-    /// name are dropped so lookups stay unambiguous).
+    /// Presets, with any custom entry of the same name overriding the preset
+    /// (so a preset's color/icon can be customized), plus genuinely new ones.
     public var allCategories: [TaskCategory] {
-        let presetNames = Set(TaskCategory.presets.map(\.name))
-        return TaskCategory.presets + customCategories.filter { !presetNames.contains($0.name) }
+        var result = TaskCategory.presets
+        for custom in customCategories {
+            if let i = result.firstIndex(where: { $0.name == custom.name }) {
+                result[i] = custom
+            } else {
+                result.append(custom)
+            }
+        }
+        return result
     }
 
     /// Hex color for a category name, consulting custom categories then presets.
@@ -52,20 +59,35 @@ public final class TaskStore: ObservableObject {
         allCategories.first { $0.name == name }?.colorHex ?? "#9AA3AF"
     }
 
-    /// Adds (or recolors) a custom category and returns its resolved name.
+    /// SF Symbol for a category name.
+    public func icon(for name: String) -> String {
+        allCategories.first { $0.name == name }?.icon ?? "folder.fill"
+    }
+
+    /// Adds or updates a category (color and/or icon). Works for presets too —
+    /// the override is stored as a custom entry. Returns the resolved name.
     @discardableResult
-    public func addCategory(name: String, colorHex: String) -> String? {
+    public func addCategory(name: String, colorHex: String, icon: String = "folder.fill") -> String? {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        // A preset with this name already exists — nothing to store.
-        if TaskCategory.presets.contains(where: { $0.name == trimmed }) { return trimmed }
         if let i = customCategories.firstIndex(where: { $0.name == trimmed }) {
             customCategories[i].colorHex = colorHex
+            customCategories[i].icon = icon
         } else {
-            customCategories.append(.init(name: trimmed, colorHex: colorHex))
+            customCategories.append(.init(name: trimmed, colorHex: colorHex, icon: icon))
         }
         persistCategories()
         return trimmed
+    }
+
+    /// Changes only the color of a category, preserving its icon.
+    public func setColor(for name: String, colorHex: String) {
+        addCategory(name: name, colorHex: colorHex, icon: icon(for: name))
+    }
+
+    /// Changes only the icon of a category, preserving its color.
+    public func setIcon(for name: String, icon: String) {
+        addCategory(name: name, colorHex: color(for: name), icon: icon)
     }
 
     // MARK: - Derived

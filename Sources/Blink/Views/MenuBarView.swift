@@ -7,6 +7,11 @@ struct MenuBarView: View {
     @ObservedObject private var tasks = TaskStore.shared
     @State private var tab: Tab = .timer
     @State private var quickTitle = ""
+    /// Categories whose accordion section is collapsed.
+    @State private var collapsedCategories: Set<String> = []
+    /// Task currently being renamed inline, and its working text.
+    @State private var editingTaskID: UUID?
+    @State private var editingText = ""
 
     private enum Tab: Hashable { case timer, tasks, stats }
 
@@ -91,18 +96,94 @@ struct MenuBarView: View {
                 .padding(.vertical, 10)
             } else {
                 ScrollView {
-                    VStack(spacing: 6) {
-                        ForEach(openTasks) { task in miniRow(task) }
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(groupedOpen, id: \.category) { group in
+                            categorySection(group)
+                        }
                     }
                     .padding(.vertical, 1)
                 }
-                // Show up to 5 rows; the rest scroll.
-                .frame(maxHeight: CGFloat(min(openTasks.count, 5)) * 46)
+                .frame(maxHeight: 300)
             }
         }
     }
 
-    private func miniRow(_ task: TaskItem) -> some View {
+    /// Open tasks grouped by category, in the app's category order.
+    private var groupedOpen: [(category: String, color: String, items: [TaskItem])] {
+        let order = tasks.allCategories.map(\.name)
+        let byCat = Dictionary(grouping: openTasks, by: { $0.category })
+        return byCat.keys
+            .sorted { (order.firstIndex(of: $0) ?? .max) < (order.firstIndex(of: $1) ?? .max) }
+            .map { name in (name, tasks.color(for: name), byCat[name] ?? []) }
+    }
+
+    /// One collapsible accordion section for a category.
+    @ViewBuilder
+    private func categorySection(_ group: (category: String, color: String, items: [TaskItem])) -> some View {
+        let accent = Color(hex: group.color)
+        let isCollapsed = collapsedCategories.contains(group.category)
+        VStack(alignment: .leading, spacing: 6) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    if isCollapsed { collapsedCategories.remove(group.category) }
+                    else { collapsedCategories.insert(group.category) }
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isCollapsed ? 0 : 90))
+                    Image(systemName: tasks.icon(for: group.category))
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(accent)
+                        .frame(width: 16)
+                    Text(group.category)
+                        .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                    Text("\(group.items.count)")
+                        .font(.system(.caption2, design: .rounded).weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 6).padding(.vertical, 1)
+                        .background(Capsule().fill(Color.primary.opacity(0.08)))
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .contextMenu {
+                Menu {
+                    ForEach(TaskCategory.iconChoices, id: \.self) { symbol in
+                        Button {
+                            tasks.setIcon(for: group.category, icon: symbol)
+                        } label: {
+                            Label(symbol, systemImage: symbol)
+                        }
+                    }
+                } label: {
+                    Label("Change icon", systemImage: "star")
+                }
+                Menu {
+                    ForEach(TaskCategory.palette, id: \.self) { hex in
+                        Button {
+                            tasks.setColor(for: group.category, colorHex: hex)
+                        } label: {
+                            Label(hex, systemImage: "circle.fill")
+                        }
+                    }
+                } label: {
+                    Label("Change color", systemImage: "paintpalette")
+                }
+            }
+
+            if !isCollapsed {
+                VStack(spacing: 6) {
+                    ForEach(group.items) { task in miniRow(task, showCategory: false) }
+                }
+            }
+        }
+    }
+
+    private func miniRow(_ task: TaskItem, showCategory: Bool = true) -> some View {
         let isActive = tasks.activeTaskID == task.id
         let accent = Color(hex: tasks.color(for: task.category))
         return HStack(spacing: 10) {
@@ -115,12 +196,31 @@ struct MenuBarView: View {
             }
             .buttonStyle(.plain)
 
-            Circle().fill(accent).frame(width: 7, height: 7)
+            if editingTaskID == task.id {
+                TextField("Task name", text: $editingText, onCommit: { commitEdit(task) })
+                    .textFieldStyle(.plain)
+                    .font(.system(.callout, design: .rounded).weight(.medium))
+                    .onSubmit { commitEdit(task) }
+                    .onExitCommand { editingTaskID = nil }
+                Spacer(minLength: 6)
+            } else {
+                Text(task.title)
+                    .font(.system(.callout, design: .rounded).weight(.medium))
+                    .lineLimit(1)
 
-            Text(task.title)
-                .font(.system(.callout, design: .rounded).weight(.medium))
-                .lineLimit(1)
-            Spacer(minLength: 6)
+                // Category — the colored bucket pill (hidden inside an accordion
+                // section, whose header already names the category).
+                if showCategory {
+                    categoryTag(task.category, accent: accent)
+                }
+
+                // Tags — separate `#label` chips (a tag is not a category).
+                ForEach(task.tags.prefix(2), id: \.self) { tag in
+                    tagChip(tag)
+                }
+
+                Spacer(minLength: 6)
+            }
 
             if task.pomodorosDone > 0 {
                 Text("🍅\(task.pomodorosDone)")
@@ -148,16 +248,104 @@ struct MenuBarView: View {
                 .stroke(isActive ? accent.opacity(0.5) : .clear, lineWidth: 1)
         )
         .contextMenu {
+            Button {
+                editingText = task.title
+                editingTaskID = task.id
+            } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+            Menu {
+                ForEach(tasks.allCategories) { cat in
+                    Button {
+                        var updated = task
+                        updated.category = cat.name
+                        tasks.update(updated)
+                    } label: {
+                        if task.category == cat.name {
+                            Label(cat.name, systemImage: "checkmark")
+                        } else {
+                            Text(cat.name)
+                        }
+                    }
+                }
+            } label: {
+                Label("Change category", systemImage: "tag")
+            }
+            Divider()
             Button(role: .destructive) { tasks.delete(task.id) } label: {
                 Label("Delete", systemImage: "trash")
             }
         }
     }
 
+    /// Colored bucket pill for a task's category.
+    private func categoryTag(_ name: String, accent: Color) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: tasks.icon(for: name))
+                .font(.system(size: 9, weight: .semibold))
+            Text(name)
+                .font(.system(.caption2, design: .rounded).weight(.semibold))
+                .lineLimit(1)
+        }
+        .foregroundStyle(accent)
+        .padding(.horizontal, 7).padding(.vertical, 3)
+        .background(
+            Capsule().fill(accent.opacity(0.14))
+        )
+    }
+
+    /// Neutral `#label` chip for a free-form tag (distinct from the category).
+    private func tagChip(_ tag: String) -> some View {
+        Text("#\(tag)")
+            .font(.system(.caption2, design: .rounded).weight(.medium))
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .padding(.horizontal, 6).padding(.vertical, 3)
+            .background(
+                Capsule().fill(Color.primary.opacity(0.08))
+            )
+    }
+
+    /// Adds a task, pulling any `#tag` tokens out of the typed text into the
+    /// task's tags (category stays the default — a tag is not a category).
+    /// Saves an inline rename (re-parsing `#tags` from the edited text) and exits
+    /// edit mode. Empty text cancels without changing the task.
+    private func commitEdit(_ task: TaskItem) {
+        defer { editingTaskID = nil }
+        let raw = editingText.trimmingCharacters(in: .whitespaces)
+        guard !raw.isEmpty else { return }
+        var tagList: [String] = []
+        var titleWords: [String] = []
+        for word in raw.split(separator: " ") {
+            if word.hasPrefix("#"), word.count > 1 {
+                tagList.append(String(word.dropFirst()))
+            } else {
+                titleWords.append(String(word))
+            }
+        }
+        let title = titleWords.joined(separator: " ")
+        guard !title.isEmpty else { return }
+        var updated = task
+        updated.title = title
+        if !tagList.isEmpty { updated.tags = tagList }
+        tasks.update(updated)
+    }
+
     private func quickAdd() {
-        let trimmed = quickTitle.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return }
-        tasks.add(title: trimmed)
+        let raw = quickTitle.trimmingCharacters(in: .whitespaces)
+        guard !raw.isEmpty else { return }
+        var tagList: [String] = []
+        var titleWords: [String] = []
+        for word in raw.split(separator: " ") {
+            if word.hasPrefix("#"), word.count > 1 {
+                tagList.append(String(word.dropFirst()))
+            } else {
+                titleWords.append(String(word))
+            }
+        }
+        let title = titleWords.joined(separator: " ")
+        guard !title.isEmpty else { return }
+        tasks.add(title: title, tags: tagList)
         quickTitle = ""
     }
 
