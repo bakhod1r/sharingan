@@ -109,9 +109,25 @@ struct MenuBarView: View {
                     .animation(.spring(response: 0.35, dampingFraction: 0.82),
                                value: groupedOpen.map(\.category))
                 }
-                .frame(maxHeight: 300)
+                // Size to the actual content (headers + expanded rows) so a short
+                // list doesn't claim 300pt and shove the timer off-screen; only
+                // taller lists scroll.
+                .frame(height: taskListHeight)
             }
         }
+    }
+
+    /// Height that fits the visible accordion content (section headers + rows of
+    /// expanded categories), capped so long lists scroll instead of growing.
+    private var taskListHeight: CGFloat {
+        var h: CGFloat = 0
+        for group in groupedOpen {
+            h += 30   // category header row
+            if !collapsedCategories.contains(group.category) {
+                h += CGFloat(group.items.count) * 48 + 6
+            }
+        }
+        return min(max(h, 40), 240)
     }
 
     /// Open tasks grouped by category, in the app's category order.

@@ -7,6 +7,7 @@ struct SettingsView: View {
     @Binding var settings: PomodoroSettings
     @State private var editingInstructionDirection: String?
     @State private var openCategory: SettingsCategory?
+    @State private var searchText = ""
 
     var body: some View {
         ZStack {
@@ -28,20 +29,55 @@ struct SettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 rootHeader
-                SettingsCard {
-                    categoryRow(.timer)
-                    categoryRow(.breaks)
-                    categoryRow(.focus)
-                    categoryRow(.eyeCare)
-                    categoryRow(.general)
-                    categoryRow(.voice)
-                    categoryRow(.shortcuts)
+                searchField
+                if filteredCategories.isEmpty {
+                    Text("No settings match “\(searchText)”.")
+                        .font(.system(.callout, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.6))
+                        .padding(.top, 8)
+                } else {
+                    SettingsCard {
+                        ForEach(filteredCategories) { cat in
+                            categoryRow(cat)
+                        }
+                    }
                 }
             }
             .frame(maxWidth: 600)
             .frame(maxWidth: .infinity)
             .padding(24)
         }
+    }
+
+    /// Categories matching the search query (all when the query is empty).
+    private var filteredCategories: [SettingsCategory] {
+        let q = searchText.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !q.isEmpty else { return SettingsCategory.allCases }
+        return SettingsCategory.allCases.filter { $0.matches(q) }
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.white.opacity(0.5))
+            TextField("Search settings", text: $searchText)
+                .textFieldStyle(.plain)
+                .foregroundStyle(.white)
+            if !searchText.isEmpty {
+                Button { searchText = "" } label: {
+                    Image(systemName: "xmark.circle.fill")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.white.opacity(0.4))
+            }
+        }
+        .font(.system(.body, design: .rounded))
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .background(RoundedRectangle(cornerRadius: 11, style: .continuous)
+            .fill(.white.opacity(0.08)))
+        .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous)
+            .stroke(.white.opacity(0.10), lineWidth: 1))
+        .frame(maxWidth: 600)
     }
 
     private var rootHeader: some View {
@@ -213,21 +249,6 @@ struct SettingsView: View {
                     }
                 }
 
-        case .breaks:
-                Section("Break message") {
-                    TextField("Break message text",
-                              text: $settings.breakMessage, axis: .vertical)
-                        .textFieldStyle(DarkGlassFieldStyle())
-                        .lineLimit(2...4)
-                }
-
-                Section("Break") {
-                    ToggleRow(title: "Block screen during break",
-                              isOn: $settings.blockScreenDuringBreak)
-                    ToggleRow(title: "Show \"Exit break\" button",
-                              isOn: $settings.showExitBreakButton)
-                }
-
                 Section("Floating timer") {
                     ToggleRow(title: "Floating timer (while running)",
                               isOn: $settings.floatingTimerEnabled)
@@ -246,6 +267,21 @@ struct SettingsView: View {
                             .font(.caption2)
                             .foregroundStyle(.white.opacity(0.6))
                     }
+                }
+
+        case .breaks:
+                Section("Break message") {
+                    TextField("Break message text",
+                              text: $settings.breakMessage, axis: .vertical)
+                        .textFieldStyle(DarkGlassFieldStyle())
+                        .lineLimit(2...4)
+                }
+
+                Section("Break") {
+                    ToggleRow(title: "Block screen during break",
+                              isOn: $settings.blockScreenDuringBreak)
+                    ToggleRow(title: "Show \"Exit break\" button",
+                              isOn: $settings.showExitBreakButton)
                 }
 
                 Section("Break ambience") {
@@ -528,7 +564,7 @@ struct SettingsView: View {
         }
         var subtitle: String {
             switch self {
-            case .timer:     return "Durations, mode, repeat"
+            case .timer:     return "Durations, mode, repeat, floating timer"
             case .breaks:    return "Break screen, ambience, brightness"
             case .focus:     return "App blocking, reminders"
             case .eyeCare:   return "Exercises, camera tracking"
@@ -558,6 +594,39 @@ struct SettingsView: View {
             case .voice:     return .orange
             case .shortcuts: return .purple
             }
+        }
+
+        /// Extra search terms so a query finds a category by the settings it holds
+        /// (e.g. "float" or "opacity" → Timer).
+        var keywords: [String] {
+            switch self {
+            case .timer:
+                return ["duration", "minutes", "pomodoro", "focus length", "mode",
+                        "countdown", "count up", "repeat", "endless", "floating",
+                        "float", "opacity", "always on top", "compact"]
+            case .breaks:
+                return ["break", "message", "ambience", "rain", "forest", "white noise",
+                        "brightness", "dim", "screen", "exit"]
+            case .focus:
+                return ["app", "block", "blocker", "distraction", "reminder",
+                        "posture", "water", "stand"]
+            case .eyeCare:
+                return ["eye", "exercise", "sharingan", "camera", "vision", "gaze",
+                        "blink", "20-20-20"]
+            case .general:
+                return ["auto-start", "auto start", "sound", "alarm", "chime",
+                        "notification", "launch at login", "startup"]
+            case .voice:
+                return ["tts", "voice", "speak", "spoken", "announcement", "rate", "pitch"]
+            case .shortcuts:
+                return ["keyboard", "hotkey", "shortcut", "global", "quick add"]
+            }
+        }
+
+        /// Whether this category matches a lowercased search query.
+        func matches(_ query: String) -> Bool {
+            let hay = ([title, subtitle] + keywords).joined(separator: " ").lowercased()
+            return hay.contains(query)
         }
     }
 

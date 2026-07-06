@@ -23,11 +23,13 @@ final class MenuBarController: NSObject {
         updateTitle()
 
         let popover = NSPopover()
-        popover.contentSize = NSSize(width: 360, height: 720)
         popover.behavior = .transient
-        popover.contentViewController = NSHostingController(
-            rootView: MenuBarView(timer: timer)
-        )
+        let hosting = NSHostingController(rootView: MenuBarView(timer: timer))
+        // Let the popover size itself to the SwiftUI content's natural height
+        // (the view fixes its own 360pt width). A hard-coded 720 was clipping the
+        // content and making sections overlap.
+        hosting.sizingOptions = [.preferredContentSize]
+        popover.contentViewController = hosting
         self.popover = popover
 
         if let button = item.button {
