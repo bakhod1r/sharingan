@@ -7,17 +7,30 @@ final class FloatingWindowManager: FloatingTimerController {
     static let shared = FloatingWindowManager()
     private var panel: NSPanel?
     private var moveObserver: NSObjectProtocol?
+    private var resizeObserver: NSObjectProtocol?
     private let posKeyX = "blink.floating.x"
     private let posKeyY = "blink.floating.y"
+    private let sizeKeyW = "blink.floating.w"
+    private let sizeKeyH = "blink.floating.h"
 
     func showFloating(timer: PomodoroTimer) {
         if panel != nil { applySettings(timer.settings); return }
+        let defaults = UserDefaults.standard
+        // Restore the remembered size, else a default that depends on the compact
+        // setting. The user can freely resize from here.
         let compact = timer.settings.floatingCompact
-        let size = compact ? NSSize(width: 132, height: 66)
-                           : NSSize(width: 168, height: 86)
+        let defaultSize = compact ? NSSize(width: 150, height: 90)
+                                  : NSSize(width: 186, height: 108)
+        var size = defaultSize
+        if defaults.object(forKey: sizeKeyW) != nil {
+            let w = defaults.double(forKey: sizeKeyW)
+            let h = defaults.double(forKey: sizeKeyH)
+            if w > 0, h > 0 { size = NSSize(width: w, height: h) }
+        }
+
         let panel = FloatingMiniPanel(
             contentRect: NSRect(x: 0, y: 0, width: size.width, height: size.height),
-            styleMask: [.borderless, .fullSizeContentView, .nonactivatingPanel],
+            styleMask: [.borderless, .resizable, .fullSizeContentView, .nonactivatingPanel],
             backing: .buffered, defer: false
         )
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary,
@@ -33,21 +46,17 @@ final class FloatingWindowManager: FloatingTimerController {
         panel.isMovableByWindowBackground = true
         panel.ignoresMouseEvents = false
         panel.isFloatingPanel = true
+        // Resize bounds — small pill up to a card big enough to show the task.
+        panel.minSize = NSSize(width: 120, height: 66)
+        panel.maxSize = NSSize(width: 460, height: 340)
 
         let view = FloatingTimerView(timer: timer)
             .environmentObject(timer)
         let hosting = NSHostingView(rootView: view)
+        hosting.autoresizingMask = [.width, .height]
         panel.contentView = hosting
-        // Size the panel to the view's intrinsic content (responsive to the
-        // chosen time format), keeping it anchored at its top-left corner.
-        let fitting = hosting.fittingSize
-        if fitting.width > 0, fitting.height > 0 {
-            let topLeft = NSPoint(x: panel.frame.minX, y: panel.frame.maxY)
-            panel.setContentSize(fitting)
-            panel.setFrameTopLeftPoint(topLeft)
-        }
+
         // Restore the remembered position, if any.
-        let defaults = UserDefaults.standard
         if defaults.object(forKey: posKeyX) != nil {
             let x = defaults.double(forKey: posKeyX)
             let y = defaults.double(forKey: posKeyY)
@@ -57,7 +66,7 @@ final class FloatingWindowManager: FloatingTimerController {
         applySettings(timer.settings)
         panel.orderFrontRegardless()
 
-        // Persist the position whenever the user drags the panel.
+        // Persist position on drag (and slosh the liquid); persist size on resize.
         moveObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didMoveNotification, object: panel, queue: .main
         ) { [weak panel] _ in
@@ -66,11 +75,18 @@ final class FloatingWindowManager: FloatingTimerController {
             let d = UserDefaults.standard
             d.set(Double(origin.x), forKey: "blink.floating.x")
             d.set(Double(origin.y), forKey: "blink.floating.y")
-            // Feed the drag into the liquid so the water sloshes as it moves.
-            // didMoveNotification is delivered on the main queue.
             MainActor.assumeIsolated {
                 FloatingMotion.shared.moved(to: origin.x)
             }
+        }
+        resizeObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didResizeNotification, object: panel, queue: .main
+        ) { [weak panel] _ in
+            guard let panel else { return }
+            let s = panel.frame.size
+            let d = UserDefaults.standard
+            d.set(Double(s.width), forKey: "blink.floating.w")
+            d.set(Double(s.height), forKey: "blink.floating.h")
         }
     }
 
@@ -78,6 +94,10 @@ final class FloatingWindowManager: FloatingTimerController {
         if let moveObserver {
             NotificationCenter.default.removeObserver(moveObserver)
             self.moveObserver = nil
+        }
+        if let resizeObserver {
+            NotificationCenter.default.removeObserver(resizeObserver)
+            self.resizeObserver = nil
         }
         panel?.orderOut(nil)
         panel?.contentView = nil

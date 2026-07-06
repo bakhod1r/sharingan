@@ -135,6 +135,7 @@ private struct LiquidFill: View {
 struct FloatingTimerView: View {
     @ObservedObject var timer: PomodoroTimer
     @ObservedObject private var motion = FloatingMotion.shared
+    @ObservedObject private var tasks = TaskStore.shared
     @State private var animate = false
     @State private var phasePulse = false
 
@@ -142,11 +143,37 @@ struct FloatingTimerView: View {
     private var phaseColors: [Color] { timer.phase.gradient }
 
     var body: some View {
-        let remaining = max(0, timer.remainingSeconds)
+        // The panel is resizable; the card fills it (minus a margin for the
+        // shadow) and its contents scale with the size. When tall enough, the
+        // active task is shown below the clock.
+        GeometryReader { geo in
+            let inset: CGFloat = 14
+            let cardW = max(0, geo.size.width - inset * 2)
+            let cardH = max(0, geo.size.height - inset * 2)
+            card(width: cardW, height: cardH)
+                .frame(width: cardW, height: cardH)
+                .position(x: geo.size.width / 2, y: geo.size.height / 2)
+        }
+        .onAppear { animate = true }
+        .onChange(of: timer.isFlashing) { _ in animate = timer.isFlashing }
+        .onChange(of: timer.phase) { _ in
+            withAnimation(.spring(response: 0.26, dampingFraction: 0.5)) { phasePulse = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.7)) { phasePulse = false }
+            }
+        }
+    }
 
-        VStack(spacing: 2) {
+    @ViewBuilder
+    private func card(width: CGFloat, height: CGFloat) -> some View {
+        let remaining = max(0, timer.remainingSeconds)
+        let showTodo = height >= 104
+        let timeSize = min(max(height * 0.34, 20), 54)
+        let corner = min(22, height * 0.22)
+
+        VStack(spacing: 3) {
             Text(timer.settings.timeFormat.string(remaining))
-                .font(.system(size: 30, weight: .semibold,
+                .font(.system(size: timeSize, weight: .semibold,
                               design: .rounded).monospacedDigit())
                 .foregroundStyle(.white)
                 .shadow(color: .black.opacity(0.35), radius: 4, y: 1)
@@ -155,41 +182,38 @@ struct FloatingTimerView: View {
                 .contentTransition(.numericText())
                 .animation(.snappy(duration: 0.3), value: remaining)
             Text(timer.phase.label.uppercased())
-                .font(.system(size: 10, weight: .heavy, design: .rounded))
+                .font(.system(size: max(9, timeSize * 0.3), weight: .heavy, design: .rounded))
                 .tracking(1.2)
                 .foregroundStyle(.white.opacity(0.9))
                 .lineLimit(1)
+
+            if showTodo { activeTaskRow.padding(.top, 3) }
         }
-        .padding(.horizontal, 18).padding(.vertical, 12)
-        .frame(minWidth: 132)
+        .padding(.horizontal, 16).padding(.vertical, 10)
+        .frame(width: width, height: height)
         .background {
-            // Water fills the card as the session progresses; the surface waves
-            // continuously and tilts/sloshes when the window is dragged.
             ZStack {
                 LinearGradient(colors: themeColors,
                                startPoint: .topLeading, endPoint: .bottomTrailing)
                     .opacity(0.28)
-                LiquidFill(progress: timer.progress,
-                           tilt: motion.tilt,
-                           colors: phaseColors)
+                LiquidFill(progress: timer.progress, tilt: motion.tilt, colors: phaseColors)
             }
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
         }
-        .glassRounded(20, material: .regular)
+        .glassRounded(corner, material: .regular)
         .overlay {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
+            RoundedRectangle(cornerRadius: corner, style: .continuous)
                 .stroke(
                     LinearGradient(colors: [Color.white.opacity(0.5),
                                              themeColors.last ?? Color.white.opacity(0.2)],
-                                   startPoint: .topLeading,
-                                   endPoint: .bottomTrailing),
+                                   startPoint: .topLeading, endPoint: .bottomTrailing),
                     lineWidth: 1)
                 .allowsHitTesting(false)
         }
         .liquidShadow(radius: 14, y: 8)
         .overlay {
             if timer.isFlashing {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                RoundedRectangle(cornerRadius: corner, style: .continuous)
                     .stroke(Color.white.opacity(0.9), lineWidth: 2)
                     .blur(radius: 4)
                     .opacity(animate ? 1 : 0.2)
@@ -197,19 +221,33 @@ struct FloatingTimerView: View {
                     .allowsHitTesting(false)
             }
         }
-        .scaleEffect(phasePulse ? 1.06 : 1.0)
-        .onAppear { animate = true }
-        .onChange(of: timer.isFlashing) { _ in animate = timer.isFlashing }
-        .onChange(of: timer.phase) { _ in
-            // A quick springy pop when focus↔break flips.
-            withAnimation(.spring(response: 0.26, dampingFraction: 0.5)) { phasePulse = true }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
-                withAnimation(.spring(response: 0.45, dampingFraction: 0.7)) { phasePulse = false }
+        .scaleEffect(phasePulse ? 1.05 : 1.0)
+    }
+
+    /// The active task (or a hint), shown only when the panel is enlarged.
+    @ViewBuilder
+    private var activeTaskRow: some View {
+        if let task = tasks.activeTask {
+            HStack(spacing: 6) {
+                Circle().fill(Color(hex: tasks.color(for: task.category)))
+                    .frame(width: 7, height: 7)
+                Text(task.title)
+                    .font(.system(.callout, design: .rounded).weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.92))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                if task.pomodorosDone > 0 {
+                    Text("🍅\(task.pomodorosDone)")
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.75))
+                }
             }
+            .padding(.horizontal, 10).padding(.vertical, 4)
+            .background(Capsule().fill(.white.opacity(0.14)))
+        } else {
+            Text("No task selected")
+                .font(.system(.caption, design: .rounded))
+                .foregroundStyle(.white.opacity(0.55))
         }
-        // Transparent margin so the card's rounded shadow isn't clipped by the
-        // window edge (which is what made the rectangle appear).
-        .padding(16)
-        .fixedSize()
     }
 }

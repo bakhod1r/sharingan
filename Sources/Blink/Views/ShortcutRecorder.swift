@@ -16,25 +16,42 @@ struct ShortcutRecorderRow: View {
         HStack(spacing: 8) {
             Text(title)
                 .font(.system(.body, design: .rounded))
+                .foregroundStyle(.white.opacity(0.9))
             Spacer()
-            Button(recording ? "Press keys…" : binding.displayString) {
+            Button {
                 recording.toggle()
+            } label: {
+                Text(recording ? "Press keys…" : binding.displayString)
+                    .font(.system(.callout, design: .rounded).weight(.semibold))
+                    .foregroundStyle(recording ? .white : .white.opacity(0.92))
+                    .frame(minWidth: 96)
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .background(
+                        Capsule().fill(recording ? Color.accentColor.opacity(0.55)
+                                                  : Color.white.opacity(0.12))
+                    )
+                    .overlay(
+                        Capsule().stroke(recording ? Color.accentColor
+                                                   : Color.white.opacity(0.15), lineWidth: 1)
+                    )
             }
-            .buttonStyle(.bordered)
-            .frame(minWidth: 96)
-            .tint(recording ? .accentColor : nil)
+            .buttonStyle(.plain)
 
             Button {
                 recording = false
                 onReset()
             } label: {
                 Image(systemName: "arrow.uturn.backward")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white.opacity(isCustom ? 0.75 : 0.25))
+                    .frame(width: 26, height: 26)
+                    .contentShape(Rectangle())
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(.plain)
             .help("Reset to default")
             .disabled(!isCustom)
-            .opacity(isCustom ? 1 : 0.3)
         }
+        .padding(.vertical, 2)
         .background(
             KeyCaptureView(recording: $recording,
                            onCombo: { combo in
