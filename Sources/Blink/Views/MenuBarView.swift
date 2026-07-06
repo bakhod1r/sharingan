@@ -429,7 +429,39 @@ struct MenuBarView: View {
                             tint: .orange.opacity(0.95),
                             action: { timer.removeTime(300) })
             }
+            autoModeToggle
         }
+    }
+
+    /// Auto mode — run focus → break → focus → break continuously, hands-free.
+    private var autoModeToggle: some View {
+        let on = timer.settings.autoCycle
+        return Button {
+            timer.settings.autoCycle.toggle()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "infinity")
+                    .font(.system(size: 13, weight: .bold))
+                Text(on ? "Auto mode: ON" : "Auto mode")
+                    .font(.system(.callout, design: .rounded).weight(.semibold))
+                Spacer()
+                Image(systemName: on ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 14))
+            }
+            .padding(.horizontal, 14).padding(.vertical, 9)
+            .frame(maxWidth: .infinity)
+            .background(
+                Capsule().fill(on ? Color.green.opacity(0.22) : Color.white.opacity(0.06))
+            )
+            .overlay(
+                Capsule().stroke(on ? Color.green.opacity(0.6) : Color.white.opacity(0.12),
+                                 lineWidth: 1)
+            )
+            .foregroundStyle(on ? Color.green : Color.primary.opacity(0.85))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .help("Auto mode: focus → break → focus runs continuously, no manual Start")
     }
 
     /// Start requires a task: toggle the running timer if one is active,

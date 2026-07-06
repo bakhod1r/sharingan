@@ -51,6 +51,14 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
 
     public init() {}
 
+    /// "Auto" mode: the whole focus ↔ break cycle runs hands-free (25 focus →
+    /// break → focus → break → …), with no manual Start between phases. It maps
+    /// to both auto-start flags so it reads as a single mode toggle.
+    public var autoCycle: Bool {
+        get { autoStartFocus && autoStartBreak }
+        set { autoStartFocus = newValue; autoStartBreak = newValue }
+    }
+
     public var focusSeconds: TimeInterval { TimeInterval(focusMinutes) * 60 }
     public var shortBreakSeconds: TimeInterval { TimeInterval(shortBreakMinutes) * 60 }
     public var longBreakSeconds: TimeInterval { TimeInterval(longBreakMinutes) * 60 }
