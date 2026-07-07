@@ -171,6 +171,29 @@ testBrightnessSettings()
         store.setProject(b.id, nil)
         check(store.tasks.first { $0.id == b.id }?.project == nil, "project cleared to nil")
 
+        // Weekly board: setPlannedDate buckets tasks by day; nil unschedules.
+        let storeWB = TaskStore(fileURL: dir.appendingPathComponent("twb.json"))
+        storeWB.add(title: "mon"); storeWB.add(title: "tue"); storeWB.add(title: "free")
+        let wbMon = storeWB.tasks[0], wbTue = storeWB.tasks[1], wbFree = storeWB.tasks[2]
+        let monDay = cal.startOfDay(for: Date())
+        let tueDay = cal.date(byAdding: .day, value: 1, to: monDay)!
+        storeWB.setPlannedDate(wbMon.id, monDay)
+        storeWB.setPlannedDate(wbTue.id, tueDay)
+        check(storeWB.tasksPlanned(on: monDay).map(\.id) == [wbMon.id], "one task planned on day 1")
+        check(storeWB.tasksPlanned(on: tueDay).map(\.id) == [wbTue.id], "one task planned on day 2")
+        check(storeWB.unscheduledTasks.map(\.id) == [wbFree.id], "unplanned task in backlog")
+        // Planned date normalizes to start-of-day (drop at any time lands on the day).
+        storeWB.setPlannedDate(wbFree.id, tueDay.addingTimeInterval(13 * 3600))
+        check(storeWB.tasksPlanned(on: tueDay).count == 2, "drop at 1pm still buckets on that day")
+        check(storeWB.tasks.first { $0.id == wbFree.id }?.plannedDate == tueDay,
+              "planned date normalized to start-of-day")
+        // Unschedule with nil returns it to the backlog.
+        storeWB.setPlannedDate(wbMon.id, nil)
+        check(storeWB.unscheduledTasks.contains { $0.id == wbMon.id }, "nil unschedules back to backlog")
+        // Completed tasks never appear on the board.
+        storeWB.toggleDone(wbTue.id)
+        check(storeWB.tasksPlanned(on: tueDay).allSatisfy { !$0.isDone }, "done tasks excluded from board")
+
         // Drag reorder: move B before C-equivalent. Rebuild a clean 3-task store.
         let store3 = TaskStore(fileURL: dir.appendingPathComponent("t3.json"))
         store3.add(title: "X"); store3.add(title: "Y"); store3.add(title: "Z")

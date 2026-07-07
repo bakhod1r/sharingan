@@ -211,6 +211,27 @@ public final class TaskStore: ObservableObject {
         persist()
     }
 
+    /// Sets (or clears, with nil) the day a task is planned for. Normalizes to
+    /// start-of-day. Powers the weekly board's drag-to-reschedule.
+    public func setPlannedDate(_ id: UUID, _ date: Date?) {
+        guard let i = tasks.firstIndex(where: { $0.id == id }) else { return }
+        tasks[i].plannedDate = date.map { Calendar.current.startOfDay(for: $0) }
+        persist()
+    }
+
+    /// Open tasks planned for the given day, in list order.
+    public func tasksPlanned(on day: Date) -> [TaskItem] {
+        let cal = Calendar.current
+        return tasks
+            .filter { !$0.isDone && ($0.plannedDate.map { cal.isDate($0, inSameDayAs: day) } ?? false) }
+            .sorted(by: Self.inListOrder)
+    }
+
+    /// Open tasks with no planned day — the weekly board's backlog column.
+    public var unscheduledTasks: [TaskItem] {
+        tasks.filter { !$0.isDone && $0.plannedDate == nil }.sorted(by: Self.inListOrder)
+    }
+
     public func toggleDone(_ id: UUID) {
         guard let i = tasks.firstIndex(where: { $0.id == id }) else { return }
         tasks[i].isDone.toggle()

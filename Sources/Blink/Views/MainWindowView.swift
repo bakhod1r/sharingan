@@ -44,6 +44,7 @@ struct MainWindowView: View {
             sectionHeader("Main")
             navRow(.timer)
             navRow(.tasks)
+            navRow(.week)
             navRow(.stats)
             sectionHeader("App")
             navRow(.settings)
@@ -153,6 +154,13 @@ struct MainWindowView: View {
             detailScaffold(title: "Tasks") {
                 TasksView(timer: timer, embeddedInScroll: true)
             }
+        case .week:
+            // Full-width — the 7-day board manages its own horizontal layout
+            // rather than the width-capped scaffold used by the other sections.
+            WeeklyBoardView(timer: timer)
+                .padding(.horizontal, 28)
+                .padding(.top, 32)
+                .padding(.bottom, 24)
         case .stats:
             detailScaffold(title: "Progress") {
                 VStack(spacing: 20) {

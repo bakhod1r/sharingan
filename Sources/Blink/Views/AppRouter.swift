@@ -3,12 +3,13 @@ import SwiftUI
 /// The main window's navigation sections. Top-level so both the window and the
 /// menu-bar popover can drive selection through `AppRouter`.
 enum AppSection: String, CaseIterable, Identifiable, Hashable {
-    case timer, tasks, stats, settings
+    case timer, tasks, week, stats, settings
     var id: String { rawValue }
     var title: String {
         switch self {
         case .timer:    return "Timer"
         case .tasks:    return "Tasks"
+        case .week:     return "Week"
         case .stats:    return "Stats"
         case .settings: return "Settings"
         }
@@ -17,6 +18,7 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .timer:    return "timer"
         case .tasks:    return "checklist"
+        case .week:     return "calendar"
         case .stats:    return "chart.bar"
         case .settings: return "gearshape"
         }
