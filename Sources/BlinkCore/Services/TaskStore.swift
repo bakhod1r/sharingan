@@ -121,13 +121,19 @@ public final class TaskStore: ObservableObject {
                     category: String = TaskCategory.presets[0].name,
                     tags: [String] = [],
                     dueDate: Date? = nil,
-                    estimatedPomodoros: Int? = nil) {
+                    estimatedPomodoros: Int? = nil,
+                    recurrence: Recurrence = .none,
+                    project: String? = nil,
+                    notes: String = "") {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         // New tasks go to the bottom of the manual order.
         let nextOrder = (tasks.map(\.sortOrder).max() ?? 0) + 1
+        let cleanProject = project?.trimmingCharacters(in: .whitespacesAndNewlines)
         let task = TaskItem(title: trimmed, category: category, tags: tags, dueDate: dueDate,
-                            sortOrder: nextOrder, estimatedPomodoros: estimatedPomodoros)
+                            sortOrder: nextOrder, estimatedPomodoros: estimatedPomodoros,
+                            notes: notes, recurrence: recurrence,
+                            project: (cleanProject?.isEmpty ?? true) ? nil : cleanProject)
         tasks.append(task)
         scheduleDueNotification(task)
         persist()

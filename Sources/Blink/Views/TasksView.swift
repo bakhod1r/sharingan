@@ -15,6 +15,13 @@ struct TasksView: View {
     @State private var newTags = ""
     @State private var hasDue = false
     @State private var newDue = Date().addingTimeInterval(3600)
+    @State private var newEstimate = 0
+    @State private var newRecurrence: Recurrence = .none
+    @State private var newProject = ""
+    @State private var newNotes = ""
+    /// Tasks whose subtasks/notes panel is expanded.
+    @State private var expanded: Set<UUID> = []
+    @State private var subtaskDrafts: [UUID: String] = [:]
 
     // Inline "add category" form state.
     @State private var showNewCategory = false
@@ -95,6 +102,44 @@ struct TasksView: View {
             }
 
             if showNewCategory { newCategoryForm }
+
+            // Estimate · repeat · project
+            HStack(spacing: 10) {
+                Stepper(value: $newEstimate, in: 0...12) {
+                    Text(newEstimate == 0 ? "Est: —" : "Est: \(newEstimate) 🍅")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
+                .fixedSize()
+
+                Menu {
+                    ForEach(Recurrence.allCases) { r in
+                        Button(r.label) { newRecurrence = r }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "repeat").font(.system(size: 10, weight: .semibold))
+                        Text(newRecurrence == .none ? "No repeat" : newRecurrence.label)
+                            .font(.system(.caption, design: .rounded))
+                    }
+                    .foregroundStyle(newRecurrence == .none ? .secondary : .primary)
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+
+                TextField("project", text: $newProject)
+                    .textFieldStyle(.plain)
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: 120)
+            }
+
+            TextField("notes (optional)", text: $newNotes, axis: .vertical)
+                .textFieldStyle(.plain)
+                .font(.system(.caption, design: .rounded))
+                .foregroundStyle(.secondary)
+                .lineLimit(1...3)
+
             HStack(spacing: 8) {
                 Toggle(isOn: $hasDue) {
                     Text("Due")
@@ -200,9 +245,71 @@ struct TasksView: View {
                     .foregroundStyle(.secondary)
             }
             ForEach(items) { task in
-                row(task)
+                VStack(spacing: 4) {
+                    row(task)
+                        .draggable(task.id.uuidString)
+                        .dropDestination(for: String.self) { dropped, _ in
+                            guard let s = dropped.first, let id = UUID(uuidString: s) else { return false }
+                            store.moveTask(id, before: task.id)
+                            return true
+                        }
+                    if expanded.contains(task.id) {
+                        subtaskPanel(task)
+                    }
+                }
             }
         }
+    }
+
+    /// Expanded subtasks + notes for a task in the main window.
+    private func subtaskPanel(_ task: TaskItem) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            ForEach(task.subtasks) { sub in
+                HStack(spacing: 8) {
+                    Button { store.toggleSubtask(task.id, sub.id) } label: {
+                        Image(systemName: sub.isDone ? "checkmark.circle.fill" : "circle")
+                            .font(.system(size: 13))
+                            .foregroundStyle(sub.isDone ? Color.green : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                    Text(sub.title)
+                        .font(.system(.caption, design: .rounded))
+                        .strikethrough(sub.isDone, color: .secondary)
+                        .foregroundStyle(sub.isDone ? .secondary : .primary)
+                    Spacer()
+                    Button { store.deleteSubtask(task.id, sub.id) } label: {
+                        Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            HStack(spacing: 8) {
+                Image(systemName: "plus").font(.system(size: 10, weight: .bold)).foregroundStyle(.tint)
+                TextField("Add step…", text: Binding(
+                    get: { subtaskDrafts[task.id] ?? "" },
+                    set: { subtaskDrafts[task.id] = $0 }
+                ), onCommit: { commitSubtask(task.id) })
+                    .textFieldStyle(.plain)
+                    .font(.system(.caption, design: .rounded))
+                    .onSubmit { commitSubtask(task.id) }
+            }
+            if !task.notes.isEmpty {
+                Text(task.notes)
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.leading, 34).padding(.trailing, 12).padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.03)))
+    }
+
+    private func commitSubtask(_ taskID: UUID) {
+        let text = (subtaskDrafts[taskID] ?? "").trimmingCharacters(in: .whitespaces)
+        guard !text.isEmpty else { return }
+        store.addSubtask(taskID, title: text)
+        subtaskDrafts[taskID] = ""
     }
 
     private func row(_ task: TaskItem) -> some View {
@@ -224,21 +331,42 @@ struct TasksView: View {
                     .strikethrough(task.isDone, color: .secondary)
                     .foregroundStyle(task.isDone ? .secondary : .primary)
                     .lineLimit(1)
-                HStack(spacing: 6) {
-                    ForEach(task.tags, id: \.self) { tag in
-                        Text("#\(tag)")
-                            .font(.system(size: 9, weight: .semibold, design: .rounded))
-                            .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(accent.opacity(0.22), in: Capsule())
-                            .foregroundStyle(accent)
-                    }
-                    if let due = task.dueDate {
-                        Label(dueText(due), systemImage: "calendar")
-                            .font(.system(size: 9, weight: .semibold, design: .rounded))
-                            .foregroundStyle(task.isOverdue() ? Color.red : .secondary)
+                let hasMeta = !task.tags.isEmpty || task.dueDate != nil
+                    || task.recurrence != .none || task.project != nil
+                    || task.subtaskProgress.total > 0
+                if hasMeta {
+                    HStack(spacing: 6) {
+                        ForEach(task.tags, id: \.self) { tag in
+                            Text("#\(tag)")
+                                .font(.system(size: 9, weight: .semibold, design: .rounded))
+                                .padding(.horizontal, 6).padding(.vertical, 2)
+                                .background(accent.opacity(0.22), in: Capsule())
+                                .foregroundStyle(accent)
+                        }
+                        if let project = task.project {
+                            Label(project, systemImage: "folder.fill")
+                                .font(.system(size: 9, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.secondary)
+                        }
+                        if task.recurrence != .none {
+                            Image(systemName: "repeat")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(.secondary)
+                                .help(task.recurrence.label)
+                        }
+                        if task.subtaskProgress.total > 0 {
+                            Text("☑\(task.subtaskProgress.done)/\(task.subtaskProgress.total)")
+                                .font(.system(size: 9, weight: .semibold, design: .rounded))
+                                .foregroundStyle(task.subtaskProgress.done == task.subtaskProgress.total
+                                                 ? Color.green : .secondary)
+                        }
+                        if let due = task.dueDate {
+                            Label(dueText(due), systemImage: "calendar")
+                                .font(.system(size: 9, weight: .semibold, design: .rounded))
+                                .foregroundStyle(task.isOverdue() ? Color.red : .secondary)
+                        }
                     }
                 }
-                .opacity(task.tags.isEmpty && task.dueDate == nil ? 0 : 1)
             }
             Spacer()
 
@@ -248,6 +376,22 @@ struct TasksView: View {
                     .foregroundStyle(.orange)
                     .help("On today's plan")
             }
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    if expanded.contains(task.id) { expanded.remove(task.id) }
+                    else { expanded.insert(task.id) }
+                }
+            } label: {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(expanded.contains(task.id) ? 180 : 0))
+                    .frame(width: 20, height: 20)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Subtasks & notes")
 
             if let est = task.estimatedPomodoros {
                 Text("🍅\(task.pomodorosDone)/\(est)")
@@ -317,10 +461,18 @@ struct TasksView: View {
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
         store.add(title: newTitle, category: newCategory, tags: tags,
-                  dueDate: hasDue ? newDue : nil)
+                  dueDate: hasDue ? newDue : nil,
+                  estimatedPomodoros: newEstimate > 0 ? newEstimate : nil,
+                  recurrence: newRecurrence,
+                  project: newProject.isEmpty ? nil : newProject,
+                  notes: newNotes)
         newTitle = ""
         newTags = ""
         hasDue = false
+        newEstimate = 0
+        newRecurrence = .none
+        newProject = ""
+        newNotes = ""
     }
 
     private func exportCSV() {
