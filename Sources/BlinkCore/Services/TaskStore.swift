@@ -187,11 +187,79 @@ public final class TaskStore: ObservableObject {
         tasks[i].isDone.toggle()
         if tasks[i].isDone {
             NotificationService.shared.cancel(identifier: dueNoteID(id))
+            // A recurring task spawns its next occurrence when completed.
+            if tasks[i].recurrence != .none {
+                spawnNextOccurrence(of: tasks[i])
+            }
         } else {
             // Un-completing restores the deadline reminder that toggling done cancelled.
             scheduleDueNotification(tasks[i])
         }
         persist()
+    }
+
+    /// Creates the next occurrence of a recurring task: a fresh copy (new id, not
+    /// done, counters and subtasks reset) with its due date advanced.
+    private func spawnNextOccurrence(of task: TaskItem) {
+        var next = task
+        next.id = UUID()
+        next.isDone = false
+        next.pomodorosDone = 0
+        next.createdAt = Date()
+        next.plannedDate = nil
+        next.sortOrder = (tasks.map(\.sortOrder).max() ?? 0) + 1
+        for k in next.subtasks.indices { next.subtasks[k].isDone = false }
+        let base = task.dueDate ?? Date()
+        next.dueDate = task.recurrence.nextDate(after: base)
+        tasks.append(next)
+        scheduleDueNotification(next)
+    }
+
+    // MARK: - Subtasks / notes / recurrence / project
+
+    public func addSubtask(_ taskID: UUID, title: String) {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let i = tasks.firstIndex(where: { $0.id == taskID }) else { return }
+        tasks[i].subtasks.append(Subtask(title: trimmed))
+        persist()
+    }
+
+    public func toggleSubtask(_ taskID: UUID, _ subID: UUID) {
+        guard let i = tasks.firstIndex(where: { $0.id == taskID }),
+              let j = tasks[i].subtasks.firstIndex(where: { $0.id == subID }) else { return }
+        tasks[i].subtasks[j].isDone.toggle()
+        persist()
+    }
+
+    public func deleteSubtask(_ taskID: UUID, _ subID: UUID) {
+        guard let i = tasks.firstIndex(where: { $0.id == taskID }) else { return }
+        tasks[i].subtasks.removeAll { $0.id == subID }
+        persist()
+    }
+
+    public func setNotes(_ id: UUID, _ notes: String) {
+        guard let i = tasks.firstIndex(where: { $0.id == id }) else { return }
+        tasks[i].notes = notes
+        persist()
+    }
+
+    public func setRecurrence(_ id: UUID, _ recurrence: Recurrence) {
+        guard let i = tasks.firstIndex(where: { $0.id == id }) else { return }
+        tasks[i].recurrence = recurrence
+        persist()
+    }
+
+    public func setProject(_ id: UUID, _ project: String?) {
+        guard let i = tasks.firstIndex(where: { $0.id == id }) else { return }
+        let trimmed = project?.trimmingCharacters(in: .whitespacesAndNewlines)
+        tasks[i].project = (trimmed?.isEmpty ?? true) ? nil : trimmed
+        persist()
+    }
+
+    /// Distinct project names currently in use, sorted.
+    public var projects: [String] {
+        Array(Set(tasks.compactMap(\.project))).sorted()
     }
 
     public func delete(_ id: UUID) {

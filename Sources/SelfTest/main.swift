@@ -46,6 +46,7 @@ testAlarmSoundEnum()
 testBrightnessSettings()
         testAppBlocker()
         testBlockedAppPresets()
+        testTaskPlanning()
 
         print("\nPassed: \(passed)  Failed: \(failures)")
         if failures > 0 {
@@ -56,6 +57,82 @@ testBrightnessSettings()
     }
 
     // MARK: Models
+
+    static func testTaskPlanning() {
+        print("• Task planning (reorder / estimate / plan / subtasks / recurrence)")
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("blink-selftest-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let store = TaskStore(fileURL: dir.appendingPathComponent("tasks.json"))
+        let cal = Calendar.current
+
+        store.add(title: "A")
+        store.add(title: "B")
+        store.add(title: "C")
+        check(store.tasks.count == 3, "3 tasks added")
+        let a = store.tasks[0], b = store.tasks[1], c = store.tasks[2]
+        check(a.sortOrder < b.sortOrder && b.sortOrder < c.sortOrder, "sortOrder increments on add")
+
+        // Reorder: move C up → A, C, B
+        store.move(c.id, up: true)
+        let ordered = store.tasks.filter { !$0.isDone }.sorted(by: TaskStore.inListOrder).map(\.id)
+        check(ordered == [a.id, c.id, b.id], "move up reorders within category")
+
+        // Estimate
+        store.setEstimate(a.id, 5)
+        check(store.tasks.first { $0.id == a.id }?.estimatedPomodoros == 5, "estimate set")
+        store.setEstimate(a.id, nil)
+        check(store.tasks.first { $0.id == a.id }?.estimatedPomodoros == nil, "estimate cleared")
+
+        // Plan for today
+        store.togglePlannedToday(b.id)
+        check(store.tasks.first { $0.id == b.id }?.isPlannedToday() == true, "planned for today")
+        store.togglePlannedToday(b.id)
+        check(store.tasks.first { $0.id == b.id }?.isPlannedToday() == false, "unplanned")
+
+        // Subtasks
+        store.addSubtask(a.id, title: "s1")
+        store.addSubtask(a.id, title: "s2")
+        check(store.tasks.first { $0.id == a.id }?.subtasks.count == 2, "2 subtasks added")
+        if let sid = store.tasks.first(where: { $0.id == a.id })?.subtasks.first?.id {
+            store.toggleSubtask(a.id, sid)
+            check(store.tasks.first { $0.id == a.id }?.subtaskProgress.done == 1, "subtask toggled done")
+            store.deleteSubtask(a.id, sid)
+            check(store.tasks.first { $0.id == a.id }?.subtasks.count == 1, "subtask deleted")
+        }
+
+        // Notes + project
+        store.setNotes(a.id, "hello")
+        check(store.tasks.first { $0.id == a.id }?.notes == "hello", "notes set")
+        store.setProject(a.id, "Proj")
+        check(store.projects == ["Proj"], "project listed")
+
+        // Recurrence regeneration on completion
+        store.setRecurrence(a.id, .daily)
+        var upd = store.tasks.first { $0.id == a.id }!
+        let due = cal.startOfDay(for: Date())
+        upd.dueDate = due
+        store.update(upd)
+        let before = store.tasks.count
+        store.toggleDone(a.id)
+        check(store.tasks.count == before + 1, "recurring completion spawns next occurrence")
+        let openA = store.tasks.filter { !$0.isDone && $0.title == "A" }
+        check(openA.count == 1, "exactly one open 'A' remains")
+        if let next = openA.first, let nd = next.dueDate {
+            check(cal.isDate(nd, inSameDayAs: cal.date(byAdding: .day, value: 1, to: due)!),
+                  "next occurrence due date advanced by one day")
+            check(next.pomodorosDone == 0, "spawned occurrence resets counters")
+        }
+
+        // Recurrence.nextDate weekdays skips the weekend (2026-01-02 is a Friday)
+        var comps = DateComponents(); comps.year = 2026; comps.month = 1; comps.day = 2
+        if let friday = cal.date(from: comps) {
+            check(!cal.isDateInWeekend(Recurrence.weekdays.nextDate(after: friday)),
+                  "weekdays recurrence skips the weekend")
+        }
+
+        try? FileManager.default.removeItem(at: dir)
+    }
 
     static func testModels() {
         print("• Pomodoro models")

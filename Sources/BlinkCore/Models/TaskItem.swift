@@ -1,5 +1,46 @@
 import Foundation
 
+/// A single checklist item under a task.
+public struct Subtask: Identifiable, Codable, Equatable, Sendable {
+    public var id: UUID
+    public var title: String
+    public var isDone: Bool
+
+    public init(id: UUID = UUID(), title: String, isDone: Bool = false) {
+        self.id = id
+        self.title = title
+        self.isDone = isDone
+    }
+}
+
+/// How a task repeats after completion.
+public enum Recurrence: String, Codable, Sendable, CaseIterable, Identifiable {
+    case none, daily, weekdays, weekly
+    public var id: String { rawValue }
+    public var label: String {
+        switch self {
+        case .none:     return "Does not repeat"
+        case .daily:    return "Every day"
+        case .weekdays: return "Weekdays"
+        case .weekly:   return "Every week"
+        }
+    }
+    /// The next occurrence date after `date`.
+    public func nextDate(after date: Date, calendar: Calendar = .current) -> Date {
+        switch self {
+        case .none:  return date
+        case .daily: return calendar.date(byAdding: .day, value: 1, to: date) ?? date
+        case .weekly: return calendar.date(byAdding: .day, value: 7, to: date) ?? date
+        case .weekdays:
+            var d = calendar.date(byAdding: .day, value: 1, to: date) ?? date
+            while calendar.isDateInWeekend(d) {
+                d = calendar.date(byAdding: .day, value: 1, to: d) ?? d
+            }
+            return d
+        }
+    }
+}
+
 /// A task the user can run focus pomodoros against.
 public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
     public var id: UUID
@@ -16,6 +57,14 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
     public var estimatedPomodoros: Int?
     /// Start-of-day this task is planned for (nil = not on a daily plan).
     public var plannedDate: Date?
+    /// Free-form notes.
+    public var notes: String
+    /// Checklist items.
+    public var subtasks: [Subtask]
+    /// Repeat rule applied when the task is completed.
+    public var recurrence: Recurrence
+    /// Optional project grouping (a second axis above category).
+    public var project: String?
 
     public init(id: UUID = UUID(),
                 title: String,
@@ -27,7 +76,11 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
                 dueDate: Date? = nil,
                 sortOrder: Int = 0,
                 estimatedPomodoros: Int? = nil,
-                plannedDate: Date? = nil) {
+                plannedDate: Date? = nil,
+                notes: String = "",
+                subtasks: [Subtask] = [],
+                recurrence: Recurrence = .none,
+                project: String? = nil) {
         self.id = id
         self.title = title
         self.category = category
@@ -39,6 +92,10 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         self.sortOrder = sortOrder
         self.estimatedPomodoros = estimatedPomodoros
         self.plannedDate = plannedDate
+        self.notes = notes
+        self.subtasks = subtasks
+        self.recurrence = recurrence
+        self.project = project
     }
 
     // Defensive decoding: several fields (category, tags, pomodorosDone) were
@@ -59,12 +116,21 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         sortOrder = try c.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
         estimatedPomodoros = try c.decodeIfPresent(Int.self, forKey: .estimatedPomodoros)
         plannedDate = try c.decodeIfPresent(Date.self, forKey: .plannedDate)
+        notes = try c.decodeIfPresent(String.self, forKey: .notes) ?? ""
+        subtasks = try c.decodeIfPresent([Subtask].self, forKey: .subtasks) ?? []
+        recurrence = try c.decodeIfPresent(Recurrence.self, forKey: .recurrence) ?? .none
+        project = try c.decodeIfPresent(String.self, forKey: .project)
     }
 
     /// True when the task has a past deadline and isn't finished.
     public func isOverdue(now: Date = Date()) -> Bool {
         guard let dueDate, !isDone else { return false }
         return dueDate < now
+    }
+
+    /// Completed subtasks over total, e.g. (2, 5). Zero total when no subtasks.
+    public var subtaskProgress: (done: Int, total: Int) {
+        (subtasks.filter(\.isDone).count, subtasks.count)
     }
 
     /// True when this task is on today's plan.
