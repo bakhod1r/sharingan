@@ -22,6 +22,18 @@ public final class StreakRewardCenter: ObservableObject {
 
     public init() {}
 
+    /// Seed the baseline from an already-earned streak (e.g. loaded from disk at
+    /// launch) WITHOUT announcing anything. Without this, `lastKnownStreak` starts
+    /// at 0 every launch, so the first focus session after a restart re-fires an
+    /// already-earned milestone as a fresh notification + TTS.
+    public func prime(streak: Int) {
+        for b in StreakBadge.earned(forStreak: streak)
+        where !unlockedBadges.contains(where: { $0.id == b.id }) {
+            unlockedBadges.append(Reward(badge: b))
+        }
+        lastKnownStreak = max(lastKnownStreak, streak)
+    }
+
     /// So'nggi streak qiymatini tekshirib, yangi milestone'lar uchun reward o'rnatadi.
     /// Faqat yangi yetilgan (ilgari ochilmagan) badge uchun reward qaytaradi — shu
     /// bilan chaqiruvchi har pomidoroда emas, faqat yangi badge'да e'lon qiladi.

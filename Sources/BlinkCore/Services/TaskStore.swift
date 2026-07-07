@@ -238,7 +238,10 @@ public final class TaskStore: ObservableObject {
         next.plannedDate = nil
         next.sortOrder = (tasks.map(\.sortOrder).max() ?? 0) + 1
         for k in next.subtasks.indices { next.subtasks[k].isDone = false }
-        let base = task.dueDate ?? Date()
+        // Advance from the later of the old due date and now, so completing a
+        // long-overdue recurring task lands the next occurrence in the future
+        // instead of spawning another already-past copy.
+        let base = max(task.dueDate ?? Date(), Date())
         next.dueDate = task.recurrence.nextDate(after: base)
         tasks.append(next)
         scheduleDueNotification(next)

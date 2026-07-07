@@ -263,10 +263,13 @@ struct MenuBarView: View {
                             Spacer()
                             Button { tasks.delete(task.id) } label: {
                                 Image(systemName: "xmark")
-                                    .font(.system(size: 9, weight: .bold))
+                                    .font(.system(size: 10, weight: .bold))
                                     .foregroundStyle(.secondary)
+                                    .frame(width: 22, height: 22)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
+                            .help("Delete")
                         }
                         .padding(.horizontal, 10).padding(.vertical, 4)
                     }
@@ -284,9 +287,15 @@ struct MenuBarView: View {
             h += 30   // category header row
             if !collapsedCategories.contains(group.category) {
                 h += CGFloat(group.items.count) * 48 + 6
+                // Expanded rows reveal a subtask/notes panel below them — grow the
+                // frame so opening one doesn't just push it into the scroll region.
+                for item in group.items where expandedTasks.contains(item.id) {
+                    h += CGFloat(item.subtasks.count) * 24 + 34   // steps + add field
+                    if !item.notes.isEmpty { h += 30 }
+                }
             }
         }
-        return min(max(h, 40), 240)
+        return min(max(h, 40), 300)
     }
 
     /// Open tasks grouped by category, in the app's category order.
@@ -404,6 +413,9 @@ struct MenuBarView: View {
                 Text(task.title)
                     .font(.system(.callout, design: .rounded).weight(.medium))
                     .lineLimit(1)
+                    // Keep the title legible: metadata chips yield width first
+                    // instead of collapsing the title to a few characters.
+                    .layoutPriority(1)
 
                 // Category — the colored bucket pill (hidden inside an accordion
                 // section, whose header already names the category).
@@ -608,10 +620,13 @@ struct MenuBarView: View {
                     Spacer()
                     Button { tasks.deleteSubtask(task.id, sub.id) } label: {
                         Image(systemName: "xmark")
-                            .font(.system(size: 9, weight: .bold))
+                            .font(.system(size: 10, weight: .bold))
                             .foregroundStyle(.secondary)
+                            .frame(width: 22, height: 22)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .help("Remove step")
                 }
             }
             // Add subtask
@@ -785,10 +800,19 @@ struct MenuBarView: View {
             GlassButton(label: timer.isRunning ? "Pause" : "Start",
                         systemImage: timer.isRunning ? "pause.fill" : "play.fill",
                         action: startTapped)
-                // Gentle breathing pulse while the timer runs.
-                .scaleEffect(timer.isRunning && heartbeat ? 1.012 : 1.0)
-                .animation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true),
-                           value: heartbeat)
+                // Gentle breathing pulse while the timer runs. Keyed on
+                // `isRunning` (not the one-shot `heartbeat`) so the repeating
+                // animation actually starts when the user presses Start.
+                .scaleEffect(timer.isRunning ? 1.012 : 1.0)
+                .animation(timer.isRunning
+                           ? .easeInOut(duration: 1.1).repeatForever(autoreverses: true)
+                           : .default,
+                           value: timer.isRunning)
+                // When a task is required but none exists, Start would silently
+                // do nothing — dim + disable it so the dead tap is visible.
+                .opacity(startBlocked ? 0.45 : 1)
+                .disabled(startBlocked)
+                .help(startBlocked ? "Add or pick a task to start a focus session" : "")
             HStack(spacing: 8) {
                 GlassButton(label: "Skip",
                             systemImage: "forward.end.fill",
@@ -841,6 +865,13 @@ struct MenuBarView: View {
         }
         .buttonStyle(.plain)
         .help("Auto mode: focus → break → focus runs continuously, no manual Start")
+    }
+
+    /// True when Start can do nothing: the "require a task" rule is on, no task
+    /// is active, and there are no open tasks to fall back to.
+    private var startBlocked: Bool {
+        !timer.isRunning && tasks.activeTask == nil
+            && openTasks.isEmpty && timer.settings.requireTaskForFocus
     }
 
     /// Start requires a task: toggle the running timer if one is active,

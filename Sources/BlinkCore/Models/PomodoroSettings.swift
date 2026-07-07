@@ -115,10 +115,13 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var longBreakSeconds: TimeInterval { TimeInterval(longBreakMinutes) * 60 }
 
     public func duration(for phase: PomodoroPhase) -> TimeInterval {
+        // Floor real phases at 1s: a 0-minute duration (from decoded/CLI garbage)
+        // would make the phase complete on its very first tick and, under auto
+        // mode, spin through phases every tick — inflating stats and streaks.
         switch phase {
-        case .focus:      return focusSeconds
-        case .shortBreak: return shortBreakSeconds
-        case .longBreak:  return longBreakSeconds
+        case .focus:      return max(1, focusSeconds)
+        case .shortBreak: return max(1, shortBreakSeconds)
+        case .longBreak:  return max(1, longBreakSeconds)
         case .paused:     return 0
         }
     }

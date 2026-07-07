@@ -338,33 +338,40 @@ struct SettingsView: View {
                     ToggleRow(title: "Force quit (not just hide)",
                               isOn: $settings.appBlockerSettings.killOnFrontmost)
                     ForEach($settings.appBlockerSettings.blockedApps) { $app in
-                        HStack {
+                        HStack(spacing: 8) {
                             Image(systemName: "app.dashed")
-                                .foregroundStyle(.white.opacity(0.85))
-                            Text(app.name).foregroundStyle(.white)
+                                .foregroundStyle(.white.opacity(app.isEnabled ? 0.85 : 0.35))
+                            Text(app.name)
+                                .foregroundStyle(.white.opacity(app.isEnabled ? 1 : 0.5))
+                                .strikethrough(!app.isEnabled, color: .white.opacity(0.4))
                             Spacer()
-                            Toggle("", isOn: Binding(
-                                get: { settings.appBlockerSettings.blockedApps.contains(app) },
-                                set: { on in
-                                    if !on, let idx = settings.appBlockerSettings.blockedApps.firstIndex(of: app) {
-                                        settings.appBlockerSettings.blockedApps.remove(at: idx)
-                                    } else if on, !settings.appBlockerSettings.blockedApps.contains(app) {
-                                        settings.appBlockerSettings.blockedApps.append(app)
-                                    }
-                                }
-                            ))
-                            .tint(.white)
-                            .labelsHidden()
+                            // Remove this app from the list entirely.
+                            Button {
+                                settings.appBlockerSettings.blockedApps.removeAll { $0.id == app.id }
+                            } label: {
+                                Image(systemName: "minus.circle.fill")
+                                    .foregroundStyle(.white.opacity(0.4))
+                            }
+                            .buttonStyle(.plain)
+                            .frame(width: 22, height: 22)
+                            .contentShape(Rectangle())
+                            .help("Remove from list")
+                            // Pause/resume blocking without losing the entry.
+                            Toggle("", isOn: $app.isEnabled)
+                                .tint(.white)
+                                .labelsHidden()
                         }
                         .padding(.vertical, 4)
                     }
                     Button {
-                        let preset = BlockedApp.presets[0]
-                        if !settings.appBlockerSettings.blockedApps.contains(preset) {
+                        // Re-seed any preset apps that were removed, without
+                        // touching the user's other entries or their enabled state.
+                        for preset in BlockedApp.presets
+                        where !settings.appBlockerSettings.blockedApps.contains(where: { $0.bundleID == preset.bundleID }) {
                             settings.appBlockerSettings.blockedApps.append(preset)
                         }
                     } label: {
-                        Label("Reset presets", systemImage: "arrow.counterclockwise.circle.fill")
+                        Label("Restore default apps", systemImage: "arrow.counterclockwise.circle.fill")
                             .font(.caption.weight(.semibold))
                     }
                     .buttonStyle(.plain)

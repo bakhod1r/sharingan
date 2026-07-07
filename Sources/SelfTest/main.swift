@@ -132,6 +132,22 @@ testBrightnessSettings()
                   "weekdays recurrence skips the weekend")
         }
 
+        // Overdue recurring task: completing one whose due date is 5 days in the
+        // past must land the next occurrence in the FUTURE, not spawn another
+        // already-past copy.
+        let storeOD = TaskStore(fileURL: dir.appendingPathComponent("tod.json"))
+        storeOD.add(title: "late", recurrence: .daily)
+        var late = storeOD.tasks[0]
+        late.dueDate = cal.date(byAdding: .day, value: -5, to: Date())
+        storeOD.update(late)
+        storeOD.toggleDone(late.id)
+        let nextLate = storeOD.tasks.first { !$0.isDone && $0.title == "late" }
+        if let nd = nextLate?.dueDate {
+            check(nd > Date(), "overdue recurring task's next occurrence is in the future")
+        } else {
+            check(false, "overdue recurring task should spawn an occurrence with a due date")
+        }
+
         // A non-recurring completion does NOT spawn a copy.
         let store2 = TaskStore(fileURL: dir.appendingPathComponent("t2.json"))
         store2.add(title: "solo")
@@ -183,6 +199,16 @@ testBrightnessSettings()
         check(s.longBreakSeconds == 15 * 60, "longBreakSeconds default 15m")
         check(s.duration(for: .focus) == 25 * 60, "duration(.focus)")
         check(s.duration(for: .paused) == 0, "duration(.paused) == 0")
+        // A 0-minute misconfiguration must floor to >= 1s so a phase can't
+        // complete on its first tick and spin under auto mode.
+        var zero = PomodoroSettings()
+        zero.focusMinutes = 0
+        zero.shortBreakMinutes = 0
+        zero.longBreakMinutes = 0
+        check(zero.duration(for: .focus) >= 1, "zero focus floored to >= 1s")
+        check(zero.duration(for: .shortBreak) >= 1, "zero shortBreak floored to >= 1s")
+        check(zero.duration(for: .longBreak) >= 1, "zero longBreak floored to >= 1s")
+        check(zero.duration(for: .paused) == 0, "paused stays 0 even when floored")
         check(PomodoroPhase.allCases.count == 4, "phase count == 4")
         check(TimerMode.allCases.count == 2, "mode count == 2")
         check(BlinkTheme.allCases.count == 5, "theme count == 5")
@@ -593,6 +619,20 @@ testBrightnessSettings()
 
         center.resetForTesting()
         check(center.unlockedBadges.isEmpty, "reset clears unlocked")
+
+        // prime(): seeding an already-earned streak at launch must NOT announce,
+        // and must suppress re-announcing that milestone on the next evaluate —
+        // this is the "no re-announce across restart" fix.
+        center.resetForTesting()
+        center.prime(streak: 7)
+        check(center.pendingReward == nil, "prime does not announce")
+        check(center.unlockedBadges.count == 2, "prime seeds earned badges (first, week)")
+        center.evaluate(streak: 7)
+        check(center.pendingReward == nil, "primed streak does not re-announce on evaluate")
+        // A genuinely new milestone still fires after priming.
+        center.evaluate(streak: 30)
+        check(center.pendingReward?.badge.id == "month", "new milestone still fires after prime")
+        center.resetForTesting()
     }
 
     static func testReminders() {
@@ -676,6 +716,22 @@ testBrightnessSettings()
         check(on.matches(bundleID: "com.apple.Safari") == true, "Safari matches when enabled")
         check(on.matches(bundleID: "com.example.unknown") == false, "unknown no match")
         check(on.matches(bundleID: "") == false, "empty bundleID no match")
+
+        // Per-app isEnabled: disabling one entry stops it matching without removing it.
+        if let idx = on.blockedApps.firstIndex(where: { $0.bundleID == "com.apple.Safari" }) {
+            on.blockedApps[idx].isEnabled = false
+        }
+        check(on.matches(bundleID: "com.apple.Safari") == false, "disabled app entry does not match")
+        check(on.blockedApps.count == 6, "disabled app stays in the list")
+        check(on.matches(bundleID: "com.google.Chrome") == true, "other enabled app still matches")
+
+        // Defensive decode: a legacy BlockedApp JSON without `isEnabled` defaults on.
+        let legacy = #"{"bundleID":"com.foo.Bar","name":"Bar"}"#.data(using: .utf8)!
+        if let app = try? JSONDecoder().decode(BlockedApp.self, from: legacy) {
+            check(app.isEnabled == true, "legacy BlockedApp decodes isEnabled=true")
+        } else {
+            check(false, "legacy BlockedApp should decode")
+        }
     }
 
     static func testBlockedAppPresets() {

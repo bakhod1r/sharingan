@@ -30,6 +30,9 @@ public final class BlinkCoordinator: ObservableObject {
 
     public init(timer: PomodoroTimer) {
         self.timer = timer
+        // Prime the reward baseline from the already-earned streak so restarting
+        // the app doesn't re-announce milestones the user passed days ago.
+        StreakRewardCenter.shared.prime(streak: timer.stats.streak.currentStreak)
         observe()
     }
 

@@ -92,6 +92,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
 
+        // Blink's entire UI is a dark-glass design: every surface hardcodes white
+        // text and `Color.white.opacity(...)` chrome over dark gradients and
+        // `.regularMaterial`. Under the system Light appearance the popover and
+        // stats tab render that white-on-light (invisible), while the main
+        // window's forced-dark gradient turns semantic `.primary` labels
+        // black-on-dark. Pin the whole app to dark so every surface — popover,
+        // windows, materials, semantic colors — resolves consistently. The
+        // menu-bar icon is a template image and still tints to the real menu bar.
+        NSApp.appearance = NSAppearance(named: .darkAqua)
+
         let timer = PomodoroTimer()
         let coord = BlinkCoordinator(timer: timer)
         coord.breakPresenter = BreakWindowManager.shared
