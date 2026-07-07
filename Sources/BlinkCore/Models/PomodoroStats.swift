@@ -128,4 +128,33 @@ public struct PomodoroStats: Codable, Equatable, Sendable {
         guard counts.count == 7 else { return 0 }
         return Double(counts.reduce(0, +)) / 7.0
     }
+
+    // MARK: - Weekly report
+
+    /// Sum of completed focus sessions over a rolling day window, `start` (days
+    /// ago, inclusive) to `end` (exclusive). e.g. 0..<7 is the last 7 days.
+    public func total(fromDaysAgo start: Int, toDaysAgo end: Int,
+                      now: Date = Date()) -> Int {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: now)
+        var sum = 0
+        for i in start..<end {
+            guard let day = cal.date(byAdding: .day, value: -i, to: today) else { continue }
+            sum += history.first(where: { cal.isDate($0.day, inSameDayAs: day) })?.count ?? 0
+        }
+        return sum
+    }
+
+    /// Completed focus sessions in the last 7 days.
+    public func thisWeekTotal(now: Date = Date()) -> Int { total(fromDaysAgo: 0, toDaysAgo: 7, now: now) }
+    /// Completed focus sessions in the 7 days before that.
+    public func lastWeekTotal(now: Date = Date()) -> Int { total(fromDaysAgo: 7, toDaysAgo: 14, now: now) }
+
+    /// Week-over-week change as a fraction (e.g. 0.2 = +20%). Returns nil when
+    /// there is no prior-week baseline to compare against.
+    public func weekOverWeekChange(now: Date = Date()) -> Double? {
+        let last = lastWeekTotal(now: now)
+        guard last > 0 else { return nil }
+        return Double(thisWeekTotal(now: now) - last) / Double(last)
+    }
 }

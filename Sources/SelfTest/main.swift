@@ -47,6 +47,7 @@ testBrightnessSettings()
         testAppBlocker()
         testBlockedAppPresets()
         testTaskPlanning()
+        testWeeklyReport()
 
         print("\nPassed: \(passed)  Failed: \(failures)")
         if failures > 0 {
@@ -131,7 +132,47 @@ testBrightnessSettings()
                   "weekdays recurrence skips the weekend")
         }
 
+        // A non-recurring completion does NOT spawn a copy.
+        let store2 = TaskStore(fileURL: dir.appendingPathComponent("t2.json"))
+        store2.add(title: "solo")
+        let solo = store2.tasks[0]
+        store2.toggleDone(solo.id)
+        check(store2.tasks.count == 1, "non-recurring completion spawns nothing")
+
+        // Project clear.
+        store.setProject(b.id, "Proj")
+        store.setProject(b.id, nil)
+        check(store.tasks.first { $0.id == b.id }?.project == nil, "project cleared to nil")
+
+        // Drag reorder: move B before C-equivalent. Rebuild a clean 3-task store.
+        let store3 = TaskStore(fileURL: dir.appendingPathComponent("t3.json"))
+        store3.add(title: "X"); store3.add(title: "Y"); store3.add(title: "Z")
+        let x = store3.tasks[0], y = store3.tasks[1], z = store3.tasks[2]
+        store3.moveTask(z.id, before: x.id)   // Z to front → Z, X, Y
+        let ord3 = store3.tasks.sorted(by: TaskStore.inListOrder).map(\.id)
+        check(ord3 == [z.id, x.id, y.id], "drag moveTask reorders before target")
+
         try? FileManager.default.removeItem(at: dir)
+    }
+
+    static func testWeeklyReport() {
+        print("• Weekly report (growth / decline)")
+        let cal = Calendar.current
+        let now = Date()
+        var stats = PomodoroStats()
+        for _ in 0..<3 { stats.registerFocusCompletion(on: now) }              // this week: 3
+        let d8 = cal.date(byAdding: .day, value: -8, to: now)!
+        for _ in 0..<2 { stats.registerFocusCompletion(on: d8) }               // last week: 2
+        check(stats.thisWeekTotal(now: now) == 3, "this-week total = 3")
+        check(stats.lastWeekTotal(now: now) == 2, "last-week total = 2")
+        if let ch = stats.weekOverWeekChange(now: now) {
+            check(abs(ch - 0.5) < 0.0001, "week-over-week change = +50%")
+        } else {
+            check(false, "week-over-week change should be non-nil")
+        }
+        var fresh = PomodoroStats()
+        fresh.registerFocusCompletion(on: now)
+        check(fresh.weekOverWeekChange(now: now) == nil, "no prior week → nil change")
     }
 
     static func testModels() {

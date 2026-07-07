@@ -226,6 +226,13 @@ struct SettingsView: View {
                     Text("A focus pomodoro won't start until you pick a task. The quick-add hotkey (below, in Global shortcuts) pops up a capture window.")
                         .font(.caption2)
                         .foregroundStyle(.white.opacity(0.6))
+                    StepperRow(title: "Daily pomodoro goal",
+                               value: $settings.dailyPomodoroGoal,
+                               unit: "🍅",
+                               range: 0...20)
+                    Text("Shows a progress bar in the menu bar. Set to 0 to hide.")
+                        .font(.caption2)
+                        .foregroundStyle(.white.opacity(0.6))
                 }
 
                 Section("Repeat") {
@@ -727,6 +734,7 @@ private struct StepperRow: View {
     let title: String
     @Binding var value: Int
     let unit: String
+    var range: ClosedRange<Int> = 1...600
 
     var body: some View {
         HStack(spacing: 12) {
@@ -737,7 +745,7 @@ private struct StepperRow: View {
             Text("\(value) \(unit)")
                 .font(.system(.body, design: .rounded).monospacedDigit())
                 .foregroundStyle(.white.opacity(0.6))
-            Stepper("", value: $value, in: 1...600)
+            Stepper("", value: $value, in: range)
                 .labelsHidden()
         }
         .frame(minHeight: 24)

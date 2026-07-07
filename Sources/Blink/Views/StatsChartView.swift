@@ -39,6 +39,8 @@ struct StatsChartView: View {
                 .tint(.white)
             }
 
+            weeklyReport
+
             Chart {
                 ForEach(data) { item in
                     BarMark(
@@ -131,6 +133,44 @@ struct StatsChartView: View {
     private func hourLabel(_ h: Int) -> String {
         let hh = ((h % 12) == 0) ? 12 : h % 12
         return "\(hh)\(h < 12 ? "am" : "pm")"
+    }
+
+    /// This-week total with a week-over-week growth / decline indicator.
+    private var weeklyReport: some View {
+        let this = stats.thisWeekTotal()
+        let last = stats.lastWeekTotal()
+        let change = stats.weekOverWeekChange()
+        return HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text("This week")
+                    .font(.system(.caption2, design: .rounded).weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.6))
+                Text("\(this) 🍅")
+                    .font(.system(.title3, design: .rounded).weight(.bold))
+                    .foregroundStyle(.white)
+            }
+            Spacer()
+            if let change {
+                let up = change >= 0
+                HStack(spacing: 4) {
+                    Image(systemName: up ? "arrow.up.right" : "arrow.down.right")
+                        .font(.system(size: 12, weight: .bold))
+                    Text("\(up ? "+" : "")\(Int((change * 100).rounded()))%")
+                        .font(.system(.subheadline, design: .rounded).weight(.bold))
+                }
+                .foregroundStyle(up ? Color.green : Color.red)
+                Text("vs last week (\(last))")
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.55))
+            } else {
+                Text(last == 0 && this > 0 ? "First week — keep going!" : "No data yet")
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.55))
+            }
+        }
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .fill(Color.white.opacity(0.05)))
     }
 
     private func xLabel(_ d: Date) -> String {

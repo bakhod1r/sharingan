@@ -169,6 +169,29 @@ public final class TaskStore: ObservableObject {
         persist()
     }
 
+    /// Drag reorder: places `id` immediately before `targetID` within their shared
+    /// category's open tasks. No-op across categories or when ids match.
+    public func moveTask(_ id: UUID, before targetID: UUID) {
+        guard id != targetID,
+              let moving = tasks.first(where: { $0.id == id }),
+              let target = tasks.first(where: { $0.id == targetID }),
+              moving.category == target.category, !moving.isDone, !target.isDone else { return }
+        var items = tasks
+            .filter { $0.category == moving.category && !$0.isDone }
+            .sorted(by: Self.inListOrder)
+        guard let from = items.firstIndex(where: { $0.id == id }) else { return }
+        items.remove(at: from)
+        guard let to = items.firstIndex(where: { $0.id == targetID }) else { return }
+        items.insert(moving, at: to)
+        let base = items.map(\.sortOrder).min() ?? 0
+        for (offset, item) in items.enumerated() {
+            if let i = tasks.firstIndex(where: { $0.id == item.id }) {
+                tasks[i].sortOrder = base + offset
+            }
+        }
+        persist()
+    }
+
     public func setEstimate(_ id: UUID, _ pomodoros: Int?) {
         guard let i = tasks.firstIndex(where: { $0.id == id }) else { return }
         tasks[i].estimatedPomodoros = pomodoros.map { max(1, $0) }
