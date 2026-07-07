@@ -325,63 +325,66 @@ struct WeeklyBoardView: View {
     private func card(_ task: TaskItem) -> some View {
         let color = Color(hex: store.color(for: task.category))
         let hovered = hoveredCard == task.id
-        return HStack(spacing: 0) {
-            // Left category accent bar.
-            RoundedRectangle(cornerRadius: 2)
-                .fill(color)
-                .frame(width: 3)
-                .padding(.vertical, 2)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(task.title)
-                    .font(.system(.callout, design: .rounded).weight(.medium))
-                    .foregroundStyle(.white)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+        return VStack(alignment: .leading, spacing: 6) {
+            Text(task.title)
+                .font(.system(.callout, design: .rounded).weight(.medium))
+                .foregroundStyle(.white)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
 
-                let hasMeta = task.dueDate != nil || task.subtaskProgress.total > 0
-                    || task.pomodorosDone > 0 || task.estimatedPomodoros != nil
-                    || !task.tags.isEmpty
-                if hasMeta {
-                    HStack(spacing: 7) {
-                        if let due = task.dueDate {
-                            Label(shortDue(due), systemImage: "calendar")
-                                .labelStyle(.titleAndIcon)
-                                .font(.system(size: 10, weight: .semibold, design: .rounded))
-                                .foregroundStyle(task.isOverdue() ? Color.red : .white.opacity(0.55))
-                        }
-                        if let tag = task.tags.first {
-                            Text("#\(tag)")
-                                .font(.system(size: 10, weight: .semibold, design: .rounded))
-                                .foregroundStyle(color)
-                        }
-                        if task.subtaskProgress.total > 0 {
-                            Text("☑\(task.subtaskProgress.done)/\(task.subtaskProgress.total)")
-                                .font(.system(size: 10, design: .rounded))
-                                .foregroundStyle(task.subtaskProgress.done == task.subtaskProgress.total
-                                                 ? Color.green : .white.opacity(0.55))
-                        }
-                        Spacer(minLength: 0)
-                        if task.pomodorosDone > 0 || task.estimatedPomodoros != nil {
-                            Text(task.estimatedPomodoros.map { "🍅\(task.pomodorosDone)/\($0)" }
-                                 ?? "🍅\(task.pomodorosDone)")
-                                .font(.system(size: 10, design: .rounded))
-                                .foregroundStyle(.white.opacity(0.6))
-                        }
+            let hasMeta = task.dueDate != nil || task.subtaskProgress.total > 0
+                || task.pomodorosDone > 0 || task.estimatedPomodoros != nil
+                || !task.tags.isEmpty
+            if hasMeta {
+                HStack(spacing: 7) {
+                    if let due = task.dueDate {
+                        Label(shortDue(due), systemImage: "calendar")
+                            .labelStyle(.titleAndIcon)
+                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                            .foregroundStyle(task.isOverdue() ? Color.red : .white.opacity(0.55))
+                    }
+                    if let tag = task.tags.first {
+                        Text("#\(tag)")
+                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                            .foregroundStyle(color)
+                    }
+                    if task.subtaskProgress.total > 0 {
+                        Text("☑\(task.subtaskProgress.done)/\(task.subtaskProgress.total)")
+                            .font(.system(size: 10, design: .rounded))
+                            .foregroundStyle(task.subtaskProgress.done == task.subtaskProgress.total
+                                             ? Color.green : .white.opacity(0.55))
+                    }
+                    Spacer(minLength: 0)
+                    if task.pomodorosDone > 0 || task.estimatedPomodoros != nil {
+                        Text(task.estimatedPomodoros.map { "🍅\(task.pomodorosDone)/\($0)" }
+                             ?? "🍅\(task.pomodorosDone)")
+                            .font(.system(size: 10, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.6))
                     }
                 }
             }
-            .padding(.leading, 9).padding(.trailing, 9).padding(.vertical, 9)
         }
+        .padding(.leading, 12).padding(.trailing, 9).padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
+        // Only as tall as its content — without this the greedy accent shape
+        // stretched each card to fill the whole 440pt column.
+        .fixedSize(horizontal: false, vertical: true)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                 .fill(LinearGradient(
                     colors: [Color.white.opacity(hovered ? 0.15 : 0.09),
                              Color.white.opacity(hovered ? 0.08 : 0.04)],
                     startPoint: .top, endPoint: .bottom))
         )
+        // Category accent as a leading bar sized to the card, not a greedy sibling.
+        .overlay(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(color)
+                .frame(width: 3)
+                .padding(.vertical, 6)
+        }
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                 .stroke(color.opacity(hovered ? 0.55 : 0.2), lineWidth: 1)
         )
         .scaleEffect(hovered ? 1.035 : 1)
