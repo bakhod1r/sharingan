@@ -27,9 +27,9 @@ struct MenuBarView: View {
     private enum Tab: Hashable { case timer, tasks }
 
     /// Fixed height for the switchable tab area so the popover is ONE size across
-    /// Timer / Tasks. Sized to fit the timer tab (the taller layout) so it never
-    /// scrolls in normal use; a very long task list scrolls within.
-    private let tabContentHeight: CGFloat = 560
+    /// Timer / Tasks. Sized to fit the timer tab's controls (the stats strip is
+    /// pinned separately below); a very long task list scrolls within.
+    private let tabContentHeight: CGFloat = 512
 
     var body: some View {
         VStack(spacing: 14) {
@@ -53,7 +53,11 @@ struct MenuBarView: View {
             }
             .frame(height: tabContentHeight)
 
-            Divider().overlay(Color.white.opacity(0.15))
+            // Today / Cycle / Streak — pinned below the scroll so it's always
+            // fully visible on both tabs, never clipped by the fixed height.
+            Divider().overlay(Color.dsHairline)
+            statsStrip
+            Divider().overlay(Color.dsHairline)
             footer
         }
         .onAppear { heartbeat = true }
@@ -75,8 +79,6 @@ struct MenuBarView: View {
             taskList
             statusHeader
             controls
-            Divider().overlay(Color.white.opacity(0.15))
-            statsStrip
         }
     }
 
