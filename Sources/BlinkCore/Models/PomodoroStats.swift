@@ -21,11 +21,38 @@ public struct PomodoroStats: Codable, Equatable, Sendable {
     /// Day (start-of-day) the stored `completedToday` counter belongs to, used to
     /// roll it over when a new day begins. `nil` for pre-migration data.
     public var lastCountedDay: Date?
+    /// Completed focus sessions bucketed by hour of day (24 entries) — powers the
+    /// "best focus hours" chart.
+    public var hourCounts: [Int] = Array(repeating: 0, count: 24)
 
     public init() {}
 
+    // Defensive decoding so adding fields (lastCountedDay, hourCounts) never
+    // fails an older saved stats blob — which would silently reset the user's
+    // history and streak.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        completedFocus = try c.decodeIfPresent(Int.self, forKey: .completedFocus) ?? 0
+        completedToday = try c.decodeIfPresent(Int.self, forKey: .completedToday) ?? 0
+        streakDays = try c.decodeIfPresent(Int.self, forKey: .streakDays) ?? 0
+        streak = try c.decodeIfPresent(StreakStore.self, forKey: .streak) ?? .init()
+        history = try c.decodeIfPresent([DailyCount].self, forKey: .history) ?? []
+        lastCountedDay = try c.decodeIfPresent(Date.self, forKey: .lastCountedDay)
+        let hc = try c.decodeIfPresent([Int].self, forKey: .hourCounts) ?? []
+        hourCounts = hc.count == 24 ? hc : Array(repeating: 0, count: 24)
+    }
+
+    /// Hour (0–23) with the most completed focus sessions, if any.
+    public var bestFocusHour: Int? {
+        guard let peak = hourCounts.max(), peak > 0 else { return nil }
+        return hourCounts.firstIndex(of: peak)
+    }
+
     public mutating func registerFocusCompletion(on date: Date = Date()) {
         completedFocus += 1
+
+        let hour = Calendar.current.component(.hour, from: date)
+        if hourCounts.count == 24 { hourCounts[hour] += 1 }
 
         let day = Calendar.current.startOfDay(for: date)
         // Roll `completedToday` over at the day boundary instead of accumulating

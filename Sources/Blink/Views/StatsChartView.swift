@@ -73,10 +73,64 @@ struct StatsChartView: View {
                 }
             }
             .frame(height: 180)
+
+            if stats.hourCounts.contains(where: { $0 > 0 }) {
+                Divider().overlay(Color.white.opacity(0.12))
+                hourSection
+            }
         }
         .padding(14)
         .glassRounded(22, material: .regular)
         .liquidShadow(radius: 12, y: 6)
+    }
+
+    // MARK: - Focus by hour
+
+    private var hourSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Focus by hour")
+                    .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                    .foregroundStyle(.white)
+                Spacer()
+                if let best = stats.bestFocusHour {
+                    Text("Best: \(hourLabel(best))")
+                        .font(.system(.caption, design: .rounded).weight(.medium))
+                        .foregroundStyle(.orange)
+                }
+            }
+
+            Chart {
+                ForEach(Array(stats.hourCounts.enumerated()), id: \.offset) { hour, count in
+                    BarMark(
+                        x: .value("Hour", hour),
+                        y: .value("Pomodoros", count)
+                    )
+                    .foregroundStyle(
+                        hour == stats.bestFocusHour
+                            ? AnyShapeStyle(Color.orange)
+                            : AnyShapeStyle(Color.paletteFocusStart.opacity(0.75))
+                    )
+                    .cornerRadius(2)
+                }
+            }
+            .chartXScale(domain: 0...23)
+            .chartXAxis {
+                AxisMarks(values: [0, 6, 12, 18, 23]) { value in
+                    if let h = value.as(Int.self) {
+                        AxisValueLabel { Text(hourLabel(h)).font(.system(size: 9, design: .rounded)) }
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                }
+            }
+            .chartYAxis(.hidden)
+            .frame(height: 90)
+        }
+    }
+
+    private func hourLabel(_ h: Int) -> String {
+        let hh = ((h % 12) == 0) ? 12 : h % 12
+        return "\(hh)\(h < 12 ? "am" : "pm")"
     }
 
     private func xLabel(_ d: Date) -> String {

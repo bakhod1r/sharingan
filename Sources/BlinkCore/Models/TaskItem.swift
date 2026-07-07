@@ -10,6 +10,12 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
     public var pomodorosDone: Int
     public var createdAt: Date
     public var dueDate: Date?
+    /// Manual ordering position within the list (lower = higher up).
+    public var sortOrder: Int
+    /// Planned number of pomodoros for this task (nil = no estimate).
+    public var estimatedPomodoros: Int?
+    /// Start-of-day this task is planned for (nil = not on a daily plan).
+    public var plannedDate: Date?
 
     public init(id: UUID = UUID(),
                 title: String,
@@ -18,7 +24,10 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
                 isDone: Bool = false,
                 pomodorosDone: Int = 0,
                 createdAt: Date = Date(),
-                dueDate: Date? = nil) {
+                dueDate: Date? = nil,
+                sortOrder: Int = 0,
+                estimatedPomodoros: Int? = nil,
+                plannedDate: Date? = nil) {
         self.id = id
         self.title = title
         self.category = category
@@ -27,6 +36,9 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         self.pomodorosDone = pomodorosDone
         self.createdAt = createdAt
         self.dueDate = dueDate
+        self.sortOrder = sortOrder
+        self.estimatedPomodoros = estimatedPomodoros
+        self.plannedDate = plannedDate
     }
 
     // Defensive decoding: several fields (category, tags, pomodorosDone) were
@@ -44,12 +56,21 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         pomodorosDone = try c.decodeIfPresent(Int.self, forKey: .pomodorosDone) ?? 0
         createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
         dueDate = try c.decodeIfPresent(Date.self, forKey: .dueDate)
+        sortOrder = try c.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
+        estimatedPomodoros = try c.decodeIfPresent(Int.self, forKey: .estimatedPomodoros)
+        plannedDate = try c.decodeIfPresent(Date.self, forKey: .plannedDate)
     }
 
     /// True when the task has a past deadline and isn't finished.
     public func isOverdue(now: Date = Date()) -> Bool {
         guard let dueDate, !isDone else { return false }
         return dueDate < now
+    }
+
+    /// True when this task is on today's plan.
+    public func isPlannedToday(now: Date = Date()) -> Bool {
+        guard let plannedDate else { return false }
+        return Calendar.current.isDate(plannedDate, inSameDayAs: now)
     }
 }
 

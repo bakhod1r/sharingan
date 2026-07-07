@@ -15,6 +15,8 @@ struct MenuBarView: View {
     @FocusState private var editFieldFocused: Bool
     /// Drives the gentle running-state pulse on the Start button.
     @State private var heartbeat = false
+    @State private var taskSearch = ""
+    @State private var todayOnly = false
 
     private enum Tab: Hashable { case timer, tasks, stats }
 
@@ -62,16 +64,65 @@ struct MenuBarView: View {
 
     // MARK: - Inline task list
 
-    /// Open (unfinished) tasks, the active one floated to the top.
-    private var openTasks: [TaskItem] {
-        tasks.tasks
-            .filter { !$0.isDone }
-            .sorted { a, b in
-                if (tasks.activeTaskID == a.id) != (tasks.activeTaskID == b.id) {
-                    return tasks.activeTaskID == a.id
+    /// Search field + a "Today" toggle for the inline task list.
+    private var filterRow: some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                TextField("Search", text: $taskSearch)
+                    .textFieldStyle(.plain)
+                    .font(.system(.caption, design: .rounded))
+                if !taskSearch.isEmpty {
+                    Button { taskSearch = "" } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
                 }
-                return a.createdAt < b.createdAt
             }
+            .padding(.horizontal, 10).padding(.vertical, 6)
+            .background(Capsule().fill(Color.white.opacity(0.06)))
+
+            Button { todayOnly.toggle() } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "sun.max.fill").font(.system(size: 10, weight: .bold))
+                    Text("Today").font(.system(.caption2, design: .rounded).weight(.semibold))
+                }
+                .foregroundStyle(todayOnly ? Color.orange : .secondary)
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .background(Capsule().fill(todayOnly ? Color.orange.opacity(0.18)
+                                                     : Color.white.opacity(0.06)))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    /// All open tasks (ignoring search/today filters) — used to decide whether to
+    /// show the filter controls.
+    private var allOpenCount: Int { tasks.tasks.filter { !$0.isDone }.count }
+
+    /// Open (unfinished) tasks after search + today filters, the active one on top,
+    /// then manual order.
+    private var openTasks: [TaskItem] {
+        var list = tasks.tasks.filter { !$0.isDone }
+        let q = taskSearch.trimmingCharacters(in: .whitespaces).lowercased()
+        if !q.isEmpty {
+            list = list.filter {
+                $0.title.lowercased().contains(q)
+                    || $0.category.lowercased().contains(q)
+                    || $0.tags.contains { $0.lowercased().contains(q) }
+            }
+        }
+        if todayOnly { list = list.filter { $0.isPlannedToday() } }
+        return list.sorted { a, b in
+            if (tasks.activeTaskID == a.id) != (tasks.activeTaskID == b.id) {
+                return tasks.activeTaskID == a.id
+            }
+            return TaskStore.inListOrder(a, b)
+        }
     }
 
     private var taskList: some View {
@@ -89,10 +140,17 @@ struct MenuBarView: View {
             .padding(.horizontal, 12).padding(.vertical, 9)
             .glassCapsule(material: .thin)
 
+            // Search + Today filter — only once the list is big enough to need it.
+            if allOpenCount > 4 || todayOnly || !taskSearch.isEmpty {
+                filterRow
+            }
+
             if openTasks.isEmpty {
                 HStack {
                     Spacer()
-                    Text("No tasks yet — add one above")
+                    Text(taskSearch.isEmpty && !todayOnly
+                         ? "No tasks yet — add one above"
+                         : "No matching tasks")
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -252,14 +310,24 @@ struct MenuBarView: View {
                     tagChip(tag)
                 }
 
+                // Due date chip (red when overdue).
+                if let due = task.dueDate {
+                    Label(dueChipText(due), systemImage: "calendar")
+                        .font(.system(size: 9, weight: .semibold, design: .rounded))
+                        .foregroundStyle(task.isOverdue() ? Color.red : .secondary)
+                        .labelStyle(.titleAndIcon)
+                }
+
                 Spacer(minLength: 6)
             }
 
-            if task.pomodorosDone > 0 {
-                Text("🍅\(task.pomodorosDone)")
-                    .font(.system(.caption2, design: .rounded))
-                    .foregroundStyle(.secondary)
+            if task.isPlannedToday() {
+                Image(systemName: "sun.max.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.orange)
+                    .help("On today's plan")
             }
+            pomodoroBadge(task)
             Button {
                 startFocus(on: task)
             } label: {
@@ -307,6 +375,36 @@ struct MenuBarView: View {
             } label: {
                 Label("Change category", systemImage: "tag")
             }
+            Menu {
+                Button("No estimate") { tasks.setEstimate(task.id, nil) }
+                Divider()
+                ForEach(1...8, id: \.self) { n in
+                    Button {
+                        tasks.setEstimate(task.id, n)
+                    } label: {
+                        if task.estimatedPomodoros == n {
+                            Label("\(n) 🍅", systemImage: "checkmark")
+                        } else {
+                            Text("\(n) 🍅")
+                        }
+                    }
+                }
+            } label: {
+                Label("Estimate", systemImage: "target")
+            }
+            Button {
+                tasks.togglePlannedToday(task.id)
+            } label: {
+                Label(task.isPlannedToday() ? "Remove from today" : "Plan for today",
+                      systemImage: task.isPlannedToday() ? "sun.max" : "sun.max.fill")
+            }
+            Divider()
+            Button { tasks.move(task.id, up: true) } label: {
+                Label("Move up", systemImage: "arrow.up")
+            }
+            Button { tasks.move(task.id, up: false) } label: {
+                Label("Move down", systemImage: "arrow.down")
+            }
             Divider()
             Button(role: .destructive) { tasks.delete(task.id) } label: {
                 Label("Delete", systemImage: "trash")
@@ -328,6 +426,31 @@ struct MenuBarView: View {
         .background(
             Capsule().fill(accent.opacity(0.14))
         )
+    }
+
+    /// Pomodoro progress: "🍅done/est" when estimated, else "🍅done".
+    @ViewBuilder
+    private func pomodoroBadge(_ task: TaskItem) -> some View {
+        if let est = task.estimatedPomodoros {
+            Text("🍅\(task.pomodorosDone)/\(est)")
+                .font(.system(.caption2, design: .rounded).weight(.medium))
+                .foregroundStyle(task.pomodorosDone >= est ? Color.green : .secondary)
+        } else if task.pomodorosDone > 0 {
+            Text("🍅\(task.pomodorosDone)")
+                .font(.system(.caption2, design: .rounded))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// Compact due-date label for a task row.
+    private func dueChipText(_ d: Date) -> String {
+        let cal = Calendar.current
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US")
+        if cal.isDateInToday(d) { f.dateFormat = "HH:mm"; return f.string(from: d) }
+        if cal.isDateInTomorrow(d) { return "tmrw" }
+        f.dateFormat = "MMM d"
+        return f.string(from: d)
     }
 
     /// Neutral `#label` chip for a free-form tag (distinct from the category).

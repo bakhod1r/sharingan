@@ -242,7 +242,18 @@ struct TasksView: View {
             }
             Spacer()
 
-            if task.pomodorosDone > 0 {
+            if task.isPlannedToday() {
+                Image(systemName: "sun.max.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.orange)
+                    .help("On today's plan")
+            }
+
+            if let est = task.estimatedPomodoros {
+                Text("🍅\(task.pomodorosDone)/\(est)")
+                    .font(.system(.caption2, design: .rounded).weight(.medium))
+                    .foregroundStyle(task.pomodorosDone >= est ? Color.green : .secondary)
+            } else if task.pomodorosDone > 0 {
                 Text("🍅\(task.pomodorosDone)")
                     .font(.system(.caption2, design: .rounded))
                     .foregroundStyle(.secondary)
@@ -265,6 +276,33 @@ struct TasksView: View {
                 .fill(isActive ? Color.accentColor.opacity(0.12) : Color.white.opacity(0.04))
         )
         .contextMenu {
+            Menu {
+                Button("No estimate") { store.setEstimate(task.id, nil) }
+                Divider()
+                ForEach(1...8, id: \.self) { n in
+                    Button {
+                        store.setEstimate(task.id, n)
+                    } label: {
+                        if task.estimatedPomodoros == n {
+                            Label("\(n) 🍅", systemImage: "checkmark")
+                        } else { Text("\(n) 🍅") }
+                    }
+                }
+            } label: { Label("Estimate", systemImage: "target") }
+            Button {
+                store.togglePlannedToday(task.id)
+            } label: {
+                Label(task.isPlannedToday() ? "Remove from today" : "Plan for today",
+                      systemImage: "sun.max.fill")
+            }
+            Divider()
+            Button { store.move(task.id, up: true) } label: {
+                Label("Move up", systemImage: "arrow.up")
+            }
+            Button { store.move(task.id, up: false) } label: {
+                Label("Move down", systemImage: "arrow.down")
+            }
+            Divider()
             Button(role: .destructive) { store.delete(task.id) } label: {
                 Label("Delete", systemImage: "trash")
             }

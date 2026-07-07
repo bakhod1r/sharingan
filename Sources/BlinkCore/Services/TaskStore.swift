@@ -97,14 +97,21 @@ public final class TaskStore: ObservableObject {
         return tasks.first { $0.id == id }
     }
 
+    /// Canonical ordering: open tasks before done, then manual `sortOrder`, then
+    /// creation time as a stable tiebreak.
+    public static func inListOrder(_ a: TaskItem, _ b: TaskItem) -> Bool {
+        if a.isDone != b.isDone { return !a.isDone }
+        if a.sortOrder != b.sortOrder { return a.sortOrder < b.sortOrder }
+        return a.createdAt < b.createdAt
+    }
+
     /// Tasks grouped by category, in preset order (custom categories last).
     public func grouped() -> [(category: String, items: [TaskItem])] {
         let order = TaskCategory.presets.map(\.name)
         let names = Array(Set(tasks.map(\.category)))
             .sorted { (order.firstIndex(of: $0) ?? .max, $0) < (order.firstIndex(of: $1) ?? .max, $1) }
         return names.map { name in
-            (name, tasks.filter { $0.category == name }
-                .sorted { !$0.isDone && $1.isDone })
+            (name, tasks.filter { $0.category == name }.sorted(by: Self.inListOrder))
         }
     }
 
@@ -113,12 +120,65 @@ public final class TaskStore: ObservableObject {
     public func add(title: String,
                     category: String = TaskCategory.presets[0].name,
                     tags: [String] = [],
-                    dueDate: Date? = nil) {
+                    dueDate: Date? = nil,
+                    estimatedPomodoros: Int? = nil) {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        let task = TaskItem(title: trimmed, category: category, tags: tags, dueDate: dueDate)
+        // New tasks go to the bottom of the manual order.
+        let nextOrder = (tasks.map(\.sortOrder).max() ?? 0) + 1
+        let task = TaskItem(title: trimmed, category: category, tags: tags, dueDate: dueDate,
+                            sortOrder: nextOrder, estimatedPomodoros: estimatedPomodoros)
         tasks.append(task)
         scheduleDueNotification(task)
+        persist()
+    }
+
+    // MARK: - Planning
+
+    /// Moves a task one place up or down within its own category (open tasks).
+    public func move(_ id: UUID, up: Bool) {
+        guard let task = tasks.first(where: { $0.id == id }) else { return }
+        let siblings = tasks
+            .filter { $0.category == task.category && !$0.isDone }
+            .sorted(by: Self.inListOrder)
+        guard let idx = siblings.firstIndex(where: { $0.id == id }) else { return }
+        let swapIdx = up ? idx - 1 : idx + 1
+        guard swapIdx >= 0, swapIdx < siblings.count else { return }
+        let other = siblings[swapIdx]
+        guard let i = tasks.firstIndex(where: { $0.id == id }),
+              let j = tasks.firstIndex(where: { $0.id == other.id }) else { return }
+        let tmp = tasks[i].sortOrder
+        tasks[i].sortOrder = tasks[j].sortOrder
+        tasks[j].sortOrder = tmp
+        persist()
+    }
+
+    /// Applies a drag reorder (`onMove`) within one category's open tasks.
+    public func reorder(category: String, from source: IndexSet, to destination: Int) {
+        var items = tasks
+            .filter { $0.category == category && !$0.isDone }
+            .sorted(by: Self.inListOrder)
+        items.move(fromOffsets: source, toOffset: destination)
+        // Reassign a compact, contiguous order block for this category.
+        let base = items.map(\.sortOrder).min() ?? 0
+        for (offset, item) in items.enumerated() {
+            if let i = tasks.firstIndex(where: { $0.id == item.id }) {
+                tasks[i].sortOrder = base + offset
+            }
+        }
+        persist()
+    }
+
+    public func setEstimate(_ id: UUID, _ pomodoros: Int?) {
+        guard let i = tasks.firstIndex(where: { $0.id == id }) else { return }
+        tasks[i].estimatedPomodoros = pomodoros.map { max(1, $0) }
+        persist()
+    }
+
+    /// Toggles whether a task is on today's plan.
+    public func togglePlannedToday(_ id: UUID) {
+        guard let i = tasks.firstIndex(where: { $0.id == id }) else { return }
+        tasks[i].plannedDate = tasks[i].isPlannedToday() ? nil : Calendar.current.startOfDay(for: Date())
         persist()
     }
 
