@@ -164,14 +164,14 @@ struct TasksView: View {
         VStack(alignment: .leading, spacing: 12) {
             Divider().overlay(Color.white.opacity(0.1))
 
-            // Estimate + repeat + due, on one tidy row of chips.
-            HStack(spacing: 10) {
-                Stepper(value: $newEstimate, in: 0...12) {
+            // Estimate + repeat + due, on one tidy row of glass chips.
+            HStack(spacing: 8) {
+                HStack(spacing: 6) {
                     Text(newEstimate == 0 ? "Est —" : "Est \(newEstimate) 🍅")
                         .font(.system(.caption, design: .rounded).weight(.medium))
-                        .foregroundStyle(.white.opacity(0.85))
+                        .foregroundStyle(Color.dsSecondary)
+                    DSStepper(value: $newEstimate, range: 0...12)
                 }
-                .fixedSize()
 
                 Menu {
                     ForEach(Recurrence.allCases) { r in
@@ -188,16 +188,19 @@ struct TasksView: View {
 
                 Spacer()
 
-                Toggle(isOn: $hasDue.animation(.easeInOut(duration: 0.15))) {
-                    Text("Due").font(.system(.caption, design: .rounded).weight(.medium))
-                        .foregroundStyle(.white.opacity(0.85))
+                // Due toggle as a glass chip; a compact date picker appears when on.
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) { hasDue.toggle() }
+                } label: {
+                    chip(icon: hasDue ? "calendar.circle.fill" : "calendar",
+                         text: "Due", active: hasDue)
                 }
-                .toggleStyle(.checkbox)
+                .buttonStyle(.plain)
                 if hasDue {
                     DatePicker("", selection: $newDue)
-                        .datePickerStyle(.field)
+                        .datePickerStyle(.compact)
                         .labelsHidden()
-                        .font(.caption)
+                        .controlSize(.small)
                 }
             }
 
@@ -267,7 +270,10 @@ struct TasksView: View {
                                 Text("#\(tag)")
                                     .font(.system(size: 10, weight: .semibold, design: .rounded))
                                 Button { removeTag(tag) } label: {
-                                    Image(systemName: "xmark").font(.system(size: 7, weight: .bold))
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(.white.opacity(0.8))
+                                        .contentShape(Rectangle())
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -445,8 +451,8 @@ struct TasksView: View {
                         .foregroundStyle(.white)
                     if !custom {
                         Text("preset")
-                            .font(.system(size: 8, design: .rounded).weight(.bold))
-                            .foregroundStyle(.white.opacity(0.4))
+                            .font(.system(size: 9, design: .rounded).weight(.bold))
+                            .foregroundStyle(Color.dsTertiary)
                             .padding(.horizontal, 5).padding(.vertical, 1)
                             .background(Capsule().fill(Color.white.opacity(0.06)))
                     }

@@ -65,8 +65,8 @@ struct StatsSummaryView: View {
                     .foregroundStyle(.white.opacity(0.6))
                 if let sub = m.sub {
                     Text(sub)
-                        .font(.system(size: 9, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.45))
+                        .font(.system(size: 10, design: .rounded))
+                        .foregroundStyle(Color.dsSecondary)
                 }
             }
             Spacer(minLength: 0)

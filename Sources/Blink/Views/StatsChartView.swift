@@ -36,7 +36,7 @@ struct StatsChartView: View {
                 }
                 .pickerStyle(.segmented)
                 .frame(width: 160)
-                .tint(.white)
+                
             }
 
             weeklyReport
@@ -82,7 +82,7 @@ struct StatsChartView: View {
             }
         }
         .padding(14)
-        .glassRounded(22, material: .regular)
+        .glassRounded(DS.Radius.xl, material: .regular)
         .liquidShadow(radius: 12, y: 6)
     }
 
@@ -169,7 +169,7 @@ struct StatsChartView: View {
             }
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
+        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
             .fill(Color.white.opacity(0.05)))
     }
 

@@ -349,19 +349,17 @@ struct MenuBarView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.dsTertiary)
                         .rotationEffect(.degrees(isCollapsed ? 0 : 90))
                     Image(systemName: tasks.icon(for: group.category))
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(accent)
-                        .frame(width: 16)
-                    Text(group.category)
-                        .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                    Text(group.category).dsSectionLabel()
                     Text("\(group.items.count)")
                         .font(.system(.caption2, design: .rounded).weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.dsTertiary)
                         .padding(.horizontal, 6).padding(.vertical, 1)
-                        .background(Capsule().fill(Color.primary.opacity(0.08)))
+                        .background(Capsule().fill(Color.dsFill))
                     Spacer()
                 }
                 .contentShape(Rectangle())
@@ -815,6 +813,8 @@ struct MenuBarView: View {
         VStack(spacing: 8) {
             GlassButton(label: timer.isRunning ? "Pause" : "Start",
                         systemImage: timer.isRunning ? "pause.fill" : "play.fill",
+                        prominent: true,
+                        accent: timer.settings.theme.gradient.first ?? .accentColor,
                         action: startTapped)
                 // Gentle breathing pulse while the timer runs. Keyed on
                 // `isRunning` (not the one-shot `heartbeat`) so the repeating

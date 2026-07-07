@@ -195,7 +195,7 @@ struct SettingsView: View {
                         }
                     }
                     .pickerStyle(.menu)
-                    .tint(.white)
+                    
 
                     Picker("Time format", selection: $settings.timeFormat) {
                         ForEach(TimeDisplayFormat.allCases, id: \.self) { f in
@@ -203,7 +203,7 @@ struct SettingsView: View {
                         }
                     }
                     .pickerStyle(.menu)
-                    .tint(.white)
+                    
 
                     ToggleRow(title: "Flash at 5 seconds left",
                               isOn: $settings.flashAtFiveSecLeft)
@@ -276,7 +276,7 @@ struct SettingsView: View {
                             Text("Opacity: \(Int(settings.floatingOpacity * 100))%")
                                 .font(.caption.weight(.medium))
                             Slider(value: $settings.floatingOpacity, in: 0.3...1.0)
-                                .tint(.white)
+                                
                         }
                         Text("Drag the floating timer to reposition — its spot is remembered.")
                             .font(.caption2)
@@ -308,16 +308,16 @@ struct SettingsView: View {
                         }
                     }
                     .pickerStyle(.menu)
-                    .tint(.white)
+                    
                     HStack(spacing: 8) {
                         Button("Preview") {
                             BreakAmbienceService.shared.preview(
                                 BreakAmbienceService.Ambience(rawValue: settings.ambienceSound) ?? .rain
                             )
                         }
-                        .buttonStyle(.bordered).tint(.white)
+                        .buttonStyle(.bordered)
                         Button("Stop") { BreakAmbienceService.shared.stop() }
-                            .buttonStyle(.bordered).tint(.white)
+                            .buttonStyle(.bordered)
                     }
                 }
 
@@ -331,7 +331,7 @@ struct SettingsView: View {
                                 get: { Double(settings.brightnessDimPercent) },
                                 set: { settings.brightnessDimPercent = Int($0) }
                               ), in: 5...95)
-                            .tint(.white)
+                            
                     }
                     ToggleRow(title: "Smooth transition",
                               isOn: $settings.brightnessSmooth)
@@ -366,7 +366,7 @@ struct SettingsView: View {
                             .help("Remove from list")
                             // Pause/resume blocking without losing the entry.
                             Toggle("", isOn: $app.isEnabled)
-                                .tint(.white)
+                                
                                 .labelsHidden()
                         }
                         .padding(.vertical, 4)
@@ -432,7 +432,7 @@ struct SettingsView: View {
                         }
                         .labelsHidden()
                         .pickerStyle(.menu)
-                        .tint(.white)
+                        
                         .fixedSize()
                     }
 
@@ -445,13 +445,13 @@ struct SettingsView: View {
                             .font(.system(.callout, design: .rounded).weight(.medium))
                     }
                     .buttonStyle(.bordered)
-                    .tint(.white)
+                    
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Step hold scale: \(String(format: "%.2f", settings.exerciseSettings.stepHoldScale))×")
                             .font(.caption.weight(.medium))
                         Slider(value: $settings.exerciseSettings.stepHoldScale,
                                in: 0.5...2.0)
-                            .tint(.white)
+                            
                     }
                     Text("Step length in seconds: \(String(format: "%.0f", settings.exerciseSettings.scaledHold(4)))")
                         .font(.caption2)
@@ -469,7 +469,7 @@ struct SettingsView: View {
                             .font(.caption.weight(.medium))
                         Slider(value: $settings.ttsSettings.kalibIntervalSeconds,
                                in: 0...60)
-                            .tint(.white)
+                            
                     }
                 }
 
@@ -512,7 +512,7 @@ struct SettingsView: View {
                         }
                     }
                     .pickerStyle(.menu)
-                    .tint(.white)
+                    
                 }
 
         case .voice:
@@ -522,12 +522,12 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Voice rate: \(String(format: "%.2f", settings.ttsRate))")
                             .font(.caption.weight(.medium))
-                        Slider(value: $settings.ttsRate, in: 0...1).tint(.white)
+                        Slider(value: $settings.ttsRate, in: 0...1)
                     }
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Voice pitch: \(String(format: "%.2f", settings.ttsPitch))")
                             .font(.caption.weight(.medium))
-                        Slider(value: $settings.ttsPitch, in: 0.5...1.5).tint(.white)
+                        Slider(value: $settings.ttsPitch, in: 0.5...1.5)
                     }
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Global kalib pool")
@@ -713,9 +713,7 @@ struct SettingsView: View {
     private func Section<C: View>(_ title: LocalizedStringKey,
                                   @ViewBuilder content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text(title)
-                .font(.system(.subheadline, design: .rounded).weight(.semibold))
-                .foregroundStyle(.white.opacity(0.5))
+            Text(title).dsSectionLabel()
                 .padding(.leading, 6)
             SettingsCard { content() }
         }
@@ -759,11 +757,41 @@ private struct StepperRow: View {
                 .foregroundStyle(.white)
             Spacer(minLength: 8)
             Text("\(value) \(unit)")
-                .font(.system(.body, design: .rounded).monospacedDigit())
-                .foregroundStyle(.white.opacity(0.6))
-            Stepper("", value: $value, in: range)
-                .labelsHidden()
+                .font(.system(.body, design: .rounded).weight(.semibold).monospacedDigit())
+                .foregroundStyle(Color.dsSecondary)
+            DSStepper(value: $value, range: range)
         }
         .frame(minHeight: 24)
+    }
+}
+
+/// A glass +/- stepper that matches the app instead of the stock AppKit widget.
+struct DSStepper: View {
+    @Binding var value: Int
+    var range: ClosedRange<Int> = 1...600
+    var step: Int = 1
+
+    var body: some View {
+        HStack(spacing: 0) {
+            button("minus") { value = max(range.lowerBound, value - step) }
+                .disabled(value <= range.lowerBound)
+            Rectangle().fill(Color.dsHairline).frame(width: 1, height: 18)
+            button("plus") { value = min(range.upperBound, value + step) }
+                .disabled(value >= range.upperBound)
+        }
+        .background(Capsule().fill(Color.dsFill))
+        .overlay(Capsule().stroke(Color.dsHairline, lineWidth: 1))
+        .clipShape(Capsule())
+    }
+
+    private func button(_ icon: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 30, height: 26)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
