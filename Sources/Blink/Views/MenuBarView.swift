@@ -17,6 +17,10 @@ struct MenuBarView: View {
     @State private var heartbeat = false
     @State private var taskSearch = ""
     @State private var todayOnly = false
+    /// Tasks whose subtask/notes panel is expanded in the popover.
+    @State private var expandedTasks: Set<UUID> = []
+    @State private var subtaskDrafts: [UUID: String] = [:]
+    @State private var showCompleted = false
 
     private enum Tab: Hashable { case timer, tasks, stats }
 
@@ -51,6 +55,7 @@ struct MenuBarView: View {
     private var timerTab: some View {
         VStack(alignment: .leading, spacing: 14) {
             StreakRewardBanner(center: StreakRewardCenter.shared)
+            dailyGoalBar
             // Task list is the primary plan — it sits at the very top so the
             // user's added todos are the first thing shown. The pomodoro status
             // and controls sit below as a secondary layer.
@@ -59,6 +64,41 @@ struct MenuBarView: View {
             controls
             Divider().overlay(Color.white.opacity(0.15))
             statsStrip
+        }
+    }
+
+    /// Today's pomodoro goal as a slim progress bar (hidden when goal is 0).
+    @ViewBuilder
+    private var dailyGoalBar: some View {
+        let goal = timer.settings.dailyPomodoroGoal
+        if goal > 0 {
+            let done = timer.stats.completedTodayCount()
+            let frac = min(1, Double(done) / Double(goal))
+            VStack(spacing: 4) {
+                HStack {
+                    Text("Today's goal")
+                        .font(.system(.caption2, design: .rounded).weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text("\(done)/\(goal) 🍅")
+                        .font(.system(.caption2, design: .rounded).weight(.bold))
+                        .foregroundStyle(done >= goal ? Color.green : .secondary)
+                }
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Color.white.opacity(0.08))
+                        Capsule()
+                            .fill(done >= goal
+                                  ? AnyShapeStyle(Color.green)
+                                  : AnyShapeStyle(LinearGradient(
+                                        colors: [.paletteFocusStart, .paletteBreakStart],
+                                        startPoint: .leading, endPoint: .trailing)))
+                            .frame(width: max(4, geo.size.width * frac))
+                    }
+                }
+                .frame(height: 6)
+                .animation(.easeInOut(duration: 0.3), value: frac)
+            }
         }
     }
 
@@ -172,6 +212,67 @@ struct MenuBarView: View {
                 // taller lists scroll.
                 .frame(height: taskListHeight)
             }
+
+            completedSection
+        }
+    }
+
+    /// Collapsible list of completed tasks with one-tap un-complete (undo).
+    @ViewBuilder
+    private var completedSection: some View {
+        let done = tasks.tasks.filter { $0.isDone }.sorted { $0.createdAt > $1.createdAt }
+        if !done.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { showCompleted.toggle() }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(.secondary)
+                            .rotationEffect(.degrees(showCompleted ? 90 : 0))
+                        Text("Completed")
+                            .font(.system(.caption, design: .rounded).weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        Text("\(done.count)")
+                            .font(.system(.caption2, design: .rounded).weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 6).padding(.vertical, 1)
+                            .background(Capsule().fill(Color.primary.opacity(0.08)))
+                        Spacer()
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                if showCompleted {
+                    ForEach(done.prefix(8)) { task in
+                        HStack(spacing: 10) {
+                            Button { tasks.toggleDone(task.id) } label: {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 15))
+                                    .foregroundStyle(.green)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Mark not done")
+                            Text(task.title)
+                                .font(.system(.caption, design: .rounded))
+                                .strikethrough(true, color: .secondary)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                            Spacer()
+                            Button { tasks.delete(task.id) } label: {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.horizontal, 10).padding(.vertical, 4)
+                    }
+                }
+            }
+            .padding(.top, 2)
         }
     }
 
@@ -260,10 +361,15 @@ struct MenuBarView: View {
             if !isCollapsed {
                 VStack(spacing: 6) {
                     ForEach(group.items) { task in
-                        miniRow(task, showCategory: false)
-                            .transition(.asymmetric(
-                                insertion: .move(edge: .top).combined(with: .opacity),
-                                removal: .opacity.combined(with: .scale(scale: 0.9))))
+                        VStack(spacing: 4) {
+                            miniRow(task, showCategory: false)
+                            if expandedTasks.contains(task.id) {
+                                subtaskPanel(task)
+                            }
+                        }
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .top).combined(with: .opacity),
+                            removal: .opacity.combined(with: .scale(scale: 0.9))))
                     }
                 }
                 .animation(.spring(response: 0.35, dampingFraction: 0.82),
@@ -327,7 +433,36 @@ struct MenuBarView: View {
                     .foregroundStyle(.orange)
                     .help("On today's plan")
             }
+            if task.recurrence != .none {
+                Image(systemName: "repeat")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .help(task.recurrence.label)
+            }
+            if task.subtaskProgress.total > 0 {
+                Text("☑\(task.subtaskProgress.done)/\(task.subtaskProgress.total)")
+                    .font(.system(.caption2, design: .rounded).weight(.medium))
+                    .foregroundStyle(task.subtaskProgress.done == task.subtaskProgress.total
+                                     ? Color.green : .secondary)
+            }
             pomodoroBadge(task)
+
+            // Expand to manage subtasks / notes.
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    if expandedTasks.contains(task.id) { expandedTasks.remove(task.id) }
+                    else { expandedTasks.insert(task.id) }
+                }
+            } label: {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(expandedTasks.contains(task.id) ? 180 : 0))
+                    .frame(width: 18, height: 18)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
             Button {
                 startFocus(on: task)
             } label: {
@@ -398,6 +533,30 @@ struct MenuBarView: View {
                 Label(task.isPlannedToday() ? "Remove from today" : "Plan for today",
                       systemImage: task.isPlannedToday() ? "sun.max" : "sun.max.fill")
             }
+            Menu {
+                ForEach(Recurrence.allCases) { r in
+                    Button {
+                        tasks.setRecurrence(task.id, r)
+                    } label: {
+                        if task.recurrence == r { Label(r.label, systemImage: "checkmark") }
+                        else { Text(r.label) }
+                    }
+                }
+            } label: { Label("Repeat", systemImage: "repeat") }
+            if !tasks.projects.isEmpty {
+                Menu {
+                    Button("None") { tasks.setProject(task.id, nil) }
+                    Divider()
+                    ForEach(tasks.projects, id: \.self) { p in
+                        Button {
+                            tasks.setProject(task.id, p)
+                        } label: {
+                            if task.project == p { Label(p, systemImage: "checkmark") }
+                            else { Text(p) }
+                        }
+                    }
+                } label: { Label("Project", systemImage: "folder") }
+            }
             Divider()
             Button { tasks.move(task.id, up: true) } label: {
                 Label("Move up", systemImage: "arrow.up")
@@ -426,6 +585,65 @@ struct MenuBarView: View {
         .background(
             Capsule().fill(accent.opacity(0.14))
         )
+    }
+
+    /// Expanded subtasks + notes editor for a task in the popover.
+    private func subtaskPanel(_ task: TaskItem) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            ForEach(task.subtasks) { sub in
+                HStack(spacing: 8) {
+                    Button {
+                        tasks.toggleSubtask(task.id, sub.id)
+                    } label: {
+                        Image(systemName: sub.isDone ? "checkmark.circle.fill" : "circle")
+                            .font(.system(size: 13))
+                            .foregroundStyle(sub.isDone ? Color.green : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                    Text(sub.title)
+                        .font(.system(.caption, design: .rounded))
+                        .strikethrough(sub.isDone, color: .secondary)
+                        .foregroundStyle(sub.isDone ? .secondary : .primary)
+                        .lineLimit(1)
+                    Spacer()
+                    Button { tasks.deleteSubtask(task.id, sub.id) } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            // Add subtask
+            HStack(spacing: 8) {
+                Image(systemName: "plus")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.tint)
+                TextField("Add step…", text: Binding(
+                    get: { subtaskDrafts[task.id] ?? "" },
+                    set: { subtaskDrafts[task.id] = $0 }
+                ), onCommit: { commitSubtask(task.id) })
+                    .textFieldStyle(.plain)
+                    .font(.system(.caption, design: .rounded))
+                    .onSubmit { commitSubtask(task.id) }
+            }
+            if !task.notes.isEmpty {
+                Text(task.notes)
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+            }
+        }
+        .padding(.leading, 28).padding(.trailing, 10).padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.03)))
+    }
+
+    private func commitSubtask(_ taskID: UUID) {
+        let text = (subtaskDrafts[taskID] ?? "").trimmingCharacters(in: .whitespaces)
+        guard !text.isEmpty else { return }
+        tasks.addSubtask(taskID, title: text)
+        subtaskDrafts[taskID] = ""
     }
 
     /// Pomodoro progress: "🍅done/est" when estimated, else "🍅done".
