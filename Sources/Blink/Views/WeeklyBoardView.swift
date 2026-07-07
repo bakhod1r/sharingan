@@ -1,24 +1,25 @@
 import SwiftUI
 import BlinkCore
 
-/// A Trello/Todoist-style weekly planner: eight columns (a backlog + Mon–Sun),
-/// each a drop target. Drag a task card onto a day to plan it for that day, or
-/// back onto "Unscheduled" to clear its plan. Everything animates: cards spring
-/// into place, the drop target glows, and week navigation slides.
+/// A beautiful Trello/Todoist-style weekly planner: a backlog + Mon–Sun columns,
+/// each a frosted-glass drop target. Drag a task card onto a day to plan it, or
+/// back onto "Unscheduled" to clear its plan. Everything animates — cards spring
+/// into place, the target column glows, cards lift on hover, the week slides.
 struct WeeklyBoardView: View {
     @ObservedObject var timer: PomodoroTimer
     @ObservedObject private var store = TaskStore.shared
 
     /// Weeks away from the current week (0 = this week).
     @State private var weekOffset = 0
-    /// Card currently under the pointer — nudges up slightly.
+    /// Card currently under the pointer — lifts slightly.
     @State private var hoveredCard: UUID?
     /// Column currently being dragged over — highlighted.
     @State private var targetedColumn: String?
 
-    private let columnWidth: CGFloat = 196
+    private let columnWidth: CGFloat = 204
 
     private var cal: Calendar { Calendar.current }
+    private var accent: Color { timer.settings.theme.gradient.first ?? .accentColor }
 
     /// Monday that starts the visible week.
     private var weekStart: Date {
@@ -33,8 +34,13 @@ struct WeeklyBoardView: View {
         (0..<7).compactMap { cal.date(byAdding: .day, value: $0, to: weekStart) }
     }
 
+    /// Count of open tasks planned within the visible week.
+    private var plannedThisWeek: Int {
+        days.reduce(0) { $0 + store.tasksPlanned(on: $1).count }
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 20) {
             header
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 14) {
@@ -43,11 +49,12 @@ struct WeeklyBoardView: View {
                         dayColumn(day)
                     }
                 }
-                .padding(.bottom, 10)
+                .padding(.vertical, 4)
+                .padding(.horizontal, 2)
                 // Slide + fade the whole week when navigating.
                 .id(weekOffset)
                 .transition(.asymmetric(
-                    insertion: .opacity.combined(with: .offset(x: weekOffset >= 0 ? 40 : -40)),
+                    insertion: .opacity.combined(with: .offset(x: weekOffset >= 0 ? 44 : -44)),
                     removal: .opacity))
             }
         }
@@ -56,49 +63,60 @@ struct WeeklyBoardView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack(spacing: 14) {
-            Text("Week")
-                .font(.system(.largeTitle, design: .rounded).weight(.bold))
-                .foregroundStyle(.white)
+        HStack(alignment: .firstTextBaseline, spacing: 14) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Week")
+                    .font(.system(.largeTitle, design: .rounded).weight(.bold))
+                    .foregroundStyle(.white)
+                Text(plannedThisWeek == 0 ? "Nothing planned yet"
+                     : "\(plannedThisWeek) task\(plannedThisWeek == 1 ? "" : "s") planned")
+                    .font(.system(.subheadline, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.5))
+                    .contentTransition(.opacity)
+            }
 
             Spacer()
 
             if weekOffset != 0 {
                 Button {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { weekOffset = 0 }
+                    withAnimation(.spring(response: 0.42, dampingFraction: 0.85)) { weekOffset = 0 }
                 } label: {
                     Text("Today")
                         .font(.system(.callout, design: .rounded).weight(.semibold))
-                        .padding(.horizontal, 12).padding(.vertical, 6)
-                        .background(Capsule().fill(Color.white.opacity(0.1)))
+                        .padding(.horizontal, 14).padding(.vertical, 7)
+                        .background(Capsule().fill(accent.opacity(0.9)))
                         .foregroundStyle(.white)
+                        .shadow(color: accent.opacity(0.5), radius: 8, y: 3)
                 }
                 .buttonStyle(.plain)
                 .transition(.opacity.combined(with: .scale))
             }
 
-            HStack(spacing: 10) {
+            HStack(spacing: 6) {
                 navButton("chevron.left") { weekOffset -= 1 }
                 Text(rangeLabel)
-                    .font(.system(.callout, design: .rounded).weight(.medium))
-                    .foregroundStyle(.white.opacity(0.85))
-                    .frame(minWidth: 150)
+                    .font(.system(.callout, design: .rounded).weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .frame(minWidth: 152)
                     .contentTransition(.opacity)
                 navButton("chevron.right") { weekOffset += 1 }
             }
-            .padding(.horizontal, 8).padding(.vertical, 6)
-            .background(Capsule().fill(Color.white.opacity(0.06)))
+            .padding(6)
+            .background(
+                Capsule().fill(.ultraThinMaterial)
+                    .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 1))
+            )
         }
     }
 
     private func navButton(_ icon: String, _ action: @escaping () -> Void) -> some View {
         Button {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { action() }
+            withAnimation(.spring(response: 0.42, dampingFraction: 0.85)) { action() }
         } label: {
             Image(systemName: icon)
                 .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(.white)
-                .frame(width: 26, height: 26)
+                .frame(width: 28, height: 28)
                 .background(Circle().fill(Color.white.opacity(0.08)))
                 .contentShape(Circle())
         }
@@ -117,12 +135,9 @@ struct WeeklyBoardView: View {
 
     private var backlogColumn: some View {
         let items = store.unscheduledTasks
-        return column(
-            id: "unscheduled",
-            title: "Unscheduled",
-            subtitle: "\(items.count)",
-            isToday: false,
-            accent: .white.opacity(0.5),
+        return columnContainer(
+            id: "unscheduled", isToday: false, isWeekend: false,
+            header: AnyView(backlogHeader(count: items.count)),
             items: items,
             onDrop: { store.setPlannedDate($0, nil) })
     }
@@ -130,134 +145,218 @@ struct WeeklyBoardView: View {
     private func dayColumn(_ day: Date) -> some View {
         let items = store.tasksPlanned(on: day)
         let isToday = cal.isDateInToday(day)
-        return column(
-            id: dayKey(day),
-            title: weekdayName(day),
-            subtitle: dayNumber(day),
-            isToday: isToday,
-            accent: isToday ? Color.accentColor : .white.opacity(0.4),
+        return columnContainer(
+            id: dayKey(day), isToday: isToday, isWeekend: cal.isDateInWeekend(day),
+            header: AnyView(dayHeader(day, isToday: isToday, count: items.count)),
             items: items,
             onDrop: { store.setPlannedDate($0, day) })
     }
 
-    private func column(id: String, title: String, subtitle: String,
-                        isToday: Bool, accent: Color,
-                        items: [TaskItem],
-                        onDrop: @escaping (UUID) -> Void) -> some View {
-        let targeted = targetedColumn == id
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                Circle().fill(accent).frame(width: 7, height: 7)
-                Text(title)
-                    .font(.system(.subheadline, design: .rounded).weight(.bold))
-                    .foregroundStyle(isToday ? Color.accentColor : .white)
-                Spacer()
-                Text(subtitle)
-                    .font(.system(.caption, design: .rounded).weight(.medium))
-                    .foregroundStyle(.white.opacity(0.5))
-            }
+    private func backlogHeader(count: Int) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "tray.full")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.7))
+            Text("Unscheduled")
+                .font(.system(.subheadline, design: .rounded).weight(.bold))
+                .foregroundStyle(.white)
+            Spacer()
+            countBadge(count, tint: .white.opacity(0.5))
+        }
+    }
 
-            if items.isEmpty {
-                Text("Drop here")
+    private func dayHeader(_ day: Date, isToday: Bool, count: Int) -> some View {
+        HStack(spacing: 9) {
+            // Date chip — filled accent circle for today, like a calendar's "today".
+            Text(dayNumber(day))
+                .font(.system(.callout, design: .rounded).weight(.bold))
+                .foregroundStyle(isToday ? .white : .white.opacity(0.9))
+                .frame(width: 30, height: 30)
+                .background(
+                    Circle().fill(isToday
+                                  ? AnyShapeStyle(accent)
+                                  : AnyShapeStyle(Color.white.opacity(0.06)))
+                )
+                .shadow(color: isToday ? accent.opacity(0.6) : .clear, radius: 6, y: 2)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(weekdayName(day).uppercased())
+                    .font(.system(.caption2, design: .rounded).weight(.heavy))
+                    .tracking(1.1)
+                    .foregroundStyle(isToday ? accent : .white.opacity(0.75))
+                Text(isToday ? "Today" : monthName(day))
                     .font(.system(.caption2, design: .rounded))
-                    .foregroundStyle(.white.opacity(targeted ? 0.7 : 0.28))
-                    .frame(maxWidth: .infinity, minHeight: 54)
+                    .foregroundStyle(.white.opacity(0.4))
+            }
+            Spacer()
+            countBadge(count, tint: isToday ? accent : .white.opacity(0.45))
+        }
+    }
+
+    private func countBadge(_ n: Int, tint: Color) -> some View {
+        Text("\(n)")
+            .font(.system(.caption2, design: .rounded).weight(.bold))
+            .foregroundStyle(n == 0 ? .white.opacity(0.3) : tint)
+            .frame(minWidth: 20, minHeight: 20)
+            .background(Circle().fill(Color.white.opacity(n == 0 ? 0.03 : 0.08)))
+    }
+
+    private func columnContainer(id: String, isToday: Bool, isWeekend: Bool,
+                                 header: AnyView, items: [TaskItem],
+                                 onDrop: @escaping (UUID) -> Void) -> some View {
+        let targeted = targetedColumn == id
+        return VStack(alignment: .leading, spacing: 12) {
+            header
+            if items.isEmpty {
+                emptyDrop(targeted: targeted)
             } else {
-                ForEach(items) { task in
-                    card(task)
-                        .transition(.asymmetric(
-                            insertion: .scale(scale: 0.9).combined(with: .opacity),
-                            removal: .opacity))
+                VStack(spacing: 9) {
+                    ForEach(items) { task in
+                        card(task)
+                            .transition(.asymmetric(
+                                insertion: .scale(scale: 0.88).combined(with: .opacity),
+                                removal: .scale(scale: 0.9).combined(with: .opacity)))
+                    }
                 }
             }
             Spacer(minLength: 0)
         }
-        .padding(10)
+        .padding(12)
         .frame(width: columnWidth, alignment: .top)
-        .frame(minHeight: 420, alignment: .top)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.white.opacity(targeted ? 0.12 : (isToday ? 0.06 : 0.03)))
-        )
+        .frame(minHeight: 440, alignment: .top)
+        .background(columnBackground(isToday: isToday, isWeekend: isWeekend, targeted: targeted))
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(targeted ? Color.accentColor.opacity(0.7)
-                        : (isToday ? Color.accentColor.opacity(0.35) : Color.white.opacity(0.06)),
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(targeted ? accent.opacity(0.8)
+                        : (isToday ? accent.opacity(0.4) : Color.white.opacity(0.08)),
                         lineWidth: targeted ? 2 : 1)
         )
-        .scaleEffect(targeted ? 1.02 : 1)
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: targeted)
+        .shadow(color: .black.opacity(0.28), radius: 16, y: 8)
+        .scaleEffect(targeted ? 1.015 : 1)
+        .animation(.spring(response: 0.32, dampingFraction: 0.7), value: targeted)
         .dropDestination(for: String.self) { dropped, _ in
             guard let s = dropped.first, let id = UUID(uuidString: s) else { return false }
-            withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) {
-                onDrop(id)
-            }
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) { onDrop(id) }
             return true
         } isTargeted: { hovering in
             targetedColumn = hovering ? id : (targetedColumn == id ? nil : targetedColumn)
         }
     }
 
+    private func columnBackground(isToday: Bool, isWeekend: Bool, targeted: Bool) -> some View {
+        RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .fill(.ultraThinMaterial)
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(LinearGradient(
+                        colors: targeted ? [accent.opacity(0.22), accent.opacity(0.05)]
+                            : isToday ? [accent.opacity(0.16), accent.opacity(0.02)]
+                            : isWeekend ? [Color.white.opacity(0.02), .clear]
+                            : [Color.white.opacity(0.05), .clear],
+                        startPoint: .top, endPoint: .bottom))
+            )
+            .overlay( // top glass highlight
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(LinearGradient(colors: [.white.opacity(0.25), .clear],
+                                           startPoint: .top, endPoint: .center),
+                            lineWidth: 1)
+                    .blendMode(.overlay)
+            )
+    }
+
+    private func emptyDrop(targeted: Bool) -> some View {
+        RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+            .foregroundStyle(targeted ? accent.opacity(0.8) : Color.white.opacity(0.14))
+            .frame(maxWidth: .infinity, minHeight: 60)
+            .overlay(
+                Text(targeted ? "Release to plan" : "Drop here")
+                    .font(.system(.caption2, design: .rounded).weight(.medium))
+                    .foregroundStyle(targeted ? accent : .white.opacity(0.3))
+            )
+            .animation(.easeInOut(duration: 0.2), value: targeted)
+    }
+
     // MARK: - Card
 
     private func card(_ task: TaskItem) -> some View {
-        let accent = Color(hex: store.color(for: task.category))
+        let color = Color(hex: store.color(for: task.category))
         let hovered = hoveredCard == task.id
-        return VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .top, spacing: 6) {
-                Circle().fill(accent).frame(width: 7, height: 7).padding(.top, 4)
+        return HStack(spacing: 0) {
+            // Left category accent bar.
+            RoundedRectangle(cornerRadius: 2)
+                .fill(color)
+                .frame(width: 3)
+                .padding(.vertical, 2)
+            VStack(alignment: .leading, spacing: 6) {
                 Text(task.title)
                     .font(.system(.callout, design: .rounded).weight(.medium))
                     .foregroundStyle(.white)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
+
+                let hasMeta = task.dueDate != nil || task.subtaskProgress.total > 0
+                    || task.pomodorosDone > 0 || task.estimatedPomodoros != nil
+                    || !task.tags.isEmpty
+                if hasMeta {
+                    HStack(spacing: 7) {
+                        if let due = task.dueDate {
+                            Label(shortDue(due), systemImage: "calendar")
+                                .labelStyle(.titleAndIcon)
+                                .font(.system(size: 9, weight: .semibold, design: .rounded))
+                                .foregroundStyle(task.isOverdue() ? Color.red : .white.opacity(0.55))
+                        }
+                        if let tag = task.tags.first {
+                            Text("#\(tag)")
+                                .font(.system(size: 9, weight: .semibold, design: .rounded))
+                                .foregroundStyle(color)
+                        }
+                        if task.subtaskProgress.total > 0 {
+                            Text("☑\(task.subtaskProgress.done)/\(task.subtaskProgress.total)")
+                                .font(.system(size: 9, design: .rounded))
+                                .foregroundStyle(task.subtaskProgress.done == task.subtaskProgress.total
+                                                 ? Color.green : .white.opacity(0.55))
+                        }
+                        Spacer(minLength: 0)
+                        if task.pomodorosDone > 0 || task.estimatedPomodoros != nil {
+                            Text(task.estimatedPomodoros.map { "🍅\(task.pomodorosDone)/\($0)" }
+                                 ?? "🍅\(task.pomodorosDone)")
+                                .font(.system(size: 9, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.6))
+                        }
+                    }
+                }
             }
-            HStack(spacing: 8) {
-                if let due = task.dueDate {
-                    Label(shortDue(due), systemImage: "calendar")
-                        .font(.system(size: 9, weight: .semibold, design: .rounded))
-                        .foregroundStyle(task.isOverdue() ? Color.red : .white.opacity(0.55))
-                }
-                if task.subtaskProgress.total > 0 {
-                    Text("☑\(task.subtaskProgress.done)/\(task.subtaskProgress.total)")
-                        .font(.system(size: 9, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.55))
-                }
-                Spacer()
-                if task.pomodorosDone > 0 || task.estimatedPomodoros != nil {
-                    Text(task.estimatedPomodoros.map { "🍅\(task.pomodorosDone)/\($0)" }
-                         ?? "🍅\(task.pomodorosDone)")
-                        .font(.system(size: 9, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.6))
-                }
-            }
+            .padding(.leading, 9).padding(.trailing, 9).padding(.vertical, 9)
         }
-        .padding(9)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .fill(Color.white.opacity(hovered ? 0.12 : 0.07))
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(LinearGradient(
+                    colors: [Color.white.opacity(hovered ? 0.15 : 0.09),
+                             Color.white.opacity(hovered ? 0.08 : 0.04)],
+                    startPoint: .top, endPoint: .bottom))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .stroke(accent.opacity(hovered ? 0.5 : 0.18), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(color.opacity(hovered ? 0.55 : 0.2), lineWidth: 1)
         )
-        .scaleEffect(hovered ? 1.03 : 1)
-        .shadow(color: .black.opacity(hovered ? 0.25 : 0), radius: 6, y: 3)
+        .scaleEffect(hovered ? 1.035 : 1)
+        .shadow(color: .black.opacity(hovered ? 0.3 : 0.12), radius: hovered ? 9 : 4, y: hovered ? 5 : 2)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: hovered)
         .onHover { inside in
             hoveredCard = inside ? task.id : (hoveredCard == task.id ? nil : hoveredCard)
         }
         .draggable(task.id.uuidString) {
-            // Drag preview.
             Text(task.title)
                 .font(.system(.callout, design: .rounded).weight(.semibold))
                 .foregroundStyle(.white)
-                .padding(8)
-                .background(RoundedRectangle(cornerRadius: 8).fill(accent.opacity(0.9)))
+                .lineLimit(1)
+                .padding(.horizontal, 12).padding(.vertical, 8)
+                .background(RoundedRectangle(cornerRadius: 10).fill(color.opacity(0.95)))
+                .shadow(color: .black.opacity(0.4), radius: 10, y: 4)
         }
         .contextMenu {
-            Button { store.setActive(task.id); startFocus(task) } label: {
+            Button { startFocus(task) } label: {
                 Label("Start focus", systemImage: "play.fill")
             }
             Button { store.setPlannedDate(task.id, nil) } label: {
@@ -278,21 +377,17 @@ struct WeeklyBoardView: View {
         timer.start()
     }
 
-    private func weekdayName(_ d: Date) -> String {
-        let f = DateFormatter(); f.locale = Locale(identifier: "en_US"); f.dateFormat = "EEE"
-        return f.string(from: d)
-    }
-    private func dayNumber(_ d: Date) -> String {
-        let f = DateFormatter(); f.locale = Locale(identifier: "en_US"); f.dateFormat = "d"
-        return f.string(from: d)
-    }
+    private func weekdayName(_ d: Date) -> String { fmt("EEE", d) }
+    private func monthName(_ d: Date) -> String { fmt("MMM", d) }
+    private func dayNumber(_ d: Date) -> String { fmt("d", d) }
     private func dayKey(_ d: Date) -> String {
-        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: d)
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; return f.string(from: d)
     }
     private func shortDue(_ d: Date) -> String {
+        Calendar.current.isDateInToday(d) ? "today" : fmt("MMM d", d)
+    }
+    private func fmt(_ pattern: String, _ d: Date) -> String {
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US")
-        f.dateFormat = Calendar.current.isDateInToday(d) ? "'today'" : "MMM d"
-        return f.string(from: d)
+        f.dateFormat = pattern; return f.string(from: d)
     }
 }
