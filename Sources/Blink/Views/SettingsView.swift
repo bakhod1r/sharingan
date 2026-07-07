@@ -684,7 +684,8 @@ struct SettingsView: View {
             }
             Text("Click a combo, then press the new keys (needs at least one modifier). Esc cancels.")
                 .font(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.white.opacity(0.55))
+                .fixedSize(horizontal: false, vertical: true)
         }
         .glassRounded(18, material: .thin)
         .padding(14)

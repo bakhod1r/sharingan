@@ -22,6 +22,10 @@ struct TasksView: View {
     /// Tasks whose subtasks/notes panel is expanded.
     @State private var expanded: Set<UUID> = []
     @State private var subtaskDrafts: [UUID: String] = [:]
+    /// Inline title editing (double-click a row or the context-menu "Edit").
+    @State private var editingTaskID: UUID?
+    @State private var editingText = ""
+    @FocusState private var editFocused: Bool
 
     // Inline "add category" form state.
     @State private var showNewCategory = false
@@ -326,11 +330,23 @@ struct TasksView: View {
             .buttonStyle(.plain)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(task.title)
-                    .font(.system(.callout, design: .rounded).weight(.medium))
-                    .strikethrough(task.isDone, color: .secondary)
-                    .foregroundStyle(task.isDone ? .secondary : .primary)
-                    .lineLimit(1)
+                if editingTaskID == task.id {
+                    TextField("Task name", text: $editingText)
+                        .textFieldStyle(.plain)
+                        .font(.system(.callout, design: .rounded).weight(.medium))
+                        .focused($editFocused)
+                        .onSubmit { commitEdit(task) }
+                        .onExitCommand { editingTaskID = nil }
+                        .onAppear { editFocused = true }
+                } else {
+                    Text(task.title)
+                        .font(.system(.callout, design: .rounded).weight(.medium))
+                        .strikethrough(task.isDone, color: .secondary)
+                        .foregroundStyle(task.isDone ? .secondary : .primary)
+                        .lineLimit(1)
+                        // Double-click to rename, like Finder / Todoist.
+                        .onTapGesture(count: 2) { beginEdit(task) }
+                }
                 let hasMeta = !task.tags.isEmpty || task.dueDate != nil
                     || task.recurrence != .none || task.project != nil
                     || task.subtaskProgress.total > 0
@@ -420,6 +436,10 @@ struct TasksView: View {
                 .fill(isActive ? Color.accentColor.opacity(0.12) : Color.white.opacity(0.04))
         )
         .contextMenu {
+            Button { beginEdit(task) } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+            Divider()
             Menu {
                 Button("No estimate") { store.setEstimate(task.id, nil) }
                 Divider()
@@ -454,6 +474,21 @@ struct TasksView: View {
     }
 
     // MARK: - Actions
+
+    private func beginEdit(_ task: TaskItem) {
+        editingText = task.title
+        editingTaskID = task.id
+    }
+
+    /// Persist an inline title edit. Ignores empty or unchanged input.
+    private func commitEdit(_ task: TaskItem) {
+        defer { editingTaskID = nil }
+        let trimmed = editingText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != task.title else { return }
+        var updated = task
+        updated.title = trimmed
+        store.update(updated)
+    }
 
     private func add() {
         let tags = newTags
