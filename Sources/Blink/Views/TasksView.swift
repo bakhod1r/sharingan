@@ -508,16 +508,14 @@ struct TasksView: View {
     private func section(_ category: String, _ items: [TaskItem]) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                Circle().fill(Color(hex: store.color(for: category)))
-                    .frame(width: 8, height: 8)
-                Text(category.uppercased())
-                    .font(.system(.caption2, design: .rounded).weight(.heavy))
-                    .tracking(1.2)
-                    .foregroundStyle(.secondary)
+                Image(systemName: store.icon(for: category))
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Color(hex: store.color(for: category)))
+                Text(category).dsSectionLabel()
                 Spacer()
                 Text("\(items.filter { !$0.isDone }.count)")
-                    .font(.system(.caption2, design: .rounded))
-                    .foregroundStyle(.secondary)
+                    .font(.system(.caption2, design: .rounded).weight(.semibold))
+                    .foregroundStyle(Color.dsTertiary)
             }
             ForEach(items) { task in
                 VStack(spacing: 4) {
@@ -625,14 +623,14 @@ struct TasksView: View {
                     HStack(spacing: 6) {
                         ForEach(task.tags, id: \.self) { tag in
                             Text("#\(tag)")
-                                .font(.system(size: 9, weight: .semibold, design: .rounded))
+                                .font(.system(size: 10, weight: .semibold, design: .rounded))
                                 .padding(.horizontal, 6).padding(.vertical, 2)
                                 .background(accent.opacity(0.22), in: Capsule())
                                 .foregroundStyle(accent)
                         }
                         if let project = task.project {
                             Label(project, systemImage: "folder.fill")
-                                .font(.system(size: 9, weight: .semibold, design: .rounded))
+                                .font(.system(size: 10, weight: .semibold, design: .rounded))
                                 .foregroundStyle(.secondary)
                         }
                         if task.recurrence != .none {
@@ -643,13 +641,13 @@ struct TasksView: View {
                         }
                         if task.subtaskProgress.total > 0 {
                             Text("☑\(task.subtaskProgress.done)/\(task.subtaskProgress.total)")
-                                .font(.system(size: 9, weight: .semibold, design: .rounded))
+                                .font(.system(size: 10, weight: .semibold, design: .rounded))
                                 .foregroundStyle(task.subtaskProgress.done == task.subtaskProgress.total
                                                  ? Color.green : .secondary)
                         }
                         if let due = task.dueDate {
                             Label(dueText(due), systemImage: "calendar")
-                                .font(.system(size: 9, weight: .semibold, design: .rounded))
+                                .font(.system(size: 10, weight: .semibold, design: .rounded))
                                 .foregroundStyle(task.isOverdue() ? Color.red : .secondary)
                         }
                     }
@@ -700,6 +698,7 @@ struct TasksView: View {
             }
             .buttonStyle(.plain)
             .opacity(hoveredTask == task.id ? 1 : 0)
+            .animation(.easeInOut(duration: 0.15), value: hoveredTask)
             .help("Delete task")
 
             Button {
@@ -715,9 +714,11 @@ struct TasksView: View {
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(isActive ? Color.accentColor.opacity(0.12) : Color.white.opacity(0.04))
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .fill(isActive ? Color.accentColor.opacity(0.14)
+                      : (hoveredTask == task.id ? Color.dsFillStrong : Color.dsFill))
         )
+        .animation(.easeInOut(duration: 0.15), value: hoveredTask)
         .onHover { inside in
             if inside { hoveredTask = task.id }
             else if hoveredTask == task.id { hoveredTask = nil }

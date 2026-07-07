@@ -51,6 +51,8 @@ struct MenuBarView: View {
         .onAppear { heartbeat = true }
         .padding(18)
         .frame(width: 360)
+        // One app accent: controls follow the chosen theme, not system blue.
+        .tint(timer.settings.theme.gradient.first ?? .accentColor)
     }
 
     // MARK: - Tabs
@@ -446,7 +448,7 @@ struct MenuBarView: View {
                 // Due date chip (red when overdue).
                 if let due = task.dueDate {
                     Label(dueChipText(due), systemImage: "calendar")
-                        .font(.system(size: 9, weight: .semibold, design: .rounded))
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
                         .foregroundStyle(task.isOverdue() ? Color.red : .secondary)
                         .labelStyle(.titleAndIcon)
                 }
@@ -500,6 +502,7 @@ struct MenuBarView: View {
             }
             .buttonStyle(.plain)
             .opacity(hoveredTask == task.id ? 1 : 0)
+            .animation(.easeInOut(duration: 0.15), value: hoveredTask)
             .help("Delete task")
 
             Button {
@@ -515,13 +518,15 @@ struct MenuBarView: View {
         }
         .padding(.horizontal, 10).padding(.vertical, 7)
         .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(isActive ? accent.opacity(0.16) : Color.white.opacity(0.04))
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .fill(isActive ? accent.opacity(0.16)
+                      : (hoveredTask == task.id ? Color.dsFillStrong : Color.dsFill))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                 .stroke(isActive ? accent.opacity(0.5) : .clear, lineWidth: 1)
         )
+        .animation(.easeInOut(duration: 0.15), value: hoveredTask)
         .onHover { inside in
             if inside { hoveredTask = task.id }
             else if hoveredTask == task.id { hoveredTask = nil }

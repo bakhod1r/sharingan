@@ -80,15 +80,23 @@ struct SettingsView: View {
         .frame(maxWidth: 600)
     }
 
+    /// The real app icon (same asset the main-window sidebar uses), so the app
+    /// presents one brand mark instead of an eye glyph here and the icon there.
+    private var appIcon: Image {
+        if let url = Bundle.module.url(forResource: "AppIcon", withExtension: "png"),
+           let ns = NSImage(contentsOf: url) {
+            return Image(nsImage: ns)
+        }
+        return Image(systemName: "eye.fill")
+    }
+
     private var rootHeader: some View {
         VStack(spacing: 10) {
-            Image(systemName: "eye.fill")
-                .font(.system(size: 26, weight: .semibold))
-                .foregroundStyle(.white)
+            appIcon
+                .resizable()
                 .frame(width: 62, height: 62)
-                .background(RoundedRectangle(cornerRadius: 15, style: .continuous)
-                    .fill(LinearGradient(colors: timer.settings.theme.gradient,
-                                         startPoint: .topLeading, endPoint: .bottomTrailing)))
+                .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+                .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
             Text("Settings")
                 .font(.system(.largeTitle, design: .rounded).weight(.bold))
                 .foregroundStyle(.white)

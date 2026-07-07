@@ -34,6 +34,9 @@ struct MainWindowView: View {
             .animation(.easeInOut(duration: 0.24), value: section)
         }
         .frame(minWidth: 920, minHeight: 620)
+        // One app accent: controls (pickers, toggles, sliders, menus) follow the
+        // chosen theme instead of the stock system blue.
+        .tint(timer.settings.theme.gradient.first ?? .accentColor)
     }
 
     // MARK: - Sidebar (custom glass panel, CleanMyMac-style)

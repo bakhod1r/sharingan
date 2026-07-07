@@ -15,6 +15,8 @@ struct WeeklyBoardView: View {
     @State private var hoveredCard: UUID?
     /// Column currently being dragged over — highlighted.
     @State private var targetedColumn: String?
+    /// Draft for the quick-add field in the Unscheduled column.
+    @State private var backlogDraft = ""
 
     private let columnWidth: CGFloat = 204
 
@@ -39,9 +41,21 @@ struct WeeklyBoardView: View {
         days.reduce(0) { $0 + store.tasksPlanned(on: $1).count }
     }
 
+    private var hasAnyOpenTask: Bool { store.tasks.contains { !$0.isDone } }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             header
+            if !hasAnyOpenTask {
+                Label("Add a task in the Unscheduled column, then drag it onto a day to plan your week.",
+                      systemImage: "hand.draw")
+                    .font(.system(.subheadline, design: .rounded))
+                    .foregroundStyle(Color.dsSecondary)
+                    .padding(.horizontal, 14).padding(.vertical, 10)
+                    .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                        .fill(Color.dsFill))
+                    .transition(.opacity)
+            }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 14) {
                     backlogColumn
@@ -153,16 +167,39 @@ struct WeeklyBoardView: View {
     }
 
     private func backlogHeader(count: Int) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: "tray.full")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.7))
-            Text("Unscheduled")
-                .font(.system(.subheadline, design: .rounded).weight(.bold))
-                .foregroundStyle(.white)
-            Spacer()
-            countBadge(count, tint: .white.opacity(0.5))
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "tray.full")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.dsSecondary)
+                Text("Unscheduled")
+                    .font(.system(.subheadline, design: .rounded).weight(.bold))
+                    .foregroundStyle(.white)
+                Spacer()
+                countBadge(count, tint: Color.dsSecondary)
+            }
+            // Quick-add straight into the backlog — no need to leave the board.
+            HStack(spacing: 6) {
+                Image(systemName: "plus")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(accent)
+                TextField("Add task", text: $backlogDraft)
+                    .textFieldStyle(.plain)
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(.white)
+                    .onSubmit(addBacklog)
+            }
+            .padding(.horizontal, 8).padding(.vertical, 6)
+            .background(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
+                .fill(Color.dsFill))
         }
+    }
+
+    private func addBacklog() {
+        let t = backlogDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return }
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { store.add(title: t) }
+        backlogDraft = ""
     }
 
     private func dayHeader(_ day: Date, isToday: Bool, count: Int) -> some View {
@@ -263,17 +300,24 @@ struct WeeklyBoardView: View {
             )
     }
 
+    /// Empty column: a quiet blank normally, a lit dashed prompt only when a card
+    /// is being dragged over it — so an empty week isn't a wall of "Drop here".
     private func emptyDrop(targeted: Bool) -> some View {
-        RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
-            .foregroundStyle(targeted ? accent.opacity(0.8) : Color.white.opacity(0.14))
-            .frame(maxWidth: .infinity, minHeight: 60)
-            .overlay(
-                Text(targeted ? "Release to plan" : "Drop here")
-                    .font(.system(.caption2, design: .rounded).weight(.medium))
-                    .foregroundStyle(targeted ? accent : .white.opacity(0.3))
-            )
-            .animation(.easeInOut(duration: 0.2), value: targeted)
+        Group {
+            if targeted {
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .strokeBorder(accent.opacity(0.8),
+                                  style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+                    .overlay(
+                        Text("Release to plan")
+                            .font(.system(.caption2, design: .rounded).weight(.semibold))
+                            .foregroundStyle(accent))
+            } else {
+                Color.clear
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 60)
+        .animation(.easeInOut(duration: 0.2), value: targeted)
     }
 
     // MARK: - Card
@@ -302,17 +346,17 @@ struct WeeklyBoardView: View {
                         if let due = task.dueDate {
                             Label(shortDue(due), systemImage: "calendar")
                                 .labelStyle(.titleAndIcon)
-                                .font(.system(size: 9, weight: .semibold, design: .rounded))
+                                .font(.system(size: 10, weight: .semibold, design: .rounded))
                                 .foregroundStyle(task.isOverdue() ? Color.red : .white.opacity(0.55))
                         }
                         if let tag = task.tags.first {
                             Text("#\(tag)")
-                                .font(.system(size: 9, weight: .semibold, design: .rounded))
+                                .font(.system(size: 10, weight: .semibold, design: .rounded))
                                 .foregroundStyle(color)
                         }
                         if task.subtaskProgress.total > 0 {
                             Text("☑\(task.subtaskProgress.done)/\(task.subtaskProgress.total)")
-                                .font(.system(size: 9, design: .rounded))
+                                .font(.system(size: 10, design: .rounded))
                                 .foregroundStyle(task.subtaskProgress.done == task.subtaskProgress.total
                                                  ? Color.green : .white.opacity(0.55))
                         }
@@ -320,7 +364,7 @@ struct WeeklyBoardView: View {
                         if task.pomodorosDone > 0 || task.estimatedPomodoros != nil {
                             Text(task.estimatedPomodoros.map { "🍅\(task.pomodorosDone)/\($0)" }
                                  ?? "🍅\(task.pomodorosDone)")
-                                .font(.system(size: 9, design: .rounded))
+                                .font(.system(size: 10, design: .rounded))
                                 .foregroundStyle(.white.opacity(0.6))
                         }
                     }
