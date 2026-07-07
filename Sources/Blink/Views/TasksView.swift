@@ -26,6 +26,8 @@ struct TasksView: View {
     @State private var editingTaskID: UUID?
     @State private var editingText = ""
     @FocusState private var editFocused: Bool
+    /// Row the pointer is over — reveals its delete button.
+    @State private var hoveredTask: UUID?
 
     // Inline "add category" form state.
     @State private var showNewCategory = false
@@ -336,7 +338,7 @@ struct TasksView: View {
                         .font(.system(.callout, design: .rounded).weight(.medium))
                         .focused($editFocused)
                         .onSubmit { commitEdit(task) }
-                        .onExitCommand { editingTaskID = nil }
+                        .onExitCommand { editingTaskID = nil; editFocused = false }
                         .onAppear { editFocused = true }
                 } else {
                     Text(task.title)
@@ -419,6 +421,18 @@ struct TasksView: View {
                     .foregroundStyle(.secondary)
             }
 
+            // Delete — revealed on hover so the row stays uncluttered.
+            Button { store.delete(task.id) } label: {
+                Image(systemName: "trash")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .opacity(hoveredTask == task.id ? 1 : 0)
+            .help("Delete task")
+
             Button {
                 startFocus(on: task)
             } label: {
@@ -435,6 +449,10 @@ struct TasksView: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(isActive ? Color.accentColor.opacity(0.12) : Color.white.opacity(0.04))
         )
+        .onHover { inside in
+            if inside { hoveredTask = task.id }
+            else if hoveredTask == task.id { hoveredTask = nil }
+        }
         .contextMenu {
             Button { beginEdit(task) } label: {
                 Label("Edit", systemImage: "pencil")
@@ -482,7 +500,7 @@ struct TasksView: View {
 
     /// Persist an inline title edit. Ignores empty or unchanged input.
     private func commitEdit(_ task: TaskItem) {
-        defer { editingTaskID = nil }
+        defer { editingTaskID = nil; editFocused = false }
         let trimmed = editingText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed != task.title else { return }
         var updated = task

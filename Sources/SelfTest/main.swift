@@ -148,6 +148,17 @@ testBrightnessSettings()
             check(false, "overdue recurring task should spawn an occurrence with a due date")
         }
 
+        // A recurring task with NO due date spawns a copy that is also due-less,
+        // so no surprise deadline reminder is scheduled.
+        let storeND = TaskStore(fileURL: dir.appendingPathComponent("tnd.json"))
+        storeND.add(title: "nodue", recurrence: .daily)
+        let nd0 = storeND.tasks[0]
+        check(nd0.dueDate == nil, "recurring task added without a due date")
+        storeND.toggleDone(nd0.id)
+        let ndNext = storeND.tasks.first { !$0.isDone && $0.title == "nodue" }
+        check(ndNext != nil, "due-less recurring task still spawns next occurrence")
+        check(ndNext?.dueDate == nil, "due-less recurring occurrence stays due-less")
+
         // A non-recurring completion does NOT spawn a copy.
         let store2 = TaskStore(fileURL: dir.appendingPathComponent("t2.json"))
         store2.add(title: "solo")

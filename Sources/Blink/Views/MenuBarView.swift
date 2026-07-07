@@ -21,6 +21,8 @@ struct MenuBarView: View {
     @State private var expandedTasks: Set<UUID> = []
     @State private var subtaskDrafts: [UUID: String] = [:]
     @State private var showCompleted = false
+    /// Row the pointer is over — reveals its delete button.
+    @State private var hoveredTask: UUID?
 
     private enum Tab: Hashable { case timer, tasks, stats }
 
@@ -143,6 +145,18 @@ struct MenuBarView: View {
     /// All open tasks (ignoring search/today filters) — used to decide whether to
     /// show the filter controls.
     private var allOpenCount: Int { tasks.tasks.filter { !$0.isDone }.count }
+
+    /// All open tasks, active-on-top then manual order, IGNORING the search /
+    /// Today filters — used by Start so a filter that hides every row doesn't
+    /// disable a perfectly startable timer or change which task Start launches.
+    private var allOpenTasks: [TaskItem] {
+        tasks.tasks.filter { !$0.isDone }.sorted { a, b in
+            if (tasks.activeTaskID == a.id) != (tasks.activeTaskID == b.id) {
+                return tasks.activeTaskID == a.id
+            }
+            return TaskStore.inListOrder(a, b)
+        }
+    }
 
     /// Open (unfinished) tasks after search + today filters, the active one on top,
     /// then manual order.
@@ -406,7 +420,7 @@ struct MenuBarView: View {
                     .font(.system(.callout, design: .rounded).weight(.medium))
                     .focused($editFieldFocused)
                     .onSubmit { commitEdit(task) }
-                    .onExitCommand { editingTaskID = nil }
+                    .onExitCommand { editingTaskID = nil; editFieldFocused = false }
                     .onAppear { editFieldFocused = true }
                 Spacer(minLength: 6)
             } else {
@@ -475,6 +489,18 @@ struct MenuBarView: View {
             }
             .buttonStyle(.plain)
 
+            // Delete — revealed on hover so the dense row stays uncluttered.
+            Button { tasks.delete(task.id) } label: {
+                Image(systemName: "trash")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 20, height: 20)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .opacity(hoveredTask == task.id ? 1 : 0)
+            .help("Delete task")
+
             Button {
                 startFocus(on: task)
             } label: {
@@ -495,12 +521,13 @@ struct MenuBarView: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(isActive ? accent.opacity(0.5) : .clear, lineWidth: 1)
         )
+        .onHover { inside in
+            if inside { hoveredTask = task.id }
+            else if hoveredTask == task.id { hoveredTask = nil }
+        }
         .contextMenu {
             Button {
-                // Prefill with title + existing #tags so the rename round-trips
-                // (what you see is what gets saved, and tags can be edited/cleared).
-                let tagText = task.tags.map { "#\($0)" }.joined(separator: " ")
-                editingText = ([task.title, tagText].filter { !$0.isEmpty }).joined(separator: " ")
+                editingText = task.title
                 editingTaskID = task.id
             } label: {
                 Label("Edit", systemImage: "pencil")
@@ -700,29 +727,15 @@ struct MenuBarView: View {
 
     /// Adds a task, pulling any `#tag` tokens out of the typed text into the
     /// task's tags (category stays the default — a tag is not a category).
-    /// Saves an inline rename (re-parsing `#tags` from the edited text) and exits
-    /// edit mode. Empty text cancels without changing the task.
+    /// Saves an inline rename and exits edit mode. Title-only, matching the
+    /// main window — re-parsing `#tokens` here corrupted any legitimate title
+    /// containing a `#` (e.g. "Buy #2 pencils" lost "#2" on a no-op edit).
     private func commitEdit(_ task: TaskItem) {
-        defer { editingTaskID = nil }
-        let raw = editingText.trimmingCharacters(in: .whitespaces)
-        guard !raw.isEmpty else { return }
-        var tagList: [String] = []
-        var titleWords: [String] = []
-        for word in raw.split(separator: " ") {
-            if word.hasPrefix("#"), word.count > 1 {
-                tagList.append(String(word.dropFirst()))
-            } else {
-                titleWords.append(String(word))
-            }
-        }
-        let title = titleWords.joined(separator: " ")
-        guard !title.isEmpty else { return }
+        defer { editingTaskID = nil; editFieldFocused = false }
+        let title = editingText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty, title != task.title else { return }
         var updated = task
         updated.title = title
-        // Tags always reflect the edited text: adding #tags sets them, removing
-        // all hashtags clears them (prefill includes existing tags so nothing is
-        // lost accidentally).
-        updated.tags = tagList
         tasks.update(updated)
     }
 
@@ -871,7 +884,7 @@ struct MenuBarView: View {
     /// is active, and there are no open tasks to fall back to.
     private var startBlocked: Bool {
         !timer.isRunning && tasks.activeTask == nil
-            && openTasks.isEmpty && timer.settings.requireTaskForFocus
+            && allOpenTasks.isEmpty && timer.settings.requireTaskForFocus
     }
 
     /// Start requires a task: toggle the running timer if one is active,
@@ -879,7 +892,7 @@ struct MenuBarView: View {
     private func startTapped() {
         if timer.isRunning || tasks.activeTask != nil {
             timer.toggle()
-        } else if let first = openTasks.first {
+        } else if let first = allOpenTasks.first {
             startFocus(on: first)
         } else if !timer.settings.requireTaskForFocus {
             timer.toggle()
