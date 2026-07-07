@@ -26,6 +26,11 @@ struct MenuBarView: View {
 
     private enum Tab: Hashable { case timer, tasks, stats }
 
+    /// Constant height for the switchable tab area so the popover keeps one size
+    /// across Timer / Tasks / Stats. Sized to the timer tab (the tallest common
+    /// layout); taller content scrolls within.
+    private let tabContentHeight: CGFloat = 494
+
     var body: some View {
         VStack(spacing: 14) {
             Picker("", selection: $tab) {
@@ -36,13 +41,20 @@ struct MenuBarView: View {
             .pickerStyle(.segmented)
             .labelsHidden()
 
-            Group {
-                switch tab {
-                case .timer: timerTab
-                case .tasks: TasksView(timer: timer)
-                case .stats: statsTab
+            // Fixed-height content area so switching tabs never resizes the
+            // popover. Each tab is top-aligned and scrolls internally if its
+            // content is taller than the area.
+            ScrollView(.vertical, showsIndicators: false) {
+                Group {
+                    switch tab {
+                    case .timer: timerTab
+                    case .tasks: TasksView(timer: timer)
+                    case .stats: statsTab
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .top)
             }
+            .frame(height: tabContentHeight)
 
             Divider().overlay(Color.white.opacity(0.15))
             footer

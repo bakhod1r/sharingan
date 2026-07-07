@@ -33,6 +33,10 @@ struct TasksView: View {
     @State private var showNewCategory = false
     @State private var newCatName = ""
     @State private var newCatColor = TaskCategory.palette[0]
+    /// Advanced add-fields (category/tags/estimate/repeat/project/notes/due) are
+    /// hidden behind a disclosure so the default composer is a single clean input.
+    @State private var showDetails = false
+    @FocusState private var composerFocused: Bool
 
     private var newCategoryAccent: Color { Color(hex: store.color(for: newCategory)) }
 
@@ -65,56 +69,96 @@ struct TasksView: View {
     // MARK: - Composer
 
     private var composer: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 8) {
-                TextField("New task…", text: $newTitle, onCommit: add)
-                    .textFieldStyle(.plain)
-                    .font(.system(.body, design: .rounded))
+        VStack(spacing: 0) {
+            // Primary row — a clean, prominent single input. This is the whole
+            // composer by default; everything else lives behind "options".
+            HStack(spacing: 10) {
                 Button(action: add) {
                     Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 20))
+                        .font(.system(size: 22))
                         .foregroundStyle(.tint)
                 }
                 .buttonStyle(.plain)
                 .disabled(newTitle.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-            HStack(spacing: 8) {
-                Menu {
-                    ForEach(store.allCategories) { c in
-                        Button(c.name) { newCategory = c.name }
-                    }
-                    Divider()
-                    Button {
-                        newCatName = ""
-                        showNewCategory = true
-                    } label: {
-                        Label("Add category…", systemImage: "plus")
-                    }
-                } label: {
-                    HStack(spacing: 6) {
-                        Circle().fill(newCategoryAccent)
-                            .frame(width: 9, height: 9)
-                        Text(newCategory)
-                            .font(.system(.caption, design: .rounded).weight(.medium))
-                    }
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
 
-                TextField("tags, comma, separated", text: $newTags)
+                TextField("Add a task…", text: $newTitle, onCommit: add)
                     .textFieldStyle(.plain)
-                    .font(.system(.caption, design: .rounded))
-                    .foregroundStyle(.secondary)
+                    .font(.system(.body, design: .rounded))
+                    .focused($composerFocused)
+
+                // A compact category chip stays visible so the default bucket is
+                // always clear and changeable in one click.
+                categoryMenu
+
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { showDetails.toggle() }
+                } label: {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(showDetails ? Color.accentColor : .secondary)
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(Color.white.opacity(showDetails ? 0.14 : 0.05)))
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .help("More options")
             }
+            .padding(12)
 
-            if showNewCategory { newCategoryForm }
+            if showDetails {
+                detailsPanel
+                    .transition(.asymmetric(
+                        insertion: .push(from: .top).combined(with: .opacity),
+                        removal: .opacity))
+            }
+        }
+        .glassRounded(16, material: .thin)
+    }
 
-            // Estimate · repeat · project
+    /// The category picker chip, reused in the primary row.
+    private var categoryMenu: some View {
+        Menu {
+            ForEach(store.allCategories) { c in
+                Button {
+                    newCategory = c.name
+                } label: {
+                    Label(c.name, systemImage: newCategory == c.name ? "checkmark" : c.icon)
+                }
+            }
+            Divider()
+            Button {
+                newCatName = ""
+                withAnimation { showDetails = true; showNewCategory = true }
+            } label: {
+                Label("Add category…", systemImage: "plus")
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Circle().fill(newCategoryAccent).frame(width: 9, height: 9)
+                Text(newCategory)
+                    .font(.system(.caption, design: .rounded).weight(.semibold))
+                Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold))
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 10).padding(.vertical, 6)
+            .background(Capsule().fill(newCategoryAccent.opacity(0.22)))
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+    }
+
+    /// Expanded add-fields: tags, estimate, repeat, project, notes, due date.
+    private var detailsPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Divider().overlay(Color.white.opacity(0.1))
+
+            // Estimate + repeat + due, on one tidy row of chips.
             HStack(spacing: 10) {
                 Stepper(value: $newEstimate, in: 0...12) {
-                    Text(newEstimate == 0 ? "Est: —" : "Est: \(newEstimate) 🍅")
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(.secondary)
+                    Text(newEstimate == 0 ? "Est —" : "Est \(newEstimate) 🍅")
+                        .font(.system(.caption, design: .rounded).weight(.medium))
+                        .foregroundStyle(.white.opacity(0.85))
                 }
                 .fixedSize()
 
@@ -123,33 +167,19 @@ struct TasksView: View {
                         Button(r.label) { newRecurrence = r }
                     }
                 } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "repeat").font(.system(size: 10, weight: .semibold))
-                        Text(newRecurrence == .none ? "No repeat" : newRecurrence.label)
-                            .font(.system(.caption, design: .rounded))
-                    }
-                    .foregroundStyle(newRecurrence == .none ? .secondary : .primary)
+                    chip(icon: "repeat",
+                         text: newRecurrence == .none ? "No repeat" : newRecurrence.label,
+                         active: newRecurrence != .none)
                 }
                 .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
                 .fixedSize()
 
-                TextField("project", text: $newProject)
-                    .textFieldStyle(.plain)
-                    .font(.system(.caption, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: 120)
-            }
+                Spacer()
 
-            TextField("notes (optional)", text: $newNotes, axis: .vertical)
-                .textFieldStyle(.plain)
-                .font(.system(.caption, design: .rounded))
-                .foregroundStyle(.secondary)
-                .lineLimit(1...3)
-
-            HStack(spacing: 8) {
-                Toggle(isOn: $hasDue) {
-                    Text("Due")
-                        .font(.system(.caption, design: .rounded).weight(.medium))
+                Toggle(isOn: $hasDue.animation(.easeInOut(duration: 0.15))) {
+                    Text("Due").font(.system(.caption, design: .rounded).weight(.medium))
+                        .foregroundStyle(.white.opacity(0.85))
                 }
                 .toggleStyle(.checkbox)
                 if hasDue {
@@ -158,21 +188,58 @@ struct TasksView: View {
                         .labelsHidden()
                         .font(.caption)
                 }
-                Spacer()
-                if !store.tasks.isEmpty {
-                    Button {
-                        exportCSV()
-                    } label: {
+            }
+
+            // Tags + project, as real-looking fields.
+            HStack(spacing: 8) {
+                fieldBox { TextField("tags, comma separated", text: $newTags) }
+                fieldBox { TextField("project", text: $newProject) }
+                    .frame(maxWidth: 130)
+            }
+
+            fieldBox {
+                TextField("notes (optional)", text: $newNotes, axis: .vertical)
+                    .lineLimit(1...3)
+            }
+
+            if showNewCategory { newCategoryForm }
+
+            if !store.tasks.isEmpty {
+                HStack {
+                    Spacer()
+                    Button(action: exportCSV) {
                         Label("Export CSV", systemImage: "square.and.arrow.up")
                             .font(.system(.caption, design: .rounded))
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.white.opacity(0.55))
                 }
             }
         }
-        .padding(12)
-        .glassRounded(16, material: .thin)
+        .padding(.horizontal, 12).padding(.bottom, 12)
+    }
+
+    /// A small labelled pill used for menu triggers in the details panel.
+    private func chip(icon: String, text: String, active: Bool) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon).font(.system(size: 10, weight: .semibold))
+            Text(text).font(.system(.caption, design: .rounded).weight(.medium))
+        }
+        .foregroundStyle(active ? Color.accentColor : .white.opacity(0.85))
+        .padding(.horizontal, 10).padding(.vertical, 6)
+        .background(Capsule().fill(Color.white.opacity(0.06)))
+    }
+
+    /// Wraps a text field in a subtle rounded box so it reads as an input.
+    private func fieldBox<C: View>(@ViewBuilder _ content: () -> C) -> some View {
+        content()
+            .textFieldStyle(.plain)
+            .font(.system(.caption, design: .rounded))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 10).padding(.vertical, 7)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(Color.white.opacity(0.05)))
     }
 
     /// Inline form to create a custom, color-coded category.
