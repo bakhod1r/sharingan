@@ -90,6 +90,43 @@ public final class TaskStore: ObservableObject {
         addCategory(name: name, colorHex: color(for: name), icon: icon)
     }
 
+    /// True for user-created categories (presets can be recolored but not renamed
+    /// or deleted).
+    public func isCustomCategory(_ name: String) -> Bool {
+        !TaskCategory.presets.contains { $0.name == name }
+    }
+
+    /// Renames a custom category and moves every task in it to the new name.
+    /// No-op for presets, empty names, or collisions with an existing category.
+    @discardableResult
+    public func renameCategory(_ old: String, to newName: String) -> Bool {
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard isCustomCategory(old), !trimmed.isEmpty, trimmed != old,
+              !allCategories.contains(where: { $0.name == trimmed }) else { return false }
+        if let i = customCategories.firstIndex(where: { $0.name == old }) {
+            customCategories[i].name = trimmed
+        }
+        for j in tasks.indices where tasks[j].category == old {
+            tasks[j].category = trimmed
+        }
+        persistCategories()
+        persist()
+        return true
+    }
+
+    /// Deletes a custom category, reassigning its tasks to the first preset.
+    /// No-op for presets.
+    public func deleteCategory(_ name: String) {
+        guard isCustomCategory(name) else { return }
+        let fallback = TaskCategory.presets[0].name
+        customCategories.removeAll { $0.name == name }
+        for j in tasks.indices where tasks[j].category == name {
+            tasks[j].category = fallback
+        }
+        persistCategories()
+        persist()
+    }
+
     // MARK: - Derived
 
     public var activeTask: TaskItem? {
@@ -317,6 +354,14 @@ public final class TaskStore: ObservableObject {
     /// Distinct project names currently in use, sorted.
     public var projects: [String] {
         Array(Set(tasks.compactMap(\.project))).sorted()
+    }
+
+    /// Distinct tags across all tasks, most-used first — powers tag suggestions.
+    public var allTags: [String] {
+        var freq: [String: Int] = [:]
+        for t in tasks { for tag in t.tags { freq[tag, default: 0] += 1 } }
+        return freq.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }
+            .map(\.key)
     }
 
     public func delete(_ id: UUID) {

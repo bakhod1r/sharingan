@@ -12,7 +12,8 @@ struct TasksView: View {
 
     @State private var newTitle = ""
     @State private var newCategory = TaskCategory.presets[0].name
-    @State private var newTags = ""
+    @State private var newTagList: [String] = []
+    @State private var tagDraft = ""
     @State private var hasDue = false
     @State private var newDue = Date().addingTimeInterval(3600)
     @State private var newEstimate = 0
@@ -33,6 +34,11 @@ struct TasksView: View {
     @State private var showNewCategory = false
     @State private var newCatName = ""
     @State private var newCatColor = TaskCategory.palette[0]
+    @State private var newCatIcon = TaskCategory.iconChoices[0]
+    /// Inline category manager (recolor / re-icon / rename / delete).
+    @State private var showCategoryManager = false
+    @State private var renamingCategory: String?
+    @State private var renameText = ""
     /// Advanced add-fields (category/tags/estimate/repeat/project/notes/due) are
     /// hidden behind a disclosure so the default composer is a single clean input.
     @State private var showDetails = false
@@ -132,6 +138,11 @@ struct TasksView: View {
             } label: {
                 Label("Add category…", systemImage: "plus")
             }
+            Button {
+                withAnimation { showDetails = true; showCategoryManager.toggle() }
+            } label: {
+                Label("Edit categories…", systemImage: "slider.horizontal.3")
+            }
         } label: {
             HStack(spacing: 6) {
                 Circle().fill(newCategoryAccent).frame(width: 9, height: 9)
@@ -190,12 +201,8 @@ struct TasksView: View {
                 }
             }
 
-            // Tags + project, as real-looking fields.
-            HStack(spacing: 8) {
-                fieldBox { TextField("tags, comma separated", text: $newTags) }
-                fieldBox { TextField("project", text: $newProject) }
-                    .frame(maxWidth: 130)
-            }
+            tagEditor
+            fieldBox { TextField("project", text: $newProject) }
 
             fieldBox {
                 TextField("notes (optional)", text: $newNotes, axis: .vertical)
@@ -203,6 +210,7 @@ struct TasksView: View {
             }
 
             if showNewCategory { newCategoryForm }
+            if showCategoryManager { categoryManager }
 
             if !store.tasks.isEmpty {
                 HStack {
@@ -242,11 +250,98 @@ struct TasksView: View {
                 .fill(Color.white.opacity(0.05)))
     }
 
+    // MARK: - Tag editor
+
+    /// Chip-based tag input: current tags as removable pills, an inline field
+    /// (Return / comma commits), plus one-tap suggestions from existing tags.
+    private var tagEditor: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "tag")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.5))
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(newTagList, id: \.self) { tag in
+                            HStack(spacing: 4) {
+                                Text("#\(tag)")
+                                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                Button { removeTag(tag) } label: {
+                                    Image(systemName: "xmark").font(.system(size: 7, weight: .bold))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 8).padding(.vertical, 4)
+                            .background(Capsule().fill(Color.accentColor.opacity(0.28)))
+                            .transition(.scale.combined(with: .opacity))
+                        }
+                        TextField(newTagList.isEmpty ? "add tags" : "", text: $tagDraft)
+                            .textFieldStyle(.plain)
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(.white)
+                            .frame(minWidth: 60)
+                            .onChange(of: tagDraft) { v in
+                                // Commit on comma/space so typing flows into chips.
+                                if v.hasSuffix(",") || v.hasSuffix(" ") { commitTagDraft() }
+                            }
+                            .onSubmit { commitTagDraft() }
+                    }
+                }
+            }
+            .padding(.horizontal, 10).padding(.vertical, 7)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(Color.white.opacity(0.05)))
+
+            // Suggestions — existing tags not already added.
+            let suggestions = store.allTags.filter { !newTagList.contains($0) }.prefix(6)
+            if !suggestions.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(Array(suggestions), id: \.self) { tag in
+                            Button { addTag(tag) } label: {
+                                Text("#\(tag)")
+                                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                                    .foregroundStyle(.white.opacity(0.7))
+                                    .padding(.horizontal, 8).padding(.vertical, 3)
+                                    .background(Capsule().fill(Color.white.opacity(0.06)))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func addTag(_ raw: String) {
+        let t = raw.trimmingCharacters(in: .whitespaces)
+            .replacingOccurrences(of: "#", with: "")
+        guard !t.isEmpty, !newTagList.contains(t) else { return }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { newTagList.append(t) }
+    }
+
+    private func removeTag(_ tag: String) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            newTagList.removeAll { $0 == tag }
+        }
+    }
+
+    private func commitTagDraft() {
+        let parts = tagDraft.split(whereSeparator: { $0 == "," || $0 == " " })
+        for p in parts { addTag(String(p)) }
+        tagDraft = ""
+    }
+
     /// Inline form to create a custom, color-coded category.
     private var newCategoryForm: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                Circle().fill(Color(hex: newCatColor)).frame(width: 10, height: 10)
+                Image(systemName: newCatIcon)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color(hex: newCatColor))
+                    .frame(width: 20)
                 TextField("New category name", text: $newCatName, onCommit: addCategory)
                     .textFieldStyle(.plain)
                     .font(.system(.caption, design: .rounded).weight(.medium))
@@ -254,34 +349,141 @@ struct TasksView: View {
                     .buttonStyle(.borderless)
                     .disabled(newCatName.trimmingCharacters(in: .whitespaces).isEmpty)
                 Button {
-                    showNewCategory = false
+                    withAnimation { showNewCategory = false }
                 } label: {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
             }
-            HStack(spacing: 6) {
-                ForEach(TaskCategory.palette, id: \.self) { hex in
-                    Circle()
-                        .fill(Color(hex: hex))
-                        .frame(width: 18, height: 18)
-                        .overlay(
-                            Circle().stroke(Color.white,
-                                            lineWidth: newCatColor == hex ? 2 : 0)
-                        )
-                        .onTapGesture { newCatColor = hex }
+            colorRow(selected: newCatColor) { newCatColor = $0 }
+            iconRow(selected: newCatIcon) { newCatIcon = $0 }
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.05)))
+    }
+
+    /// Palette swatches; calls `pick` on tap.
+    private func colorRow(selected: String, pick: @escaping (String) -> Void) -> some View {
+        HStack(spacing: 6) {
+            ForEach(TaskCategory.palette, id: \.self) { hex in
+                Circle()
+                    .fill(Color(hex: hex))
+                    .frame(width: 18, height: 18)
+                    .overlay(Circle().stroke(Color.white, lineWidth: selected == hex ? 2 : 0))
+                    .onTapGesture { withAnimation(.easeInOut(duration: 0.15)) { pick(hex) } }
+            }
+        }
+    }
+
+    /// Icon choices; calls `pick` on tap.
+    private func iconRow(selected: String, pick: @escaping (String) -> Void) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(TaskCategory.iconChoices, id: \.self) { icon in
+                    Image(systemName: icon)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(selected == icon ? .white : .white.opacity(0.6))
+                        .frame(width: 26, height: 26)
+                        .background(Circle().fill(Color.white.opacity(selected == icon ? 0.18 : 0.05)))
+                        .onTapGesture { withAnimation(.easeInOut(duration: 0.15)) { pick(icon) } }
                 }
+            }
+        }
+    }
+
+    /// Inline manager: recolor / re-icon / rename / delete each category.
+    private var categoryManager: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Categories")
+                    .font(.system(.caption, design: .rounded).weight(.bold))
+                    .foregroundStyle(.white.opacity(0.8))
+                Spacer()
+                Button {
+                    withAnimation { showCategoryManager = false }
+                } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+            ForEach(store.allCategories) { c in
+                categoryManagerRow(c)
             }
         }
         .padding(10)
         .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.05)))
     }
 
+    private func categoryManagerRow(_ c: TaskCategory) -> some View {
+        let custom = store.isCustomCategory(c.name)
+        return VStack(spacing: 6) {
+            HStack(spacing: 8) {
+                // Icon menu.
+                Menu {
+                    ForEach(TaskCategory.iconChoices, id: \.self) { icon in
+                        Button { store.setIcon(for: c.name, icon: icon) } label: {
+                            Label(icon, systemImage: icon)
+                        }
+                    }
+                } label: {
+                    Image(systemName: c.icon)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color(hex: c.colorHex))
+                        .frame(width: 26, height: 26)
+                        .background(Circle().fill(Color.white.opacity(0.06)))
+                }
+                .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+
+                if renamingCategory == c.name {
+                    TextField("Name", text: $renameText, onCommit: { commitRename(c.name) })
+                        .textFieldStyle(.plain)
+                        .font(.system(.caption, design: .rounded).weight(.medium))
+                        .onSubmit { commitRename(c.name) }
+                } else {
+                    Text(c.name)
+                        .font(.system(.caption, design: .rounded).weight(.medium))
+                        .foregroundStyle(.white)
+                    if !custom {
+                        Text("preset")
+                            .font(.system(size: 8, design: .rounded).weight(.bold))
+                            .foregroundStyle(.white.opacity(0.4))
+                            .padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(Capsule().fill(Color.white.opacity(0.06)))
+                    }
+                }
+                Spacer()
+                if custom {
+                    Button {
+                        renameText = c.name; renamingCategory = c.name
+                    } label: {
+                        Image(systemName: "pencil").font(.system(size: 11))
+                            .foregroundStyle(.white.opacity(0.6)).frame(width: 22, height: 22)
+                    }
+                    .buttonStyle(.plain).help("Rename")
+                    Button { store.deleteCategory(c.name) } label: {
+                        Image(systemName: "trash").font(.system(size: 11))
+                            .foregroundStyle(.red.opacity(0.8)).frame(width: 22, height: 22)
+                    }
+                    .buttonStyle(.plain).help("Delete category")
+                }
+            }
+            colorRow(selected: c.colorHex) { store.setColor(for: c.name, colorHex: $0) }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func commitRename(_ old: String) {
+        let ok = store.renameCategory(old, to: renameText)
+        if ok, newCategory == old { newCategory = renameText.trimmingCharacters(in: .whitespacesAndNewlines) }
+        renamingCategory = nil
+    }
+
     private func addCategory() {
-        guard let name = store.addCategory(name: newCatName, colorHex: newCatColor) else { return }
+        guard let name = store.addCategory(name: newCatName, colorHex: newCatColor, icon: newCatIcon) else { return }
         newCategory = name
         newCatName = ""
-        showNewCategory = false
+        newCatIcon = TaskCategory.iconChoices[0]
+        withAnimation { showNewCategory = false }
     }
 
     private var emptyState: some View {
@@ -576,18 +778,16 @@ struct TasksView: View {
     }
 
     private func add() {
-        let tags = newTags
-            .split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
-        store.add(title: newTitle, category: newCategory, tags: tags,
+        commitTagDraft()   // fold any half-typed tag in before saving
+        store.add(title: newTitle, category: newCategory, tags: newTagList,
                   dueDate: hasDue ? newDue : nil,
                   estimatedPomodoros: newEstimate > 0 ? newEstimate : nil,
                   recurrence: newRecurrence,
                   project: newProject.isEmpty ? nil : newProject,
                   notes: newNotes)
         newTitle = ""
-        newTags = ""
+        newTagList = []
+        tagDraft = ""
         hasDue = false
         newEstimate = 0
         newRecurrence = .none

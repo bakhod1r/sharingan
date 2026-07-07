@@ -164,6 +164,9 @@ struct MainWindowView: View {
         case .stats:
             detailScaffold(title: "Progress") {
                 VStack(spacing: 20) {
+                    StatsSummaryView(stats: timer.stats,
+                                     focusMinutes: timer.settings.focusMinutes,
+                                     accent: timer.settings.theme.gradient.first ?? .accentColor)
                     StreakBadgeView(streak: timer.stats.streak)
                     StatsChartView(stats: timer.stats)
                 }

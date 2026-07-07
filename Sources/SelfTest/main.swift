@@ -171,6 +171,30 @@ testBrightnessSettings()
         store.setProject(b.id, nil)
         check(store.tasks.first { $0.id == b.id }?.project == nil, "project cleared to nil")
 
+        // Categories: rename (custom only) reassigns tasks; delete falls back;
+        // presets can't be renamed/deleted.
+        let storeCat = TaskStore(fileURL: dir.appendingPathComponent("tcat.json"))
+        _ = storeCat.addCategory(name: "Side", colorHex: "#FF0000", icon: "star.fill")
+        storeCat.add(title: "sidejob", category: "Side")
+        check(storeCat.isCustomCategory("Side"), "Side is custom")
+        check(!storeCat.isCustomCategory("Work"), "Work is a preset")
+        check(storeCat.renameCategory("Side", to: "Hustle"), "custom rename succeeds")
+        check(storeCat.tasks.first { $0.title == "sidejob" }?.category == "Hustle",
+              "rename reassigns the task's category")
+        check(!storeCat.renameCategory("Work", to: "Job"), "preset rename refused")
+        check(!storeCat.renameCategory("Hustle", to: "Work"), "rename to existing name refused")
+        storeCat.deleteCategory("Hustle")
+        check(storeCat.tasks.first { $0.title == "sidejob" }?.category == TaskCategory.presets[0].name,
+              "delete reassigns tasks to first preset")
+        check(!storeCat.allCategories.contains { $0.name == "Hustle" }, "deleted category gone")
+
+        // allTags: distinct, most-used first.
+        let storeTag = TaskStore(fileURL: dir.appendingPathComponent("ttag.json"))
+        storeTag.add(title: "a", tags: ["x", "y"])
+        storeTag.add(title: "b", tags: ["x"])
+        check(storeTag.allTags.first == "x", "most-used tag ranks first")
+        check(Set(storeTag.allTags) == ["x", "y"], "allTags is the distinct set")
+
         // Weekly board: setPlannedDate buckets tasks by day; nil unschedules.
         let storeWB = TaskStore(fileURL: dir.appendingPathComponent("twb.json"))
         storeWB.add(title: "mon"); storeWB.add(title: "tue"); storeWB.add(title: "free")

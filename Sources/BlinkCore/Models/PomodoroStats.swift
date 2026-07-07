@@ -157,4 +157,19 @@ public struct PomodoroStats: Codable, Equatable, Sendable {
         guard last > 0 else { return nil }
         return Double(thisWeekTotal(now: now) - last) / Double(last)
     }
+
+    // MARK: - Lifetime summary
+
+    /// Days on which at least one focus session was completed.
+    public var activeDays: Int { history.filter { $0.count > 0 }.count }
+
+    /// The most productive day on record, if any.
+    public var bestDay: DailyCount? { history.max { $0.count < $1.count } }
+
+    /// Average completed focus sessions per active day (0 when none).
+    public var averagePerActiveDay: Double {
+        let days = activeDays
+        guard days > 0 else { return 0 }
+        return Double(history.reduce(0) { $0 + $1.count }) / Double(days)
+    }
 }

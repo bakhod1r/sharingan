@@ -24,37 +24,26 @@ struct MenuBarView: View {
     /// Row the pointer is over — reveals its delete button.
     @State private var hoveredTask: UUID?
 
-    private enum Tab: Hashable { case timer, tasks, stats }
-
-    /// Constant height for the switchable tab area so the popover keeps one size
-    /// across Timer / Tasks / Stats. Sized to the timer tab (the tallest common
-    /// layout); taller content scrolls within.
-    private let tabContentHeight: CGFloat = 494
+    private enum Tab: Hashable { case timer, tasks }
 
     var body: some View {
         VStack(spacing: 14) {
             Picker("", selection: $tab) {
-                Image(systemName: "timer").tag(Tab.timer)
-                Image(systemName: "checklist").tag(Tab.tasks)
-                Image(systemName: "chart.bar.fill").tag(Tab.stats)
+                Label("Timer", systemImage: "timer").tag(Tab.timer)
+                Label("Tasks", systemImage: "checklist").tag(Tab.tasks)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
 
-            // Fixed-height content area so switching tabs never resizes the
-            // popover. Each tab is top-aligned and scrolls internally if its
-            // content is taller than the area.
-            ScrollView(.vertical, showsIndicators: false) {
-                Group {
-                    switch tab {
-                    case .timer: timerTab
-                    case .tasks: TasksView(timer: timer)
-                    case .stats: statsTab
-                    }
+            // Timer and Tasks size to their own content — no forced scroll or
+            // empty space. (Detailed stats live in the main window, not here.)
+            Group {
+                switch tab {
+                case .timer: timerTab
+                case .tasks: TasksView(timer: timer)
                 }
-                .frame(maxWidth: .infinity, alignment: .top)
             }
-            .frame(height: tabContentHeight)
+            .frame(maxWidth: .infinity, alignment: .top)
 
             Divider().overlay(Color.white.opacity(0.15))
             footer
@@ -777,17 +766,6 @@ struct MenuBarView: View {
         tasks.setActive(task.id)
         if timer.phase != .focus { timer.stop() }
         timer.start()
-    }
-
-    private var statsTab: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                StreakBadgeView(streak: timer.stats.streak)
-                StatsChartView(stats: timer.stats)
-            }
-            .padding(.vertical, 2)
-        }
-        .frame(height: 360)
     }
 
     // MARK: - Pieces
