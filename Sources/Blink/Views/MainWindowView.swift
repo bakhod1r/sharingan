@@ -55,7 +55,8 @@ struct MainWindowView: View {
             navRow(.stats)
             sectionHeader("App")
             navRow(.settings)
-            Spacer(minLength: 0)
+            Spacer(minLength: 12)
+            sidebarFooter
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .background(
@@ -106,14 +107,55 @@ struct MainWindowView: View {
         return Image(systemName: "eye.fill")
     }
 
+    /// A small glass status card pinned to the bottom of the sidebar — today's
+    /// focus count and the current streak, so the panel closes on a live signal
+    /// instead of empty space (the way Todoist parks account/karma at the foot).
+    private var sidebarFooter: some View {
+        let today = timer.stats.completedTodayCount()
+        let streak = timer.stats.streak.currentStreak
+        return HStack(spacing: 0) {
+            footerStat(icon: "target", tint: accent, value: today, label: "Today")
+            Divider().frame(height: 28).overlay(Color.white.opacity(0.12))
+            footerStat(icon: "flame.fill", tint: .orange, value: streak, label: "Streak")
+        }
+        .padding(.vertical, 11)
+        .background(
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .fill(Color.white.opacity(0.06))
+                .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .stroke(Color.white.opacity(0.08), lineWidth: 1))
+        )
+        .padding(.horizontal, 10)
+        .padding(.bottom, 12)
+    }
+
+    private func footerStat(icon: String, tint: Color, value: Int, label: String) -> some View {
+        VStack(spacing: 3) {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(tint)
+                Text("\(value)")
+                    .font(.system(.title3, design: .rounded).weight(.bold).monospacedDigit())
+                    .foregroundStyle(.white)
+                    .contentTransition(.numericText())
+            }
+            Text(label)
+                .font(.system(.caption2, design: .rounded).weight(.medium))
+                .foregroundStyle(.white.opacity(0.5))
+        }
+        .frame(maxWidth: .infinity)
+    }
+
     private func sectionHeader(_ title: String) -> some View {
-        // Muted, title-case group label — CleanMyMac uses soft gray captions
-        // ("Cleanup", "Protection") rather than heavy all-caps.
-        Text(title)
-            .font(.system(.caption, design: .rounded).weight(.semibold))
-            .foregroundStyle(.white.opacity(0.45))
+        // Crisp uppercase micro-label, matching the WORK/STUDY group headers in
+        // the task list so the whole app speaks one visual language.
+        Text(title.uppercased())
+            .font(.system(.caption2, design: .rounded).weight(.heavy))
+            .tracking(1.2)
+            .foregroundStyle(.white.opacity(0.42))
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 18).padding(.top, 16).padding(.bottom, 4)
+            .padding(.horizontal, 18).padding(.top, 16).padding(.bottom, 5)
     }
 
     private func navRow(_ s: Section) -> some View {

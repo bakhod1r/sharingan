@@ -10,7 +10,7 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
         case .timer:    return "Timer"
         case .tasks:    return "Tasks"
         case .week:     return "Week"
-        case .stats:    return "Stats"
+        case .stats:    return "Progress"
         case .settings: return "Settings"
         }
     }
@@ -19,7 +19,7 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
         case .timer:    return "timer"
         case .tasks:    return "checklist"
         case .week:     return "calendar"
-        case .stats:    return "chart.bar"
+        case .stats:    return "chart.line.uptrend.xyaxis"
         case .settings: return "gearshape"
         }
     }
