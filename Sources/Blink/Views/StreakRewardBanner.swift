@@ -47,7 +47,7 @@ struct StreakRewardBanner: View {
                         .padding(.horizontal, 28).padding(.vertical, 10)
                         .glassCapsule(material: .regular)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressableSubtle)
                 .scaleEffect(show ? 1 : 0.8)
                 .opacity(show ? 1 : 0)
             }

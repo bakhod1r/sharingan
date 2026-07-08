@@ -4,78 +4,57 @@ import BlinkCore
 
 struct StatsChartView: View {
     let stats: PomodoroStats
-    @State private var range: Range = .week
+    @State private var range: ChartRange = .month
 
-    enum Range: String, CaseIterable, Identifiable {
-        case week   = "7d"
-        case month  = "30d"
+    /// Time window + bucketing for the focus-history chart.
+    enum ChartRange: String, CaseIterable, Identifiable {
+        case week    = "1W"    // last 7 days, daily bars
+        case month   = "1M"    // last 30 days, daily bars
+        case quarter = "3M"    // last 13 weeks, weekly bars
+        case year    = "1Y"    // last 12 months, monthly bars
         var id: String { rawValue }
-        var days: Int { self == .week ? 7 : 30 }
+
+        /// Calendar unit each bar spans — drives BarMark width + axis stride.
+        var unit: Calendar.Component {
+            switch self {
+            case .week, .month: return .day
+            case .quarter:      return .weekOfYear
+            case .year:         return .month
+            }
+        }
+
+        /// What one bar represents, for the "avg per …" caption.
+        var perLabel: String {
+            switch self {
+            case .week, .month: return "day"
+            case .quarter:      return "week"
+            case .year:         return "month"
+            }
+        }
     }
 
+    /// The bucketed series for the active range — every slot filled (0 where
+    /// idle) so the axis shows the whole window, not just active days.
     private var data: [DailyCount] {
-        stats.recentDays(range.days)
+        switch range {
+        case .week:    return stats.recentDays(7)
+        case .month:   return stats.recentDays(30)
+        case .quarter: return stats.recentWeeks(13)
+        case .year:    return stats.recentMonths(12)
+        }
     }
 
-    private var average: Double { stats.weeklyAverage }
+    private var total: Int { data.reduce(0) { $0 + $1.count } }
+    private var average: Double {
+        guard !data.isEmpty else { return 0 }
+        return Double(total) / Double(data.count)
+    }
+    private var peak: Int { max(1, data.map(\.count).max() ?? 1) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Stats")
-                        .font(.system(.headline, design: .rounded).weight(.bold))
-                        .foregroundStyle(.white)
-                    Text("Avg: \(String(format: "%.1f", average))/day")
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.7))
-                }
-                Spacer()
-                Picker("", selection: $range) {
-                    ForEach(Range.allCases) { r in Text(r.rawValue).tag(r) }
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 160)
-                
-            }
-
-            weeklyReport
-
-            Chart {
-                ForEach(data) { item in
-                    BarMark(
-                        x: .value("Day", item.day, unit: .day),
-                        y: .value("Pomodoros", item.count)
-                    )
-                    .foregroundStyle(
-                        LinearGradient(colors: [.paletteFocusStart, .paletteBreakStart],
-                                       startPoint: .top, endPoint: .bottom)
-                    )
-                    .cornerRadius(4)
-                    .opacity(max(0.35, Double(item.count) / Double(max(1, data.map { $0.count }.max() ?? 1))))
-                }
-            }
-            .chartXAxis {
-                // Cap the number of labels so 30-day mode doesn't overlap into mush.
-                AxisMarks(values: .automatic(desiredCount: range == .week ? 7 : 6)) { value in
-                    if let d = value.as(Date.self) {
-                        AxisGridLine().foregroundStyle(Color.white.opacity(0.08))
-                        AxisValueLabel {
-                            Text(xLabel(d))
-                                .font(.system(size: 9, design: .rounded))
-                        }
-                        .foregroundStyle(.white.opacity(0.7))
-                    }
-                }
-            }
-            .chartYAxis {
-                AxisMarks(position: .leading) { _ in
-                    AxisGridLine().foregroundStyle(Color.white.opacity(0.12))
-                    AxisValueLabel().foregroundStyle(.white.opacity(0.65))
-                }
-            }
-            .frame(height: 180)
-
+            header
+            chart
             if stats.hourCounts.contains(where: { $0 > 0 }) {
                 Divider().overlay(Color.white.opacity(0.12))
                 hourSection
@@ -84,6 +63,108 @@ struct StatsChartView: View {
         .padding(14)
         .glassRounded(DS.Radius.xl, material: .regular)
         .liquidShadow(radius: 12, y: 6)
+    }
+
+    // MARK: - Header + range picker
+
+    private var header: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Focus history")
+                    .font(.system(.headline, design: .rounded).weight(.bold))
+                    .foregroundStyle(.white)
+                Text("\(total) 🍅 · avg \(String(format: "%.1f", average))/\(range.perLabel)")
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .contentTransition(.numericText())
+            }
+            Spacer()
+            rangePicker
+        }
+    }
+
+    /// Custom segmented range control — animated selection pill, tactile press.
+    private var rangePicker: some View {
+        HStack(spacing: 2) {
+            ForEach(ChartRange.allCases) { r in
+                let selected = r == range
+                Button {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) { range = r }
+                } label: {
+                    Text(r.rawValue)
+                        .font(.system(.caption, design: .rounded).weight(.bold))
+                        .foregroundStyle(selected ? .white : .white.opacity(0.55))
+                        .frame(width: 34, height: 24)
+                        .background {
+                            if selected {
+                                Capsule().fill(Color.paletteFocusStart.opacity(0.9))
+                                    .matchedGeometryEffect(id: "rangePill", in: pickerNS)
+                            }
+                        }
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.pressableSubtle)
+            }
+        }
+        .padding(3)
+        .background(Capsule().fill(Color.white.opacity(0.06)))
+    }
+    @Namespace private var pickerNS
+
+    // MARK: - Main chart
+
+    private var chart: some View {
+        Chart {
+            ForEach(data) { item in
+                BarMark(
+                    x: .value("Period", item.day, unit: range.unit),
+                    y: .value("Pomodoros", item.count)
+                )
+                .foregroundStyle(
+                    LinearGradient(colors: [.paletteFocusStart, .paletteBreakStart],
+                                   startPoint: .top, endPoint: .bottom)
+                )
+                .cornerRadius(4)
+                .opacity(max(0.4, Double(item.count) / Double(peak)))
+            }
+        }
+        .chartXAxis {
+            AxisMarks(values: .stride(by: range.unit, count: axisStride)) { value in
+                if let d = value.as(Date.self) {
+                    AxisGridLine().foregroundStyle(Color.white.opacity(0.08))
+                    AxisValueLabel {
+                        Text(xLabel(d)).font(.system(size: 9, design: .rounded))
+                    }
+                    .foregroundStyle(.white.opacity(0.7))
+                }
+            }
+        }
+        .chartYAxis {
+            AxisMarks(position: .leading) { _ in
+                AxisGridLine().foregroundStyle(Color.white.opacity(0.12))
+                AxisValueLabel().foregroundStyle(.white.opacity(0.65))
+            }
+        }
+        .frame(height: 180)
+        .animation(.easeInOut(duration: 0.3), value: range)
+    }
+
+    /// Stride between axis labels so they never overlap into mush.
+    private var axisStride: Int {
+        switch range {
+        case .week:    return 1     // every day
+        case .month:   return 4     // ~8 labels across 30 days
+        case .quarter: return 2     // every other week
+        case .year:    return 1     // every month
+        }
+    }
+
+    private func xLabel(_ d: Date) -> String {
+        switch range {
+        case .week:            return DateFormatter.chartDay.string(from: d)    // Mon
+        case .month, .quarter: return DateFormatter.chartDate.string(from: d)   // 7/4
+        case .year:            return DateFormatter.chartMonth.string(from: d)  // Jul
+        }
     }
 
     // MARK: - Focus by hour
@@ -134,63 +215,16 @@ struct StatsChartView: View {
         let hh = ((h % 12) == 0) ? 12 : h % 12
         return "\(hh)\(h < 12 ? "am" : "pm")"
     }
-
-    /// This-week total with a week-over-week growth / decline indicator.
-    private var weeklyReport: some View {
-        let this = stats.thisWeekTotal()
-        let last = stats.lastWeekTotal()
-        let change = stats.weekOverWeekChange()
-        return HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text("This week")
-                    .font(.system(.caption2, design: .rounded).weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.6))
-                Text("\(this) 🍅")
-                    .font(.system(.title3, design: .rounded).weight(.bold))
-                    .foregroundStyle(.white)
-            }
-            Spacer()
-            if let change {
-                let up = change >= 0
-                HStack(spacing: 4) {
-                    Image(systemName: up ? "arrow.up.right" : "arrow.down.right")
-                        .font(.system(size: 12, weight: .bold))
-                    Text("\(up ? "+" : "")\(Int((change * 100).rounded()))%")
-                        .font(.system(.subheadline, design: .rounded).weight(.bold))
-                }
-                .foregroundStyle(up ? Color.green : Color.red)
-                Text("vs last week (\(last))")
-                    .font(.system(.caption2, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.55))
-            } else {
-                Text(last == 0 && this > 0 ? "First week — keep going!" : "No data yet")
-                    .font(.system(.caption, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.55))
-            }
-        }
-        .padding(.horizontal, 12).padding(.vertical, 10)
-        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-            .fill(Color.white.opacity(0.05)))
-    }
-
-    private func xLabel(_ d: Date) -> String {
-        range == .week
-            ? DateFormatter.shortDay.string(from: d)   // Mon, Tue…
-            : DateFormatter.shortDate.string(from: d)   // 7/4
-    }
 }
 
 private extension DateFormatter {
-    static let shortDay: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US")
-        f.dateFormat = "EEE"
-        return f
+    static let chartDay: DateFormatter = {
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US"); f.dateFormat = "EEE"; return f
     }()
-    static let shortDate: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US")
-        f.dateFormat = "M/d"
-        return f
+    static let chartDate: DateFormatter = {
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US"); f.dateFormat = "M/d"; return f
+    }()
+    static let chartMonth: DateFormatter = {
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US"); f.dateFormat = "MMM"; return f
     }()
 }

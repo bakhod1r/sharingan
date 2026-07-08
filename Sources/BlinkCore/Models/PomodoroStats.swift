@@ -95,8 +95,9 @@ public struct PomodoroStats: Codable, Equatable, Sendable {
         return completedToday
     }
 
-    /// Faqat oxirgi `days` kun saqlanadi (default 90).
-    private mutating func trimHistory(_ days: Int = 90) {
+    /// Faqat oxirgi `days` kun saqlanadi (default 400 — choraklik/yillik
+    /// grafiklar uchun yetarli tarix qoladi).
+    private mutating func trimHistory(_ days: Int = 400) {
         let cutoff = Calendar.current.date(byAdding: .day,
                                             value: -days,
                                             to: Calendar.current.startOfDay(for: Date())) ?? Date()
@@ -123,6 +124,42 @@ public struct PomodoroStats: Codable, Equatable, Sendable {
 
     public var last7Days: [DailyCount] { recentDays(7) }
     public var last30Days: [DailyCount] { recentDays(30) }
+
+    /// Oxirgi `n` kalendar hafta (dushanba bilan boshlanadi), har biri o'sha
+    /// haftadagi jami bilan. Bo'sh haftalar 0 bilan to'ldiriladi.
+    public func recentWeeks(_ n: Int) -> [DailyCount] {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let wd = (cal.component(.weekday, from: today) + 5) % 7    // 0 = Mon
+        guard let thisMonday = cal.date(byAdding: .day, value: -wd, to: today) else { return [] }
+        var result: [DailyCount] = []
+        for i in stride(from: n - 1, through: 0, by: -1) {
+            guard let start = cal.date(byAdding: .day, value: -7 * i, to: thisMonday),
+                  let end = cal.date(byAdding: .day, value: 7, to: start) else { continue }
+            let sum = history.filter { $0.day >= start && $0.day < end }
+                             .reduce(0) { $0 + $1.count }
+            result.append(DailyCount(day: start, count: sum))
+        }
+        return result
+    }
+
+    /// Oxirgi `n` kalendar oy, har biri o'sha oydagi jami bilan. Bo'sh oylar 0.
+    public func recentMonths(_ n: Int) -> [DailyCount] {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        guard let thisMonth = cal.date(from: cal.dateComponents([.year, .month], from: today))
+        else { return [] }
+        var result: [DailyCount] = []
+        for i in stride(from: n - 1, through: 0, by: -1) {
+            guard let start = cal.date(byAdding: .month, value: -i, to: thisMonth),
+                  let end = cal.date(byAdding: .month, value: 1, to: start) else { continue }
+            let sum = history.filter { $0.day >= start && $0.day < end }
+                             .reduce(0) { $0 + $1.count }
+            result.append(DailyCount(day: start, count: sum))
+        }
+        return result
+    }
+
     public var weeklyAverage: Double {
         let counts = last7Days.map { $0.count }
         guard counts.count == 7 else { return 0 }

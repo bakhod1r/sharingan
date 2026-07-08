@@ -135,7 +135,7 @@ struct MenuBarView: View {
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressableSubtle)
                 }
             }
             .padding(.horizontal, 10).padding(.vertical, 6)
@@ -151,7 +151,7 @@ struct MenuBarView: View {
                 .background(Capsule().fill(todayOnly ? Color.orange.opacity(0.18)
                                                      : Color.white.opacity(0.06)))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressableSubtle)
         }
     }
 
@@ -270,7 +270,7 @@ struct MenuBarView: View {
                     }
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressableSubtle)
 
                 if showCompleted {
                     ForEach(done.prefix(8)) { task in
@@ -280,7 +280,7 @@ struct MenuBarView: View {
                                     .font(.system(size: 15))
                                     .foregroundStyle(.green)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.pressableSubtle)
                             .help("Mark not done")
                             Text(task.title)
                                 .font(.system(.caption, design: .rounded))
@@ -295,7 +295,7 @@ struct MenuBarView: View {
                                     .frame(width: 22, height: 22)
                                     .contentShape(Rectangle())
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.pressableSubtle)
                             .help("Delete")
                         }
                         .padding(.horizontal, 10).padding(.vertical, 4)
@@ -366,7 +366,7 @@ struct MenuBarView: View {
                 }
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressableSubtle)
             .contextMenu {
                 Menu {
                     ForEach(TaskCategory.iconChoices, id: \.self) { symbol in
@@ -423,7 +423,7 @@ struct MenuBarView: View {
                     .font(.system(size: 17))
                     .foregroundStyle(.secondary)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressableSubtle)
 
             if editingTaskID == task.id {
                 TextField("Task name", text: $editingText, onCommit: { commitEdit(task) })
@@ -498,7 +498,7 @@ struct MenuBarView: View {
                     .frame(width: 18, height: 18)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressableSubtle)
 
             // Delete — revealed on hover so the dense row stays uncluttered.
             Button { tasks.delete(task.id) } label: {
@@ -508,7 +508,7 @@ struct MenuBarView: View {
                     .frame(width: 20, height: 20)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressableSubtle)
             .opacity(hoveredTask == task.id ? 1 : 0)
             .animation(.easeInOut(duration: 0.15), value: hoveredTask)
             .help("Delete task")
@@ -521,7 +521,7 @@ struct MenuBarView: View {
                     .font(.system(size: 22))
                     .foregroundStyle(isActive ? Color.accentColor : .secondary)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressableSubtle)
             .help("Run a focus pomodoro on this task")
         }
         .padding(.horizontal, 10).padding(.vertical, 7)
@@ -652,7 +652,7 @@ struct MenuBarView: View {
                             .font(.system(size: 13))
                             .foregroundStyle(sub.isDone ? Color.green : .secondary)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressableSubtle)
                     Text(sub.title)
                         .font(.system(.caption, design: .rounded))
                         .strikethrough(sub.isDone, color: .secondary)
@@ -666,7 +666,7 @@ struct MenuBarView: View {
                             .frame(width: 22, height: 22)
                             .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressableSubtle)
                     .help("Remove step")
                 }
             }
@@ -881,7 +881,7 @@ struct MenuBarView: View {
             .foregroundStyle(on ? Color.green : Color.primary.opacity(0.85))
             .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressableSubtle)
         .help("Auto mode: focus → break → focus runs continuously, no manual Start")
     }
 
@@ -936,7 +936,7 @@ struct MenuBarView: View {
                 Label("Open window", systemImage: "macwindow")
                     .font(.system(.callout, design: .rounded).weight(.medium))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressableSubtle)
             .foregroundStyle(.secondary)
 
             Button { openAppSettings() } label: {
@@ -955,7 +955,7 @@ struct MenuBarView: View {
                 Label("Quit", systemImage: "power")
                     .font(.system(.callout, design: .rounded).weight(.medium))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressableSubtle)
             .foregroundStyle(.secondary)
         }
     }

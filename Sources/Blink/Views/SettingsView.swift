@@ -67,7 +67,7 @@ struct SettingsView: View {
                 Button { searchText = "" } label: {
                     Image(systemName: "xmark.circle.fill")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressableSubtle)
                 .foregroundStyle(.white.opacity(0.4))
             }
         }
@@ -360,7 +360,7 @@ struct SettingsView: View {
                                 Image(systemName: "minus.circle.fill")
                                     .foregroundStyle(.white.opacity(0.4))
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.pressableSubtle)
                             .frame(width: 22, height: 22)
                             .contentShape(Rectangle())
                             .help("Remove from list")
@@ -382,7 +382,7 @@ struct SettingsView: View {
                         Label("Restore default apps", systemImage: "arrow.counterclockwise.circle.fill")
                             .font(.caption.weight(.semibold))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressableSubtle)
                 }
 
                 Section("Reminders (posture / water / custom)") {
@@ -402,7 +402,7 @@ struct SettingsView: View {
                         Label("Add reminder", systemImage: "plus.circle.fill")
                             .font(.caption.weight(.semibold))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressableSubtle)
                 }
 
         case .eyeCare:
@@ -546,7 +546,7 @@ struct SettingsView: View {
                                         Image(systemName: "minus.circle.fill")
                                             .foregroundStyle(.red.opacity(0.85))
                                     }
-                                    .buttonStyle(.plain)
+                                    .buttonStyle(.pressableSubtle)
                                 }
                             }
                         }
@@ -556,7 +556,7 @@ struct SettingsView: View {
                             Label("Add reminder", systemImage: "plus.circle.fill")
                                 .font(.caption.weight(.semibold))
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressableSubtle)
                     }
                 }
 
@@ -668,7 +668,7 @@ struct SettingsView: View {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(.white.opacity(0.7))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressableSubtle)
             }
         }
     }
@@ -737,7 +737,7 @@ struct StepsInstructionEditor: View {
                             .padding(.horizontal, 10).padding(.vertical, 6)
                             .glassCapsule(material: .regular)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressableSubtle)
                 }
             }
         }
@@ -792,6 +792,6 @@ struct DSStepper: View {
                 .frame(width: 30, height: 26)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressableSubtle)
     }
 }

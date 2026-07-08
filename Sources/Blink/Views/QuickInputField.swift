@@ -23,7 +23,7 @@ struct QuickInputField: View {
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(timer.phase.glow)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressableSubtle)
             }
         }
         .padding(.horizontal, 14).padding(.vertical, 10)

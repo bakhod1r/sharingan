@@ -102,7 +102,7 @@ struct WeeklyBoardView: View {
                         .foregroundStyle(.white)
                         .shadow(color: accent.opacity(0.5), radius: 8, y: 3)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressableSubtle)
                 .transition(.opacity.combined(with: .scale))
             }
 
@@ -134,7 +134,7 @@ struct WeeklyBoardView: View {
                 .background(Circle().fill(Color.white.opacity(0.08)))
                 .contentShape(Circle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressableSubtle)
     }
 
     private var rangeLabel: String {

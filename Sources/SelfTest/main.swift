@@ -48,6 +48,7 @@ testBrightnessSettings()
         testBlockedAppPresets()
         testTaskPlanning()
         testWeeklyReport()
+        testChartAggregation()
 
         print("\nPassed: \(passed)  Failed: \(failures)")
         if failures > 0 {
@@ -275,6 +276,41 @@ testBrightnessSettings()
         var fresh = PomodoroStats()
         fresh.registerFocusCompletion(on: now)
         check(fresh.weekOverWeekChange(now: now) == nil, "no prior week → nil change")
+    }
+
+    static func testChartAggregation() {
+        print("• Chart aggregation (weekly / monthly buckets)")
+        let cal = Calendar.current
+        let now = Date()
+        var stats = PomodoroStats()
+        // 3 today, 2 eight days ago (previous calendar week for most week-days).
+        for _ in 0..<3 { stats.registerFocusCompletion(on: now) }
+        let d8 = cal.date(byAdding: .day, value: -8, to: now)!
+        for _ in 0..<2 { stats.registerFocusCompletion(on: d8) }
+        // 4 forty days ago (previous month for most days).
+        let d40 = cal.date(byAdding: .day, value: -40, to: now)!
+        for _ in 0..<4 { stats.registerFocusCompletion(on: d40) }
+
+        let weeks = stats.recentWeeks(4)
+        check(weeks.count == 4, "recentWeeks returns exactly n buckets")
+        check(weeks.last?.count == 3, "current week bucket = 3")
+        let weekSum = weeks.reduce(0) { $0 + $1.count }
+        // d40 may fall outside a 4-week window; the 3 + 2 always land inside it.
+        check(weekSum >= 5, "recentWeeks sums the in-window days")
+
+        let months = stats.recentMonths(3)
+        check(months.count == 3, "recentMonths returns exactly n buckets")
+        check(months.reduce(0) { $0 + $1.count } == 9, "recentMonths sums all 3 months = 9")
+        // Buckets are chronological, oldest first.
+        check(months.first!.day < months.last!.day, "month buckets are chronological")
+
+        // History now retains well beyond 90 days (400-day window).
+        let old = cal.date(byAdding: .day, value: -200, to: now)!
+        var deep = PomodoroStats()
+        deep.registerFocusCompletion(on: old)
+        deep.registerFocusCompletion(on: now)
+        check(deep.recentMonths(12).reduce(0) { $0 + $1.count } == 2,
+              "200-day-old history survives (retention > 90d)")
     }
 
     static func testModels() {

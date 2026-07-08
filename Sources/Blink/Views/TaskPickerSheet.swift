@@ -87,7 +87,7 @@ struct TaskPickerSheet: View {
             .padding(.horizontal, 14).padding(.vertical, 10)
             .glassRounded(12, material: .regular)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressableSubtle)
     }
 
     // MARK: - Empty state
@@ -123,7 +123,7 @@ struct TaskPickerSheet: View {
                         .font(.system(size: 22))
                         .foregroundStyle(.white)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressableSubtle)
                 .disabled(newTitle.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             .padding(.horizontal, 14).padding(.vertical, 10)
@@ -136,7 +136,7 @@ struct TaskPickerSheet: View {
                     .font(.system(.caption, design: .rounded).weight(.medium))
                     .foregroundStyle(.white.opacity(0.6))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressableSubtle)
         }
         .padding(16)
     }

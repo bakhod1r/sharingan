@@ -85,7 +85,7 @@ struct TasksView: View {
                         .font(.system(size: 24))
                         .foregroundStyle(.tint)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressableSubtle)
                 .disabled(newTitle.trimmingCharacters(in: .whitespaces).isEmpty)
 
                 TextField("Add a task…", text: $newTitle, onCommit: add)
@@ -107,7 +107,7 @@ struct TasksView: View {
                     chip(icon: "slider.horizontal.3",
                          text: showDetails ? "Less" : "More", active: showDetails)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressableSubtle)
                 .help("Tags, estimate, repeat, project, notes")
             }
 
@@ -179,7 +179,7 @@ struct TasksView: View {
                     .frame(width: 260)
                 HStack {
                     Button("Clear") { setDue(nil) }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressableSubtle)
                         .foregroundStyle(Color.red.opacity(0.9))
                     Spacer()
                     Button("Set") { hasDue = true; showCustomDue = false }
@@ -320,7 +320,7 @@ struct TasksView: View {
                         Label("Export CSV", systemImage: "square.and.arrow.up")
                             .font(.system(.caption, design: .rounded))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressableSubtle)
                     .foregroundStyle(.white.opacity(0.55))
                 }
             }
@@ -373,7 +373,7 @@ struct TasksView: View {
                                         .foregroundStyle(.white.opacity(0.8))
                                         .contentShape(Rectangle())
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(.pressableSubtle)
                             }
                             .foregroundStyle(.white)
                             .padding(.horizontal, 8).padding(.vertical, 4)
@@ -411,7 +411,7 @@ struct TasksView: View {
                                     .padding(.horizontal, 8).padding(.vertical, 3)
                                     .background(Capsule().fill(Color.white.opacity(0.06)))
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.pressableSubtle)
                         }
                     }
                 }
@@ -457,7 +457,7 @@ struct TasksView: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressableSubtle)
             }
             colorRow(selected: newCatColor) { newCatColor = $0 }
             iconRow(selected: newCatIcon) { newCatIcon = $0 }
@@ -508,7 +508,7 @@ struct TasksView: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressableSubtle)
             }
             ForEach(store.allCategories) { c in
                 categoryManagerRow(c)
@@ -563,12 +563,12 @@ struct TasksView: View {
                         Image(systemName: "pencil").font(.system(size: 11))
                             .foregroundStyle(.white.opacity(0.6)).frame(width: 22, height: 22)
                     }
-                    .buttonStyle(.plain).help("Rename")
+                    .buttonStyle(.pressableSubtle).help("Rename")
                     Button { store.deleteCategory(c.name) } label: {
                         Image(systemName: "trash").font(.system(size: 11))
                             .foregroundStyle(.red.opacity(0.8)).frame(width: 22, height: 22)
                     }
-                    .buttonStyle(.plain).help("Delete category")
+                    .buttonStyle(.pressableSubtle).help("Delete category")
                 }
             }
             colorRow(selected: c.colorHex) { store.setColor(for: c.name, colorHex: $0) }
@@ -648,7 +648,7 @@ struct TasksView: View {
                             .font(.system(size: 13))
                             .foregroundStyle(sub.isDone ? Color.green : .secondary)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressableSubtle)
                     Text(sub.title)
                         .font(.system(.caption, design: .rounded))
                         .strikethrough(sub.isDone, color: .secondary)
@@ -658,7 +658,7 @@ struct TasksView: View {
                         Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
                             .foregroundStyle(.secondary)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.pressableSubtle)
                 }
             }
             HStack(spacing: 8) {
@@ -770,7 +770,7 @@ struct TasksView: View {
                     .frame(width: 24, height: 24)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressableSubtle)
             .help(task.priority == .none ? "" : task.priority.menuLabel)
 
             VStack(alignment: .leading, spacing: 3) {
@@ -824,7 +824,7 @@ struct TasksView: View {
                         .frame(width: 22, height: 22)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.pressableSubtle)
                 .help("Subtasks & notes")
             }
 
@@ -835,7 +835,7 @@ struct TasksView: View {
                     .frame(width: 22, height: 22)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressableSubtle)
             .opacity(hovered ? 1 : 0)
             .animation(.easeInOut(duration: 0.15), value: hovered)
             .help("Delete task")
@@ -846,7 +846,7 @@ struct TasksView: View {
                     .foregroundStyle(isActive ? accent : (hovered ? Color.dsPrimary : Color.dsSecondary))
                     .shadow(color: isActive ? accent.opacity(0.5) : .clear, radius: 5)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressableSubtle)
             .help("Run a focus pomodoro on this task")
         }
         .padding(.leading, 14).padding(.trailing, 12).padding(.vertical, 10)
