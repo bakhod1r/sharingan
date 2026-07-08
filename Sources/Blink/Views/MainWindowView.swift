@@ -7,6 +7,10 @@ struct MainWindowView: View {
     @ObservedObject var timer: PomodoroTimer
     @ObservedObject private var tasks = TaskStore.shared
     @ObservedObject private var router = AppRouter.shared
+    /// Sidebar row the pointer is hovering, for a subtle highlight.
+    @State private var hoveredNav: AppSection?
+
+    private var accent: Color { timer.settings.theme.gradient.first ?? .accentColor }
 
     typealias Section = AppSection
     private var section: Section {
@@ -114,36 +118,56 @@ struct MainWindowView: View {
 
     private func navRow(_ s: Section) -> some View {
         let selected = section == s
+        let hovered = hoveredNav == s
         let openCount = tasks.tasks.filter { !$0.isDone }.count
         return Button {
             section = s
         } label: {
             HStack(spacing: 11) {
-                // Plain monochrome line glyph — CleanMyMac's rows use simple
-                // gray icons, brighter when the row is selected.
+                // Icon glows in the theme accent when the row is selected, so the
+                // active section reads instantly (Todoist-style accent selection).
                 Image(systemName: s.icon)
-                    .font(.system(size: 15, weight: .regular))
+                    .font(.system(size: 15, weight: selected ? .semibold : .regular))
+                    .foregroundStyle(selected ? accent
+                                     : (hovered ? Color.white.opacity(0.85) : .white.opacity(0.55)))
                     .frame(width: 20, alignment: .center)
                 Text(s.title)
                     .font(.system(.body, design: .rounded).weight(selected ? .semibold : .regular))
+                    .foregroundStyle(selected ? Color.white : .white.opacity(0.7))
                 Spacer()
                 if s == .tasks, openCount > 0 {
                     Text("\(openCount)")
-                        .font(.system(.caption2, design: .rounded).weight(.bold))
+                        .font(.system(.caption2, design: .rounded).weight(.bold).monospacedDigit())
+                        .foregroundStyle(selected ? accent : .white.opacity(0.5))
                         .padding(.horizontal, 7).padding(.vertical, 2)
-                        .background(Color.white.opacity(0.2), in: Capsule())
+                        .background(Capsule().fill(selected ? accent.opacity(0.18)
+                                                   : Color.white.opacity(0.08)))
                 }
             }
-            .foregroundStyle(selected ? Color.white : .white.opacity(0.62))
             .padding(.horizontal, 10).padding(.vertical, 9)
             .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(selected ? Color.white.opacity(0.16) : .clear)
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(selected ? accent.opacity(0.20)
+                          : (hovered ? Color.white.opacity(0.06) : .clear))
             )
+            // A slim accent bar marks the selected row, like a sidebar cursor.
+            .overlay(alignment: .leading) {
+                if selected {
+                    Capsule().fill(accent)
+                        .frame(width: 3, height: 16)
+                        .padding(.leading, 2)
+                }
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.pressableSubtle)
         .padding(.horizontal, 8)
+        .onHover { inside in
+            if inside { hoveredNav = s }
+            else if hoveredNav == s { hoveredNav = nil }
+        }
+        .animation(.easeOut(duration: 0.15), value: selected)
+        .animation(.easeOut(duration: 0.15), value: hovered)
     }
 
     // MARK: - Detail

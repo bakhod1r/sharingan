@@ -53,10 +53,13 @@ final class MenuBarController: NSObject {
 
     private func updateTitle() {
         guard let timer, let button = statusItem?.button else { return }
+        // Todoist-style minimal menu bar: just the stopwatch icon at rest, and
+        // the icon + countdown only while a session is actually engaged
+        // (running or paused mid-way). A fresh/reset timer shows the icon alone.
         let s = max(0, timer.remainingSeconds)
-        // The stopwatch glyph is a real template image (set once in install); the
-        // title is just the time, spaced off the icon.
-        button.title = String(format: " %02d:%02d", Int(s) / 60, Int(s) % 60)
+        let engaged = timer.isRunning
+            || (timer.remainingSeconds > 0 && timer.remainingSeconds < timer.totalSeconds)
+        button.title = engaged ? String(format: " %02d:%02d", Int(s) / 60, Int(s) % 60) : ""
     }
 
     /// The menu-bar stopwatch icon as a template image, so macOS tints it
