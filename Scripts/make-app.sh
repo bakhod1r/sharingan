@@ -45,7 +45,17 @@ cp "$BINDIR/$APP_NAME" "$APP/Contents/MacOS/$APP_NAME"
 # Info.plist
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 
-# SwiftPM resource bundles (Bundle.module lookups: sounds, animations, icons)
+# SwiftPM resource bundles (Bundle.module lookups: sounds, animations, icons).
+# The generated Bundle.module accessor resolves `Bundle.main.bundleURL/<name>.bundle`,
+# and for an app launched via LaunchServices `bundleURL` is the .app ROOT — not
+# Contents/Resources. If the bundle isn't found there, Bundle.module falls back
+# to the absolute build path baked in at compile time, which only exists on the
+# build machine, so the app crashes on launch on every other Mac.
+#
+# Fix: keep the real bundles in Contents/Resources (where codesign can seal
+# them cleanly), then AFTER signing add a root-level symlink to each (see the
+# post-codesign step below). codesign rejects any content — real or symlink —
+# at the bundle root, so the symlinks must go on after the seal.
 for b in "$BINDIR"/*.bundle; do
   [[ -e "$b" ]] && cp -R "$b" "$APP/Contents/Resources/"
 done
@@ -72,7 +82,18 @@ fi
 xattr -cr "$APP" 2>/dev/null || true
 
 # Ad-hoc codesign so SMAppService / LaunchServices accept the bundle locally.
+# Signed while the root is clean (Contents/ only) so the seal is valid.
 codesign --force --deep --sign - "$APP" 2>/dev/null && echo "  ✓ ad-hoc signed" || echo "  ! codesign skipped"
+
+# Post-sign: add the root-level symlinks the Bundle.module accessor needs. Done
+# after signing so they don't break the seal; on launch (no quarantine) macOS
+# doesn't re-verify, and Bundle.main.bundleURL/<name>.bundle resolves through
+# the symlink into the sealed Contents/Resources copy.
+for b in "$BINDIR"/*.bundle; do
+  [[ -e "$b" ]] || continue
+  name="$(basename "$b")"
+  ln -sf "Contents/Resources/$name" "$APP/$name"
+done
 
 echo "✅ Done → $APP"
 echo "   Install:  Scripts/install.sh   (build + install to /Applications)"

@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 #
-# install.sh — build Blink from source and install it to /Applications so it
-# opens cleanly on ANY Mac, including a second machine you git-pulled onto.
+# install.sh — make Blink open on THIS Mac, whatever state it arrived in.
 #
-#   Scripts/install.sh              # build + install + launch
-#   Scripts/install.sh --universal  # universal binary (needs Xcode)
+#   Scripts/install.sh            # use the git-tracked prebuilt app (fast)
+#   Scripts/install.sh --build    # rebuild from source first
 #
-# Why this exists: the app is ad-hoc signed (no paid Apple Developer ID), and
-# on macOS 15/26 Gatekeeper shows "Blink can't be opened" for an ad-hoc app
-# that carries a quarantine flag — which is exactly what happens when you copy
-# the built .app between Macs (AirDrop/iCloud/USB). Building from source on each
-# Mac and stripping quarantine avoids that entirely. This script does both.
+# Both of your Macs are Apple Silicon, so the prebuilt arm64 bundle committed
+# in dist/ runs as-is — no rebuild needed. The only thing that stops an ad-hoc
+# app from launching on a second Mac (macOS 15/26) is the quarantine flag +
+# Gatekeeper's Finder gate. This script removes the flag, re-seals the bundle
+# with a local ad-hoc signature, installs to /Applications, and launches it via
+# `open` (which bypasses the Finder double-click block for un-quarantined apps).
 #
 set -euo pipefail
 
@@ -21,26 +21,39 @@ APP_NAME="Blink"
 SRC="$ROOT/dist/$APP_NAME.app"
 DEST="/Applications/$APP_NAME.app"
 
-# 1) Build the bundle (forwards --universal / --debug).
-"$ROOT/Scripts/make-app.sh" "${1:-}"
-
-# 2) Replace any previous install.
-echo "▸ Installing to $DEST …"
-if [[ -d "$DEST" ]]; then
-  # Quit a running copy so the replace doesn't hit a busy binary.
-  pkill -f "$DEST/Contents/MacOS/$APP_NAME" 2>/dev/null || true
-  sleep 1
-  rm -rf "$DEST"
+# 1) Rebuild only if asked, or if the prebuilt bundle is missing.
+if [[ "${1:-}" == "--build" || ! -d "$SRC" ]]; then
+  echo "▸ Building from source…"
+  "$ROOT/Scripts/make-app.sh"
+else
+  echo "▸ Using prebuilt dist/$APP_NAME.app (pass --build to recompile)"
 fi
+
+# 2) Replace any previous install (quit a running copy first).
+echo "▸ Installing to $DEST …"
+pkill -f "$APP_NAME.app/Contents/MacOS/$APP_NAME" 2>/dev/null || true
+sleep 1
+rm -rf "$DEST"
 cp -R "$SRC" "$DEST"
 
-# 3) Clear quarantine + re-sign the installed copy so Gatekeeper lets it launch
-#    from Finder (double-click), not just from Terminal.
+# 3) The universal unlock: drop the quarantine flag (from a git-zip / AirDrop /
+#    iCloud copy). The bundle keeps its original ad-hoc signature — no re-sign,
+#    which would fail anyway because of the root-level Bundle.module symlinks.
 xattr -cr "$DEST" 2>/dev/null || true
-codesign --force --deep --sign - "$DEST" 2>/dev/null || true
 
-# 4) Launch it.
+# 4) Launch via `open` — works even when a Finder double-click is blocked.
 open "$DEST"
+sleep 2
 
-echo "✅ Installed and launched → $DEST"
-echo "   The stopwatch icon should now be in your menu bar."
+# 5) Confirm, or hand off to the one manual step macOS may still require.
+if pgrep -f "$APP_NAME.app/Contents/MacOS/$APP_NAME" >/dev/null; then
+  echo "✅ Blink is running — look for the stopwatch icon in your menu bar."
+else
+  cat <<EOF
+⚠️  macOS is still holding the first launch. One-time unlock:
+    1) Open  System Settings → Privacy & Security
+    2) Scroll down — you'll see: '"Blink" was blocked'
+    3) Click  Open Anyway,  then re-run:  Scripts/install.sh
+  (This only happens once per Mac for an ad-hoc-signed app.)
+EOF
+fi
