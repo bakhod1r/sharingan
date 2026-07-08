@@ -171,6 +171,17 @@ testBrightnessSettings()
         store.setProject(b.id, nil)
         check(store.tasks.first { $0.id == b.id }?.project == nil, "project cleared to nil")
 
+        // Weekday totals bucket history by weekday (0=Mon…6=Sun).
+        var wdStats = PomodoroStats()
+        var wdComps = DateComponents(); wdComps.year = 2026; wdComps.month = 1; wdComps.day = 5 // Mon
+        let monday = cal.date(from: wdComps)!
+        wdStats.history = [DailyCount(day: monday, count: 3),
+                           DailyCount(day: cal.date(byAdding: .day, value: 2, to: monday)!, count: 1)] // Wed
+        let wt = wdStats.weekdayTotals()
+        check(wt[0] == 3, "Monday bucket = 3")
+        check(wt[2] == 1, "Wednesday bucket = 1")
+        check(wdStats.bestWeekday == 0, "best weekday is Monday")
+
         // Priority: set/persist + P-label mapping + defensive decode default.
         let storeP = TaskStore(fileURL: dir.appendingPathComponent("tprio.json"))
         storeP.add(title: "urgent")

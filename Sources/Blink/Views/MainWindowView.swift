@@ -172,6 +172,8 @@ struct MainWindowView: View {
                                      accent: timer.settings.theme.gradient.first ?? .accentColor)
                     StreakBadgeView(streak: timer.stats.streak)
                     StatsChartView(stats: timer.stats)
+                    StatsExtrasView(stats: timer.stats,
+                                    accent: timer.settings.theme.gradient.first ?? .accentColor)
                 }
             }
         case .settings:

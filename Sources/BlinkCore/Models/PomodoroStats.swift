@@ -172,4 +172,22 @@ public struct PomodoroStats: Codable, Equatable, Sendable {
         guard days > 0 else { return 0 }
         return Double(history.reduce(0) { $0 + $1.count }) / Double(days)
     }
+
+    /// Completed focus sessions bucketed by weekday, index 0 = Monday … 6 = Sunday.
+    public func weekdayTotals() -> [Int] {
+        let cal = Calendar.current
+        var out = Array(repeating: 0, count: 7)
+        for d in history where d.count > 0 {
+            let wd = cal.component(.weekday, from: d.day)   // 1=Sun … 7=Sat
+            out[(wd + 5) % 7] += d.count                     // → 0=Mon … 6=Sun
+        }
+        return out
+    }
+
+    /// The most productive weekday (0 = Mon … 6 = Sun), or nil if no data.
+    public var bestWeekday: Int? {
+        let t = weekdayTotals()
+        guard let peak = t.max(), peak > 0 else { return nil }
+        return t.firstIndex(of: peak)
+    }
 }
