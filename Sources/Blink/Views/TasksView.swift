@@ -16,6 +16,7 @@ struct TasksView: View {
     @State private var tagDraft = ""
     @State private var hasDue = false
     @State private var newDue = Date().addingTimeInterval(3600)
+    @State private var showCustomDue = false
     @State private var newEstimate = 0
     @State private var newRecurrence: Recurrence = .none
     @State private var newProject = ""
@@ -97,15 +98,7 @@ struct TasksView: View {
             HStack(spacing: 8) {
                 categoryMenu
                 priorityMenu
-                Button { withAnimation(.easeInOut(duration: 0.15)) { hasDue.toggle() } } label: {
-                    chip(icon: hasDue ? "calendar.circle.fill" : "calendar",
-                         text: "Due", active: hasDue)
-                }
-                .buttonStyle(.plain)
-                if hasDue {
-                    DatePicker("", selection: $newDue)
-                        .datePickerStyle(.compact).labelsHidden().controlSize(.small)
-                }
+                dueMenu
                 Spacer(minLength: 4)
                 // Everything else (tags, estimate, repeat, project, notes).
                 Button {
@@ -156,6 +149,90 @@ struct TasksView: View {
             .background(Capsule().fill(Color.dsFill))
         }
         .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+    }
+
+    /// Due-date chip: quick options in a menu, plus a "Pick a date…" that opens
+    /// a graphical calendar popover for a specific day + time.
+    private var dueMenu: some View {
+        Menu {
+            Button { setDue(dueAt(daysFromNow: 0)) } label: { Label("Today", systemImage: "star") }
+            Button { setDue(dueAt(daysFromNow: 1)) } label: { Label("Tomorrow", systemImage: "sun.max") }
+            Button { setDue(upcomingWeekend()) } label: { Label("This weekend", systemImage: "beach.umbrella") }
+            Button { setDue(nextMonday()) } label: { Label("Next week", systemImage: "calendar") }
+            Divider()
+            Button { showCustomDue = true } label: { Label("Pick a date…", systemImage: "calendar.badge.clock") }
+            if hasDue {
+                Divider()
+                Button(role: .destructive) { setDue(nil) } label: { Label("No date", systemImage: "xmark") }
+            }
+        } label: {
+            chip(icon: hasDue ? "calendar.circle.fill" : "calendar", text: dueChipLabel, active: hasDue)
+        }
+        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+        .popover(isPresented: $showCustomDue, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Due date").dsSectionLabel()
+                DatePicker("", selection: $newDue,
+                           displayedComponents: [.date, .hourAndMinute])
+                    .datePickerStyle(.graphical)
+                    .labelsHidden()
+                    .frame(width: 260)
+                HStack {
+                    Button("Clear") { setDue(nil) }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(Color.red.opacity(0.9))
+                    Spacer()
+                    Button("Set") { hasDue = true; showCustomDue = false }
+                        .keyboardShortcut(.defaultAction)
+                }
+            }
+            .padding(16)
+            .frame(width: 292)
+        }
+    }
+
+    /// Human label for the due chip — "Today", "Tomorrow", or "MMM d".
+    private var dueChipLabel: String {
+        guard hasDue else { return "Due" }
+        let cal = Calendar.current
+        if cal.isDateInToday(newDue) { return "Today" }
+        if cal.isDateInTomorrow(newDue) { return "Tomorrow" }
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US"); f.dateFormat = "MMM d"
+        return f.string(from: newDue)
+    }
+
+    private func setDue(_ date: Date?) {
+        if let d = date { newDue = d; hasDue = true } else { hasDue = false }
+        showCustomDue = false
+    }
+
+    /// `days` from now at 9:00 AM.
+    private func dueAt(daysFromNow days: Int) -> Date {
+        let cal = Calendar.current
+        let base = cal.date(byAdding: .day, value: days, to: Date()) ?? Date()
+        return cal.date(bySettingHour: 9, minute: 0, second: 0, of: base) ?? base
+    }
+
+    /// The coming Saturday (today if it's already Saturday) at 9:00 AM.
+    private func upcomingWeekend() -> Date {
+        let cal = Calendar.current
+        var d = Date()
+        for _ in 0..<7 {
+            if cal.component(.weekday, from: d) == 7 { break }   // 7 = Saturday
+            d = cal.date(byAdding: .day, value: 1, to: d) ?? d
+        }
+        return cal.date(bySettingHour: 9, minute: 0, second: 0, of: d) ?? d
+    }
+
+    /// The next Monday (never today) at 9:00 AM.
+    private func nextMonday() -> Date {
+        let cal = Calendar.current
+        var d = cal.date(byAdding: .day, value: 1, to: Date()) ?? Date()
+        for _ in 0..<7 {
+            if cal.component(.weekday, from: d) == 2 { break }   // 2 = Monday
+            d = cal.date(byAdding: .day, value: 1, to: d) ?? d
+        }
+        return cal.date(bySettingHour: 9, minute: 0, second: 0, of: d) ?? d
     }
 
     /// The category picker chip, reused in the primary row.
@@ -883,6 +960,7 @@ struct TasksView: View {
         newTagList = []
         tagDraft = ""
         hasDue = false
+        showCustomDue = false
         newEstimate = 0
         newRecurrence = .none
         newProject = ""
