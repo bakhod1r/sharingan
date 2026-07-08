@@ -41,6 +41,40 @@ public enum Recurrence: String, Codable, Sendable, CaseIterable, Identifiable {
     }
 }
 
+/// Task priority, Todoist-style: P1 (urgent, red) … P4 (none). Higher rawValue
+/// = more urgent, so sorting descending puts P1 first.
+public enum TaskPriority: Int, Codable, Sendable, CaseIterable, Identifiable {
+    case none = 0   // P4 — no flag
+    case low  = 1   // P3 — blue
+    case medium = 2 // P2 — orange
+    case high = 3   // P1 — red
+
+    public var id: Int { rawValue }
+
+    /// "P1"…"P4".
+    public var label: String { "P\(4 - rawValue)" }
+
+    /// Menu label.
+    public var menuLabel: String {
+        switch self {
+        case .none:   return "No priority"
+        case .low:    return "P3 · Low"
+        case .medium: return "P2 · Medium"
+        case .high:   return "P1 · Urgent"
+        }
+    }
+
+    /// Flag color hex, or nil for `.none`.
+    public var colorHex: String? {
+        switch self {
+        case .none:   return nil
+        case .low:    return "#4F8DFD"
+        case .medium: return "#FFB020"
+        case .high:   return "#FF5E5B"
+        }
+    }
+}
+
 /// A task the user can run focus pomodoros against.
 public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
     public var id: UUID
@@ -65,6 +99,8 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
     public var recurrence: Recurrence
     /// Optional project grouping (a second axis above category).
     public var project: String?
+    /// Todoist-style priority flag.
+    public var priority: TaskPriority
 
     public init(id: UUID = UUID(),
                 title: String,
@@ -80,7 +116,8 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
                 notes: String = "",
                 subtasks: [Subtask] = [],
                 recurrence: Recurrence = .none,
-                project: String? = nil) {
+                project: String? = nil,
+                priority: TaskPriority = .none) {
         self.id = id
         self.title = title
         self.category = category
@@ -96,6 +133,7 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         self.subtasks = subtasks
         self.recurrence = recurrence
         self.project = project
+        self.priority = priority
     }
 
     // Defensive decoding: several fields (category, tags, pomodorosDone) were
@@ -120,6 +158,7 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         subtasks = try c.decodeIfPresent([Subtask].self, forKey: .subtasks) ?? []
         recurrence = try c.decodeIfPresent(Recurrence.self, forKey: .recurrence) ?? .none
         project = try c.decodeIfPresent(String.self, forKey: .project)
+        priority = try c.decodeIfPresent(TaskPriority.self, forKey: .priority) ?? .none
     }
 
     /// True when the task has a past deadline and isn't finished.

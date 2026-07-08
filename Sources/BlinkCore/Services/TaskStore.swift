@@ -161,7 +161,8 @@ public final class TaskStore: ObservableObject {
                     estimatedPomodoros: Int? = nil,
                     recurrence: Recurrence = .none,
                     project: String? = nil,
-                    notes: String = "") {
+                    notes: String = "",
+                    priority: TaskPriority = .none) {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         // New tasks go to the bottom of the manual order.
@@ -170,7 +171,8 @@ public final class TaskStore: ObservableObject {
         let task = TaskItem(title: trimmed, category: category, tags: tags, dueDate: dueDate,
                             sortOrder: nextOrder, estimatedPomodoros: estimatedPomodoros,
                             notes: notes, recurrence: recurrence,
-                            project: (cleanProject?.isEmpty ?? true) ? nil : cleanProject)
+                            project: (cleanProject?.isEmpty ?? true) ? nil : cleanProject,
+                            priority: priority)
         tasks.append(task)
         scheduleDueNotification(task)
         persist()
@@ -341,6 +343,12 @@ public final class TaskStore: ObservableObject {
     public func setRecurrence(_ id: UUID, _ recurrence: Recurrence) {
         guard let i = tasks.firstIndex(where: { $0.id == id }) else { return }
         tasks[i].recurrence = recurrence
+        persist()
+    }
+
+    public func setPriority(_ id: UUID, _ priority: TaskPriority) {
+        guard let i = tasks.firstIndex(where: { $0.id == id }) else { return }
+        tasks[i].priority = priority
         persist()
     }
 

@@ -171,6 +171,23 @@ testBrightnessSettings()
         store.setProject(b.id, nil)
         check(store.tasks.first { $0.id == b.id }?.project == nil, "project cleared to nil")
 
+        // Priority: set/persist + P-label mapping + defensive decode default.
+        let storeP = TaskStore(fileURL: dir.appendingPathComponent("tprio.json"))
+        storeP.add(title: "urgent")
+        let pt = storeP.tasks[0]
+        check(pt.priority == .none, "new task defaults to no priority")
+        storeP.setPriority(pt.id, .high)
+        check(storeP.tasks[0].priority == .high, "priority set to high")
+        check(TaskPriority.high.label == "P1", "high maps to P1")
+        check(TaskPriority.none.label == "P4", "none maps to P4")
+        check(TaskPriority.high.colorHex != nil && TaskPriority.none.colorHex == nil,
+              "flag color only for real priorities")
+        // Legacy TaskItem JSON without `priority` decodes to .none.
+        let legacyTask = #"{"id":"\#(UUID().uuidString)","title":"old","isDone":false}"#.data(using: .utf8)!
+        if let t = try? JSONDecoder().decode(TaskItem.self, from: legacyTask) {
+            check(t.priority == .none, "legacy task decodes priority=.none")
+        } else { check(false, "legacy task should decode") }
+
         // Categories: rename (custom only) reassigns tasks; delete falls back;
         // presets can't be renamed/deleted.
         let storeCat = TaskStore(fileURL: dir.appendingPathComponent("tcat.json"))

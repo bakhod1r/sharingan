@@ -20,6 +20,7 @@ struct TasksView: View {
     @State private var newRecurrence: Recurrence = .none
     @State private var newProject = ""
     @State private var newNotes = ""
+    @State private var newPriority: TaskPriority = .none
     /// Tasks whose subtasks/notes panel is expanded.
     @State private var expanded: Set<UUID> = []
     @State private var subtaskDrafts: [UUID: String] = [:]
@@ -75,13 +76,12 @@ struct TasksView: View {
     // MARK: - Composer
 
     private var composer: some View {
-        VStack(spacing: 0) {
-            // Primary row — a clean, prominent single input. This is the whole
-            // composer by default; everything else lives behind "options".
+        VStack(alignment: .leading, spacing: 10) {
+            // Row 1 — just type and press Return (or +). Nothing else needed.
             HStack(spacing: 10) {
                 Button(action: add) {
                     Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 22))
+                        .font(.system(size: 24))
                         .foregroundStyle(.tint)
                 }
                 .buttonStyle(.plain)
@@ -89,27 +89,34 @@ struct TasksView: View {
 
                 TextField("Add a task…", text: $newTitle, onCommit: add)
                     .textFieldStyle(.plain)
-                    .font(.system(.body, design: .rounded))
+                    .font(.system(.title3, design: .rounded))
                     .focused($composerFocused)
+            }
 
-                // A compact category chip stays visible so the default bucket is
-                // always clear and changeable in one click.
+            // Row 2 — the three you set most: category, priority, due. One tap each.
+            HStack(spacing: 8) {
                 categoryMenu
-
+                priorityMenu
+                Button { withAnimation(.easeInOut(duration: 0.15)) { hasDue.toggle() } } label: {
+                    chip(icon: hasDue ? "calendar.circle.fill" : "calendar",
+                         text: "Due", active: hasDue)
+                }
+                .buttonStyle(.plain)
+                if hasDue {
+                    DatePicker("", selection: $newDue)
+                        .datePickerStyle(.compact).labelsHidden().controlSize(.small)
+                }
+                Spacer(minLength: 4)
+                // Everything else (tags, estimate, repeat, project, notes).
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) { showDetails.toggle() }
                 } label: {
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(showDetails ? Color.accentColor : .secondary)
-                        .frame(width: 30, height: 30)
-                        .background(Circle().fill(Color.white.opacity(showDetails ? 0.14 : 0.05)))
-                        .contentShape(Circle())
+                    chip(icon: "slider.horizontal.3",
+                         text: showDetails ? "Less" : "More", active: showDetails)
                 }
                 .buttonStyle(.plain)
-                .help("More options")
+                .help("Tags, estimate, repeat, project, notes")
             }
-            .padding(12)
 
             if showDetails {
                 detailsPanel
@@ -118,7 +125,37 @@ struct TasksView: View {
                         removal: .opacity))
             }
         }
-        .glassRounded(16, material: .thin)
+        .padding(12)
+        .glassRounded(DS.Radius.lg, material: .thin)
+    }
+
+    /// Priority flag menu (P1–P4) for the quick-setter row.
+    private var priorityMenu: some View {
+        Menu {
+            ForEach(TaskPriority.allCases.reversed()) { p in
+                Button {
+                    newPriority = p
+                } label: {
+                    if p == .none {
+                        Label(p.menuLabel, systemImage: newPriority == p ? "checkmark" : "flag.slash")
+                    } else {
+                        Label(p.menuLabel, systemImage: newPriority == p ? "checkmark" : "flag.fill")
+                    }
+                }
+            }
+        } label: {
+            let hex = newPriority.colorHex
+            HStack(spacing: 5) {
+                Image(systemName: newPriority == .none ? "flag" : "flag.fill")
+                    .font(.system(size: 10, weight: .semibold))
+                Text(newPriority == .none ? "Priority" : newPriority.label)
+                    .font(.system(.caption, design: .rounded).weight(.medium))
+            }
+            .foregroundStyle(hex.map { Color(hex: $0) } ?? Color.dsSecondary)
+            .padding(.horizontal, 10).padding(.vertical, 6)
+            .background(Capsule().fill(Color.dsFill))
+        }
+        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
     }
 
     /// The category picker chip, reused in the primary row.
@@ -164,7 +201,7 @@ struct TasksView: View {
         VStack(alignment: .leading, spacing: 12) {
             Divider().overlay(Color.white.opacity(0.1))
 
-            // Estimate + repeat + due, on one tidy row of glass chips.
+            // Estimate + repeat (due & priority live in the always-visible row).
             HStack(spacing: 8) {
                 HStack(spacing: 6) {
                     Text(newEstimate == 0 ? "Est —" : "Est \(newEstimate) 🍅")
@@ -185,23 +222,7 @@ struct TasksView: View {
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
                 .fixedSize()
-
                 Spacer()
-
-                // Due toggle as a glass chip; a compact date picker appears when on.
-                Button {
-                    withAnimation(.easeInOut(duration: 0.15)) { hasDue.toggle() }
-                } label: {
-                    chip(icon: hasDue ? "calendar.circle.fill" : "calendar",
-                         text: "Due", active: hasDue)
-                }
-                .buttonStyle(.plain)
-                if hasDue {
-                    DatePicker("", selection: $newDue)
-                        .datePickerStyle(.compact)
-                        .labelsHidden()
-                        .controlSize(.small)
-                }
             }
 
             tagEditor
@@ -591,140 +612,186 @@ struct TasksView: View {
         subtaskDrafts[taskID] = ""
     }
 
+    /// Secondary metadata line: tags, project, repeat, subtasks, due.
+    @ViewBuilder
+    private func metaRow(_ task: TaskItem, accent: Color) -> some View {
+        let hasMeta = !task.tags.isEmpty || task.dueDate != nil
+            || task.recurrence != .none || task.project != nil
+            || task.subtaskProgress.total > 0 || task.priority != .none
+        if hasMeta {
+            HStack(spacing: 7) {
+                if task.priority != .none, let hex = task.priority.colorHex {
+                    Label(task.priority.label, systemImage: "flag.fill")
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color(hex: hex))
+                }
+                if let project = task.project {
+                    Label(project, systemImage: "folder.fill")
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Color.dsSecondary)
+                }
+                ForEach(task.tags.prefix(3), id: \.self) { tag in
+                    Text("#\(tag)")
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(accent.opacity(0.22), in: Capsule())
+                        .foregroundStyle(accent)
+                }
+                if task.recurrence != .none {
+                    Image(systemName: "repeat")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(Color.dsSecondary)
+                        .help(task.recurrence.label)
+                }
+                if task.subtaskProgress.total > 0 {
+                    Label("\(task.subtaskProgress.done)/\(task.subtaskProgress.total)",
+                          systemImage: "checklist")
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .foregroundStyle(task.subtaskProgress.done == task.subtaskProgress.total
+                                         ? Color.green : Color.dsSecondary)
+                }
+                if let due = task.dueDate {
+                    Label(dueText(due), systemImage: "calendar")
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .foregroundStyle(task.isOverdue() ? Color.red : Color.dsSecondary)
+                }
+            }
+        }
+    }
+
+    /// A small circular progress ring for pomodoro estimates (done / total).
+    private func estimateRing(done: Int, total: Int, color: Color) -> some View {
+        let frac = min(1, Double(done) / Double(max(1, total)))
+        let complete = done >= total
+        return ZStack {
+            Circle().stroke(Color.dsFillStrong, lineWidth: 3)
+            Circle()
+                .trim(from: 0, to: frac)
+                .stroke(complete ? Color.green : color,
+                        style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+            Text("\(done)")
+                .font(.system(size: 10, design: .rounded).weight(.bold))
+                .foregroundStyle(complete ? Color.green : Color.dsPrimary)
+        }
+        .frame(width: 26, height: 26)
+        .help("\(done) of \(total) pomodoros")
+    }
+
     private func row(_ task: TaskItem) -> some View {
         let isActive = store.activeTaskID == task.id
         let accent = Color(hex: store.color(for: task.category))
-        return HStack(spacing: 10) {
-            Button {
-                store.toggleDone(task.id)
-            } label: {
+        let hovered = hoveredTask == task.id
+        let prio = task.priority.colorHex.map { Color(hex: $0) }
+        return HStack(spacing: 11) {
+            // Checkbox — priority-tinted ring (Todoist-style), fills green when done.
+            Button { store.toggleDone(task.id) } label: {
                 Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 18))
-                    .foregroundStyle(task.isDone ? Color.green : .secondary)
+                    .font(.system(size: 19))
+                    .foregroundStyle(task.isDone ? Color.green
+                                     : (prio ?? (hovered ? accent : Color.dsSecondary)))
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .help(task.priority == .none ? "" : task.priority.menuLabel)
 
             VStack(alignment: .leading, spacing: 3) {
                 if editingTaskID == task.id {
                     TextField("Task name", text: $editingText)
                         .textFieldStyle(.plain)
-                        .font(.system(.callout, design: .rounded).weight(.medium))
+                        .font(.system(.callout, design: .rounded).weight(.semibold))
                         .focused($editFocused)
                         .onSubmit { commitEdit(task) }
                         .onExitCommand { editingTaskID = nil; editFocused = false }
                         .onAppear { editFocused = true }
                 } else {
                     Text(task.title)
-                        .font(.system(.callout, design: .rounded).weight(.medium))
-                        .strikethrough(task.isDone, color: .secondary)
-                        .foregroundStyle(task.isDone ? .secondary : .primary)
+                        .font(.system(.callout, design: .rounded).weight(.semibold))
+                        .strikethrough(task.isDone, color: .dsTertiary)
+                        .foregroundStyle(task.isDone ? Color.dsTertiary : Color.dsPrimary)
                         .lineLimit(1)
-                        // Double-click to rename, like Finder / Todoist.
                         .onTapGesture(count: 2) { beginEdit(task) }
                 }
-                let hasMeta = !task.tags.isEmpty || task.dueDate != nil
-                    || task.recurrence != .none || task.project != nil
-                    || task.subtaskProgress.total > 0
-                if hasMeta {
-                    HStack(spacing: 6) {
-                        ForEach(task.tags, id: \.self) { tag in
-                            Text("#\(tag)")
-                                .font(.system(size: 10, weight: .semibold, design: .rounded))
-                                .padding(.horizontal, 6).padding(.vertical, 2)
-                                .background(accent.opacity(0.22), in: Capsule())
-                                .foregroundStyle(accent)
-                        }
-                        if let project = task.project {
-                            Label(project, systemImage: "folder.fill")
-                                .font(.system(size: 10, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.secondary)
-                        }
-                        if task.recurrence != .none {
-                            Image(systemName: "repeat")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(.secondary)
-                                .help(task.recurrence.label)
-                        }
-                        if task.subtaskProgress.total > 0 {
-                            Text("☑\(task.subtaskProgress.done)/\(task.subtaskProgress.total)")
-                                .font(.system(size: 10, weight: .semibold, design: .rounded))
-                                .foregroundStyle(task.subtaskProgress.done == task.subtaskProgress.total
-                                                 ? Color.green : .secondary)
-                        }
-                        if let due = task.dueDate {
-                            Label(dueText(due), systemImage: "calendar")
-                                .font(.system(size: 10, weight: .semibold, design: .rounded))
-                                .foregroundStyle(task.isOverdue() ? Color.red : .secondary)
-                        }
-                    }
-                }
+                metaRow(task, accent: accent)
             }
-            Spacer()
+            Spacer(minLength: 6)
 
             if task.isPlannedToday() {
                 Image(systemName: "sun.max.fill")
-                    .font(.system(size: 11))
+                    .font(.system(size: 12))
                     .foregroundStyle(.orange)
                     .help("On today's plan")
             }
 
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    if expanded.contains(task.id) { expanded.remove(task.id) }
-                    else { expanded.insert(task.id) }
-                }
-            } label: {
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.secondary)
-                    .rotationEffect(.degrees(expanded.contains(task.id) ? 180 : 0))
-                    .frame(width: 20, height: 20)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("Subtasks & notes")
-
+            // Estimate progress ring (or a plain count when no estimate).
             if let est = task.estimatedPomodoros {
-                Text("🍅\(task.pomodorosDone)/\(est)")
-                    .font(.system(.caption2, design: .rounded).weight(.medium))
-                    .foregroundStyle(task.pomodorosDone >= est ? Color.green : .secondary)
+                estimateRing(done: task.pomodorosDone, total: est, color: accent)
             } else if task.pomodorosDone > 0 {
                 Text("🍅\(task.pomodorosDone)")
-                    .font(.system(.caption2, design: .rounded))
-                    .foregroundStyle(.secondary)
+                    .font(.system(.caption, design: .rounded).weight(.medium))
+                    .foregroundStyle(Color.dsSecondary)
             }
 
-            // Delete — revealed on hover so the row stays uncluttered.
+            if task.subtaskProgress.total > 0 || !task.notes.isEmpty {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        if expanded.contains(task.id) { expanded.remove(task.id) }
+                        else { expanded.insert(task.id) }
+                    }
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color.dsSecondary)
+                        .rotationEffect(.degrees(expanded.contains(task.id) ? 180 : 0))
+                        .frame(width: 22, height: 22)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Subtasks & notes")
+            }
+
             Button { store.delete(task.id) } label: {
                 Image(systemName: "trash")
                     .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.dsSecondary)
                     .frame(width: 22, height: 22)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .opacity(hoveredTask == task.id ? 1 : 0)
-            .animation(.easeInOut(duration: 0.15), value: hoveredTask)
+            .opacity(hovered ? 1 : 0)
+            .animation(.easeInOut(duration: 0.15), value: hovered)
             .help("Delete task")
 
-            Button {
-                startFocus(on: task)
-            } label: {
-                Image(systemName: isActive && timer.isRunning
-                      ? "pause.circle.fill" : "play.circle.fill")
-                    .font(.system(size: 22))
-                    .foregroundStyle(isActive ? Color.accentColor : .secondary)
+            Button { startFocus(on: task) } label: {
+                Image(systemName: isActive && timer.isRunning ? "pause.circle.fill" : "play.circle.fill")
+                    .font(.system(size: 24))
+                    .foregroundStyle(isActive ? accent : (hovered ? Color.dsPrimary : Color.dsSecondary))
+                    .shadow(color: isActive ? accent.opacity(0.5) : .clear, radius: 5)
             }
             .buttonStyle(.plain)
             .help("Run a focus pomodoro on this task")
         }
-        .padding(.horizontal, 12).padding(.vertical, 8)
+        .padding(.leading, 14).padding(.trailing, 12).padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .fill(isActive ? Color.accentColor.opacity(0.14)
-                      : (hoveredTask == task.id ? Color.dsFillStrong : Color.dsFill))
+                .fill(isActive ? accent.opacity(0.16)
+                      : (hovered ? Color.dsFillStrong : Color.dsFill))
         )
-        .animation(.easeInOut(duration: 0.15), value: hoveredTask)
+        // Left category accent bar (overlay so it matches the row height).
+        .overlay(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(accent.opacity(task.isDone ? 0.3 : 1))
+                .frame(width: 3)
+                .padding(.vertical, 8)
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .stroke(isActive ? accent.opacity(0.5) : .clear, lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(hovered ? 0.18 : 0), radius: 6, y: 3)
+        .scaleEffect(hovered && !isActive ? 1.006 : 1)
+        .animation(.easeInOut(duration: 0.15), value: hovered)
         .onHover { inside in
             if inside { hoveredTask = task.id }
             else if hoveredTask == task.id { hoveredTask = nil }
@@ -733,6 +800,25 @@ struct TasksView: View {
             Button { beginEdit(task) } label: {
                 Label("Edit", systemImage: "pencil")
             }
+            Menu {
+                ForEach(TaskPriority.allCases.reversed()) { p in
+                    Button {
+                        store.setPriority(task.id, p)
+                    } label: {
+                        Label(p.menuLabel,
+                              systemImage: task.priority == p ? "checkmark" : "flag.fill")
+                    }
+                }
+            } label: { Label("Priority", systemImage: "flag.fill") }
+            Menu {
+                ForEach(store.allCategories) { c in
+                    Button {
+                        var u = task; u.category = c.name; store.update(u)
+                    } label: {
+                        Label(c.name, systemImage: task.category == c.name ? "checkmark" : c.icon)
+                    }
+                }
+            } label: { Label("Category", systemImage: "folder.fill") }
             Divider()
             Menu {
                 Button("No estimate") { store.setEstimate(task.id, nil) }
@@ -791,7 +877,8 @@ struct TasksView: View {
                   estimatedPomodoros: newEstimate > 0 ? newEstimate : nil,
                   recurrence: newRecurrence,
                   project: newProject.isEmpty ? nil : newProject,
-                  notes: newNotes)
+                  notes: newNotes,
+                  priority: newPriority)
         newTitle = ""
         newTagList = []
         tagDraft = ""
@@ -800,6 +887,7 @@ struct TasksView: View {
         newRecurrence = .none
         newProject = ""
         newNotes = ""
+        newPriority = .none
     }
 
     private func exportCSV() {
