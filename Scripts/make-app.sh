@@ -66,8 +66,13 @@ if [[ -f "$ICONSET_SRC/icon_1024.png" ]]; then
   echo "  ✓ AppIcon.icns"
 fi
 
+# Strip any quarantine flag (e.g. if a resource came in via download/AirDrop)
+# so macOS 15/26 Gatekeeper doesn't block the ad-hoc bundle with a
+# "Blink can't be opened" dialog.
+xattr -cr "$APP" 2>/dev/null || true
+
 # Ad-hoc codesign so SMAppService / LaunchServices accept the bundle locally.
 codesign --force --deep --sign - "$APP" 2>/dev/null && echo "  ✓ ad-hoc signed" || echo "  ! codesign skipped"
 
 echo "✅ Done → $APP"
-echo "   Install:  cp -R \"$APP\" /Applications/"
+echo "   Install:  Scripts/install.sh   (build + install to /Applications)"
