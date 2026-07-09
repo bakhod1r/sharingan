@@ -4,6 +4,7 @@ import BlinkCore
 
 struct StatsChartView: View {
     let stats: PomodoroStats
+    var accent: Color = .paletteFocusStart
     @State private var range: ChartRange = .month
 
     /// Time window + bucketing for the focus-history chart.
@@ -97,7 +98,7 @@ struct StatsChartView: View {
                         .frame(width: 34, height: 24)
                         .background {
                             if selected {
-                                Capsule().fill(Color.paletteFocusStart.opacity(0.9))
+                                Capsule().fill(accent.opacity(0.9))
                                     .matchedGeometryEffect(id: "rangePill", in: pickerNS)
                             }
                         }
@@ -121,7 +122,7 @@ struct StatsChartView: View {
                     y: .value("Pomodoros", item.count)
                 )
                 .foregroundStyle(
-                    LinearGradient(colors: [.paletteFocusStart, .paletteBreakStart],
+                    LinearGradient(colors: [accent, accent.opacity(0.5)],
                                    startPoint: .top, endPoint: .bottom)
                 )
                 .cornerRadius(4)
@@ -179,7 +180,7 @@ struct StatsChartView: View {
                 if let best = stats.bestFocusHour {
                     Text("Best: \(hourLabel(best))")
                         .font(.system(.caption, design: .rounded).weight(.medium))
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(accent)
                 }
             }
 
@@ -191,8 +192,8 @@ struct StatsChartView: View {
                     )
                     .foregroundStyle(
                         hour == stats.bestFocusHour
-                            ? AnyShapeStyle(Color.orange)
-                            : AnyShapeStyle(Color.paletteFocusStart.opacity(0.75))
+                            ? AnyShapeStyle(accent)
+                            : AnyShapeStyle(accent.opacity(0.4))
                     )
                     .cornerRadius(2)
                 }

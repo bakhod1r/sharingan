@@ -9,44 +9,96 @@ struct StatsSummaryView: View {
     let focusMinutes: Int
     var accent: Color = .paletteFocusStart
 
+    /// A deliberately narrow palette — colour carries meaning instead of a stock
+    /// rainbow: warm orange for streak/achievement, green for today, and the
+    /// theme accent for every focus-volume metric.
     private var metrics: [Metric] {
         let totalMinutes = stats.completedFocus * max(1, focusMinutes)
         return [
             Metric("flame.fill", "\(stats.streak.currentStreak)", "Day streak",
                    .orange, sub: "best \(stats.streak.longestStreak)"),
-            Metric("checkmark.seal.fill", "\(stats.completedFocus)", "Total 🍅",
+            Metric("checkmark.seal.fill", "\(stats.completedFocus)", "Focus sessions",
                    accent),
             Metric("clock.fill", focusTime(totalMinutes), "Focus time",
-                   .cyan),
+                   accent),
             Metric("calendar", "\(stats.completedTodayCount())", "Today",
                    .green),
             Metric("chart.line.uptrend.xyaxis", "\(stats.thisWeekTotal())", "This week",
                    accent, sub: weekTrend()),
             Metric("star.fill", "\(stats.bestDay?.count ?? 0)", "Best day",
-                   .yellow),
+                   .orange),
             Metric("square.grid.2x2.fill", "\(stats.activeDays)", "Active days",
-                   .purple),
+                   accent),
             Metric("gauge.medium", String(format: "%.1f", stats.averagePerActiveDay), "Avg / day",
-                   .teal),
+                   accent),
             Metric("sunrise.fill", bestHour(), "Best hour",
-                   .pink),
+                   accent),
         ]
     }
 
     private let columns = [GridItem(.adaptive(minimum: 132, maximum: 200), spacing: 12)]
 
     var body: some View {
-        LazyVGrid(columns: columns, spacing: 12) {
-            ForEach(metrics) { m in
-                card(m)
+        VStack(spacing: 12) {
+            // Two headline numbers, sized up, so the page has a clear focal point
+            // instead of nine equal-weight cards.
+            HStack(spacing: 12) {
+                heroCard(metrics[0])
+                heroCard(metrics[1])
+            }
+            LazyVGrid(columns: columns, spacing: 12) {
+                ForEach(metrics.dropFirst(2)) { m in
+                    card(m)
+                }
             }
         }
+    }
+
+    /// A larger card for a headline metric — bigger number, tint-washed surface.
+    private func heroCard(_ m: Metric) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ZStack {
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .fill(m.tint.opacity(0.18))
+                Image(systemName: m.icon)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(m.tint)
+            }
+            .frame(width: 44, height: 44)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(m.value)
+                    .font(.system(size: 30, weight: .bold, design: .rounded).monospacedDigit())
+                    .foregroundStyle(.white)
+                    .lineLimit(1).minimumScaleFactor(0.6)
+                    .contentTransition(.numericText())
+                Text(m.label)
+                    .font(.system(.caption, design: .rounded).weight(.medium))
+                    .foregroundStyle(.white.opacity(0.6))
+                if let sub = m.sub {
+                    Text(sub)
+                        .font(.system(size: 10, design: .rounded))
+                        .foregroundStyle(Color.dsSecondary)
+                }
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .fill(m.tint.opacity(0.06)))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
     }
 
     private func card(_ m: Metric) -> some View {
         HStack(spacing: 12) {
             ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                     .fill(m.tint.opacity(0.18))
                 Image(systemName: m.icon)
                     .font(.system(size: 16, weight: .semibold))
@@ -74,13 +126,13 @@ struct StatsSummaryView: View {
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                 .fill(.ultraThinMaterial)
-                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                     .fill(Color.white.opacity(0.04)))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                 .stroke(Color.white.opacity(0.08), lineWidth: 1)
         )
     }

@@ -131,6 +131,7 @@ struct StatsExtrasView: View {
         .padding(14)
         .frame(maxWidth: .infinity)
         .glassRounded(DS.Radius.xl, material: .regular)
+        .liquidShadow(radius: 12, y: 6)
     }
 
     // MARK: - Category
@@ -182,6 +183,7 @@ struct StatsExtrasView: View {
         .padding(14)
         .frame(maxWidth: .infinity)
         .glassRounded(DS.Radius.xl, material: .regular)
+        .liquidShadow(radius: 12, y: 6)
     }
 
     private func dayLabel(_ d: Date) -> String {

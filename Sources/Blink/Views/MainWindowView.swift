@@ -60,18 +60,18 @@ struct MainWindowView: View {
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
+            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
                 .fill(.ultraThinMaterial)
                 .overlay(
                     // Faint theme tint so the panel reads as colored glass —
                     // the window color glows through, CleanMyMac-style.
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
                         .fill(timer.settings.theme.accent.opacity(0.14))
                 )
         )
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
+            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
                 .stroke(
                     LinearGradient(colors: [Color.white.opacity(0.35),
                                             Color.white.opacity(0.08)],
@@ -120,9 +120,9 @@ struct MainWindowView: View {
         }
         .padding(.vertical, 11)
         .background(
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                 .fill(Color.white.opacity(0.06))
-                .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                     .stroke(Color.white.opacity(0.08), lineWidth: 1))
         )
         .padding(.horizontal, 10)
@@ -148,12 +148,10 @@ struct MainWindowView: View {
     }
 
     private func sectionHeader(_ title: String) -> some View {
-        // Crisp uppercase micro-label, matching the WORK/STUDY group headers in
-        // the task list so the whole app speaks one visual language.
-        Text(title.uppercased())
-            .font(.system(.caption2, design: .rounded).weight(.heavy))
-            .tracking(1.2)
-            .foregroundStyle(.white.opacity(0.42))
+        // The one canonical group-label style — same as the task-list and
+        // Settings headers, instead of a hand-inlined copy at a dimmer opacity.
+        Text(title)
+            .dsSectionLabel()
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 18).padding(.top, 16).padding(.bottom, 5)
     }
@@ -188,7 +186,7 @@ struct MainWindowView: View {
             }
             .padding(.horizontal, 10).padding(.vertical, 9)
             .background(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
                     .fill(selected ? accent.opacity(0.20)
                           : (hovered ? Color.white.opacity(0.06) : .clear))
             )
@@ -237,7 +235,7 @@ struct MainWindowView: View {
                                      focusMinutes: timer.settings.focusMinutes,
                                      accent: timer.settings.theme.accent)
                     StreakBadgeView(streak: timer.stats.streak)
-                    StatsChartView(stats: timer.stats)
+                    StatsChartView(stats: timer.stats, accent: timer.settings.theme.accent)
                     StatsExtrasView(stats: timer.stats,
                                     accent: timer.settings.theme.accent)
                 }
