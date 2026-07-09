@@ -32,10 +32,10 @@ struct BreakView: View {
                     // Center — big Sharingan eyes over a slow breathing halo.
                     ZStack {
                         breathingGuide(size: min(geo.size.width, geo.size.height) * 0.5)
-                        SharinganEyePair(direction: validator.currentStep?.direction ?? "center",
-                                         gaze: validator.currentStep?.targetGaze ?? .center,
-                                         eyeSize: eyeH,
-                                         style: timer.settings.sharinganStyle)
+                        MoveEyePair(direction: validator.currentStep?.direction ?? "center",
+                                    gaze: validator.currentStep?.targetGaze ?? .center,
+                                    eyeSize: eyeH,
+                                    style: timer.settings.sharinganStyle)
                     }
 
                     Spacer()

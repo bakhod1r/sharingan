@@ -1,7 +1,7 @@
 import Foundation
 
-/// The Sharingan iris artwork shown during break eye exercises. Each case maps
-/// to a PNG bundled with the Blink app target (`Resources/Sharingan/<file>.png`).
+/// The Sharingan iris artwork shown during break eye exercises. Every style is
+/// drawn in code as vector art (see MoveIrisView) — no PNG assets.
 public enum SharinganStyle: String, CaseIterable, Codable, Sendable, Identifiable {
     case classic
     case mangekyou
@@ -10,21 +10,11 @@ public enum SharinganStyle: String, CaseIterable, Codable, Sendable, Identifiabl
     case itachi
     case sixStar
     case blade
+    case orbit
+    case crescent
+    case fourBlade
 
     public var id: String { rawValue }
-
-    /// Resource file name (without extension).
-    public var fileName: String {
-        switch self {
-        case .classic:         return "classic"
-        case .mangekyou:       return "mangekyou"
-        case .mangekyouKamui:  return "mangekyou_kamui"
-        case .mangekyouEternal:return "mangekyou_eternal"
-        case .itachi:          return "itachi"
-        case .sixStar:         return "sixstar"
-        case .blade:           return "blade"
-        }
-    }
 
     public var label: String {
         switch self {
@@ -35,6 +25,9 @@ public enum SharinganStyle: String, CaseIterable, Codable, Sendable, Identifiabl
         case .itachi:          return "Itachi"
         case .sixStar:         return "Six-point star"
         case .blade:           return "Three-blade"
+        case .orbit:           return "Orbit rings"
+        case .crescent:        return "Triple crescent"
+        case .fourBlade:       return "Four-blade"
         }
     }
 }

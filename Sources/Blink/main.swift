@@ -14,6 +14,35 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-icon"),
     exit(0)
 }
 
+// Headless preview of all vector Sharingan iris styles (debug utility):
+// `Blink --render-iris-grid <path>`.
+if let i = CommandLine.arguments.firstIndex(of: "--render-iris-grid"),
+   i + 1 < CommandLine.arguments.count {
+    let out = CommandLine.arguments[i + 1]
+    MainActor.assumeIsolated {
+        let grid = LazyVGrid(columns: Array(repeating: GridItem(.fixed(150)), count: 5), spacing: 18) {
+            ForEach(SharinganStyle.allCases) { style in
+                VStack(spacing: 8) {
+                    MoveIrisView(diameter: 110, style: style)
+                    Text(style.label)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.8))
+                }
+            }
+        }
+        .padding(24)
+        .background(Color(red: 0.06, green: 0.06, blue: 0.07))
+        let renderer = ImageRenderer(content: grid)
+        renderer.scale = 2
+        if let cg = renderer.cgImage {
+            let rep = NSBitmapImageRep(cgImage: cg)
+            try? rep.representation(using: .png, properties: [:])?
+                .write(to: URL(fileURLWithPath: out))
+        }
+    }
+    exit(0)
+}
+
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate

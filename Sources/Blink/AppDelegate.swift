@@ -63,16 +63,17 @@ final class MenuBarController: NSObject {
     }
 
     /// The menu-bar icon: the app's own red Sharingan iris, kept in colour
-    /// (not a template) so its identity carries into the menu bar. Falls back
-    /// to a template stopwatch glyph if the artwork can't be loaded.
+    /// (not a template) so its identity carries into the menu bar. Rendered
+    /// from the vector artwork — no PNG assets. Falls back to a template
+    /// stopwatch glyph if rendering fails.
+    @MainActor
     private static func menuBarIcon() -> NSImage? {
-        if let sharingan = SharinganAssets.image(.classic) {
-            let height: CGFloat = 16
-            let img = NSImage(size: NSSize(width: height, height: height))
-            img.lockFocus()
-            NSGraphicsContext.current?.imageInterpolation = .high
-            sharingan.draw(in: NSRect(x: 0, y: 0, width: height, height: height))
-            img.unlockFocus()
+        let renderer = ImageRenderer(
+            content: MoveIrisView(diameter: 16).frame(width: 16, height: 16)
+        )
+        renderer.scale = 2
+        if let cg = renderer.cgImage {
+            let img = NSImage(cgImage: cg, size: NSSize(width: 16, height: 16))
             img.isTemplate = false
             return img
         }
@@ -121,5 +122,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainWindowManager.shared.content = { AnyView(MainWindowView(timer: timer)) }
 
         MenuBarController.shared.install(timer: timer, coordinator: coord)
+
+        // Eyes wallpaper: restore on launch if the user left it enabled.
+        if timer.settings.eyesWallpaperEnabled {
+            WallpaperWindowManager.shared.setEnabled(true, style: timer.settings.sharinganStyle)
+        }
     }
 }

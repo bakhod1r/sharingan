@@ -7,8 +7,6 @@ import BlinkCore
 ///   dark-glass squircle → blue pomodoro countdown ring → red Sharingan iris.
 struct AppIconArtwork: View {
     var body: some View {
-        let sharingan = SharinganAssets.image(.classic)
-
         ZStack {
             // Dark-glass squircle base (deep navy → near-black).
             RoundedRectangle(cornerRadius: 230, style: .continuous)
@@ -61,18 +59,9 @@ struct AppIconArtwork: View {
                 .frame(width: 520, height: 520)
                 .blur(radius: 64)
 
-            // The Sharingan iris — the app's actual eye artwork.
-            if let sharingan {
-                Image(nsImage: sharingan)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 470, height: 470)
-                    .shadow(color: .black.opacity(0.45), radius: 22, y: 8)
-            } else {
-                Circle()
-                    .fill(Color(red: 0.62, green: 0.05, blue: 0.05))
-                    .frame(width: 470, height: 470)
-            }
+            // The Sharingan iris — the app's actual vector eye artwork.
+            MoveIrisView(diameter: 470)
+                .shadow(color: .black.opacity(0.45), radius: 22, y: 8)
         }
         .frame(width: 1024, height: 1024)
     }

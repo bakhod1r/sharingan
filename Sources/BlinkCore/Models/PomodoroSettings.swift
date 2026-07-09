@@ -17,6 +17,8 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var timeFormat: TimeDisplayFormat = .minutesSeconds
     public var showExitBreakButton: Bool = false
     public var sharinganStyle: SharinganStyle = .classic
+    /// MoveEyes ko'zlarini ish stoli orqa foni (jonli wallpaper) sifatida ko'rsatish.
+    public var eyesWallpaperEnabled: Bool = false
     public var theme: BlinkTheme = .liquidGlass
     public var repeatConfig: RepeatConfig = .init()
     public var flashAtFiveSecLeft: Bool = true
@@ -75,6 +77,7 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
         timeFormat = try c.decodeIfPresent(TimeDisplayFormat.self, forKey: .timeFormat) ?? d.timeFormat
         showExitBreakButton = try c.decodeIfPresent(Bool.self, forKey: .showExitBreakButton) ?? d.showExitBreakButton
         sharinganStyle = try c.decodeIfPresent(SharinganStyle.self, forKey: .sharinganStyle) ?? d.sharinganStyle
+        eyesWallpaperEnabled = try c.decodeIfPresent(Bool.self, forKey: .eyesWallpaperEnabled) ?? d.eyesWallpaperEnabled
         theme = try c.decodeIfPresent(BlinkTheme.self, forKey: .theme) ?? d.theme
         repeatConfig = try c.decodeIfPresent(RepeatConfig.self, forKey: .repeatConfig) ?? d.repeatConfig
         flashAtFiveSecLeft = try c.decodeIfPresent(Bool.self, forKey: .flashAtFiveSecLeft) ?? d.flashAtFiveSecLeft

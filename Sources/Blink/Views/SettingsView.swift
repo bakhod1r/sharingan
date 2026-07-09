@@ -423,8 +423,7 @@ struct SettingsView: View {
                         Text("Sharingan eye")
                             .font(.system(.body, design: .rounded))
                         Spacer()
-                        Image(nsImage: sharinganThumb(settings.sharinganStyle))
-                            .resizable().frame(width: 26, height: 26)
+                        MoveIrisView(diameter: 26, style: settings.sharinganStyle)
                         Picker("", selection: $settings.sharinganStyle) {
                             ForEach(SharinganStyle.allCases) { s in
                                 Text(s.label).tag(s)
@@ -471,6 +470,17 @@ struct SettingsView: View {
                                in: 0...60)
                             
                     }
+                }
+
+                Section("Desktop eyes wallpaper") {
+                    ToggleRow(title: "Show eyes on the desktop",
+                              isOn: $settings.eyesWallpaperEnabled)
+                        .onChange(of: settings.eyesWallpaperEnabled) { on in
+                            WallpaperWindowManager.shared.setEnabled(on, style: settings.sharinganStyle)
+                        }
+                    Text("Live wallpaper: the eyes sit under your desktop icons and follow the mouse. When idle, the Sharingan spins.")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.65))
                 }
 
                 Section("Camera & Vision") {
@@ -702,12 +712,6 @@ struct SettingsView: View {
     private func effectiveBinding(_ sh: GlobalShortcut) -> ShortcutBinding {
         if let b = settings.shortcutBindings[sh.rawValue], b.isValid { return b }
         return sh.defaultBinding
-    }
-
-    private func sharinganThumb(_ style: SharinganStyle) -> NSImage {
-        SharinganAssets.image(style)
-            ?? NSImage(systemSymbolName: "eye.fill", accessibilityDescription: nil)
-            ?? NSImage()
     }
 
     private func Section<C: View>(_ title: LocalizedStringKey,
