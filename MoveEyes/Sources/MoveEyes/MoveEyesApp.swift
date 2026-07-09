@@ -38,16 +38,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.terminate(nil)
             return
         }
-        if let i = args.firstIndex(of: "--menuicon"), i + 1 < args.count {
-            if let img = Self.menuBarIcon(),
-               let tiff = img.tiffRepresentation,
-               let rep = NSBitmapImageRep(data: tiff) {
-                try? rep.representation(using: .png, properties: [:])?
-                    .write(to: URL(fileURLWithPath: args[i + 1]))
-            }
-            NSApp.terminate(nil)
-            return
-        }
         // .app sifatida ochilganda default — wallpaper rejimi
         // (oddiy oyna uchun --window bilan ishga tushiriladi)
         let fromBundle = Bundle.main.bundlePath.hasSuffix(".app")
