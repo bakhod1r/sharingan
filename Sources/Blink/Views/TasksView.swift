@@ -597,20 +597,29 @@ struct TasksView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "checklist")
-                .font(.system(size: 34))
-                .foregroundStyle(.secondary)
-            Text("No tasks yet")
-                .font(.system(.callout, design: .rounded).weight(.medium))
-                .foregroundStyle(.secondary)
-            Text("Add one above, then press ▶ to run a focus pomodoro on it.")
-                .font(.caption2)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
+        let accent = timer.settings.theme.gradient.first ?? .accentColor
+        return VStack(spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(accent.opacity(0.14))
+                    .frame(width: 68, height: 68)
+                Image(systemName: "checklist")
+                    .font(.system(size: 28, weight: .medium))
+                    .foregroundStyle(accent)
+            }
+            VStack(spacing: 5) {
+                Text("Plan your first task")
+                    .font(.system(.title3, design: .rounded).weight(.semibold))
+                    .foregroundStyle(Color.dsPrimary)
+                Text("Type above and press Return. Then hit ▶ to\nrun a focus pomodoro on it.")
+                    .font(.system(.caption, design: .rounded))
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(Color.dsSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
+        .padding(.vertical, 44)
     }
 
     // MARK: - Section
@@ -623,9 +632,12 @@ struct TasksView: View {
                     .foregroundStyle(Color(hex: store.color(for: category)))
                 Text(category).dsSectionLabel()
                 Spacer()
-                Text("\(items.filter { !$0.isDone }.count)")
-                    .font(.system(.caption2, design: .rounded).weight(.semibold))
-                    .foregroundStyle(Color.dsTertiary)
+                let open = items.filter { !$0.isDone }.count
+                Text("\(open)")
+                    .font(.system(.caption2, design: .rounded).weight(.bold).monospacedDigit())
+                    .foregroundStyle(Color.dsSecondary)
+                    .padding(.horizontal, 7).padding(.vertical, 2)
+                    .background(Capsule().fill(Color.white.opacity(0.06)))
             }
             ForEach(items) { task in
                 VStack(spacing: 4) {
@@ -739,6 +751,9 @@ struct TasksView: View {
                         .foregroundStyle(task.isOverdue() ? Color.red : Color.dsSecondary)
                 }
             }
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .padding(.top, 1)
         }
     }
 
@@ -759,6 +774,21 @@ struct TasksView: View {
         }
         .frame(width: 26, height: 26)
         .help("\(done) of \(total) pomodoros")
+    }
+
+    /// One icon in the hover action pill (edit / delete).
+    private func rowActionButton(_ icon: String, _ help: String,
+                                 danger: Bool = false,
+                                 action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(danger ? Color.red.opacity(0.75) : Color.dsSecondary)
+                .frame(width: 24, height: 24)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.pressableSubtle)
+        .help(help)
     }
 
     private func row(_ task: TaskItem) -> some View {
@@ -816,6 +846,7 @@ struct TasksView: View {
                     .foregroundStyle(Color.dsSecondary)
             }
 
+            // Expand chevron — an info affordance, only when there's more to see.
             if task.subtaskProgress.total > 0 || !task.notes.isEmpty {
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -824,49 +855,47 @@ struct TasksView: View {
                     }
                 } label: {
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(Color.dsSecondary)
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(Color.dsTertiary)
                         .rotationEffect(.degrees(expanded.contains(task.id) ? 180 : 0))
-                        .frame(width: 22, height: 22)
+                        .frame(width: 20, height: 20)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.pressableSubtle)
                 .help("Subtasks & notes")
             }
 
-            Button { editorTask = task } label: {
-                Image(systemName: "slider.horizontal.3")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.dsSecondary)
-                    .frame(width: 22, height: 22)
-                    .contentShape(Rectangle())
+            // Secondary actions live together in one quiet pill that only
+            // appears on hover — separated from the primary Focus button so the
+            // row reads calm at rest and Delete never sits under the cursor's
+            // path to Play.
+            if hovered {
+                HStack(spacing: 1) {
+                    rowActionButton("slider.horizontal.3", "Edit task…") { editorTask = task }
+                    rowActionButton("trash", "Delete task", danger: true) { store.delete(task.id) }
+                }
+                .padding(2)
+                .background(Capsule().fill(Color.white.opacity(0.07)))
+                .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .trailing)))
             }
-            .buttonStyle(.pressableSubtle)
-            .opacity(hovered ? 1 : 0)
-            .animation(.easeInOut(duration: 0.15), value: hovered)
-            .help("Edit task…")
 
-            Button { store.delete(task.id) } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.dsSecondary)
-                    .frame(width: 22, height: 22)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.pressableSubtle)
-            .opacity(hovered ? 1 : 0)
-            .animation(.easeInOut(duration: 0.15), value: hovered)
-            .help("Delete task")
-
+            // Primary action: Focus. A filled circle so it's unmistakably THE
+            // button — accent when active/hovered, calm at rest.
             Button { startFocus(on: task) } label: {
-                Image(systemName: isActive && timer.isRunning ? "pause.circle.fill" : "play.circle.fill")
-                    .font(.system(size: 24))
-                    .foregroundStyle(isActive ? accent : (hovered ? Color.dsPrimary : Color.dsSecondary))
+                Image(systemName: isActive && timer.isRunning ? "pause.fill" : "play.fill")
+                    .font(.system(size: 11, weight: .black))
+                    .foregroundStyle(isActive || hovered ? .white : Color.dsSecondary)
+                    .frame(width: 30, height: 30)
+                    .background(
+                        Circle().fill(isActive ? accent
+                                      : (hovered ? accent.opacity(0.9) : Color.white.opacity(0.06))))
                     .shadow(color: isActive ? accent.opacity(0.5) : .clear, radius: 5)
+                    .contentShape(Circle())
             }
             .buttonStyle(.pressableSubtle)
             .help("Run a focus pomodoro on this task")
         }
+        .animation(.easeInOut(duration: 0.15), value: hovered)
         .padding(.leading, 14).padding(.trailing, 12).padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
