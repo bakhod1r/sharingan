@@ -262,7 +262,7 @@ struct WeeklyBoardView: View {
         .frame(minHeight: 440, alignment: .top)
         .background(columnBackground(isToday: isToday, isWeekend: isWeekend, targeted: targeted))
         .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
+            RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
                 .stroke(targeted ? accent.opacity(0.8)
                         : (isToday ? accent.opacity(0.4) : Color.white.opacity(0.08)),
                         lineWidth: targeted ? 2 : 1)
@@ -280,19 +280,19 @@ struct WeeklyBoardView: View {
     }
 
     private func columnBackground(isToday: Bool, isWeekend: Bool, targeted: Bool) -> some View {
-        RoundedRectangle(cornerRadius: 20, style: .continuous)
+        RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
             .fill(.ultraThinMaterial)
             .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
                     .fill(LinearGradient(
                         colors: targeted ? [accent.opacity(0.22), accent.opacity(0.05)]
                             : isToday ? [accent.opacity(0.16), accent.opacity(0.02)]
-                            : isWeekend ? [Color.white.opacity(0.02), .clear]
-                            : [Color.white.opacity(0.05), .clear],
+                            : isWeekend ? [Color.white.opacity(0.015), .clear]
+                            : [Color.white.opacity(0.07), .clear],
                         startPoint: .top, endPoint: .bottom))
             )
             .overlay( // top glass highlight
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
                     .stroke(LinearGradient(colors: [.white.opacity(0.25), .clear],
                                            startPoint: .top, endPoint: .center),
                             lineWidth: 1)
