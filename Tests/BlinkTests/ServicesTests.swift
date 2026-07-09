@@ -229,6 +229,43 @@ struct TaskTests {
         #expect(TaskCategory.color(for: "Work") == "#4F8DFD")
         #expect(TaskCategory.color(for: "Nonexistent") == "#9AA3AF")
     }
+
+    @Test func smartViewFiltering() {
+        let s = tempStore()
+        let cal = Calendar.current
+        s.add(title: "Due today", category: "Work",
+              dueDate: cal.date(bySettingHour: 8, minute: 0, second: 0, of: Date()))
+        s.add(title: "Later", category: "Work",
+              dueDate: cal.date(byAdding: .day, value: 3, to: Date()))
+        s.add(title: "Someday", category: "Work")
+        s.add(title: "Finished", category: "Work")
+        let doneID = s.tasks.first { $0.title == "Finished" }!.id
+        s.toggleDone(doneID)
+
+        // All = open tasks only; Done = completed only.
+        #expect(s.count(.all) == 3)
+        #expect(s.count(.completed) == 1)
+        // Today includes the task due today; not the +3d one.
+        let todayTitles = s.grouped(filter: .today).flatMap { $0.items.map(\.title) }
+        #expect(todayTitles.contains("Due today"))
+        #expect(!todayTitles.contains("Later"))
+        // Upcoming is the future-dated task only.
+        let upcoming = s.grouped(filter: .upcoming).flatMap { $0.items.map(\.title) }
+        #expect(upcoming == ["Later"])
+        // Search narrows within a view.
+        #expect(s.grouped(filter: .all, search: "some").flatMap { $0.items }.count == 1)
+    }
+
+    @Test func clearCompletedRemovesOnlyDone() {
+        let s = tempStore()
+        s.add(title: "Keep")
+        s.add(title: "Remove me")
+        let id = s.tasks.first { $0.title == "Remove me" }!.id
+        s.toggleDone(id)
+        s.clearCompleted()
+        #expect(s.tasks.count == 1)
+        #expect(s.tasks.first?.title == "Keep")
+    }
 }
 
 @Suite("Settings extras")

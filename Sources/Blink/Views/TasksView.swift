@@ -47,6 +47,10 @@ struct TasksView: View {
     /// hidden behind a disclosure so the default composer is a single clean input.
     @State private var showDetails = false
     @FocusState private var composerFocused: Bool
+    /// Smart-view filter + free-text search over the list.
+    @State private var filter: TaskFilter = .all
+    @State private var search = ""
+    @FocusState private var searchFocused: Bool
 
     private var newCategoryAccent: Color { Color(hex: store.color(for: newCategory)) }
 
@@ -56,27 +60,134 @@ struct TasksView: View {
 
             if store.tasks.isEmpty {
                 emptyState
-            } else if embeddedInScroll {
-                VStack(alignment: .leading, spacing: 16) {
-                    ForEach(store.grouped(), id: \.category) { group in
-                        section(group.category, group.items)
-                    }
-                }
             } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        ForEach(store.grouped(), id: \.category) { group in
-                            section(group.category, group.items)
-                        }
-                    }
-                    .padding(.vertical, 2)
+                viewBar
+                let groups = store.grouped(filter: filter, search: search)
+                if groups.isEmpty {
+                    noResults
+                } else if embeddedInScroll {
+                    taskList(groups)
+                } else {
+                    ScrollView { taskList(groups).padding(.vertical, 2) }
+                        .frame(height: 320)
                 }
-                .frame(height: 320)
             }
         }
         .sheet(item: $editorTask) { task in
             TaskEditorView(task: task,
                            accent: timer.settings.theme.accent)
+        }
+    }
+
+    /// The grouped section stack, shared by the embedded and popover layouts.
+    private func taskList(_ groups: [(category: String, items: [TaskItem])]) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            ForEach(groups, id: \.category) { group in
+                section(group.category, group.items)
+            }
+        }
+    }
+
+    // MARK: - Smart views (filter + search)
+
+    /// Smart-view selector + search + (in Done) a clear-all action.
+    private var viewBar: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 6) {
+                ForEach(TaskFilter.allCases) { filterPill($0) }
+            }
+            HStack(spacing: 8) {
+                searchField
+                if filter == .completed, store.count(.completed) > 0 {
+                    Button { withAnimation { store.clearCompleted() } } label: {
+                        Label("Clear", systemImage: "trash")
+                            .font(.system(.caption, design: .rounded).weight(.semibold))
+                            .foregroundStyle(Color.red.opacity(0.85))
+                    }
+                    .buttonStyle(.pressableSubtle)
+                    .help("Delete all completed tasks")
+                }
+            }
+        }
+    }
+
+    /// One segment of the smart-view selector — label + live count.
+    private func filterPill(_ f: TaskFilter) -> some View {
+        let selected = filter == f
+        let n = store.count(f)
+        let accent = timer.settings.theme.accent
+        return Button {
+            withAnimation(.easeInOut(duration: 0.15)) { filter = f }
+        } label: {
+            HStack(spacing: 4) {
+                Text(f.label)
+                    .font(.system(.caption, design: .rounded).weight(selected ? .semibold : .medium))
+                if n > 0 {
+                    Text("\(n)")
+                        .font(.system(size: 9, weight: .bold, design: .rounded).monospacedDigit())
+                        .foregroundStyle(selected ? .white.opacity(0.85) : Color.dsTertiary)
+                }
+            }
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+            .foregroundStyle(selected ? .white : Color.dsSecondary)
+            .padding(.horizontal, 8).padding(.vertical, 5)
+            .frame(maxWidth: .infinity)
+            .background(Capsule().fill(selected ? accent.opacity(0.9) : Color.dsFill))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.pressableSubtle)
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Color.dsTertiary)
+            TextField("Search tasks", text: $search)
+                .textFieldStyle(.plain)
+                .font(.system(.caption, design: .rounded))
+                .foregroundStyle(.white)
+                .focused($searchFocused)
+            if !search.isEmpty {
+                Button { search = "" } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.dsTertiary)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.pressableSubtle)
+            }
+        }
+        .padding(.horizontal, 10).padding(.vertical, 6)
+        .frame(maxWidth: .infinity)
+        .background(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous).fill(Color.dsFill))
+    }
+
+    /// Shown when the list has tasks but none match the current view/search.
+    private var noResults: some View {
+        VStack(spacing: 8) {
+            Image(systemName: search.isEmpty ? filter.icon : "magnifyingglass")
+                .font(.system(size: 22, weight: .medium))
+                .foregroundStyle(Color.dsTertiary)
+            Text(noResultsText)
+                .font(.system(.caption, design: .rounded))
+                .foregroundStyle(Color.dsSecondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 30)
+    }
+
+    private var noResultsText: String {
+        if !search.trimmingCharacters(in: .whitespaces).isEmpty {
+            return "No tasks match “\(search)”."
+        }
+        switch filter {
+        case .today:     return "Nothing due today — enjoy the breathing room."
+        case .upcoming:  return "No upcoming tasks scheduled."
+        case .completed: return "No completed tasks yet."
+        case .all:       return "No open tasks. You're all clear."
         }
     }
 
@@ -370,21 +481,8 @@ struct TasksView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
                         ForEach(newTagList, id: \.self) { tag in
-                            HStack(spacing: 4) {
-                                Text("#\(tag)")
-                                    .font(.system(size: 10, weight: .semibold, design: .rounded))
-                                Button { removeTag(tag) } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(.system(size: 11))
-                                        .foregroundStyle(.white.opacity(0.8))
-                                        .contentShape(Rectangle())
-                                }
-                                .buttonStyle(.pressableSubtle)
-                            }
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 8).padding(.vertical, 4)
-                            .background(Capsule().fill(Color.accentColor.opacity(0.28)))
-                            .transition(.scale.combined(with: .opacity))
+                            TaskTag(tag: tag, onRemove: { removeTag(tag) })
+                                .transition(.scale.combined(with: .opacity))
                         }
                         TextField(newTagList.isEmpty ? "add tags" : "", text: $tagDraft)
                             .textFieldStyle(.plain)
@@ -611,7 +709,7 @@ struct TasksView: View {
                 Text("Plan your first task")
                     .font(.system(.title3, design: .rounded).weight(.semibold))
                     .foregroundStyle(Color.dsPrimary)
-                Text("Type above and press Return. Then hit ▶ to\nrun a focus pomodoro on it.")
+                Text("Type a task above and press Return. Then hit \(Image(systemName: "play.fill")) to run a focus pomodoro on it.")
                     .font(.system(.caption, design: .rounded))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(Color.dsSecondary)
@@ -632,8 +730,7 @@ struct TasksView: View {
                     .foregroundStyle(Color(hex: store.color(for: category)))
                 Text(category).dsSectionLabel()
                 Spacer()
-                let open = items.filter { !$0.isDone }.count
-                Text("\(open)")
+                Text("\(items.count)")
                     .font(.system(.caption2, design: .rounded).weight(.bold).monospacedDigit())
                     .foregroundStyle(Color.dsSecondary)
                     .padding(.horizontal, 7).padding(.vertical, 2)
@@ -707,50 +804,44 @@ struct TasksView: View {
         subtaskDrafts[taskID] = ""
     }
 
-    /// Secondary metadata line: tags, project, repeat, subtasks, due.
+    /// Secondary metadata line — deliberately calm: due leads (most actionable),
+    /// then the priority flag, up to two neutral tags (+N), and a quiet cluster
+    /// of subtask progress / repeat / project. One line, one size. Category and
+    /// priority own their color channels; tags stay neutral so nothing competes.
     @ViewBuilder
-    private func metaRow(_ task: TaskItem, accent: Color) -> some View {
+    private func metaRow(_ task: TaskItem) -> some View {
         let hasMeta = !task.tags.isEmpty || task.dueDate != nil
             || task.recurrence != .none || task.project != nil
             || task.subtaskProgress.total > 0 || task.priority != .none
         if hasMeta {
             HStack(spacing: 7) {
+                if let due = task.dueDate {
+                    Label(dueText(due), systemImage: "calendar")
+                        .foregroundStyle(task.isOverdue() ? Color.red : Color.dsSecondary)
+                }
                 if task.priority != .none, let hex = task.priority.colorHex {
                     Label(task.priority.label, systemImage: "flag.fill")
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
                         .foregroundStyle(Color(hex: hex))
                 }
-                if let project = task.project {
-                    Label(project, systemImage: "folder.fill")
-                        .font(.system(size: 10, weight: .semibold, design: .rounded))
-                        .foregroundStyle(Color.dsSecondary)
-                }
-                ForEach(task.tags.prefix(3), id: \.self) { tag in
-                    Text("#\(tag)")
-                        .font(.system(size: 10, weight: .semibold, design: .rounded))
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(accent.opacity(0.22), in: Capsule())
-                        .foregroundStyle(accent)
-                }
-                if task.recurrence != .none {
-                    Image(systemName: "repeat")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(Color.dsSecondary)
-                        .help(task.recurrence.label)
-                }
+                ForEach(task.tags.prefix(2), id: \.self) { TaskTag(tag: $0) }
+                if task.tags.count > 2 { TaskTagOverflow(count: task.tags.count - 2) }
                 if task.subtaskProgress.total > 0 {
                     Label("\(task.subtaskProgress.done)/\(task.subtaskProgress.total)",
                           systemImage: "checklist")
-                        .font(.system(size: 10, weight: .semibold, design: .rounded))
                         .foregroundStyle(task.subtaskProgress.done == task.subtaskProgress.total
                                          ? Color.green : Color.dsSecondary)
                 }
-                if let due = task.dueDate {
-                    Label(dueText(due), systemImage: "calendar")
-                        .font(.system(size: 10, weight: .semibold, design: .rounded))
-                        .foregroundStyle(task.isOverdue() ? Color.red : Color.dsSecondary)
+                if task.recurrence != .none {
+                    Image(systemName: "repeat")
+                        .foregroundStyle(Color.dsTertiary)
+                        .help(task.recurrence.label)
+                }
+                if let project = task.project {
+                    Label(project, systemImage: "folder")
+                        .foregroundStyle(Color.dsTertiary)
                 }
             }
+            .font(.system(size: 10, weight: .semibold, design: .rounded))
             .lineLimit(1)
             .truncationMode(.tail)
             .padding(.top, 1)
@@ -802,7 +893,7 @@ struct TasksView: View {
                 Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 19))
                     .foregroundStyle(task.isDone ? Color.green
-                                     : (prio ?? (hovered ? accent : Color.dsSecondary)))
+                                     : (prio ?? (hovered ? Color.dsPrimary : Color.dsSecondary)))
                     .frame(width: 24, height: 24)
                     .contentShape(Rectangle())
             }
@@ -826,7 +917,7 @@ struct TasksView: View {
                         .lineLimit(1)
                         .onTapGesture(count: 2) { beginEdit(task) }
                 }
-                metaRow(task, accent: accent)
+                metaRow(task)
             }
             Spacer(minLength: 6)
 
@@ -871,7 +962,7 @@ struct TasksView: View {
             // path to Play.
             if hovered {
                 HStack(spacing: 1) {
-                    rowActionButton("slider.horizontal.3", "Edit task…") { editorTask = task }
+                    rowActionButton("pencil", "Edit task…") { editorTask = task }
                     rowActionButton("trash", "Delete task", danger: true) { store.delete(task.id) }
                 }
                 .padding(2)

@@ -1,6 +1,28 @@
 import Foundation
 import Combine
 
+/// A smart view over the task list — the top-level filter in the Tasks screen.
+public enum TaskFilter: String, CaseIterable, Identifiable, Sendable {
+    case today, upcoming, all, completed
+    public var id: String { rawValue }
+    public var label: String {
+        switch self {
+        case .today:     return "Today"
+        case .upcoming:  return "Upcoming"
+        case .all:       return "All"
+        case .completed: return "Done"
+        }
+    }
+    public var icon: String {
+        switch self {
+        case .today:     return "sun.max"
+        case .upcoming:  return "calendar"
+        case .all:       return "tray.full"
+        case .completed: return "checkmark.circle"
+        }
+    }
+}
+
 /// Persists the user's task list to a local SQLite database in Application
 /// Support (via `TaskDatabase`) and tracks which task the active focus session
 /// is running against.
@@ -153,6 +175,60 @@ public final class TaskStore: ObservableObject {
         return names.map { name in
             (name, tasks.filter { $0.category == name }.sorted(by: Self.inListOrder))
         }
+    }
+
+    /// Whether a task belongs in a given smart view.
+    private func matches(_ task: TaskItem, _ filter: TaskFilter, now: Date = Date()) -> Bool {
+        let cal = Calendar.current
+        switch filter {
+        case .all:
+            return !task.isDone
+        case .completed:
+            return task.isDone
+        case .today:
+            guard !task.isDone else { return false }
+            if task.isPlannedToday(now: now) { return true }
+            if let due = task.dueDate { return cal.isDateInToday(due) || due < now }  // today or overdue
+            return false
+        case .upcoming:
+            guard !task.isDone, let due = task.dueDate else { return false }
+            return due >= now && !cal.isDateInToday(due)   // a future day
+        }
+    }
+
+    /// Number of tasks in a smart view — powers the filter-bar counts.
+    public func count(_ filter: TaskFilter) -> Int {
+        tasks.filter { matches($0, filter) }.count
+    }
+
+    /// Tasks for a smart view, narrowed by a free-text query (title / tags /
+    /// project / notes), grouped by category in the usual order.
+    public func grouped(filter: TaskFilter, search: String = "") -> [(category: String, items: [TaskItem])] {
+        let q = search.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let filtered = tasks.filter { task in
+            guard matches(task, filter) else { return false }
+            guard !q.isEmpty else { return true }
+            return task.title.lowercased().contains(q)
+                || task.tags.contains { $0.lowercased().contains(q) }
+                || (task.project?.lowercased().contains(q) ?? false)
+                || task.notes.lowercased().contains(q)
+        }
+        let order = TaskCategory.presets.map(\.name)
+        let names = Array(Set(filtered.map(\.category)))
+            .sorted { (order.firstIndex(of: $0) ?? .max, $0) < (order.firstIndex(of: $1) ?? .max, $1) }
+        return names.map { name in
+            (name, filtered.filter { $0.category == name }.sorted(by: Self.inListOrder))
+        }
+    }
+
+    /// Deletes every completed task (the Done view's "Clear" action).
+    public func clearCompleted() {
+        for id in tasks.filter(\.isDone).map(\.id) {
+            NotificationService.shared.cancel(identifier: dueNoteID(id))
+            if activeTaskID == id { activeTaskID = nil }
+        }
+        tasks.removeAll(where: \.isDone)
+        persist()
     }
 
     // MARK: - Mutations

@@ -41,7 +41,10 @@ struct TaskEditorView: View {
                 .padding(20)
             }
         }
-        .frame(width: 420, height: 560)
+        // A comfortable default that can grow — long notes/subtask lists no
+        // longer scroll inside a locked 420×560 box.
+        .frame(minWidth: 440, idealWidth: 460, maxWidth: 620,
+               minHeight: 560, idealHeight: 640, maxHeight: 820)
         .background(editorBackground)
         .tint(accent)
     }
@@ -269,7 +272,7 @@ struct TaskEditorView: View {
             TextEditor(text: $draft.notes)
                 .font(.system(.callout, design: .rounded))
                 .scrollContentBackground(.hidden)
-                .frame(height: 70)
+                .frame(minHeight: 110, maxHeight: 240)
                 .padding(8)
                 .background(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
                     .fill(Color.white.opacity(0.05)))
@@ -427,7 +430,9 @@ private struct FlowLayout: Layout {
     }
 }
 
-/// A simple wrapping row of tag chips (removable, tappable, or muted suggestions).
+/// A wrapping row of the shared `TaskTag` pills — removable (current tags) or
+/// tappable (muted suggestions). Same pill as the composer and row, so tags
+/// read identically everywhere.
 private struct FlowTags: View {
     let tags: [String]
     var muted = false
@@ -437,20 +442,12 @@ private struct FlowTags: View {
     var body: some View {
         FlowLayout(spacing: 6) {
             ForEach(tags, id: \.self) { tag in
-                HStack(spacing: 4) {
-                    Text("#\(tag)").font(.system(.caption, design: .rounded).weight(.medium))
-                    if let onRemove {
-                        Button { onRemove(tag) } label: {
-                            Image(systemName: "xmark").font(.system(size: 8, weight: .bold))
-                        }
-                        .buttonStyle(.plain)
-                    }
+                if let onTap {
+                    Button { onTap(tag) } label: { TaskTag(tag: tag) }
+                        .buttonStyle(.pressableSubtle)
+                } else {
+                    TaskTag(tag: tag, onRemove: onRemove.map { remove in { remove(tag) } })
                 }
-                .foregroundStyle(muted ? Color.dsSecondary : Color.dsPrimary)
-                .padding(.horizontal, 9).padding(.vertical, 4)
-                .background(Capsule().fill(Color.white.opacity(muted ? 0.05 : 0.10)))
-                .contentShape(Capsule())
-                .onTapGesture { onTap?(tag) }
             }
         }
     }
