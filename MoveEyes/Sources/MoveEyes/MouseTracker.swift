@@ -5,6 +5,7 @@ import SwiftUI
 /// har kadrda o'qib turadi — oynadan tashqarida ham ishlaydi.
 final class MouseState: ObservableObject {
     @Published var location: CGPoint?
+    @Published var lastMoved = Date.distantPast
 }
 
 struct MouseTrackerView: NSViewRepresentable {
@@ -42,6 +43,7 @@ final class TrackerNSView: NSView {
         let local = convert(inWindow, from: nil)
         if state.location != local {
             state.location = local
+            state.lastMoved = Date()
         }
     }
 

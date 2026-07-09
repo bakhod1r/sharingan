@@ -147,6 +147,43 @@ struct IrisView: View {
     }
 }
 
+/// Iris — sichqoncha tinch turganda silliq aylanadi, harakatda to'xtaydi.
+struct SpinningIris: View {
+    var diameter: CGFloat
+    @ObservedObject var mouse: MouseState
+
+    @AppStorage(Settings.spinEnabledKey) private var spinEnabled = true
+    @AppStorage(Settings.spinDurationKey) private var spinDuration = 1.6
+    @AppStorage(Settings.idleDelayKey) private var idleDelay = 1.2
+
+    @State private var angle: Double = 0
+    @State private var spinning = false
+    private let ticker = Timer.publish(every: 0.2, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        IrisView(diameter: diameter)
+            .rotationEffect(.degrees(angle))
+            .onReceive(ticker) { _ in
+                let idle = Date().timeIntervalSince(mouse.lastMoved) > idleDelay
+                let shouldSpin = idle && spinEnabled
+                if shouldSpin && !spinning {
+                    spinning = true
+                    withAnimation(.linear(duration: spinDuration).repeatForever(autoreverses: false)) {
+                        angle += 360
+                    }
+                } else if !shouldSpin && spinning {
+                    spinning = false
+                    // repeatForever'ni to'xtatish: qiymatni animatsiyasiz muhrlash
+                    var t = Transaction()
+                    t.disablesAnimations = true
+                    withTransaction(t) {
+                        angle = angle.truncatingRemainder(dividingBy: 360)
+                    }
+                }
+            }
+    }
+}
+
 /// Bitta ko'z: kontur, sklera, sichqonchaga qaraydigan iris (qovoqlar bilan kesiladi).
 struct EyeView: View {
     var size: CGSize
@@ -203,7 +240,7 @@ struct EyeView: View {
                             )
                         )
                         .frame(width: irisD * 1.6, height: irisD * 1.6)
-                    IrisView(diameter: irisD)
+                    SpinningIris(diameter: irisD, mouse: mouse)
                 }
                 // tinch holatda iris sklera markazidan sal pastda, burun tomonda turadi
                 .offset(
