@@ -25,6 +25,7 @@ struct MenuBarView: View {
     @State private var hoveredTask: UUID?
     /// Task open in the full editor sheet (nil = closed).
     @State private var editorTask: TaskItem?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private enum Tab: Hashable { case timer, tasks }
 
@@ -66,10 +67,10 @@ struct MenuBarView: View {
         .padding(18)
         .frame(width: 360)
         // One app accent: controls follow the chosen theme, not system blue.
-        .tint(timer.settings.theme.gradient.first ?? .accentColor)
+        .tint(timer.settings.theme.accent)
         .sheet(item: $editorTask) { task in
             TaskEditorView(task: task,
-                           accent: timer.settings.theme.gradient.first ?? .accentColor)
+                           accent: timer.settings.theme.accent)
         }
     }
 
@@ -809,7 +810,7 @@ struct MenuBarView: View {
                     .font(.system(.headline, design: .rounded).weight(.bold))
                     .contentTransition(.opacity)
                 Text(timer.settings.timeFormat.string(timer.remainingSeconds))
-                    .font(.system(.title3, design: .rounded).weight(.semibold).monospacedDigit())
+                    .font(.dsTimer(20))
                     .foregroundStyle(.secondary)
                     .contentTransition(.numericText())
                     .animation(.snappy(duration: 0.3), value: timer.remainingSeconds)
@@ -825,13 +826,13 @@ struct MenuBarView: View {
             GlassButton(label: timer.isRunning ? "Pause" : "Start",
                         systemImage: timer.isRunning ? "pause.fill" : "play.fill",
                         prominent: true,
-                        accent: timer.settings.theme.gradient.first ?? .accentColor,
+                        accent: timer.settings.theme.accent,
                         action: startTapped)
                 // Gentle breathing pulse while the timer runs. Keyed on
                 // `isRunning` (not the one-shot `heartbeat`) so the repeating
                 // animation actually starts when the user presses Start.
-                .scaleEffect(timer.isRunning ? 1.012 : 1.0)
-                .animation(timer.isRunning
+                .scaleEffect(timer.isRunning && !reduceMotion ? 1.012 : 1.0)
+                .animation(timer.isRunning && !reduceMotion
                            ? .easeInOut(duration: 1.1).repeatForever(autoreverses: true)
                            : .default,
                            value: timer.isRunning)

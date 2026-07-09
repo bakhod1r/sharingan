@@ -695,8 +695,8 @@ struct SettingsView: View {
                 .foregroundStyle(.white.opacity(0.55))
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .glassRounded(18, material: .thin)
         .padding(14)
+        .glassRounded(DS.Radius.lg, material: .thin)
     }
 
     private func effectiveBinding(_ sh: GlobalShortcut) -> ShortcutBinding {

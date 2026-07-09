@@ -21,7 +21,7 @@ struct WeeklyBoardView: View {
     private let columnWidth: CGFloat = 204
 
     private var cal: Calendar { Calendar.current }
-    private var accent: Color { timer.settings.theme.gradient.first ?? .accentColor }
+    private var accent: Color { timer.settings.theme.accent }
 
     /// Monday that starts the visible week.
     private var weekStart: Date {

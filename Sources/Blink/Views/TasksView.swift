@@ -76,7 +76,7 @@ struct TasksView: View {
         }
         .sheet(item: $editorTask) { task in
             TaskEditorView(task: task,
-                           accent: timer.settings.theme.gradient.first ?? .accentColor)
+                           accent: timer.settings.theme.accent)
         }
     }
 
@@ -597,7 +597,7 @@ struct TasksView: View {
     }
 
     private var emptyState: some View {
-        let accent = timer.settings.theme.gradient.first ?? .accentColor
+        let accent = timer.settings.theme.accent
         return VStack(spacing: 14) {
             ZStack {
                 Circle()

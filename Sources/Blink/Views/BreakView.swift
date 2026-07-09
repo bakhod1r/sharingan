@@ -9,6 +9,7 @@ struct BreakView: View {
     /// Force-show the Exit button regardless of the user setting (used by the
     /// Settings "Preview break screen" so the preview can always be closed).
     var forceExit: Bool = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let remaining = max(0, timer.remainingSeconds)
@@ -76,7 +77,7 @@ struct BreakView: View {
     /// A soft ring that expands and contracts on a ~5s cycle — a gentle
     /// breathe-in / breathe-out pacer behind the eyes.
     private func breathingGuide(size: CGFloat) -> some View {
-        TimelineView(.animation) { ctx in
+        TimelineView(.animation(paused: reduceMotion)) { ctx in
             let t = ctx.date.timeIntervalSinceReferenceDate
             let phase = (sin(t * (2 * .pi / 5.0)) + 1) / 2   // 0…1
             let scale = 0.82 + phase * 0.5
@@ -106,8 +107,8 @@ struct BreakView: View {
                 Text("Time Left:")
                     .foregroundStyle(.white.opacity(0.55))
                 Text(timer.settings.timeFormat.string(remaining))
+                    .font(.dsTimer(20))
                     .foregroundStyle(.white)
-                    .monospacedDigit()
             }
             .font(.system(size: 20, weight: .medium, design: .rounded))
             .padding(.horizontal, 16).padding(.vertical, 8)

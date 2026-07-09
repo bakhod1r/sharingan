@@ -165,6 +165,7 @@ struct SharinganEyePair: View {
 
     /// When the current Sharingan spin-up began (reference time interval).
     @State private var spinStart: TimeInterval = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Whole accel→spin→decel burst length, seconds.
     private let spinDuration: Double = 1.6
     /// Full rotations the tomoe make during the burst.
@@ -194,6 +195,9 @@ struct SharinganEyePair: View {
     /// bell curve — zero at both ends, peaking mid-burst — so the spin eases in
     /// and eases out on its own. After the burst it holds still.
     private func activationSpin(at t: TimeInterval) -> Double {
+        // The dramatic tomoe whirl is decorative — skip it under Reduce Motion,
+        // while the gaze path (the actual eye-movement exercise) keeps running.
+        if reduceMotion { return 0 }
         let u = min(max((t - spinStart) / spinDuration, 0), 1)
         let eased = u * u * u * (u * (u * 6 - 15) + 10)   // 6u⁵ − 15u⁴ + 10u³
         return spinTurns * 360 * eased

@@ -56,13 +56,17 @@ struct StreakBadgeView: View {
                         .foregroundStyle(.white.opacity(0.68))
                 }
             }
-            ZStack(alignment: .leading) {
-                Capsule().fill(Color.white.opacity(0.12))
-                    .frame(height: 5)
-                Capsule().fill(LinearGradient(colors: [.orange, .yellow],
-                                              startPoint: .leading, endPoint: .trailing))
-                    .frame(width: max(3, 240 * pct), height: 5)
+            // Fill width is a fraction of the *actual* track width — a hardcoded
+            // 240pt only lined up at one specific card size.
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.white.opacity(0.12))
+                    Capsule().fill(LinearGradient(colors: [.orange, .yellow],
+                                                  startPoint: .leading, endPoint: .trailing))
+                        .frame(width: max(3, geo.size.width * pct))
+                }
             }
+            .frame(height: 5)
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
         .glassRounded(16, material: .thin)

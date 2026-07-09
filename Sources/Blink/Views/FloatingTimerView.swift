@@ -97,9 +97,12 @@ private struct LiquidFill: View {
     var progress: Double
     var tilt: CGFloat
     var colors: [Color]
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        TimelineView(.animation) { ctx in
+        // Pausing the schedule freezes the ambient waves at a static level while
+        // still showing the fill; drag-driven slosh remains as direct feedback.
+        TimelineView(.animation(paused: reduceMotion)) { ctx in
             let t = ctx.date.timeIntervalSinceReferenceDate
             // Calmer at rest, choppier while sloshing.
             let amp = 2.6 + abs(tilt) * 6.0
@@ -138,6 +141,7 @@ struct FloatingTimerView: View {
     @ObservedObject private var tasks = TaskStore.shared
     @State private var animate = false
     @State private var phasePulse = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var themeColors: [Color] { timer.settings.theme.gradient }
     private var phaseColors: [Color] { timer.phase.gradient }
@@ -173,8 +177,7 @@ struct FloatingTimerView: View {
 
         VStack(spacing: 3) {
             Text(timer.settings.timeFormat.string(remaining))
-                .font(.system(size: timeSize, weight: .semibold,
-                              design: .rounded).monospacedDigit())
+                .font(.dsTimer(timeSize))
                 .foregroundStyle(.white)
                 .shadow(color: .black.opacity(0.35), radius: 4, y: 1)
                 .lineLimit(1)
@@ -217,7 +220,7 @@ struct FloatingTimerView: View {
                     .stroke(Color.white.opacity(0.9), lineWidth: 2)
                     .blur(radius: 4)
                     .opacity(animate ? 1 : 0.2)
-                    .animation(.easeInOut(duration: 0.5).repeatForever(), value: animate)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.5).repeatForever(), value: animate)
                     .allowsHitTesting(false)
             }
         }

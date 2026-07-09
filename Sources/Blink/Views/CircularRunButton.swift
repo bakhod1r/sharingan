@@ -8,6 +8,7 @@ struct CircularRunButton: View {
     var action: () -> Void
 
     @State private var pulse = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var glow: Color { colors.first ?? .cyan }
 
@@ -57,7 +58,9 @@ struct CircularRunButton: View {
     /// The glow breathes only while the timer runs; at rest it sits still so the
     /// screen stays calm.
     private func syncPulse() {
-        if isRunning {
+        // Breathe only while running AND when the user hasn't asked for reduced
+        // motion — otherwise the glow sits still.
+        if isRunning && !reduceMotion {
             withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) {
                 pulse = true
             }

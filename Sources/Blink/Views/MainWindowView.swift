@@ -10,7 +10,7 @@ struct MainWindowView: View {
     /// Sidebar row the pointer is hovering, for a subtle highlight.
     @State private var hoveredNav: AppSection?
 
-    private var accent: Color { timer.settings.theme.gradient.first ?? .accentColor }
+    private var accent: Color { timer.settings.theme.accent }
 
     typealias Section = AppSection
     private var section: Section {
@@ -40,7 +40,7 @@ struct MainWindowView: View {
         .frame(minWidth: 920, minHeight: 620)
         // One app accent: controls (pickers, toggles, sliders, menus) follow the
         // chosen theme instead of the stock system blue.
-        .tint(timer.settings.theme.gradient.first ?? .accentColor)
+        .tint(timer.settings.theme.accent)
     }
 
     // MARK: - Sidebar (custom glass panel, CleanMyMac-style)
@@ -66,7 +66,7 @@ struct MainWindowView: View {
                     // Faint theme tint so the panel reads as colored glass —
                     // the window color glows through, CleanMyMac-style.
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .fill((timer.settings.theme.gradient.first ?? .blue).opacity(0.14))
+                        .fill(timer.settings.theme.accent.opacity(0.14))
                 )
         )
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
@@ -235,11 +235,11 @@ struct MainWindowView: View {
                 VStack(spacing: 20) {
                     StatsSummaryView(stats: timer.stats,
                                      focusMinutes: timer.settings.focusMinutes,
-                                     accent: timer.settings.theme.gradient.first ?? .accentColor)
+                                     accent: timer.settings.theme.accent)
                     StreakBadgeView(streak: timer.stats.streak)
                     StatsChartView(stats: timer.stats)
                     StatsExtrasView(stats: timer.stats,
-                                    accent: timer.settings.theme.gradient.first ?? .accentColor)
+                                    accent: timer.settings.theme.accent)
                 }
             }
         case .settings:
@@ -304,7 +304,7 @@ private struct TimerDetailView: View {
                     .frame(width: 300, height: 300)
                 VStack(spacing: 8) {
                     Text(timer.settings.timeFormat.string(remaining))
-                        .font(.system(size: 76, weight: .light, design: .rounded).monospacedDigit())
+                        .font(.dsTimer(76))
                         .foregroundStyle(.white)
                     Label(timer.phase.label, systemImage: timer.phase.systemImage)
                         .font(.system(.title3, design: .rounded).weight(.semibold))

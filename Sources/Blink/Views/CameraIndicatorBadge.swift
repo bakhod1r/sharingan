@@ -4,6 +4,7 @@ import BlinkCore
 struct CameraIndicatorBadge: View {
     @ObservedObject var camera: CameraService
     @State private var pulse = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 6) {
@@ -12,7 +13,7 @@ struct CameraIndicatorBadge: View {
                 .frame(width: 8, height: 8)
                 .shadow(color: color.opacity(0.7), radius: 4)
                 .scaleEffect(pulse ? 1.15 : 0.92)
-                .animation(.easeInOut(duration: 1.1).repeatForever(),
+                .animation(reduceMotion ? nil : .easeInOut(duration: 1.1).repeatForever(),
                            value: pulse)
             Text(label)
                 .font(.system(.caption2, design: .rounded).weight(.semibold))

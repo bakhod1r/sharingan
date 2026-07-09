@@ -34,6 +34,28 @@ extension Color {
     static let dsHairline   = Color.white.opacity(0.09)
 }
 
+extension Font {
+    // One rounded type ramp. Every surface picked its own `.system(size:)` before
+    // this — 170-odd ad-hoc calls with no shared scale. These roles are built on
+    // Dynamic Type text styles so they scale with the user's accessibility text
+    // size, while staying uniformly `.rounded` to match the app's voice.
+    static let dsDisplay  = Font.system(.largeTitle, design: .rounded).weight(.bold)   // screen titles
+    static let dsTitle    = Font.system(.title2, design: .rounded).weight(.bold)       // section titles
+    static let dsHeadline = Font.system(.headline, design: .rounded)                   // emphasis (semibold)
+    static let dsBody     = Font.system(.body, design: .rounded)                       // default text
+    static let dsCallout  = Font.system(.callout, design: .rounded).weight(.medium)    // list item text
+    static let dsCaption  = Font.system(.caption, design: .rounded).weight(.medium)    // secondary/help
+    static let dsMicro    = Font.system(.caption2, design: .rounded).weight(.semibold) // meta, badges
+
+    /// The one countdown-numeral style — a light, rounded, monospaced-digit face
+    /// used at every size (76pt hero, menu-bar strip, break screen, floating
+    /// pill) so the clock reads as one element across surfaces. Fixed size
+    /// because the digits are laid out to the pixel; weight stays constant.
+    static func dsTimer(_ size: CGFloat) -> Font {
+        .system(size: size, weight: .light, design: .rounded).monospacedDigit()
+    }
+}
+
 extension View {
     /// The one canonical group-label style: uppercase, tracked, tertiary color.
     func dsSectionLabel() -> some View {
