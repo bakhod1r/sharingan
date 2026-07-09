@@ -1,11 +1,14 @@
 import Foundation
 import Combine
 
-/// Persists the user's task list to a JSON file in Application Support and
-/// tracks which task the active focus session is running against.
+/// Persists the user's task list to a local SQLite database in Application
+/// Support (via `TaskDatabase`) and tracks which task the active focus session
+/// is running against.
 ///
-/// (SQLite would be overkill at this scale; a Codable JSON store keeps it simple,
-/// dependency-free, and easy to test.)
+/// The in-memory `@Published` model and the whole public API are storage-
+/// agnostic: mutations funnel through `persist()` / `persistCategories()`, which
+/// write the tables inside a transaction. A first launch with the old JSON files
+/// present migrates them automatically (see `migrateLegacyJSONIfNeeded`).
 @MainActor
 public final class TaskStore: ObservableObject {
     public static let shared = TaskStore()
@@ -15,13 +18,14 @@ public final class TaskStore: ObservableObject {
     /// User-created categories, persisted alongside (and merged after) the presets.
     @Published public private(set) var customCategories: [TaskCategory] = []
 
-    private let fileURL: URL
-    private let categoriesURL: URL
+    private let database: TaskDatabase?
 
+    /// `fileURL`, when given (tests), is the SQLite database path. In the app it
+    /// defaults to `Application Support/Blink/blink.sqlite`.
     public init(fileURL: URL? = nil) {
-        let resolved: URL
+        let dbURL: URL
         if let fileURL {
-            resolved = fileURL
+            dbURL = fileURL
         } else {
             let base = FileManager.default.urls(for: .applicationSupportDirectory,
                                                 in: .userDomainMask).first
@@ -29,13 +33,12 @@ public final class TaskStore: ObservableObject {
             let dir = base.appendingPathComponent("Blink", isDirectory: true)
             try? FileManager.default.createDirectory(at: dir,
                                                      withIntermediateDirectories: true)
-            resolved = dir.appendingPathComponent("tasks.json")
+            dbURL = dir.appendingPathComponent("blink.sqlite")
         }
-        self.fileURL = resolved
-        self.categoriesURL = resolved.deletingLastPathComponent()
-            .appendingPathComponent("categories.json")
+        self.database = TaskDatabase(path: dbURL.path)
         load()
         loadCategories()
+        migrateLegacyJSONIfNeeded(dbDir: dbURL.deletingLastPathComponent())
     }
 
     // MARK: - Categories
@@ -403,29 +406,44 @@ public final class TaskStore: ObservableObject {
     // MARK: - Persistence
 
     private func load() {
-        guard let data = try? Data(contentsOf: fileURL),
-              let decoded = try? JSONDecoder().decode([TaskItem].self, from: data) else {
-            return
-        }
-        tasks = decoded
+        tasks = database?.loadTasks() ?? []
     }
 
     private func persist() {
-        guard let data = try? JSONEncoder().encode(tasks) else { return }
-        try? data.write(to: fileURL, options: .atomic)
+        database?.saveTasks(tasks)
     }
 
     private func loadCategories() {
-        guard let data = try? Data(contentsOf: categoriesURL),
-              let decoded = try? JSONDecoder().decode([TaskCategory].self, from: data) else {
-            return
-        }
-        customCategories = decoded
+        customCategories = database?.loadCategories() ?? []
     }
 
     private func persistCategories() {
-        guard let data = try? JSONEncoder().encode(customCategories) else { return }
-        try? data.write(to: categoriesURL, options: .atomic)
+        database?.saveCategories(customCategories)
+    }
+
+    /// One-time import of the pre-SQLite JSON files sitting next to the database.
+    /// Runs only when the DB side is still empty, then renames each JSON to
+    /// `*.migrated` so it's kept as a backup but never re-imported.
+    private func migrateLegacyJSONIfNeeded(dbDir: URL) {
+        let fm = FileManager.default
+        let tasksJSON = dbDir.appendingPathComponent("tasks.json")
+        if tasks.isEmpty,
+           let data = try? Data(contentsOf: tasksJSON),
+           let decoded = try? JSONDecoder().decode([TaskItem].self, from: data),
+           !decoded.isEmpty {
+            tasks = decoded
+            persist()
+            try? fm.moveItem(at: tasksJSON, to: tasksJSON.appendingPathExtension("migrated"))
+        }
+        let catsJSON = dbDir.appendingPathComponent("categories.json")
+        if customCategories.isEmpty,
+           let data = try? Data(contentsOf: catsJSON),
+           let decoded = try? JSONDecoder().decode([TaskCategory].self, from: data),
+           !decoded.isEmpty {
+            customCategories = decoded
+            persistCategories()
+            try? fm.moveItem(at: catsJSON, to: catsJSON.appendingPathExtension("migrated"))
+        }
     }
 
     // MARK: - Deadlines

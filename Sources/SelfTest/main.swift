@@ -49,6 +49,8 @@ testBrightnessSettings()
         testTaskPlanning()
         testWeeklyReport()
         testChartAggregation()
+        testSQLitePersistence()
+        testJSONMigration()
 
         print("\nPassed: \(passed)  Failed: \(failures)")
         if failures > 0 {
@@ -256,6 +258,84 @@ testBrightnessSettings()
         check(ord3 == [z.id, x.id, y.id], "drag moveTask reorders before target")
 
         try? FileManager.default.removeItem(at: dir)
+    }
+
+    static func testSQLitePersistence() {
+        print("• SQLite persistence (full round-trip across instances)")
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("blink-sqlite-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let dbURL = dir.appendingPathComponent("blink.sqlite")
+        let cal = Calendar.current
+        let due = cal.date(byAdding: .day, value: 2, to: Date())!
+
+        // Write with every non-default field set, then re-open a fresh instance.
+        do {
+            let s = TaskStore(fileURL: dbURL)
+            s.add(title: "Ship v2", category: "Work",
+                  tags: ["urgent", "release"], dueDate: due,
+                  estimatedPomodoros: 4, recurrence: .weekly,
+                  project: "Blink", notes: "line1\nline2", priority: .high)
+            let id = s.tasks[0].id
+            s.addSubtask(id, title: "step 1")
+            s.addSubtask(id, title: "step 2")
+            s.setPlannedDate(id, Date())
+            _ = s.addCategory(name: "Side", colorHex: "#123456", icon: "star.fill")
+        }
+
+        let s2 = TaskStore(fileURL: dbURL)
+        check(s2.tasks.count == 1, "task survives a fresh DB open")
+        guard let t = s2.tasks.first else { check(false, "no task reloaded"); return }
+        check(t.title == "Ship v2", "title round-trips")
+        check(t.category == "Work", "category round-trips")
+        check(t.tags == ["urgent", "release"], "tags (JSON) round-trip")
+        check(t.priority == .high, "priority round-trips")
+        check(t.recurrence == .weekly, "recurrence round-trips")
+        check(t.project == "Blink", "project round-trips")
+        check(t.notes == "line1\nline2", "multiline notes round-trip")
+        check(t.estimatedPomodoros == 4, "estimate round-trips")
+        check(t.subtasks.count == 2, "subtasks (JSON) round-trip")
+        check(t.dueDate.map { abs($0.timeIntervalSince(due)) < 0.001 } ?? false, "dueDate round-trips")
+        check(t.plannedDate != nil, "plannedDate round-trips")
+        check(s2.customCategories.contains { $0.name == "Side" && $0.colorHex == "#123456" },
+              "custom category round-trips")
+
+        // A nil-heavy task keeps its NULLs.
+        let s3url = dir.appendingPathComponent("plain.sqlite")
+        do { let s = TaskStore(fileURL: s3url); s.add(title: "Bare") }
+        let s3 = TaskStore(fileURL: s3url)
+        check(s3.tasks.first?.dueDate == nil, "nil dueDate stays nil")
+        check(s3.tasks.first?.estimatedPomodoros == nil, "nil estimate stays nil")
+        check(s3.tasks.first?.project == nil, "nil project stays nil")
+    }
+
+    static func testJSONMigration() {
+        print("• Legacy JSON → SQLite migration")
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("blink-migrate-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
+        // Seed the old-format files next to where the DB will live.
+        let legacyTasks = [TaskItem(title: "Old task", category: "Personal", priority: .low)]
+        let legacyCats = [TaskCategory(name: "Legacy", colorHex: "#abcdef", icon: "book.fill")]
+        try? JSONEncoder().encode(legacyTasks)
+            .write(to: dir.appendingPathComponent("tasks.json"))
+        try? JSONEncoder().encode(legacyCats)
+            .write(to: dir.appendingPathComponent("categories.json"))
+
+        // First open with an empty DB should import them.
+        let s = TaskStore(fileURL: dir.appendingPathComponent("blink.sqlite"))
+        check(s.tasks.first?.title == "Old task", "legacy task imported")
+        check(s.customCategories.contains { $0.name == "Legacy" }, "legacy category imported")
+        let fm = FileManager.default
+        check(!fm.fileExists(atPath: dir.appendingPathComponent("tasks.json").path),
+              "tasks.json renamed after migration")
+        check(fm.fileExists(atPath: dir.appendingPathComponent("tasks.json.migrated").path),
+              "tasks.json kept as .migrated backup")
+
+        // Re-opening must NOT double-import (JSON already renamed) — still one task.
+        let s2 = TaskStore(fileURL: dir.appendingPathComponent("blink.sqlite"))
+        check(s2.tasks.count == 1, "no double-import on second launch")
     }
 
     static func testWeeklyReport() {
