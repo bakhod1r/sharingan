@@ -31,6 +31,8 @@ struct TasksView: View {
     @FocusState private var editFocused: Bool
     /// Row the pointer is over — reveals its delete button.
     @State private var hoveredTask: UUID?
+    /// Task currently open in the full editor sheet (nil = closed).
+    @State private var editorTask: TaskItem?
 
     // Inline "add category" form state.
     @State private var showNewCategory = false
@@ -71,6 +73,10 @@ struct TasksView: View {
                 }
                 .frame(height: 320)
             }
+        }
+        .sheet(item: $editorTask) { task in
+            TaskEditorView(task: task,
+                           accent: timer.settings.theme.gradient.first ?? .accentColor)
         }
     }
 
@@ -828,6 +834,18 @@ struct TasksView: View {
                 .help("Subtasks & notes")
             }
 
+            Button { editorTask = task } label: {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.dsSecondary)
+                    .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.pressableSubtle)
+            .opacity(hovered ? 1 : 0)
+            .animation(.easeInOut(duration: 0.15), value: hovered)
+            .help("Edit task…")
+
             Button { store.delete(task.id) } label: {
                 Image(systemName: "trash")
                     .font(.system(size: 12))
@@ -874,8 +892,11 @@ struct TasksView: View {
             else if hoveredTask == task.id { hoveredTask = nil }
         }
         .contextMenu {
+            Button { editorTask = task } label: {
+                Label("Edit…", systemImage: "pencil")
+            }
             Button { beginEdit(task) } label: {
-                Label("Edit", systemImage: "pencil")
+                Label("Rename", systemImage: "character.cursor.ibeam")
             }
             Menu {
                 ForEach(TaskPriority.allCases.reversed()) { p in

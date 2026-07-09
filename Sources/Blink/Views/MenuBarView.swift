@@ -23,6 +23,8 @@ struct MenuBarView: View {
     @State private var showCompleted = false
     /// Row the pointer is over — reveals its delete button.
     @State private var hoveredTask: UUID?
+    /// Task open in the full editor sheet (nil = closed).
+    @State private var editorTask: TaskItem?
 
     private enum Tab: Hashable { case timer, tasks }
 
@@ -65,6 +67,10 @@ struct MenuBarView: View {
         .frame(width: 360)
         // One app accent: controls follow the chosen theme, not system blue.
         .tint(timer.settings.theme.gradient.first ?? .accentColor)
+        .sheet(item: $editorTask) { task in
+            TaskEditorView(task: task,
+                           accent: timer.settings.theme.gradient.first ?? .accentColor)
+        }
     }
 
     // MARK: - Tabs
@@ -540,11 +546,14 @@ struct MenuBarView: View {
             else if hoveredTask == task.id { hoveredTask = nil }
         }
         .contextMenu {
+            Button { editorTask = task } label: {
+                Label("Edit…", systemImage: "pencil")
+            }
             Button {
                 editingText = task.title
                 editingTaskID = task.id
             } label: {
-                Label("Edit", systemImage: "pencil")
+                Label("Rename", systemImage: "character.cursor.ibeam")
             }
             Menu {
                 ForEach(tasks.allCategories) { cat in
