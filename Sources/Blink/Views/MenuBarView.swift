@@ -1045,7 +1045,7 @@ struct MenuBarView: View {
     /// than the `showSettingsWindow:` selector, which silently no-ops for an
     /// `.accessory` menu-bar app on recent macOS.
     private func openAppSettings() {
-        AppRouter.shared.section = .settings
+        AppRouter.shared.openSettings()
         MainWindowManager.shared.show()
     }
 }

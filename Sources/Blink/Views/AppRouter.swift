@@ -41,6 +41,18 @@ final class AppRouter: ObservableObject {
     @Published var pendingTaskPriority: TaskPriority?
     @Published var focusTaskSearch = false
 
+    /// Bumped whenever Settings is (re)opened from outside — the sidebar row,
+    /// the menu-bar gear — so SettingsView pops any open sub-page back to the
+    /// category list. A counter (not a flag) so every tap fires onChange.
+    @Published private(set) var settingsPopToRoot = 0
+
+    /// Open the Settings section at its root category list, even if a
+    /// sub-page is currently showing.
+    func openSettings() {
+        settingsPopToRoot += 1
+        section = .settings
+    }
+
     /// Jump to the Tasks section with an optional smart filter and at most one
     /// narrowing dimension (category / tag / priority).
     func openTasks(filter: TaskFilter? = nil, category: String? = nil,

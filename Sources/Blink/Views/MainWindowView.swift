@@ -692,7 +692,10 @@ struct MainWindowView: View {
         let hovered = hoveredNav == s
         let badge = badgeCount(for: s)
         return Button {
-            section = s
+            // Settings routes through the router helper so re-selecting the
+            // row while a sub-page is open pops back to the category list.
+            if s == .settings { router.openSettings() }
+            else { section = s }
         } label: {
             HStack(spacing: 11) {
                 // Icon glows in the theme accent when the row is selected, so the

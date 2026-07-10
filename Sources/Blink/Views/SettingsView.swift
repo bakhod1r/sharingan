@@ -6,6 +6,7 @@ struct SettingsView: View {
     @ObservedObject var timer: PomodoroTimer
     @Binding var settings: PomodoroSettings
     @ObservedObject private var dndService = DNDShortcutService.shared
+    @ObservedObject private var router = AppRouter.shared
     @State private var editingInstructionDirection: String?
     @State private var openCategory: SettingsCategory?
     @State private var searchText = ""
@@ -22,6 +23,9 @@ struct SettingsView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .animation(DS.Motion.gentle, value: openCategory)
+        // Sidebar "Settings" (or the menu-bar gear) re-selected while a
+        // sub-page is open → pop back to the category list.
+        .onChange(of: router.settingsPopToRoot) { openCategory = nil }
     }
 
     // MARK: - Root: category list (macOS System Settings style)
