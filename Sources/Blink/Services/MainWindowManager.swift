@@ -22,7 +22,11 @@ final class MainWindowManager: NSObject, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
 
         if let window {
-            window.makeKeyAndOrderFront(nil)
+            if window.isVisible {
+                window.makeKeyAndOrderFront(nil)
+            } else {
+                WindowAnimator.present(window)
+            }
             return
         }
         guard let content else { return }
@@ -40,7 +44,7 @@ final class MainWindowManager: NSObject, NSWindowDelegate {
         win.contentView = NSHostingView(rootView: content())
         win.delegate = self
         win.center()
-        win.makeKeyAndOrderFront(nil)
+        WindowAnimator.present(win)
         self.window = win
     }
 

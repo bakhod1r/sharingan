@@ -49,15 +49,18 @@ final class QuickAddWindowManager: QuickAddController {
             let y = frame.midY + frame.height * 0.12
             panel.setFrameTopLeftPoint(NSPoint(x: x, y: y))
         }
-        panel.makeKeyAndOrderFront(nil)
+        WindowAnimator.present(panel)
         NSApp.activate(ignoringOtherApps: true)
         self.panel = panel
     }
 
     func hideQuickAdd() {
-        panel?.orderOut(nil)
-        panel?.contentView = nil
-        panel = nil
+        guard let panel else { return }
+        self.panel = nil
+        WindowAnimator.dismiss(panel) {
+            panel.orderOut(nil)
+            panel.contentView = nil
+        }
     }
 }
 

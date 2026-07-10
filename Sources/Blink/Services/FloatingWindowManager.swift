@@ -64,7 +64,9 @@ final class FloatingWindowManager: FloatingTimerController {
         }
         self.panel = panel
         applySettings(timer.settings)
-        panel.orderFrontRegardless()
+        // Present BEFORE the move/resize observers below register, so the
+        // 0.97→1 settle isn't persisted as a user drag.
+        WindowAnimator.present(panel, makeKey: false)
 
         // Persist position on drag (and slosh the liquid); persist size on resize.
         moveObserver = NotificationCenter.default.addObserver(
@@ -99,9 +101,12 @@ final class FloatingWindowManager: FloatingTimerController {
             NotificationCenter.default.removeObserver(resizeObserver)
             self.resizeObserver = nil
         }
-        panel?.orderOut(nil)
-        panel?.contentView = nil
-        panel = nil
+        guard let panel else { return }
+        self.panel = nil
+        WindowAnimator.dismiss(panel) {
+            panel.orderOut(nil)
+            panel.contentView = nil
+        }
     }
 
     func toggleFloating(timer: PomodoroTimer) {
