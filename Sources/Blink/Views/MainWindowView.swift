@@ -605,10 +605,12 @@ struct MainWindowView: View {
                 Image(systemName: icon)
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(tint)
+                    .symbolEffect(.bounce, value: value)
                 Text("\(value)")
                     .font(.system(.title3, design: .rounded).weight(.bold).monospacedDigit())
                     .foregroundStyle(.white)
                     .contentTransition(.numericText())
+                    .animation(DS.Motion.snappy, value: value)
             }
             Text(label)
                 .font(.system(.caption2, design: .rounded).weight(.medium))

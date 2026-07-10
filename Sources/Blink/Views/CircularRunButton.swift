@@ -42,6 +42,8 @@ struct CircularRunButton: View {
                 VStack(spacing: 3) {
                     Image(systemName: isRunning ? "pause.fill" : "play.fill")
                         .font(.system(size: 24, weight: .bold))
+                        .contentTransition(.symbolEffect(.replace))
+                        .animation(DS.Motion.snappy, value: isRunning)
                     Text(isRunning ? "Pause" : "Start")
                         .font(.system(.caption, design: .rounded).weight(.bold))
                 }

@@ -987,6 +987,9 @@ struct TasksView: View {
                     .font(.system(size: 19))
                     .foregroundStyle(task.isDone ? Color.green
                                      : (prio ?? (hovered ? Color.dsPrimary : Color.dsSecondary)))
+                    .contentTransition(.symbolEffect(.replace))
+                    .symbolEffect(.bounce, value: task.isDone)
+                    .animation(DS.Motion.celebrate, value: task.isDone)
                     .frame(width: 24, height: 24)
                     .contentShape(Rectangle())
             }
