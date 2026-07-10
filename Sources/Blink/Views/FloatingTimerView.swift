@@ -147,11 +147,11 @@ struct FloatingTimerView: View {
     private var phaseColors: [Color] { timer.phase.gradient }
 
     var body: some View {
-        // The panel is resizable; the card fills it (minus a margin for the
-        // shadow) and its contents scale with the size. When tall enough, the
-        // active task is shown below the clock.
+        // The panel is resizable; the card fills it (minus a small margin so
+        // the flash glow isn't clipped) and its contents scale with the size.
+        // When tall enough, the active task is shown below the clock.
         GeometryReader { geo in
-            let inset: CGFloat = 14
+            let inset: CGFloat = 6
             let cardW = max(0, geo.size.width - inset * 2)
             let cardH = max(0, geo.size.height - inset * 2)
             card(width: cardW, height: cardH)
@@ -205,9 +205,11 @@ struct FloatingTimerView: View {
         }
         // Borderless glass: material backdrop only — no hairline ring (the
         // glassRounded stroke read as a gray border around the pill).
+        // No drop shadow: on a transparent panel it rendered as a muddy gray
+        // halo around the pill (the OS window shadow is off for the same
+        // reason in FloatingWindowManager).
         .background(.regularMaterial,
                     in: RoundedRectangle(cornerRadius: corner, style: .continuous))
-        .liquidShadow(radius: 14, y: 8)
         .overlay {
             if timer.isFlashing {
                 RoundedRectangle(cornerRadius: corner, style: .continuous)
