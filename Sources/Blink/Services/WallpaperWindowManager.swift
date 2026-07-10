@@ -55,11 +55,40 @@ final class WallpaperTrackerNSView: NSView {
 
 // MARK: - Wallpaper scene: two big eyes that follow the cursor
 
-struct WallpaperEyesView: View {
+/// Everything the wallpaper scene needs from user settings.
+struct WallpaperConfig: Equatable {
     var style: SharinganStyle = .classic
+    var spinTrigger: WallpaperSpinTrigger = .idle
+    var spinDuration: Double = 1.6
+    var idleDelay: Double = 1.2
+
+    init(style: SharinganStyle = .classic,
+         spinTrigger: WallpaperSpinTrigger = .idle,
+         spinDuration: Double = 1.6,
+         idleDelay: Double = 1.2) {
+        self.style = style
+        self.spinTrigger = spinTrigger
+        self.spinDuration = spinDuration
+        self.idleDelay = idleDelay
+    }
+
+    init(from settings: PomodoroSettings) {
+        style = settings.sharinganStyle
+        spinTrigger = settings.wallpaperSpinTrigger
+        spinDuration = settings.wallpaperSpinDuration
+        idleDelay = settings.wallpaperIdleDelay
+    }
+}
+
+struct WallpaperEyesView: View {
+    var config = WallpaperConfig()
+    /// Headless previews can't host the AppKit tracker — disable it there.
+    var trackingEnabled = true
+
     @StateObject private var mouse = WallpaperMouseState()
     @State private var spinAngle: Double = 0
     @State private var spinning = false
+    @State private var clickMonitor: Any?
     private let ticker = Timer.publish(every: 0.2, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -79,31 +108,59 @@ struct WallpaperEyesView: View {
                     .blur(radius: 60)
                     .position(x: w / 2, y: h * 0.68)
 
-                MoveEyeView(gaze: gaze(from: leftC), spin: spinAngle, size: eyeH, style: style)
+                MoveEyeView(gaze: gaze(from: leftC), spin: spinAngle, size: eyeH, style: config.style)
                     .position(leftC)
-                MoveEyeView(gaze: gaze(from: rightC), spin: spinAngle, size: eyeH, mirrored: true, style: style)
+                MoveEyeView(gaze: gaze(from: rightC), spin: spinAngle, size: eyeH, mirrored: true, style: config.style)
                     .position(rightC)
 
-                WallpaperMouseTracker(state: mouse)
-                    .allowsHitTesting(false)
+                if trackingEnabled {
+                    WallpaperMouseTracker(state: mouse)
+                        .allowsHitTesting(false)
+                }
             }
             .ignoresSafeArea()
         }
         .onReceive(ticker) { _ in
-            let idle = Date().timeIntervalSince(mouse.lastMoved) > 1.2
+            guard config.spinTrigger.spinsOnIdle else { return }
+            let idle = Date().timeIntervalSince(mouse.lastMoved) > config.idleDelay
             if idle && !spinning {
                 spinning = true
-                withAnimation(.linear(duration: 1.6).repeatForever(autoreverses: false)) {
+                withAnimation(.linear(duration: config.spinDuration).repeatForever(autoreverses: false)) {
                     spinAngle += 360
                 }
             } else if !idle && spinning {
-                spinning = false
-                var t = Transaction()
-                t.disablesAnimations = true
-                withTransaction(t) {
-                    spinAngle = spinAngle.truncatingRemainder(dividingBy: 360)
-                }
+                stopContinuousSpin()
             }
+        }
+        .onAppear {
+            guard trackingEnabled, config.spinTrigger.spinsOnClick else { return }
+            // The wallpaper window ignores mouse events, so listen globally.
+            clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown]) { _ in
+                clickBurst()
+            }
+        }
+        .onDisappear {
+            if let clickMonitor {
+                NSEvent.removeMonitor(clickMonitor)
+            }
+            clickMonitor = nil
+        }
+    }
+
+    /// One accelerate→decelerate whirl (two full turns) per click.
+    private func clickBurst() {
+        if spinning { stopContinuousSpin() }
+        withAnimation(.easeInOut(duration: max(0.6, config.spinDuration))) {
+            spinAngle += 720
+        }
+    }
+
+    private func stopContinuousSpin() {
+        spinning = false
+        var t = Transaction()
+        t.disablesAnimations = true
+        withTransaction(t) {
+            spinAngle = spinAngle.truncatingRemainder(dividingBy: 360)
         }
     }
 
@@ -128,15 +185,15 @@ final class WallpaperWindowManager {
     private init() {}
 
     private var windows: [NSWindow] = []
-    private var currentStyle: SharinganStyle = .classic
+    private var currentConfig = WallpaperConfig()
 
     var isActive: Bool { !windows.isEmpty }
 
-    func setEnabled(_ enabled: Bool, style: SharinganStyle = .classic) {
-        if enabled, isActive, style != currentStyle {
+    func setEnabled(_ enabled: Bool, config: WallpaperConfig = WallpaperConfig()) {
+        if enabled, isActive, config != currentConfig {
             hide()
         }
-        currentStyle = style
+        currentConfig = config
         enabled ? show() : hide()
     }
 
@@ -155,7 +212,7 @@ final class WallpaperWindowManager {
             window.isMovable = false
             window.hasShadow = false
             window.isReleasedWhenClosed = false
-            window.contentView = NSHostingView(rootView: WallpaperEyesView(style: currentStyle))
+            window.contentView = NSHostingView(rootView: WallpaperEyesView(config: currentConfig))
             window.setFrame(screen.frame, display: true)
             window.orderFrontRegardless()
             windows.append(window)

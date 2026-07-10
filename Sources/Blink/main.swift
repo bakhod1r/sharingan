@@ -43,6 +43,32 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-iris-grid"),
     exit(0)
 }
 
+// Headless preview of the wallpaper scene + break-screen eye pair:
+// `Blink --render-eyes-preview <path>`.
+if let i = CommandLine.arguments.firstIndex(of: "--render-eyes-preview"),
+   i + 1 < CommandLine.arguments.count {
+    let out = CommandLine.arguments[i + 1]
+    MainActor.assumeIsolated {
+        let preview = VStack(spacing: 0) {
+            WallpaperEyesView(trackingEnabled: false)
+                .frame(width: 1440, height: 620)
+            ZStack {
+                Color.black
+                MoveEyePair(direction: "center", gaze: .center, eyeSize: 130)
+            }
+            .frame(width: 1440, height: 380)
+        }
+        let renderer = ImageRenderer(content: preview)
+        renderer.scale = 1
+        if let cg = renderer.cgImage {
+            let rep = NSBitmapImageRep(cgImage: cg)
+            try? rep.representation(using: .png, properties: [:])?
+                .write(to: URL(fileURLWithPath: out))
+        }
+    }
+    exit(0)
+}
+
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate

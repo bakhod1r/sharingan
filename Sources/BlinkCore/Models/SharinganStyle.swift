@@ -31,3 +31,26 @@ public enum SharinganStyle: String, CaseIterable, Codable, Sendable, Identifiabl
         }
     }
 }
+
+/// When the desktop-wallpaper Sharingan spins. The eyes always follow the
+/// mouse; the spin is an extra flourish.
+public enum WallpaperSpinTrigger: String, CaseIterable, Codable, Sendable, Identifiable {
+    case off
+    case idle
+    case click
+    case both
+
+    public var id: String { rawValue }
+
+    public var label: String {
+        switch self {
+        case .off:   return "Off"
+        case .idle:  return "When idle"
+        case .click: return "On click"
+        case .both:  return "Idle + click"
+        }
+    }
+
+    public var spinsOnIdle: Bool { self == .idle || self == .both }
+    public var spinsOnClick: Bool { self == .click || self == .both }
+}

@@ -125,7 +125,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Eyes wallpaper: restore on launch if the user left it enabled.
         if timer.settings.eyesWallpaperEnabled {
-            WallpaperWindowManager.shared.setEnabled(true, style: timer.settings.sharinganStyle)
+            WallpaperWindowManager.shared.setEnabled(true, config: WallpaperConfig(from: timer.settings))
         }
     }
 }

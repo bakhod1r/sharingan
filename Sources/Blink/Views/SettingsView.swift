@@ -232,14 +232,14 @@ struct SettingsView: View {
                     ToggleRow(title: "Require a task to start focus",
                               isOn: $settings.requireTaskForFocus)
                     Text("A focus pomodoro won't start until you pick a task. The quick-add hotkey (below, in Global shortcuts) pops up a capture window.")
-                        .font(.caption2)
+                        .font(.system(.caption2, design: .rounded))
                         .foregroundStyle(.white.opacity(0.6))
                     StepperRow(title: "Daily pomodoro goal",
                                value: $settings.dailyPomodoroGoal,
                                unit: "🍅",
                                range: 0...20)
                     Text("Shows a progress bar in the menu bar. Set to 0 to hide.")
-                        .font(.caption2)
+                        .font(.system(.caption2, design: .rounded))
                         .foregroundStyle(.white.opacity(0.6))
                 }
 
@@ -274,12 +274,12 @@ struct SettingsView: View {
                                   isOn: $settings.floatingAlwaysOnTop)
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Opacity: \(Int(settings.floatingOpacity * 100))%")
-                                .font(.caption.weight(.medium))
+                                .font(.system(.caption, design: .rounded).weight(.medium))
                             Slider(value: $settings.floatingOpacity, in: 0.3...1.0)
                                 
                         }
                         Text("Drag the floating timer to reposition — its spot is remembered.")
-                            .font(.caption2)
+                            .font(.system(.caption2, design: .rounded))
                             .foregroundStyle(.white.opacity(0.6))
                     }
                 }
@@ -326,7 +326,7 @@ struct SettingsView: View {
                               isOn: $settings.brightnessDimEnabled)
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Dim level: \(settings.brightnessDimPercent)%")
-                            .font(.caption.weight(.medium))
+                            .font(.system(.caption, design: .rounded).weight(.medium))
                         Slider(value: Binding(
                                 get: { Double(settings.brightnessDimPercent) },
                                 set: { settings.brightnessDimPercent = Int($0) }
@@ -366,6 +366,7 @@ struct SettingsView: View {
                             .help("Remove from list")
                             // Pause/resume blocking without losing the entry.
                             Toggle("", isOn: $app.isEnabled)
+                                .tint(.green)
                                 
                                 .labelsHidden()
                         }
@@ -380,7 +381,7 @@ struct SettingsView: View {
                         }
                     } label: {
                         Label("Restore default apps", systemImage: "arrow.counterclockwise.circle.fill")
-                            .font(.caption.weight(.semibold))
+                            .font(.system(.caption, design: .rounded).weight(.semibold))
                     }
                     .buttonStyle(.pressableSubtle)
                 }
@@ -400,7 +401,7 @@ struct SettingsView: View {
                         )
                     } label: {
                         Label("Add reminder", systemImage: "plus.circle.fill")
-                            .font(.caption.weight(.semibold))
+                            .font(.system(.caption, design: .rounded).weight(.semibold))
                     }
                     .buttonStyle(.pressableSubtle)
                 }
@@ -447,13 +448,13 @@ struct SettingsView: View {
                     
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Step hold scale: \(String(format: "%.2f", settings.exerciseSettings.stepHoldScale))×")
-                            .font(.caption.weight(.medium))
+                            .font(.system(.caption, design: .rounded).weight(.medium))
                         Slider(value: $settings.exerciseSettings.stepHoldScale,
                                in: 0.5...2.0)
                             
                     }
                     Text("Step length in seconds: \(String(format: "%.0f", settings.exerciseSettings.scaledHold(4)))")
-                        .font(.caption2)
+                        .font(.system(.caption2, design: .rounded))
                         .foregroundStyle(.white.opacity(0.7))
 
                     if let selected = editingInstructionDirection {
@@ -465,7 +466,7 @@ struct SettingsView: View {
                     )
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Kalib interval: \(Int(settings.ttsSettings.kalibIntervalSeconds))s")
-                            .font(.caption.weight(.medium))
+                            .font(.system(.caption, design: .rounded).weight(.medium))
                         Slider(value: $settings.ttsSettings.kalibIntervalSeconds,
                                in: 0...60)
                             
@@ -475,20 +476,62 @@ struct SettingsView: View {
                 Section("Desktop eyes wallpaper") {
                     ToggleRow(title: "Show eyes on the desktop",
                               isOn: $settings.eyesWallpaperEnabled)
-                        .onChange(of: settings.eyesWallpaperEnabled) { on in
-                            WallpaperWindowManager.shared.setEnabled(on, style: settings.sharinganStyle)
-                        }
-                    Text("Live wallpaper: the eyes sit under your desktop icons and follow the mouse. When idle, the Sharingan spins.")
-                        .font(.caption)
+                    Text("Live wallpaper: the eyes sit under your desktop icons and always follow the mouse.")
+                        .font(.system(.caption, design: .rounded))
                         .foregroundStyle(.white.opacity(0.65))
+
+                    HStack {
+                        Text("Sharingan spin")
+                            .font(.system(.body, design: .rounded))
+                        Spacer()
+                        Picker("", selection: $settings.wallpaperSpinTrigger) {
+                            ForEach(WallpaperSpinTrigger.allCases) { t in
+                                Text(t.label).tag(t)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .fixedSize()
+                    }
+
+                    if settings.wallpaperSpinTrigger != .off {
+                        HStack {
+                            Text("Spin speed")
+                                .font(.system(.body, design: .rounded))
+                            Spacer()
+                            Picker("", selection: $settings.wallpaperSpinDuration) {
+                                Text("Slow").tag(2.8)
+                                Text("Normal").tag(1.6)
+                                Text("Fast").tag(0.9)
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.segmented)
+                            .frame(width: 210)
+                        }
+                    }
+
+                    if settings.wallpaperSpinTrigger.spinsOnIdle {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Idle delay: \(String(format: "%.1f", settings.wallpaperIdleDelay))s")
+                                .font(.caption.weight(.medium))
+                            Slider(value: $settings.wallpaperIdleDelay, in: 0.5...5, step: 0.5)
+                        }
+                    }
                 }
+                .onChange(of: settings.eyesWallpaperEnabled) { on in
+                    WallpaperWindowManager.shared.setEnabled(on, config: WallpaperConfig(from: settings))
+                }
+                .onChange(of: settings.wallpaperSpinTrigger) { _ in refreshWallpaper() }
+                .onChange(of: settings.wallpaperSpinDuration) { _ in refreshWallpaper() }
+                .onChange(of: settings.wallpaperIdleDelay) { _ in refreshWallpaper() }
+                .onChange(of: settings.sharinganStyle) { _ in refreshWallpaper() }
 
                 Section("Camera & Vision") {
                     ToggleRow(title: "Eye tracking via camera",
                               isOn: $settings.cameraEyeTrackingEnabled)
                     if settings.cameraEyeTrackingEnabled {
                         Text("Works during breaks only. Alerts when blink rate is low.")
-                            .font(.caption)
+                            .font(.system(.caption, design: .rounded))
                             .foregroundStyle(.white.opacity(0.65))
                     }
                 }
@@ -503,7 +546,7 @@ struct SettingsView: View {
                               isOn: $settings.launchAtLogin)
                     if !LaunchAtLoginService.shared.isSupported {
                         Text("Login item works only when running the packaged Blink.app.")
-                            .font(.caption2)
+                            .font(.system(.caption2, design: .rounded))
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -531,17 +574,17 @@ struct SettingsView: View {
                               isOn: $settings.ttsSettings.enabled)
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Voice rate: \(String(format: "%.2f", settings.ttsRate))")
-                            .font(.caption.weight(.medium))
+                            .font(.system(.caption, design: .rounded).weight(.medium))
                         Slider(value: $settings.ttsRate, in: 0...1)
                     }
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Voice pitch: \(String(format: "%.2f", settings.ttsPitch))")
-                            .font(.caption.weight(.medium))
+                            .font(.system(.caption, design: .rounded).weight(.medium))
                         Slider(value: $settings.ttsPitch, in: 0.5...1.5)
                     }
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Global kalib pool")
-                            .font(.caption.weight(.medium))
+                            .font(.system(.caption, design: .rounded).weight(.medium))
                         ForEach(settings.ttsSettings.globalKalib.indices, id: \.self) { idx in
                             HStack {
                                 TextField("Reminder", text: Binding(
@@ -564,7 +607,7 @@ struct SettingsView: View {
                             settings.ttsSettings.globalKalib.append("")
                         } label: {
                             Label("Add reminder", systemImage: "plus.circle.fill")
-                                .font(.caption.weight(.semibold))
+                                .font(.system(.caption, design: .rounded).weight(.semibold))
                         }
                         .buttonStyle(.pressableSubtle)
                     }
@@ -665,7 +708,7 @@ struct SettingsView: View {
     private func instructionEditor(for direction: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Spoken instruction: \(direction)")
-                .font(.caption.weight(.semibold))
+                .font(.system(.caption, design: .rounded).weight(.semibold))
             HStack {
                 TextField("Instruction", text: Binding(
                     get: { settings.ttsSettings.instruction(forDirection: direction)?.text ?? "" },
@@ -701,12 +744,18 @@ struct SettingsView: View {
                 .opacity(settings.globalShortcutsEnabled ? 1 : 0.5)
             }
             Text("Click a combo, then press the new keys (needs at least one modifier). Esc cancels.")
-                .font(.caption2)
+                .font(.system(.caption2, design: .rounded))
                 .foregroundStyle(.white.opacity(0.55))
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(14)
         .glassRounded(DS.Radius.lg, material: .thin)
+    }
+
+    /// Wallpaper yoqilgan bo'lsa, yangi sozlamalar bilan qayta quradi.
+    private func refreshWallpaper() {
+        guard settings.eyesWallpaperEnabled else { return }
+        WallpaperWindowManager.shared.setEnabled(true, config: WallpaperConfig(from: settings))
     }
 
     private func effectiveBinding(_ sh: GlobalShortcut) -> ShortcutBinding {

@@ -19,6 +19,12 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var sharinganStyle: SharinganStyle = .classic
     /// MoveEyes ko'zlarini ish stoli orqa foni (jonli wallpaper) sifatida ko'rsatish.
     public var eyesWallpaperEnabled: Bool = false
+    /// Wallpaper rejimida Sharingan qachon aylanadi.
+    public var wallpaperSpinTrigger: WallpaperSpinTrigger = .idle
+    /// Bir to'la aylanish davomiyligi, soniya.
+    public var wallpaperSpinDuration: Double = 1.6
+    /// Aylanish boshlanishidan oldin kutish (idle), soniya.
+    public var wallpaperIdleDelay: Double = 1.2
     public var theme: BlinkTheme = .liquidGlass
     public var repeatConfig: RepeatConfig = .init()
     public var flashAtFiveSecLeft: Bool = true
@@ -78,6 +84,9 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
         showExitBreakButton = try c.decodeIfPresent(Bool.self, forKey: .showExitBreakButton) ?? d.showExitBreakButton
         sharinganStyle = try c.decodeIfPresent(SharinganStyle.self, forKey: .sharinganStyle) ?? d.sharinganStyle
         eyesWallpaperEnabled = try c.decodeIfPresent(Bool.self, forKey: .eyesWallpaperEnabled) ?? d.eyesWallpaperEnabled
+        wallpaperSpinTrigger = try c.decodeIfPresent(WallpaperSpinTrigger.self, forKey: .wallpaperSpinTrigger) ?? d.wallpaperSpinTrigger
+        wallpaperSpinDuration = try c.decodeIfPresent(Double.self, forKey: .wallpaperSpinDuration) ?? d.wallpaperSpinDuration
+        wallpaperIdleDelay = try c.decodeIfPresent(Double.self, forKey: .wallpaperIdleDelay) ?? d.wallpaperIdleDelay
         theme = try c.decodeIfPresent(BlinkTheme.self, forKey: .theme) ?? d.theme
         repeatConfig = try c.decodeIfPresent(RepeatConfig.self, forKey: .repeatConfig) ?? d.repeatConfig
         flashAtFiveSecLeft = try c.decodeIfPresent(Bool.self, forKey: .flashAtFiveSecLeft) ?? d.flashAtFiveSecLeft
