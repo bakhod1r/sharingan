@@ -45,8 +45,13 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 # Executable (built as $PRODUCT_NAME, shipped under the brand name)
 cp "$BINDIR/$PRODUCT_NAME" "$APP/Contents/MacOS/$APP_NAME"
 
-# Info.plist
+# Info.plist — stamp CFBundleVersion with the commit count so every build is
+# distinguishable ("which build is on the other Mac" was undiagnosable at a
+# constant 1).
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
+if BUILD_NUM="$(git -C "$ROOT" rev-list --count HEAD 2>/dev/null)"; then
+  plutil -replace CFBundleVersion -string "$BUILD_NUM" "$APP/Contents/Info.plist"
+fi
 
 # SwiftPM resource bundles (sounds, animations, icons) live in Contents/Resources,
 # where codesign can seal them cleanly. They are resolved at runtime via

@@ -23,17 +23,18 @@ SRC="$BINDIR/tired"
 echo "▸ Building tired ($CONFIG)…"
 swift build -c "$CONFIG" --product tired
 
-mkdir -p "$PREFIX"
 DEST="$PREFIX/tired"
 
-# Prefer a symlink to the build product so re-builds are picked up automatically.
-if ln -sf "$SRC" "$DEST" 2>/dev/null; then
-  echo "✅ Linked $DEST → $SRC"
+# Copy (not symlink): a symlink into .build dangles as soon as `make clean`
+# runs, silently breaking `tired` until the next release build.
+if mkdir -p "$PREFIX" 2>/dev/null && cp "$SRC" "$DEST" 2>/dev/null; then
+  echo "✅ Installed → $DEST"
 else
-  # Fall back to a copy if $PREFIX needs privileges the symlink couldn't get.
-  echo "  ! symlink failed; trying sudo copy…"
+  # Fall back to sudo if $PREFIX isn't writable (e.g. a fresh /usr/local/bin).
+  echo "  ! $PREFIX not writable; trying sudo…"
+  sudo mkdir -p "$PREFIX"
   sudo cp "$SRC" "$DEST"
-  echo "✅ Copied → $DEST"
+  echo "✅ Installed → $DEST"
 fi
 
 case ":$PATH:" in

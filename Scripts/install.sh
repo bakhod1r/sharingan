@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 #
-# install.sh — make Blink open on THIS Mac, whatever state it arrived in.
+# install.sh — make Sharingan open on THIS Mac, whatever state it arrived in.
 #
-#   Scripts/install.sh            # use the git-tracked prebuilt app (fast)
+#   Scripts/install.sh            # use dist/Sharingan.app if present, else build
 #   Scripts/install.sh --build    # rebuild from source first
 #
-# Both of your Macs are Apple Silicon, so the prebuilt arm64 bundle committed
-# in dist/ runs as-is — no rebuild needed. The only thing that stops an ad-hoc
+# dist/ is not tracked in git (binaries bloated the repo); on a fresh clone the
+# script builds from source automatically. The only thing that stops an ad-hoc
 # app from launching on a second Mac (macOS 15/26) is the quarantine flag +
-# Gatekeeper's Finder gate. This script removes the flag, re-seals the bundle
-# with a local ad-hoc signature, installs to /Applications, and launches it via
-# `open` (which bypasses the Finder double-click block for un-quarantined apps).
+# Gatekeeper's Finder gate. This script removes the flag, installs to
+# /Applications, and launches it via `open` (which bypasses the Finder
+# double-click block for un-quarantined apps).
 #
 set -euo pipefail
 
@@ -38,9 +38,8 @@ sleep 1
 rm -rf "$DEST" "/Applications/Blink.app"
 cp -R "$SRC" "$DEST"
 
-# 3) The universal unlock: drop the quarantine flag (from a git-zip / AirDrop /
-#    iCloud copy). The bundle keeps its original ad-hoc signature — no re-sign,
-#    which would fail anyway because of the root-level Bundle.module symlinks.
+# 3) The universal unlock: drop the quarantine flag (from a zip / AirDrop /
+#    iCloud copy). The bundle keeps its ad-hoc signature from make-app.sh.
 xattr -cr "$DEST" 2>/dev/null || true
 
 # 4) Launch via `open` — works even when a Finder double-click is blocked.

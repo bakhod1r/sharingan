@@ -1,11 +1,12 @@
-# Blink
+# Sharingan
 
 > A macOS menu bar Pomodoro + eye-health app with liquid-glass design,
 > Vision-based gaze tracking, floating timer, natural-language input,
 > global hotkeys, streak system, CloudKit sync, app blocking, screen
 > dim, ambience sounds, and a `tired` CLI.
 
-Pure SwiftPM — no Xcode project required.
+Pure SwiftPM — no Xcode project required. (SwiftPM module names still say
+`Blink`; the shipped bundle is branded **Sharingan** — see `Makefile`.)
 
 ---
 
@@ -80,8 +81,11 @@ Pure SwiftPM — no Xcode project required.
 ```bash
 swift build                 # build all targets
 swift run Blink             # launch the menu bar app
-swift run SelfTest          # run 183 assertion tests
+swift test                  # swift-testing suites
+swift run SelfTest          # extended assertion harness
 swift run tired status      # CLI: show current timer state
+Scripts/make-app.sh         # assemble dist/Sharingan.app
+Scripts/install.sh          # install to /Applications (builds if needed)
 ```
 
 ### Release build
@@ -161,10 +165,11 @@ Everything is configurable from a single Settings screen:
 ## Tests
 
 ```bash
-swift run SelfTest
+swift test          # swift-testing suites (Tests/BlinkTests)
+swift run SelfTest  # standalone assertion harness
 ```
 
-183 assertions covering:
+SelfTest assertions cover:
 - Pomodoro models, timer state machine, add/remove/set/parsed-input
 - Natural language parser (durations, clock-target, deltas)
 - Count-up mode, repeat config
@@ -177,7 +182,7 @@ swift run SelfTest
 
 ## Tech stack
 
-- Swift 5.9+, SwiftUI, AppKit, macOS 13+
+- Swift 5.9+, SwiftUI, AppKit, macOS 14+
 - Vision (face/eye landmarks), AVFoundation (camera + TTS + audio)
 - UserNotifications, CloudKit, Carbon (global hotkeys)
 - SwiftCharts (statistics)

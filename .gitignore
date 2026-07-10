@@ -8,13 +8,14 @@
 xcuserdata/
 Pods/
 Package.resolved
-# Track the built app so a second (same-arch) Mac can `git pull` and run it
-# directly, but keep other build artifacts (e.g. the .dmg) out of git.
-/dist/*
-!/dist/Sharingan.app
+# Build artifacts stay out of git — distribute the app via Scripts/make-dmg.sh
+# (or a GitHub Release), not by committing the binary.
+/dist/
 .vscode/
 # Generated animation preview GIFs and reference videos
 /previews/
 /sharingan animation.gif
 /sharingan animation.mp4
 /original-*.mp4
+# Retired embedded prototype (deleted from git; leftover build artifacts only)
+/MoveEyes/
