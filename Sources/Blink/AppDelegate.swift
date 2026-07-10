@@ -187,17 +187,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // A menu-bar-only app (LSUIElement) shows no window and no Dock icon,
-        // so double-clicking Blink in Finder looks like "nothing happened".
-        // Open the popover once on launch so the user lands in the timer.
+        // so double-clicking Sharingan in Finder looks like "nothing happened".
+        // Open the main window on launch so the user lands in the full app.
         DispatchQueue.main.async {
-            MenuBarController.shared.showPopover()
+            MainWindowManager.shared.show()
         }
     }
 
     // Finder/Launchpad re-launch of an already-running accessory app fires
-    // reopen — surface the popover instead of silently doing nothing.
+    // reopen — surface the main window instead of silently doing nothing.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        MenuBarController.shared.showPopover()
+        MainWindowManager.shared.show()
         return false
     }
 }
