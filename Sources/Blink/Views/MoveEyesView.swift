@@ -456,7 +456,8 @@ struct MoveIrisView: View {
                 Circle()
                     .stroke(Color.black, lineWidth: 0.07 * r)
                     .frame(width: ringR * 2, height: ringR * 2)
-                MoveShurikenShape(blades: 3, lean: 0.30, rootHalfWidth: 0.42)
+                MoveShurikenShape(blades: 3, lean: 0.22, rootHalfWidth: 0.60,
+                                  rootRadius: 0.34)
                     .fill(Color.black)
                     .frame(width: 1.8 * r, height: 1.8 * r)
             }
