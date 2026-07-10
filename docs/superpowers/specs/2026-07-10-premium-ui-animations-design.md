@@ -28,7 +28,7 @@ Migrate existing inline timings in MenuBarView, MenuBarWeekView, MainWindowView,
 - **CountdownRing.swift** — the trim arc currently steps once per second. Drive progress through a `TimelineView(.animation)`-based interpolation (same pattern FloatingTimerView already uses) so the arc sweeps continuously. Pauses/resets stay instant-correct.
 - **StatsExtrasView.swift** — add `.contentTransition(.numericText())` + `DS.Motion.snappy` to all numeric values and the streak record row (matches StatsSummary/StatsChart).
 - **StreakBadgeView.swift** — animate the progress-bar fill (`DS.Motion.standard`) and the streak count (`numericText`).
-- **TaskEditorView.swift** — animate section/disclosure toggles and validation appearance with `DS.Motion.gentle`.
+- **TaskEditorView.swift** — inspected during planning: its only stateful toggle is the custom-due-date `popover`, which macOS animates itself. No custom motion needed; excluded from the plan.
 
 ## 3. Hero moments
 
