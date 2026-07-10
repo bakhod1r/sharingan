@@ -504,8 +504,10 @@ struct MoveEyeView: View {
     /// vertically it stays level for left/right gazes but is clamped into the
     /// slanted aperture band so it never vanishes into a corner.
     private func irisOffset(sw: CGFloat, sh: CGFloat, irisD: CGFloat) -> CGPoint {
-        // Horizontal position across the eye, in screen terms.
-        let uScreen = min(max(0.5 + CGFloat(gaze.dx) * 0.30, 0.12), 0.88)
+        // Horizontal position across the eye, in screen terms. ±0.20 keeps the
+        // iris out of the slanted corner zones, so a left/right gaze reads at
+        // the same height in both (mirrored) eyes instead of diverging.
+        let uScreen = min(max(0.5 + CGFloat(gaze.dx) * 0.20, 0.12), 0.88)
         // The aperture table describes the unmirrored shape.
         let uShape = mirrored ? 1 - uScreen : uScreen
         let ap = EyeAperture.sample(at: uShape)
