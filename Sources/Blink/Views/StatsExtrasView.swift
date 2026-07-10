@@ -17,6 +17,10 @@ struct StatsExtrasView: View {
                 weekdayCard
                 categoryCard
             }
+            HStack(alignment: .top, spacing: 16) {
+                timeOfDayCard
+                recordsCard
+            }
         }
     }
 
@@ -184,6 +188,106 @@ struct StatsExtrasView: View {
         .frame(maxWidth: .infinity)
         .glassRounded(DS.Radius.xl, material: .regular)
         .liquidShadow(radius: 12, y: 6)
+    }
+
+    // MARK: - Time of day
+
+    /// Focus volume folded into four day-parts, from the hourly histogram.
+    private var dayParts: [(icon: String, name: String, count: Int)] {
+        let h = stats.hourCounts
+        func sum(_ r: [Int]) -> Int { r.reduce(0) { $0 + h[$1] } }
+        return [
+            ("sunrise.fill",  "Morning",   sum(Array(5..<12))),
+            ("sun.max.fill",  "Afternoon", sum(Array(12..<17))),
+            ("sunset.fill",   "Evening",   sum(Array(17..<21))),
+            ("moon.fill",     "Night",     sum(Array(21..<24) + Array(0..<5))),
+        ]
+    }
+
+    private var timeOfDayCard: some View {
+        let parts = dayParts
+        let peak = max(1, parts.map(\.count).max() ?? 1)
+        return VStack(alignment: .leading, spacing: 10) {
+            Text("Time of day").dsSectionLabel()
+            if parts.allSatisfy({ $0.count == 0 }) {
+                Text("Finish a focus session to see this.")
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(Color.dsTertiary)
+                    .frame(maxWidth: .infinity, minHeight: 80, alignment: .leading)
+            } else {
+                VStack(spacing: 9) {
+                    ForEach(parts, id: \.name) { row in
+                        HStack(spacing: 8) {
+                            Image(systemName: row.icon)
+                                .font(.system(size: 10))
+                                .foregroundStyle(accent)
+                                .frame(width: 14)
+                            Text(row.name)
+                                .font(.system(.caption, design: .rounded).weight(.medium))
+                                .foregroundStyle(Color.dsPrimary)
+                                .frame(width: 66, alignment: .leading)
+                            GeometryReader { geo in
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(accent.opacity(0.8))
+                                    .frame(width: max(6, geo.size.width * CGFloat(row.count) / CGFloat(peak)))
+                            }
+                            .frame(height: 10)
+                            Text("\(row.count)")
+                                .font(.system(.caption2, design: .rounded).weight(.bold).monospacedDigit())
+                                .foregroundStyle(Color.dsSecondary)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity)
+        .glassRounded(DS.Radius.xl, material: .regular)
+        .liquidShadow(radius: 12, y: 6)
+    }
+
+    // MARK: - Records
+
+    private var bestWeek: Int {
+        stats.recentWeeks(26).map(\.count).max() ?? 0
+    }
+
+    private var recordsCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Records").dsSectionLabel()
+            VStack(spacing: 9) {
+                recordRow("trophy.fill", "Best day",
+                          value: stats.bestDay.map { "\($0.count) 🍅 · \(dayLabel($0.day))" } ?? "—")
+                recordRow("calendar.badge.checkmark", "Best week",
+                          value: bestWeek > 0 ? "\(bestWeek) 🍅" : "—")
+                recordRow("flame.fill", "Longest streak",
+                          value: "\(stats.streak.longestStreak) days")
+                recordRow("gauge.high", "Best weekday",
+                          value: stats.bestWeekday.map {
+                              ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][$0]
+                          } ?? "—")
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity)
+        .glassRounded(DS.Radius.xl, material: .regular)
+        .liquidShadow(radius: 12, y: 6)
+    }
+
+    private func recordRow(_ icon: String, _ label: String, value: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 10))
+                .foregroundStyle(.orange)
+                .frame(width: 14)
+            Text(label)
+                .font(.system(.caption, design: .rounded).weight(.medium))
+                .foregroundStyle(Color.dsPrimary)
+            Spacer()
+            Text(value)
+                .font(.system(.caption, design: .rounded).weight(.bold).monospacedDigit())
+                .foregroundStyle(Color.dsSecondary)
+        }
     }
 
     private func dayLabel(_ d: Date) -> String {

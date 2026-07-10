@@ -50,7 +50,6 @@ struct StatsChartView: View {
         guard !data.isEmpty else { return 0 }
         return Double(total) / Double(data.count)
     }
-    private var peak: Int { max(1, data.map(\.count).max() ?? 1) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -119,14 +118,34 @@ struct StatsChartView: View {
             ForEach(data) { item in
                 BarMark(
                     x: .value("Period", item.day, unit: range.unit),
-                    y: .value("Pomodoros", item.count)
+                    y: .value("Pomodoros", item.count),
+                    width: .fixed(barWidth)
                 )
                 .foregroundStyle(
-                    LinearGradient(colors: [accent, accent.opacity(0.5)],
+                    LinearGradient(colors: [accent, accent.opacity(0.55)],
                                    startPoint: .top, endPoint: .bottom)
                 )
-                .cornerRadius(4)
-                .opacity(max(0.4, Double(item.count) / Double(peak)))
+                .cornerRadius(3)
+                // Direct value labels only where they stay readable — the
+                // 7-bar week view; denser ranges rely on the axis + avg rule.
+                .annotation(position: .top, spacing: 3) {
+                    if range == .week, item.count > 0 {
+                        Text("\(item.count)")
+                            .font(.system(size: 9, weight: .bold,
+                                          design: .rounded).monospacedDigit())
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                }
+            }
+            if average > 0 {
+                RuleMark(y: .value("Average", average))
+                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                    .foregroundStyle(.white.opacity(0.3))
+                    .annotation(position: .top, alignment: .trailing, spacing: 2) {
+                        Text("avg \(String(format: "%.1f", average))")
+                            .font(.system(size: 9, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.5))
+                    }
             }
         }
         .chartXAxis {
@@ -148,6 +167,16 @@ struct StatsChartView: View {
         }
         .frame(height: 180)
         .animation(.easeInOut(duration: 0.3), value: range)
+    }
+
+    /// Slim, evenly-breathing bars per range — wide 7-day bars read as slabs.
+    private var barWidth: CGFloat {
+        switch range {
+        case .week:    return 26
+        case .month:   return 9
+        case .quarter: return 16
+        case .year:    return 18
+        }
     }
 
     /// Stride between axis labels so they never overlap into mush.

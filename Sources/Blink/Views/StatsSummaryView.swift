@@ -8,6 +8,7 @@ struct StatsSummaryView: View {
     let stats: PomodoroStats
     let focusMinutes: Int
     var accent: Color = .paletteFocusStart
+    @ObservedObject private var store = TaskStore.shared
 
     /// A deliberately narrow palette — colour carries meaning instead of a stock
     /// rainbow: warm orange for streak/achievement, green for today, and the
@@ -33,8 +34,15 @@ struct StatsSummaryView: View {
                    accent),
             Metric("sunrise.fill", bestHour(), "Best hour",
                    accent),
+            Metric("calendar.circle.fill", "\(stats.total(fromDaysAgo: 0, toDaysAgo: 30))", "Last 30 days",
+                   accent),
+            Metric("checklist", "\(doneTasks)", "Tasks done",
+                   .green, sub: "\(openTasks) open"),
         ]
     }
+
+    private var doneTasks: Int { store.tasks.filter(\.isDone).count }
+    private var openTasks: Int { store.tasks.count - doneTasks }
 
     private let columns = [GridItem(.adaptive(minimum: 132, maximum: 200), spacing: 12)]
 
