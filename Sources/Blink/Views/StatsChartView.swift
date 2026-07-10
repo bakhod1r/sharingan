@@ -207,7 +207,14 @@ struct StatsChartView: View {
                     }
                 }
             }
-            .chartYAxis(.hidden)
+            // A minimal 2-mark scale so the bar heights are quantified, not just
+            // relative shapes.
+            .chartYAxis {
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 2)) { _ in
+                    AxisGridLine().foregroundStyle(Color.white.opacity(0.06))
+                    AxisValueLabel().foregroundStyle(.white.opacity(0.4))
+                }
+            }
             .frame(height: 90)
         }
     }

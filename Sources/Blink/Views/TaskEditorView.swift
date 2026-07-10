@@ -123,6 +123,7 @@ struct TaskEditorView: View {
         Menu {
             Button { setDue(dueAt(0)) } label: { Label("Today", systemImage: "star") }
             Button { setDue(dueAt(1)) } label: { Label("Tomorrow", systemImage: "sun.max") }
+            Button { setDue(upcomingWeekend()) } label: { Label("This weekend", systemImage: "beach.umbrella") }
             Button { setDue(nextMonday()) } label: { Label("Next week", systemImage: "calendar") }
             Divider()
             Button { showCustomDue = true } label: { Label("Pick a date…", systemImage: "calendar.badge.clock") }
@@ -345,6 +346,15 @@ struct TaskEditorView: View {
         let cal = Calendar.current
         let base = cal.date(byAdding: .day, value: days, to: Date()) ?? Date()
         return cal.date(bySettingHour: 9, minute: 0, second: 0, of: base) ?? base
+    }
+    private func upcomingWeekend() -> Date {
+        let cal = Calendar.current
+        var d = Date()
+        for _ in 0..<7 {
+            if cal.component(.weekday, from: d) == 7 { break }   // Saturday
+            d = cal.date(byAdding: .day, value: 1, to: d) ?? d
+        }
+        return cal.date(bySettingHour: 9, minute: 0, second: 0, of: d) ?? d
     }
     private func nextMonday() -> Date {
         let cal = Calendar.current
