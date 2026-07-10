@@ -513,8 +513,8 @@ struct MoveEyeView: View {
         let ap = EyeAperture.sample(at: uShape)
         let irisUnitR = irisD / 2 / sh
         // Vertical slack inside the opening at this x; lets up/down gazes tuck
-        // the iris under the lids without losing it entirely.
-        let slack = max(0, ap.halfH - irisUnitR * 0.45)
+        // the iris well under the lids without losing it entirely.
+        let slack = max(0, ap.halfH - irisUnitR * 0.28)
         let baseY = EyeAperture.sample(at: 0.5).midY
         let y = min(max(baseY + CGFloat(gaze.dy) * slack, ap.midY - slack),
                     ap.midY + slack)
@@ -627,8 +627,15 @@ struct MoveEyePair: View {
         case "closed":
             return 0
         case "blink":
+            // Natural blink: a quick snap shut, then a slightly slower reopen.
             let ph = max(0, t - phaseStart).truncatingRemainder(dividingBy: 1.0)
-            return ph < 0.3 ? 0.5 + 0.5 * cos(2 * .pi * ph / 0.3) : 1
+            func smooth(_ u: Double) -> Double {
+                let c = min(max(u, 0), 1)
+                return c * c * (3 - 2 * c)
+            }
+            if ph < 0.12 { return 1 - smooth(ph / 0.12) }
+            if ph < 0.34 { return smooth((ph - 0.12) / 0.22) }
+            return 1
         default:
             return 1
         }
@@ -647,7 +654,12 @@ struct MoveEyePair: View {
             let a = tp * 1.7, r = pathEnvelope(tp)
             return (sin(a) * r, sin(2 * a) / 2 * r)
         default:
-            return (gaze.dx, gaze.dy)
+            // A barely-there slow drift keeps the eyes alive during long
+            // fixed holds (e.g. the 20 s far gaze) without moving the target.
+            if reduceMotion { return (gaze.dx, gaze.dy) }
+            let sway = 0.018
+            return (gaze.dx + sin(t * 0.7) * sway,
+                    gaze.dy + sin(t * 0.53 + 1.3) * sway)
         }
     }
 
