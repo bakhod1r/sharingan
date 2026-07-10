@@ -67,7 +67,11 @@ struct MenuBarView: View {
         }
         .onAppear { heartbeat = true }
         .padding(18)
-        .frame(width: 360)
+        // The Week tab widens the popover to fit the full board (backlog +
+        // 7 day columns); NSHostingController tracks preferredContentSize, so
+        // the popover follows this frame automatically.
+        .frame(width: tab == .week ? MenuBarWeekView.boardWidth + 36 : 360)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: tab)
         // One app accent: controls follow the chosen theme, not system blue.
         .tint(timer.settings.theme.accent)
         .sheet(item: $editorTask) { task in
