@@ -47,14 +47,24 @@ struct MainWindowView: View {
 
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 4) {
-            brand
-            sectionHeader("Main")
+            addTaskButton
+            shortcutRow(icon: "magnifyingglass", title: "Search") {
+                router.openTasks(focusSearch: true)
+            }
+            shortcutRow(icon: "calendar.badge.exclamationmark", title: "Today",
+                        count: tasks.count(.today), countTint: accent) {
+                router.openTasks(filter: .today)
+            }
+            shortcutRow(icon: "calendar", title: "Upcoming",
+                        count: tasks.count(.upcoming)) {
+                router.openTasks(filter: .upcoming)
+            }
             navRow(.timer)
             navRow(.tasks)
             navRow(.week)
             navRow(.stats)
-            sectionHeader("App")
             navRow(.settings)
+            categoriesSection
             Spacer(minLength: 12)
             sidebarFooter
         }
@@ -81,30 +91,98 @@ struct MainWindowView: View {
         .shadow(color: .black.opacity(0.38), radius: 28, x: 0, y: 14)
     }
 
-    private var brand: some View {
-        HStack(spacing: 10) {
-            appIcon
-                .resizable()
-                .frame(width: 28, height: 28)
-                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-                .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
-            Text("Sharingan")
-                .font(.system(.title2, design: .rounded).weight(.bold))
-                .foregroundStyle(.white)
-            Spacer()
+    /// Todoist-style "Add task" at the very top of the sidebar — an accent
+    /// plus-circle and bold accent label, opening the quick-capture panel.
+    private var addTaskButton: some View {
+        Button { QuickAddWindowManager.shared.showQuickAdd() } label: {
+            HStack(spacing: 10) {
+                ZStack {
+                    Circle().fill(accent)
+                    Image(systemName: "plus")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+                .frame(width: 24, height: 24)
+                .shadow(color: accent.opacity(0.5), radius: 5, y: 2)
+                Text("Add task")
+                    .font(.system(.body, design: .rounded).weight(.bold))
+                    .foregroundStyle(accent)
+                Spacer()
+            }
+            .padding(.horizontal, 10).padding(.vertical, 9)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.pressableSubtle)
+        .padding(.horizontal, 8)
         // Leave room for the traffic-light buttons over the hidden title bar.
-        .padding(.horizontal, 14).padding(.top, 30).padding(.bottom, 10)
+        .padding(.top, 34)
+        .padding(.bottom, 6)
     }
 
-    /// The real app icon, bundled at `Sources/Blink/Resources/AppIcon.png`,
-    /// falling back to an SF Symbol if it can't be loaded.
-    private var appIcon: Image {
-        if let url = Bundle.blinkAppResources.url(forResource: "AppIcon", withExtension: "png"),
-           let ns = NSImage(contentsOf: url) {
-            return Image(nsImage: ns)
+    /// Todoist's "My Projects" analog: categories that currently hold open
+    /// tasks, with per-category counts. Clicking one jumps to the Tasks list.
+    @ViewBuilder
+    private var categoriesSection: some View {
+        let counts = Dictionary(grouping: tasks.tasks.filter { !$0.isDone },
+                                by: \.category).mapValues(\.count)
+        let inUse = tasks.allCategories.filter { counts[$0.name] != nil }
+        if !inUse.isEmpty {
+            sectionHeader("Categories")
+            ForEach(inUse) { cat in
+                categoryRow(cat, count: counts[cat.name] ?? 0)
+            }
         }
-        return Image(systemName: "eye.fill")
+    }
+
+    /// Todoist-style shortcut row: not a section of its own, just a deep-link
+    /// into Tasks (search focus / smart filter). Count badge optional.
+    private func shortcutRow(icon: String, title: String, count: Int = 0,
+                             countTint: Color? = nil,
+                             action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 11) {
+                Image(systemName: icon)
+                    .font(.system(size: 15))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .frame(width: 20, alignment: .center)
+                Text(title)
+                    .font(.system(.body, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.7))
+                Spacer()
+                if count > 0 {
+                    Text("\(count)")
+                        .font(.system(.caption, design: .rounded).weight(.semibold).monospacedDigit())
+                        .foregroundStyle(countTint ?? .white.opacity(0.45))
+                }
+            }
+            .padding(.horizontal, 10).padding(.vertical, 9)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.pressableSubtle)
+        .padding(.horizontal, 8)
+    }
+
+    private func categoryRow(_ cat: TaskCategory, count: Int) -> some View {
+        Button { router.openTasks(category: cat.name) } label: {
+            HStack(spacing: 11) {
+                Text("#")
+                    .font(.system(.body, design: .rounded).weight(.bold))
+                    .foregroundStyle(Color(hex: cat.colorHex))
+                    .frame(width: 20, alignment: .center)
+                Text(cat.name)
+                    .font(.system(.callout, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.75))
+                    .lineLimit(1)
+                Spacer()
+                Text("\(count)")
+                    .font(.system(.caption, design: .rounded).monospacedDigit())
+                    .foregroundStyle(.white.opacity(0.45))
+            }
+            .padding(.horizontal, 10).padding(.vertical, 6)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.pressableSubtle)
+        .padding(.horizontal, 8)
     }
 
     /// A small glass status card pinned to the bottom of the sidebar — today's

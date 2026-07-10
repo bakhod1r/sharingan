@@ -51,6 +51,9 @@ struct TasksView: View {
     @State private var filter: TaskFilter = .all
     @State private var search = ""
     @FocusState private var searchFocused: Bool
+    /// Sidebar category deep-link: when set, only this category's group shows.
+    @State private var categoryFilter: String?
+    @ObservedObject private var router = AppRouter.shared
 
     private var newCategoryAccent: Color { Color(hex: store.color(for: newCategory)) }
 
@@ -62,7 +65,9 @@ struct TasksView: View {
                 emptyState
             } else {
                 viewBar
-                let groups = store.grouped(filter: filter, search: search)
+                if let cat = categoryFilter { categoryFilterChip(cat) }
+                let all = store.grouped(filter: filter, search: search)
+                let groups = categoryFilter.map { c in all.filter { $0.category == c } } ?? all
                 if groups.isEmpty {
                     noResults
                 } else if embeddedInScroll {
@@ -78,6 +83,51 @@ struct TasksView: View {
                            accent: timer.settings.theme.accent,
                            settings: timer.settings)
         }
+        .onAppear(perform: consumeDeepLink)
+        .onChange(of: router.pendingTaskFilter) { _ in consumeDeepLink() }
+        .onChange(of: router.pendingTaskCategory) { _ in consumeDeepLink() }
+        .onChange(of: router.focusTaskSearch) { _ in consumeDeepLink() }
+    }
+
+    /// Applies (and clears) one-shot sidebar deep-links: smart filter, category
+    /// narrowing, or search-field focus.
+    private func consumeDeepLink() {
+        if let f = router.pendingTaskFilter {
+            filter = f
+            router.pendingTaskFilter = nil
+        }
+        if let c = router.pendingTaskCategory {
+            categoryFilter = c
+            if filter == .completed { filter = .all }
+            router.pendingTaskCategory = nil
+        }
+        if router.focusTaskSearch {
+            searchFocused = true
+            router.focusTaskSearch = false
+        }
+    }
+
+    /// "Filtered by #Category" pill with a clear button.
+    private func categoryFilterChip(_ cat: String) -> some View {
+        HStack(spacing: 6) {
+            Text("#")
+                .font(.system(.caption, design: .rounded).weight(.bold))
+                .foregroundStyle(Color(hex: store.color(for: cat)))
+            Text(cat)
+                .font(.system(.caption, design: .rounded).weight(.semibold))
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) { categoryFilter = nil }
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.pressableSubtle)
+            .help("Clear category filter")
+            Spacer()
+        }
+        .padding(.horizontal, 10).padding(.vertical, 5)
+        .background(Capsule().fill(Color(hex: store.color(for: cat)).opacity(0.14)))
     }
 
     /// The grouped section stack, shared by the embedded and popover layouts.

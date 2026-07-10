@@ -233,7 +233,7 @@ struct FloatingTimerView: View {
                     .foregroundStyle(.white.opacity(0.92))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
-                if task.pomodorosDone > 0 {
+                if timer.settings.showPomodoroBadges, task.pomodorosDone > 0 {
                     Text("🍅\(task.pomodorosDone)")
                         .font(.system(.caption2, design: .rounded))
                         .foregroundStyle(.white.opacity(0.75))

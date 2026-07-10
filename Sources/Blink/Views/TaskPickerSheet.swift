@@ -10,6 +10,8 @@ struct TaskPickerSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var newTitle = ""
+    /// Tasks whose subtask list is expanded so a specific step can be targeted.
+    @State private var expanded: Set<UUID> = []
 
     private var openTasks: [TaskItem] {
         store.tasks.filter { !$0.isDone }
@@ -27,6 +29,9 @@ struct TaskPickerSheet: View {
                     VStack(spacing: 8) {
                         ForEach(openTasks) { task in
                             row(task)
+                            if expanded.contains(task.id) {
+                                subtaskRows(task)
+                            }
                         }
                     }
                     .padding(16)
@@ -75,10 +80,29 @@ struct TaskPickerSheet: View {
                         .foregroundStyle(.white.opacity(0.55))
                 }
                 Spacer()
-                if task.pomodorosDone > 0 {
+                if timer.settings.showPomodoroBadges, task.pomodorosDone > 0 {
                     Text("🍅\(task.pomodorosDone)")
                         .font(.system(.caption2, design: .rounded))
                         .foregroundStyle(.white.opacity(0.7))
+                }
+                // Disclosure for tasks with open steps — lets the user aim the
+                // session at one step instead of the whole task.
+                if task.subtasks.contains(where: { !$0.isDone }) {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            if expanded.contains(task.id) { expanded.remove(task.id) }
+                            else { expanded.insert(task.id) }
+                        }
+                    } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.6))
+                            .rotationEffect(.degrees(expanded.contains(task.id) ? 180 : 0))
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.pressableSubtle)
+                    .help("Pick a step to focus on")
                 }
                 Image(systemName: "play.circle.fill")
                     .font(.system(size: 22))
@@ -88,6 +112,43 @@ struct TaskPickerSheet: View {
             .glassRounded(12, material: .regular)
         }
         .buttonStyle(.pressableSubtle)
+    }
+
+    /// Open steps of an expanded task; choosing one starts the session with
+    /// that step as the pomodoro-credit target.
+    private func subtaskRows(_ task: TaskItem) -> some View {
+        VStack(spacing: 4) {
+            ForEach(task.subtasks.filter { !$0.isDone }) { sub in
+                Button {
+                    choose(task, subtask: sub.id)
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "scope")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.white.opacity(0.6))
+                        Text(sub.title)
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.85))
+                            .lineLimit(1)
+                        Spacer()
+                        if timer.settings.showPomodoroBadges,
+                           sub.pomodorosDone > 0 || sub.estimatedPomodoros != nil {
+                            Text(sub.estimatedPomodoros.map { "🍅\(sub.pomodorosDone)/\($0)" }
+                                 ?? "🍅\(sub.pomodorosDone)")
+                                .font(.system(size: 10, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.6))
+                        }
+                        Image(systemName: "play.circle")
+                            .font(.system(size: 16))
+                            .foregroundStyle(.white.opacity(0.75))
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 7)
+                    .glassRounded(10, material: .thin)
+                }
+                .buttonStyle(.pressableSubtle)
+            }
+        }
+        .padding(.leading, 26)
     }
 
     // MARK: - Empty state
@@ -150,8 +211,8 @@ struct TaskPickerSheet: View {
 
     // MARK: - Actions
 
-    private func choose(_ task: TaskItem) {
-        store.setActive(task.id)
+    private func choose(_ task: TaskItem, subtask: UUID? = nil) {
+        store.setActiveSubtask(taskID: task.id, subtaskID: subtask)
         startFocus()
     }
 

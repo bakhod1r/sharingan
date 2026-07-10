@@ -1,4 +1,5 @@
 import SwiftUI
+import BlinkCore
 
 /// The main window's navigation sections. Top-level so both the window and the
 /// menu-bar popover can drive selection through `AppRouter`.
@@ -31,4 +32,19 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
 final class AppRouter: ObservableObject {
     static let shared = AppRouter()
     @Published var section: AppSection = .timer
+
+    // One-shot deep-links into the Tasks list, set by the sidebar and consumed
+    // (reset to nil/false) by TasksView when it applies them.
+    @Published var pendingTaskFilter: TaskFilter?
+    @Published var pendingTaskCategory: String?
+    @Published var focusTaskSearch = false
+
+    /// Jump to the Tasks section with an optional smart filter / category.
+    func openTasks(filter: TaskFilter? = nil, category: String? = nil,
+                   focusSearch: Bool = false) {
+        pendingTaskFilter = filter
+        pendingTaskCategory = category
+        focusTaskSearch = focusSearch
+        section = .tasks
+    }
 }
