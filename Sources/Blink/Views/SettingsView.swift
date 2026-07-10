@@ -5,6 +5,7 @@ import BlinkCore
 struct SettingsView: View {
     @ObservedObject var timer: PomodoroTimer
     @Binding var settings: PomodoroSettings
+    @ObservedObject private var dndService = DNDShortcutService.shared
     @State private var editingInstructionDirection: String?
     @State private var openCategory: SettingsCategory?
     @State private var searchText = ""
@@ -163,6 +164,34 @@ struct SettingsView: View {
     }
 
     @ViewBuilder
+    /// One DND shortcut: editable name + Test button + last-run status.
+    @ViewBuilder
+    private func dndShortcutRow(label: String, name: Binding<String>) -> some View {
+        HStack(spacing: 8) {
+            Text(label)
+                .font(.system(.caption, design: .rounded).weight(.medium))
+                .frame(width: 84, alignment: .leading)
+            TextField("Shortcut name", text: name)
+                .textFieldStyle(DarkGlassFieldStyle())
+            switch dndService.lastResult[name.wrappedValue
+                .trimmingCharacters(in: .whitespaces)] {
+            case .success:
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                    .help("Shortcut ran successfully")
+            case .failure(let msg):
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.yellow)
+                    .help("Failed: \(msg)")
+            case nil:
+                EmptyView()
+            }
+            Button("Test") { dndService.run(name.wrappedValue) }
+                .buttonStyle(.pressableSubtle)
+                .font(.system(.caption, design: .rounded).weight(.semibold))
+        }
+    }
+
     private func categorySections(_ cat: SettingsCategory) -> some View {
         switch cat {
         case .timer:
@@ -398,6 +427,28 @@ struct SettingsView: View {
                             .font(.system(.caption, design: .rounded).weight(.semibold))
                     }
                     .buttonStyle(.pressableSubtle)
+                }
+
+                Section("Do Not Disturb") {
+                    ToggleRow(title: "Turn on Focus during focus sessions",
+                              isOn: $settings.dndEnabled)
+                    if settings.dndEnabled {
+                        dndShortcutRow(label: "On shortcut",
+                                       name: $settings.dndShortcutOn)
+                        dndShortcutRow(label: "Off shortcut",
+                                       name: $settings.dndShortcutOff)
+                        Button {
+                            NSWorkspace.shared.open(URL(string: "shortcuts://")!)
+                        } label: {
+                            Label("Open Shortcuts app",
+                                  systemImage: "arrow.up.forward.app")
+                                .font(.system(.caption, design: .rounded).weight(.semibold))
+                        }
+                        .buttonStyle(.pressableSubtle)
+                        Text("Create two shortcuts with these names: one sets a Focus (e.g. Do Not Disturb) on, the other turns it off. Blink runs them when a focus session starts and ends.")
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
                 }
 
                 Section("Reminders (posture / water / custom)") {
