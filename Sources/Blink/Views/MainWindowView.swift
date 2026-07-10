@@ -13,6 +13,8 @@ struct MainWindowView: View {
     @State private var showAddCategory = false
     @State private var newCatName = ""
     @State private var newCatColor = TaskCategory.palette[0]
+    /// Priority level whose name/color editor popover is open.
+    @State private var editingPriority: TaskPriority?
 
     private var accent: Color { timer.settings.theme.accent }
 
@@ -252,13 +254,14 @@ struct MainWindowView: View {
         }
     }
 
-    /// Priority shortcuts — always visible. The levels are fixed (P1–P3,
-    /// Todoist-style); zero-count rows render dimmed.
+    /// Every priority level, always visible; zero-count rows render dimmed.
+    /// The number of levels is fixed (Todoist-style P1–P4), but each level's
+    /// display name and flag color are editable via the row's context menu.
     @ViewBuilder
     private var prioritySection: some View {
         let open = tasks.tasks.filter { !$0.isDone }
         sectionHeader("Priority")
-        ForEach([TaskPriority.high, .medium, .low], id: \.self) { p in
+        ForEach([TaskPriority.high, .medium, .low, .none], id: \.self) { p in
             priorityRow(p, count: open.filter { $0.priority == p }.count)
         }
     }
@@ -266,26 +269,75 @@ struct MainWindowView: View {
     private func priorityRow(_ p: TaskPriority, count: Int) -> some View {
         Button { router.openTasks(priority: p) } label: {
             HStack(spacing: 11) {
-                Image(systemName: "flag.fill")
-                    .font(.system(size: 12))
-                    .foregroundStyle(p.colorHex.map { Color(hex: $0) } ?? .secondary)
+                Image(systemName: p == .none ? "flag.slash" : "flag.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(timer.settings.priorityColorHex(p)
+                        .map { Color(hex: $0) } ?? .secondary)
                     .frame(width: 20, alignment: .center)
-                Text(p.menuLabel)
-                    .font(.system(.callout, design: .rounded))
+                Text(timer.settings.priorityName(p))
+                    .font(.system(.footnote, design: .rounded))
                     .foregroundStyle(.white.opacity(count > 0 ? 0.75 : 0.45))
                     .lineLimit(1)
                 Spacer()
                 if count > 0 {
                     Text("\(count)")
-                        .font(.system(.caption, design: .rounded).monospacedDigit())
+                        .font(.system(.caption2, design: .rounded).monospacedDigit())
                         .foregroundStyle(.white.opacity(0.45))
                 }
             }
-            .padding(.horizontal, 10).padding(.vertical, 6)
+            .padding(.horizontal, 10).padding(.vertical, 5)
             .contentShape(Rectangle())
         }
         .buttonStyle(.pressableSubtle)
         .padding(.horizontal, 8)
+        .contextMenu {
+            Button("Edit name & color…") { editingPriority = p }
+            if timer.settings.priorityNames[String(p.rawValue)] != nil
+                || timer.settings.priorityColors[String(p.rawValue)] != nil {
+                Button("Reset to default") {
+                    timer.settings.priorityNames[String(p.rawValue)] = nil
+                    timer.settings.priorityColors[String(p.rawValue)] = nil
+                }
+            }
+        }
+        .popover(isPresented: Binding(
+            get: { editingPriority == p },
+            set: { if !$0 { editingPriority = nil } }
+        ), arrowEdge: .trailing) {
+            editPriorityPopover(p)
+        }
+    }
+
+    private func editPriorityPopover(_ p: TaskPriority) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Edit \(p.label)").dsSectionLabel()
+            TextField(p.menuLabel, text: Binding(
+                get: { timer.settings.priorityNames[String(p.rawValue)] ?? "" },
+                set: { timer.settings.priorityNames[String(p.rawValue)] =
+                        $0.isEmpty ? nil : $0 }
+            ))
+            .textFieldStyle(DarkGlassFieldStyle())
+            .frame(width: 180)
+            HStack(spacing: 6) {
+                ForEach(TaskCategory.palette, id: \.self) { hex in
+                    Button {
+                        timer.settings.priorityColors[String(p.rawValue)] = hex
+                    } label: {
+                        Circle()
+                            .fill(Color(hex: hex))
+                            .frame(width: 16, height: 16)
+                            .overlay(Circle().stroke(
+                                .white.opacity(timer.settings.priorityColorHex(p) == hex ? 0.9 : 0),
+                                lineWidth: 2))
+                    }
+                    .buttonStyle(.pressableSubtle)
+                }
+            }
+            Text("Empty name = default. Applies everywhere flags show.")
+                .font(.system(.caption2, design: .rounded))
+                .foregroundStyle(.white.opacity(0.5))
+        }
+        .padding(14)
     }
 
     /// Shared row shape for category/tag entries: colored text mark + name +
@@ -299,17 +351,17 @@ struct MainWindowView: View {
                     .foregroundStyle(markTint)
                     .frame(width: 20, alignment: .center)
                 Text(title)
-                    .font(.system(.callout, design: .rounded))
+                    .font(.system(.footnote, design: .rounded))
                     .foregroundStyle(.white.opacity(count > 0 ? 0.75 : 0.45))
                     .lineLimit(1)
                 Spacer()
                 if count > 0 {
                     Text("\(count)")
-                        .font(.system(.caption, design: .rounded).monospacedDigit())
+                        .font(.system(.caption2, design: .rounded).monospacedDigit())
                         .foregroundStyle(.white.opacity(0.45))
                 }
             }
-            .padding(.horizontal, 10).padding(.vertical, 6)
+            .padding(.horizontal, 10).padding(.vertical, 5)
             .contentShape(Rectangle())
         }
         .buttonStyle(.pressableSubtle)

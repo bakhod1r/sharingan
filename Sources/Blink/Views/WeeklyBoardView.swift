@@ -339,11 +339,11 @@ struct WeeklyBoardView: View {
                 || showBadge || !task.tags.isEmpty || task.priority != .none
             if hasMeta {
                 HStack(spacing: 7) {
-                    if task.priority != .none, let hex = task.priority.colorHex {
+                    if task.priority != .none, let hex = timer.settings.priorityColorHex(task.priority) {
                         Image(systemName: "flag.fill")
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(Color(hex: hex))
-                            .help(task.priority.menuLabel)
+                            .help(timer.settings.priorityName(task.priority))
                     }
                     if let due = task.dueDate {
                         Label(shortDue(due), systemImage: "calendar")
@@ -422,7 +422,7 @@ struct WeeklyBoardView: View {
                     Button {
                         store.setPriority(task.id, p)
                     } label: {
-                        Label(p.menuLabel,
+                        Label(timer.settings.priorityName(p),
                               systemImage: task.priority == p ? "checkmark" : "flag.fill")
                     }
                 }

@@ -599,7 +599,7 @@ struct MenuBarView: View {
                     Button {
                         tasks.setPriority(task.id, p)
                     } label: {
-                        Label(p.menuLabel,
+                        Label(timer.settings.priorityName(p),
                               systemImage: task.priority == p ? "checkmark" : "flag.fill")
                     }
                 }

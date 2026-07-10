@@ -87,6 +87,8 @@ struct TasksView: View {
         .onAppear(perform: consumeDeepLink)
         .onChange(of: router.pendingTaskFilter) { _ in consumeDeepLink() }
         .onChange(of: router.pendingTaskCategory) { _ in consumeDeepLink() }
+        .onChange(of: router.pendingTaskTag) { _ in consumeDeepLink() }
+        .onChange(of: router.pendingTaskPriority) { _ in consumeDeepLink() }
         .onChange(of: router.focusTaskSearch) { _ in consumeDeepLink() }
     }
 
@@ -137,7 +139,8 @@ struct TasksView: View {
                 if let c = categoryFilter { return ("#", c, Color(hex: store.color(for: c))) }
                 if let t = tagFilter { return ("@", t, .accentColor) }
                 if let p = priorityFilter {
-                    return ("⚑", p.menuLabel, p.colorHex.map { Color(hex: $0) } ?? .secondary)
+                    return ("⚑", timer.settings.priorityName(p),
+                            timer.settings.priorityColorHex(p).map { Color(hex: $0) } ?? .secondary)
                 }
                 return ("", "", .secondary)
             }()
@@ -905,7 +908,7 @@ struct TasksView: View {
                     Label(dueText(due), systemImage: "calendar")
                         .foregroundStyle(task.isOverdue() ? Color.red : Color.dsSecondary)
                 }
-                if task.priority != .none, let hex = task.priority.colorHex {
+                if task.priority != .none, let hex = timer.settings.priorityColorHex(task.priority) {
                     Label(task.priority.label, systemImage: "flag.fill")
                         .foregroundStyle(Color(hex: hex))
                 }
@@ -973,7 +976,7 @@ struct TasksView: View {
         let isActive = store.activeTaskID == task.id
         let accent = Color(hex: store.color(for: task.category))
         let hovered = hoveredTask == task.id
-        let prio = task.priority.colorHex.map { Color(hex: $0) }
+        let prio = timer.settings.priorityColorHex(task.priority).map { Color(hex: $0) }
         return HStack(spacing: 11) {
             // Checkbox — priority-tinted ring (Todoist-style), fills green when done.
             Button { store.toggleDone(task.id) } label: {
@@ -985,7 +988,7 @@ struct TasksView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.pressableSubtle)
-            .help(task.priority == .none ? "" : task.priority.menuLabel)
+            .help(task.priority == .none ? "" : timer.settings.priorityName(task.priority))
             .accessibilityLabel(task.isDone ? "Mark \(task.title) not done" : "Mark \(task.title) done")
 
             VStack(alignment: .leading, spacing: 3) {
@@ -1116,7 +1119,7 @@ struct TasksView: View {
                     Button {
                         store.setPriority(task.id, p)
                     } label: {
-                        Label(p.menuLabel,
+                        Label(timer.settings.priorityName(p),
                               systemImage: task.priority == p ? "checkmark" : "flag.fill")
                     }
                 }

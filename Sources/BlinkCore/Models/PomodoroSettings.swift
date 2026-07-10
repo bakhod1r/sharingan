@@ -64,6 +64,11 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var defaultSubtaskEstimate: Int = 0
     /// Show 🍅 done/estimate badges on task & subtask rows.
     public var showPomodoroBadges: Bool = true
+    /// Custom display names for priority levels, keyed by String(rawValue).
+    /// Missing keys fall back to the built-in Todoist-style labels.
+    public var priorityNames: [String: String] = [:]
+    /// Custom flag colors (hex) per priority level, keyed by String(rawValue).
+    public var priorityColors: [String: String] = [:]
 
     public init() {}
 
@@ -121,6 +126,21 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
         weekStartsOnMonday = try c.decodeIfPresent(Bool.self, forKey: .weekStartsOnMonday) ?? d.weekStartsOnMonday
         defaultSubtaskEstimate = try c.decodeIfPresent(Int.self, forKey: .defaultSubtaskEstimate) ?? d.defaultSubtaskEstimate
         showPomodoroBadges = try c.decodeIfPresent(Bool.self, forKey: .showPomodoroBadges) ?? d.showPomodoroBadges
+        priorityNames = try c.decodeIfPresent([String: String].self, forKey: .priorityNames) ?? d.priorityNames
+        priorityColors = try c.decodeIfPresent([String: String].self, forKey: .priorityColors) ?? d.priorityColors
+    }
+
+    /// Display name for a priority level — custom override, else the built-in.
+    public func priorityName(_ p: TaskPriority) -> String {
+        let custom = priorityNames[String(p.rawValue)]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return (custom?.isEmpty == false ? custom! : p.menuLabel)
+    }
+
+    /// Flag color (hex) for a priority level — custom override, else built-in
+    /// (nil for `.none`, which renders no flag).
+    public func priorityColorHex(_ p: TaskPriority) -> String? {
+        priorityColors[String(p.rawValue)] ?? p.colorHex
     }
 
     /// "Auto" mode: the whole focus ↔ break cycle runs hands-free (25 focus →
