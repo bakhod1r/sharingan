@@ -9,6 +9,10 @@ struct MainWindowView: View {
     @ObservedObject private var router = AppRouter.shared
     /// Sidebar row the pointer is hovering, for a subtle highlight.
     @State private var hoveredNav: AppSection?
+    /// Inline "new category" popover state (sidebar Categories +).
+    @State private var showAddCategory = false
+    @State private var newCatName = ""
+    @State private var newCatColor = TaskCategory.palette[0]
 
     private var accent: Color { timer.settings.theme.accent }
 
@@ -125,19 +129,61 @@ struct MainWindowView: View {
         .padding(.bottom, 6)
     }
 
-    /// Todoist's "My Projects" analog: categories that currently hold open
-    /// tasks, with per-category counts. Clicking one jumps to the Tasks list.
+    /// Todoist's "My Projects" analog: every category with its open-task count.
+    /// "+" adds a custom category; a custom category's context menu deletes it.
     @ViewBuilder
     private var categoriesSection: some View {
         let counts = Dictionary(grouping: tasks.tasks.filter { !$0.isDone },
                                 by: \.category).mapValues(\.count)
-        let inUse = tasks.allCategories.filter { counts[$0.name] != nil }
-        if !inUse.isEmpty {
-            sectionHeader("Categories")
-            ForEach(inUse) { cat in
-                categoryRow(cat, count: counts[cat.name] ?? 0)
-            }
+        sectionHeader("Categories", addHelp: "New category") {
+            showAddCategory = true
         }
+        .popover(isPresented: $showAddCategory, arrowEdge: .trailing) {
+            addCategoryPopover
+        }
+        ForEach(tasks.allCategories) { cat in
+            categoryRow(cat, count: counts[cat.name] ?? 0)
+                .contextMenu {
+                    if tasks.isCustomCategory(cat.name) {
+                        Button("Delete category", role: .destructive) {
+                            tasks.deleteCategory(cat.name)
+                        }
+                    } else {
+                        Text("Preset — can't be deleted")
+                    }
+                }
+        }
+    }
+
+    private var addCategoryPopover: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("New category").dsSectionLabel()
+            TextField("Name", text: $newCatName)
+                .textFieldStyle(DarkGlassFieldStyle())
+                .frame(width: 180)
+                .onSubmit(commitNewCategory)
+            HStack(spacing: 6) {
+                ForEach(TaskCategory.palette, id: \.self) { hex in
+                    Button { newCatColor = hex } label: {
+                        Circle()
+                            .fill(Color(hex: hex))
+                            .frame(width: 16, height: 16)
+                            .overlay(Circle().stroke(.white.opacity(newCatColor == hex ? 0.9 : 0),
+                                                     lineWidth: 2))
+                    }
+                    .buttonStyle(.pressableSubtle)
+                }
+            }
+            Button("Add", action: commitNewCategory)
+                .disabled(newCatName.trimmingCharacters(in: .whitespaces).isEmpty)
+        }
+        .padding(14)
+    }
+
+    private func commitNewCategory() {
+        guard tasks.addCategory(name: newCatName, colorHex: newCatColor) != nil else { return }
+        newCatName = ""
+        showAddCategory = false
     }
 
     /// Todoist-style shortcut row: not a section of its own, just a deep-link
@@ -175,40 +221,45 @@ struct MainWindowView: View {
         }
     }
 
-    /// Todoist's "Labels": free-form tags currently in use on open tasks,
-    /// most-used first. Clicking narrows the Tasks list to that tag.
+    /// Todoist's "Labels": free-form tags across all tasks, most-used first.
+    /// Clicking narrows the Tasks list; the context menu deletes the label
+    /// everywhere. Tags are born by typing #tag when adding/editing a task.
     @ViewBuilder
     private var tagsSection: some View {
         let open = tasks.tasks.filter { !$0.isDone }
         let counts: [String: Int] = open.reduce(into: [:]) { acc, t in
             for tag in t.tags { acc[tag, default: 0] += 1 }
         }
-        let names = tasks.allTags.filter { counts[$0] != nil }.prefix(8)
-        if !names.isEmpty {
-            sectionHeader("Tags")
+        let names = tasks.allTags.prefix(8)
+        sectionHeader("Tags")
+        if names.isEmpty {
+            Text("Type #tag when adding a task")
+                .font(.system(.caption2, design: .rounded))
+                .foregroundStyle(.white.opacity(0.4))
+                .padding(.horizontal, 18).padding(.bottom, 4)
+        } else {
             ForEach(Array(names), id: \.self) { tag in
                 filterRow(mark: "@", markTint: accent,
                           title: tag, count: counts[tag] ?? 0) {
                     router.openTasks(tag: tag)
                 }
+                .contextMenu {
+                    Button("Delete label everywhere", role: .destructive) {
+                        tasks.removeTag(tag)
+                    }
+                }
             }
         }
     }
 
-    /// Priority shortcuts (P1–P3) with open-task counts; P4/none is the
-    /// default state so it gets no row.
+    /// Priority shortcuts — always visible. The levels are fixed (P1–P3,
+    /// Todoist-style); zero-count rows render dimmed.
     @ViewBuilder
     private var prioritySection: some View {
         let open = tasks.tasks.filter { !$0.isDone }
-        let used = [TaskPriority.high, .medium, .low].compactMap { p -> (TaskPriority, Int)? in
-            let n = open.filter { $0.priority == p }.count
-            return n > 0 ? (p, n) : nil
-        }
-        if !used.isEmpty {
-            sectionHeader("Priority")
-            ForEach(used, id: \.0) { p, n in
-                priorityRow(p, count: n)
-            }
+        sectionHeader("Priority")
+        ForEach([TaskPriority.high, .medium, .low], id: \.self) { p in
+            priorityRow(p, count: open.filter { $0.priority == p }.count)
         }
     }
 
@@ -221,12 +272,14 @@ struct MainWindowView: View {
                     .frame(width: 20, alignment: .center)
                 Text(p.menuLabel)
                     .font(.system(.callout, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.75))
+                    .foregroundStyle(.white.opacity(count > 0 ? 0.75 : 0.45))
                     .lineLimit(1)
                 Spacer()
-                Text("\(count)")
-                    .font(.system(.caption, design: .rounded).monospacedDigit())
-                    .foregroundStyle(.white.opacity(0.45))
+                if count > 0 {
+                    Text("\(count)")
+                        .font(.system(.caption, design: .rounded).monospacedDigit())
+                        .foregroundStyle(.white.opacity(0.45))
+                }
             }
             .padding(.horizontal, 10).padding(.vertical, 6)
             .contentShape(Rectangle())
@@ -247,12 +300,14 @@ struct MainWindowView: View {
                     .frame(width: 20, alignment: .center)
                 Text(title)
                     .font(.system(.callout, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.75))
+                    .foregroundStyle(.white.opacity(count > 0 ? 0.75 : 0.45))
                     .lineLimit(1)
                 Spacer()
-                Text("\(count)")
-                    .font(.system(.caption, design: .rounded).monospacedDigit())
-                    .foregroundStyle(.white.opacity(0.45))
+                if count > 0 {
+                    Text("\(count)")
+                        .font(.system(.caption, design: .rounded).monospacedDigit())
+                        .foregroundStyle(.white.opacity(0.45))
+                }
             }
             .padding(.horizontal, 10).padding(.vertical, 6)
             .contentShape(Rectangle())
@@ -308,6 +363,25 @@ struct MainWindowView: View {
             .dsSectionLabel()
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 18).padding(.top, 16).padding(.bottom, 5)
+    }
+
+    /// Section header with a trailing "+" action (e.g. Categories → new).
+    private func sectionHeader(_ title: String, addHelp: String,
+                               onAdd: @escaping () -> Void) -> some View {
+        HStack(spacing: 6) {
+            Text(title).dsSectionLabel()
+            Spacer()
+            Button(action: onAdd) {
+                Image(systemName: "plus")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .frame(width: 18, height: 18)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.pressableSubtle)
+            .help(addHelp)
+        }
+        .padding(.horizontal, 18).padding(.top, 16).padding(.bottom, 5)
     }
 
     /// Sidebar badge count per section: open tasks for Tasks, still-unscheduled

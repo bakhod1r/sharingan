@@ -453,6 +453,18 @@ public final class TaskStore: ObservableObject {
         Array(Set(tasks.compactMap(\.project))).sorted()
     }
 
+    /// Removes a tag from every task — the sidebar's "delete label". Tags have
+    /// no standalone registry (they exist only on tasks), so this erases the
+    /// label everywhere at once.
+    public func removeTag(_ tag: String) {
+        var touched = false
+        for i in tasks.indices where tasks[i].tags.contains(tag) {
+            tasks[i].tags.removeAll { $0 == tag }
+            touched = true
+        }
+        if touched { persist() }
+    }
+
     /// Distinct tags across all tasks, most-used first — powers tag suggestions.
     public var allTags: [String] {
         var freq: [String: Int] = [:]
