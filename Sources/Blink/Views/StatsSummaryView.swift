@@ -8,6 +8,8 @@ struct StatsSummaryView: View {
     let stats: PomodoroStats
     let focusMinutes: Int
     var accent: Color = .paletteFocusStart
+    /// Today's pomodoro target (0 = no goal configured).
+    var dailyGoal: Int = 0
     @ObservedObject private var store = TaskStore.shared
 
     /// A deliberately narrow palette — colour carries meaning instead of a stock
@@ -22,8 +24,14 @@ struct StatsSummaryView: View {
                    accent),
             Metric("clock.fill", focusTime(totalMinutes), "Focus time",
                    accent),
-            Metric("calendar", "\(stats.completedTodayCount())", "Today",
-                   .green),
+            Metric("calendar",
+                   dailyGoal > 0
+                       ? "\(stats.completedTodayCount())/\(dailyGoal)"
+                       : "\(stats.completedTodayCount())",
+                   dailyGoal > 0 ? "Today · goal" : "Today",
+                   .green,
+                   sub: dailyGoal > 0 && stats.completedTodayCount() >= dailyGoal
+                       ? "goal reached 🎯" : nil),
             Metric("chart.line.uptrend.xyaxis", "\(stats.thisWeekTotal())", "This week",
                    accent, sub: weekTrend()),
             Metric("star.fill", "\(stats.bestDay?.count ?? 0)", "Best day",

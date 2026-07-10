@@ -762,7 +762,8 @@ struct MainWindowView: View {
                 VStack(spacing: 20) {
                     StatsSummaryView(stats: timer.stats,
                                      focusMinutes: timer.settings.focusMinutes,
-                                     accent: timer.settings.theme.accent)
+                                     accent: timer.settings.theme.accent,
+                                     dailyGoal: timer.settings.dailyPomodoroGoal)
                     StreakBadgeView(streak: timer.stats.streak)
                     StatsChartView(stats: timer.stats, accent: timer.settings.theme.accent)
                     StatsExtrasView(stats: timer.stats,
