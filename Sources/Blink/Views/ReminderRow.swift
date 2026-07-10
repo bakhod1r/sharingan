@@ -16,7 +16,7 @@ struct ReminderRow: View {
                 }
                 .pickerStyle(.menu).tint(.white)
                 Spacer()
-                Toggle("", isOn: $item.enabled).tint(.white).labelsHidden()
+                Toggle("", isOn: $item.enabled).tint(.green).labelsHidden()
             }
             HStack {
                 Text("Every").foregroundStyle(.white.opacity(0.8))

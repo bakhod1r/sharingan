@@ -305,8 +305,8 @@ private struct TimerDetailView: View {
                         .font(.dsTimer(76))
                         .foregroundStyle(.white)
                     Label(timer.phase.label, systemImage: timer.phase.systemImage)
-                        .font(.system(.title3, design: .rounded).weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.85))
+                        .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.7))
                 }
             }
 
@@ -331,7 +331,7 @@ private struct TimerDetailView: View {
 
             // Primary CleanMyMac-style glowing run button, flanked by
             // subtle secondary controls.
-            HStack(alignment: .center, spacing: 40) {
+            HStack(alignment: .center, spacing: 28) {
                 GlassIconButton(systemImage: "forward.end.fill", label: "Skip",
                                 action: { timer.skip() })
 

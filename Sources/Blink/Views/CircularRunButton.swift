@@ -87,7 +87,7 @@ struct GlassIconButton: View {
                     .glass(Circle(), material: .regular)
                 Text(label)
                     .font(.system(.caption2, design: .rounded).weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.75))
+                    .foregroundStyle(tint.opacity(0.75))
             }
         }
         .buttonStyle(.pressableSubtle)
