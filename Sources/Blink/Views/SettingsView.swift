@@ -539,7 +539,7 @@ struct SettingsView: View {
                         MoveEyePair(direction: "center", gaze: .center,
                                     eyeSize: 54, style: settings.sharinganStyle,
                                     rightStyle: settings.sharinganStyleRight,
-                                    transition: .off)
+                                    evolves: false)
                         Spacer()
                     }
                     .padding(.vertical, 6)
@@ -549,7 +549,7 @@ struct SettingsView: View {
                                                                  : "Left eye")
                             .font(.system(.body, design: .rounded))
                         Spacer()
-                        MoveIrisView(diameter: 26, style: settings.sharinganStyle)
+                        SpinningIrisSwatch(style: settings.sharinganStyle)
                         Picker("", selection: $settings.sharinganStyle) {
                             ForEach(SharinganStyle.allCases) { s in
                                 Text(s.label).tag(s)
@@ -573,7 +573,7 @@ struct SettingsView: View {
                             Text("Right eye")
                                 .font(.system(.body, design: .rounded))
                             Spacer()
-                            MoveIrisView(diameter: 26, style: right)
+                            SpinningIrisSwatch(style: right)
                             Picker("", selection: Binding(
                                 get: { settings.sharinganStyleRight ?? settings.sharinganStyle },
                                 set: { settings.sharinganStyleRight = $0 })) {
@@ -1035,5 +1035,22 @@ struct DSStepper: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.pressableSubtle)
+    }
+}
+/// Small, slowly whirling iris shown next to the style pickers — every eye
+/// in the app breathes, even the 26 pt swatches.
+struct SpinningIrisSwatch: View {
+    var style: SharinganStyle
+    @State private var angle = 0.0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        MoveIrisView(diameter: 26, spin: angle, style: style)
+            .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(.linear(duration: 9).repeatForever(autoreverses: false)) {
+                    angle = 360
+                }
+            }
     }
 }

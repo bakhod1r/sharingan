@@ -22,6 +22,10 @@ struct PatternEvolution {
     /// Styles shown when the evolution is off (the user's configured pair).
     var baseLeft: SharinganStyle = .classic
     var baseRight: SharinganStyle = .classic
+    /// false = keep the configured styles (no chain walking) but still play
+    /// the opening whirl and the closing bookend — used by previews that
+    /// must show the user's selection.
+    var evolves = true
 
     /// The canonical awakening order: one tomoe → two → three, then the
     /// Mangekyō family, ending on the Rinnegan before wrapping around.
@@ -50,6 +54,15 @@ struct PatternEvolution {
             return Frame(left: baseLeft, right: baseRight, emergence: 1,
                          tomoeStage: nil, endFade: fade)
         }
+        // Non-evolving surfaces: the configured styles whirl open and fold
+        // shut, but never walk the chain.
+        if !evolves {
+            let em = Self.smooth((t - appearStart - 1.0) / transition.openSeconds)
+            return Frame(left: baseLeft, right: baseRight,
+                         emergence: CGFloat(min(em, fade)),
+                         tomoeStage: nil, endFade: fade)
+        }
+
         let chain = Self.chain
         let cur = chain[evolutionCount % chain.count]
 

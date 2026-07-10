@@ -743,6 +743,9 @@ struct MoveEyePair: View {
     var transition: PatternTransitionSpeed = .normal
     /// When the break ends — drives the closing bookend (pattern + lids).
     var endDate: Date? = nil
+    /// false = play the opening/closing whirls with the configured styles
+    /// but never evolve along the chain (style-picker previews).
+    var evolves = true
 
     private var isPath: Bool {
         direction == "circle_cw" || direction == "circle_ccw" || direction == "figure8"
@@ -810,7 +813,8 @@ struct MoveEyePair: View {
                          end: endDate?.timeIntervalSinceReferenceDate,
                          reduceMotion: reduceMotion,
                          baseLeft: style,
-                         baseRight: rightStyle ?? style)
+                         baseRight: rightStyle ?? style,
+                         evolves: evolves)
     }
 
     /// Activation burst: tomoe accelerate, whirl and settle (smootherstep).
