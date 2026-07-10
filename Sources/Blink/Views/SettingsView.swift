@@ -579,6 +579,16 @@ struct SettingsView: View {
                     Text("One flat tone across the whole break screen. Graphite matches the design video; Slate is a touch lighter.")
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(.white.opacity(0.65))
+
+                    Button {
+                        BreakWindowManager.shared.presentPreview(timer: timer) {
+                            BreakWindowManager.shared.dismissAll()
+                        }
+                    } label: {
+                        Label("Preview break screen", systemImage: "eye.fill")
+                            .font(.system(.callout, design: .rounded).weight(.medium))
+                    }
+                    .buttonStyle(.bordered)
                 }
 
                 Section("Desktop wallpaper") {
