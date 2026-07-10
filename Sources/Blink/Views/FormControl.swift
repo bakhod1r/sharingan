@@ -25,6 +25,6 @@ struct DarkGlassFieldStyle: TextFieldStyle {
         configuration
             .padding(.horizontal, 12).padding(.vertical, 10)
             .foregroundStyle(.white)
-            .glassRounded(14, material: .thin)
+            .glassRounded(DS.Radius.md, material: .thin)
     }
 }

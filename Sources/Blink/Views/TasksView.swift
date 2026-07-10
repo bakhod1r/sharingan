@@ -437,7 +437,7 @@ struct TasksView: View {
             .foregroundStyle(.white)
             .padding(.horizontal, 10).padding(.vertical, 7)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
+            .background(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
                 .fill(Color.white.opacity(0.05)))
     }
 
@@ -472,7 +472,7 @@ struct TasksView: View {
             }
             .padding(.horizontal, 10).padding(.vertical, 7)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
+            .background(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
                 .fill(Color.white.opacity(0.05)))
 
             // Suggestions — existing tags not already added.

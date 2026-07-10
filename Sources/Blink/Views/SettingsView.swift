@@ -83,7 +83,7 @@ struct SettingsView: View {
     /// The real app icon (same asset the main-window sidebar uses), so the app
     /// presents one brand mark instead of an eye glyph here and the icon there.
     private var appIcon: Image {
-        if let url = Bundle.module.url(forResource: "AppIcon", withExtension: "png"),
+        if let url = Bundle.blinkAppResources.url(forResource: "AppIcon", withExtension: "png"),
            let ns = NSImage(contentsOf: url) {
             return Image(nsImage: ns)
         }

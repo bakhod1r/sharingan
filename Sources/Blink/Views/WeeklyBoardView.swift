@@ -349,7 +349,7 @@ struct WeeklyBoardView: View {
                             .foregroundStyle(color)
                     }
                     if task.subtaskProgress.total > 0 {
-                        Text("☑\(task.subtaskProgress.done)/\(task.subtaskProgress.total)")
+                        Label("\(task.subtaskProgress.done)/\(task.subtaskProgress.total)", systemImage: "checklist")
                             .font(.system(size: 10, design: .rounded))
                             .foregroundStyle(task.subtaskProgress.done == task.subtaskProgress.total
                                              ? Color.green : .white.opacity(0.55))

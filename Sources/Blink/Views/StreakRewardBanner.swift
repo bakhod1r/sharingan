@@ -31,7 +31,7 @@ struct StreakRewardBanner: View {
                                    startPoint: .topLeading, endPoint: .bottomTrailing)
                         .opacity(0.85)
                 )
-                .glassRounded(24, material: .regular)
+                .glassRounded(DS.Radius.xl, material: .regular)
                 .liquidShadow(color: .orange.opacity(0.6), radius: 22, y: 10)
                 .overlay { if show { ConfettiBurst() } }
 

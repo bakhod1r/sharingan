@@ -73,9 +73,9 @@ public final class BreakAmbienceService: ObservableObject {
 
     private func bundledURL(for ambience: Ambience) -> URL? {
         let name = "ambience_\(ambience.rawValue)"
-        // Sounds ship with the BlinkCore target, so resolve via Bundle.module.
-        return Bundle.module.url(forResource: name, withExtension: "caf",
-                                 subdirectory: "Sounds")
-            ?? Bundle.module.url(forResource: name, withExtension: "caf")
+        // Sounds ship with the BlinkCore target; resolve from the signable bundle.
+        return Bundle.blinkCoreResources.url(forResource: name, withExtension: "caf",
+                                             subdirectory: "Sounds")
+            ?? Bundle.blinkCoreResources.url(forResource: name, withExtension: "caf")
     }
 }

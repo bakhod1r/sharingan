@@ -38,7 +38,7 @@ struct StreakBadgeView: View {
             }
         }
         .padding(14)
-        .glassRounded(22, material: .regular)
+        .glassRounded(DS.Radius.xl, material: .regular)
         .liquidShadow(radius: 12, y: 6)
     }
 

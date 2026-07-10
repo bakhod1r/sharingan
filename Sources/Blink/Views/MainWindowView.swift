@@ -100,7 +100,7 @@ struct MainWindowView: View {
     /// The real app icon, bundled at `Sources/Blink/Resources/AppIcon.png`,
     /// falling back to an SF Symbol if it can't be loaded.
     private var appIcon: Image {
-        if let url = Bundle.module.url(forResource: "AppIcon", withExtension: "png"),
+        if let url = Bundle.blinkAppResources.url(forResource: "AppIcon", withExtension: "png"),
            let ns = NSImage(contentsOf: url) {
             return Image(nsImage: ns)
         }
