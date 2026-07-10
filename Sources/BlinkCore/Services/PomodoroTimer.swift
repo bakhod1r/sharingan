@@ -183,7 +183,7 @@ public final class PomodoroTimer: ObservableObject {
 
     /// True only at the exact completion that lands on the goal, so the
     /// celebration fires once per day without any extra persisted state.
-    public static func goalJustReached(count: Int, goal: Int) -> Bool {
+    nonisolated public static func goalJustReached(count: Int, goal: Int) -> Bool {
         goal > 0 && count == goal
     }
 
