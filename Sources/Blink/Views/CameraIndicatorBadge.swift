@@ -24,7 +24,7 @@ struct CameraIndicatorBadge: View {
         .onAppear {
             pulse = camera.isRunning
         }
-        .onChange(of: camera.isRunning) { running in
+        .onChange(of: camera.isRunning) { _, running in
             pulse = running
         }
     }

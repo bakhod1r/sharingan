@@ -159,8 +159,8 @@ struct FloatingTimerView: View {
                 .position(x: geo.size.width / 2, y: geo.size.height / 2)
         }
         .onAppear { animate = true }
-        .onChange(of: timer.isFlashing) { _ in animate = timer.isFlashing }
-        .onChange(of: timer.phase) { _ in
+        .onChange(of: timer.isFlashing) { animate = timer.isFlashing }
+        .onChange(of: timer.phase) {
             withAnimation(.spring(response: 0.26, dampingFraction: 0.5)) { phasePulse = true }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
                 withAnimation(.spring(response: 0.45, dampingFraction: 0.7)) { phasePulse = false }

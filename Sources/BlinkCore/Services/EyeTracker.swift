@@ -82,26 +82,40 @@ public final class EyeTracker: ObservableObject {
     public var underBlinkRateThreshold: Double = 8.0 // blinks/min
     public var gazeTolerance: Double = 0.35
 
-    private var sequenceHandler: VNSequenceRequestHandler?
     /// Previous frame's blink state — a blink is counted once on the open→closed
     /// edge, not repeatedly while the eyes stay shut.
     private var wasBlinking: Bool = false
     private var binksInWindow: [Date] = []
     private var rotation: CGImagePropertyOrientation = .up
     private var faceBoundsCache: CGRect = .null
+    private var trackingTask: Task<Void, Never>?
 
     public init() {}
 
     public func start() {
         guard !isDetecting else { return }
-        sequenceHandler = VNSequenceRequestHandler()
         isDetecting = true
-        Task { await runTracking() }
+        let stream = CameraService.shared.frames()
+        let orientation = rotation
+        // Vision inference runs OFF the main actor — synchronous ~30 fps
+        // face-landmark detection on main janked the break UI and pinned a
+        // core. Only the small Sendable per-frame summary hops back to main.
+        trackingTask = Task.detached(priority: .utility) { [weak self] in
+            let handler = VNSequenceRequestHandler()
+            for await buffer in stream {
+                guard let self else { return }
+                guard await self.isDetecting else { return }
+                let sample = Self.analyze(buffer, handler: handler,
+                                          orientation: orientation)
+                await self.apply(sample)
+            }
+        }
     }
 
     public func stop() {
         isDetecting = false
-        sequenceHandler = nil
+        trackingTask?.cancel()
+        trackingTask = nil
     }
 
     public func resetBlinkWindow() {
@@ -110,30 +124,36 @@ public final class EyeTracker: ObservableObject {
                         faceDetected: false)
     }
 
-    private func runTracking() async {
-        let stream = CameraService.shared.frames()
-        for await buffer in stream {
-            guard isDetecting else { return }
-            process(buffer)
-        }
+    private struct FrameSample: Sendable {
+        var faceDetected: Bool
+        var left: Double = 0
+        var right: Double = 0
+        var gaze: GazeDirection = .center
+        var bounds: CGRect = .null
     }
 
-    private func process(_ buffer: CVImageBuffer) {
-        let faceReq = VNDetectFaceLandmarksRequest { [weak self] req, _ in
-            MainActor.assumeIsolated {
-                self?.handleResult(req)
-            }
+    private nonisolated static func analyze(_ buffer: CVImageBuffer,
+                                            handler: VNSequenceRequestHandler,
+                                            orientation: CGImagePropertyOrientation) -> FrameSample {
+        let request = VNDetectFaceLandmarksRequest()
+        request.revision = VNDetectFaceLandmarksRequestRevision2
+        try? handler.perform([request], on: buffer, orientation: orientation)
+        // `results` holds VNFaceObservation — the landmarks hang off it. (The
+        // old code cast the observation itself to VNFaceLandmarks2D, which
+        // always failed, so no face was ever detected.)
+        guard let lm = request.results?.first?.landmarks else {
+            return FrameSample(faceDetected: false)
         }
-        faceReq.revision = VNDetectFaceLandmarksRequestRevision2
-        do {
-            try sequenceHandler?.perform([faceReq], on: buffer, orientation: rotation)
-        } catch {
-            // Vision error — drop frame quietly.
-        }
+        return FrameSample(faceDetected: true,
+                           left: openRatio(for: lm.leftEye),
+                           right: openRatio(for: lm.rightEye),
+                           gaze: gazeDirection(lm),
+                           bounds: boundsFromLandmarks(lm))
     }
 
-    private func handleResult(_ request: VNRequest) {
-        guard let observation = request.results?.first as? VNFaceLandmarks2D else {
+    private func apply(_ sample: FrameSample) {
+        guard isDetecting else { return }
+        guard sample.faceDetected else {
             state = EyeState(left: state.leftEyeOpenRatio,
                              right: state.rightEyeOpenRatio,
                              blinking: state.isBlinking,
@@ -142,16 +162,9 @@ public final class EyeTracker: ObservableObject {
                              faceDetected: false)
             return
         }
-        // VNFaceLandmarks2D itself has no boundingBox; derive face bounds
-        // from the union of all available landmark points.
-        let bounds = boundsFromLandmarks(observation)
-        faceBoundsCache = bounds
-        let left = openRatio(for: observation.leftEye)
-        let right = openRatio(for: observation.rightEye)
-        let avg = (left + right) / 2
+        faceBoundsCache = sample.bounds
+        let avg = (sample.left + sample.right) / 2
         let blinking = avg < blinkThreshold
-
-        let gaze = gazeDirection(observation)
 
         // Count exactly one blink per open→closed transition. Holding the eyes
         // shut no longer inflates the count (the old timer re-fired every 0.15s).
@@ -164,12 +177,12 @@ public final class EyeTracker: ObservableObject {
 
         binksInWindow = binksInWindow.filter { Date().timeIntervalSince($0) < 60 }
 
-        lastGazeDirection = gaze
-        state = EyeState(left: left, right: right, blinking: blinking, total: total,
-                         gaze: gaze, faceDetected: true)
+        lastGazeDirection = sample.gaze
+        state = EyeState(left: sample.left, right: sample.right, blinking: blinking,
+                         total: total, gaze: sample.gaze, faceDetected: true)
     }
 
-    private func boundsFromLandmarks(_ lm: VNFaceLandmarks2D) -> CGRect {
+    private nonisolated static func boundsFromLandmarks(_ lm: VNFaceLandmarks2D) -> CGRect {
         let regions: [VNFaceLandmarkRegion2D?] = [
             lm.faceContour, lm.leftEye, lm.rightEye,
             lm.leftEyebrow, lm.rightEyebrow, lm.nose, lm.outerLips, lm.innerLips,
@@ -192,7 +205,7 @@ public final class EyeTracker: ObservableObject {
     }
 
     /// Eye openness ratio in [0,1]. Lower values = more closed eye.
-    private func openRatio(for eye: VNFaceLandmarkRegion2D?) -> Double {
+    private nonisolated static func openRatio(for eye: VNFaceLandmarkRegion2D?) -> Double {
         guard let eye = eye else { return 1.0 }
         let points = eye.normalizedPoints
         guard points.count >= 2 else { return 1.0 }
@@ -206,7 +219,7 @@ public final class EyeTracker: ObservableObject {
     /// removes the structural upward bias of the old method (the eyes always sit
     /// above the face-box center, so "look down" could never validate).
     /// Vision returns normalized points in image coords (origin bottom-left).
-    private func gazeDirection(_ lm: VNFaceLandmarks2D) -> GazeDirection {
+    private nonisolated static func gazeDirection(_ lm: VNFaceLandmarks2D) -> GazeDirection {
         let samples = [eyeGaze(eye: lm.leftEye, pupil: lm.leftPupil),
                        eyeGaze(eye: lm.rightEye, pupil: lm.rightPupil)].compactMap { $0 }
         guard !samples.isEmpty else { return .center }
@@ -222,8 +235,8 @@ public final class EyeTracker: ObservableObject {
     /// Pupil offset from the eye's center, normalized to the eye's half-extents,
     /// giving roughly -1…1 per axis. Falls back to the eye centroid (≈0 offset)
     /// when no pupil landmark is available.
-    private func eyeGaze(eye: VNFaceLandmarkRegion2D?,
-                         pupil: VNFaceLandmarkRegion2D?) -> (Double, Double)? {
+    private nonisolated static func eyeGaze(eye: VNFaceLandmarkRegion2D?,
+                                            pupil: VNFaceLandmarkRegion2D?) -> (Double, Double)? {
         guard let eye, !eye.normalizedPoints.isEmpty else { return nil }
         let xs = eye.normalizedPoints.map { $0.x }
         let ys = eye.normalizedPoints.map { $0.y }

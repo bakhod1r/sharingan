@@ -796,7 +796,7 @@ struct MoveEyePair: View {
             transitionFrom = 1
             lastDirection = direction
         }
-        .onChange(of: direction) { newDirection in
+        .onChange(of: direction) { _, newDirection in
             let now = Date().timeIntervalSinceReferenceDate
             transitionFrom = steadyOpenness(of: lastDirection, at: now)
             lastDirection = newDirection

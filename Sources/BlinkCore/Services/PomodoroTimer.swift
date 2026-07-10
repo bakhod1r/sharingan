@@ -27,6 +27,18 @@ public final class PomodoroTimer: ObservableObject {
     private var lastTickDate: Date?
     private var repeatJob: Task<Void, Never>?
 
+    /// The loop ticks every 200 ms for accuracy, but writing the @Published
+    /// values at that cadence re-renders every observing hierarchy 5×/second
+    /// for the whole session (including retained-but-hidden windows). Time is
+    /// accumulated here and published only when the whole second flips.
+    private var preciseRemaining: TimeInterval = 0
+    private var preciseElapsed: TimeInterval = 0
+
+    private func syncPrecise() {
+        preciseRemaining = remainingSeconds
+        preciseElapsed = elapsedSeconds
+    }
+
     public var mode: TimerMode { settings.timerMode }
 
     public var progress: Double {
@@ -77,6 +89,9 @@ public final class PomodoroTimer: ObservableObject {
         phase = .paused
         isRunning = false
         cancelLoop()
+        // Surface the exact stopping point (published values lag by <1 s).
+        remainingSeconds = preciseRemaining
+        elapsedSeconds = preciseElapsed
     }
 
     public func stop() {
@@ -117,11 +132,13 @@ public final class PomodoroTimer: ObservableObject {
         // keeps them consistent (next count-up tick recomputes to the same value).
         durationOverride = max(1, totalSeconds + seconds)
         remainingSeconds = max(0, remainingSeconds + seconds)
+        syncPrecise()
     }
 
     public func removeTime(_ seconds: TimeInterval) {
         durationOverride = max(1, totalSeconds - seconds)
         remainingSeconds = max(0, remainingSeconds - seconds)
+        syncPrecise()
     }
 
     public func setCustomDuration(_ seconds: TimeInterval) {
@@ -131,6 +148,7 @@ public final class PomodoroTimer: ObservableObject {
         elapsedSeconds = 0
         isRunning = false
         cancelLoop()
+        syncPrecise()
     }
 
     public func setTargetTime(_ date: Date) {
@@ -158,6 +176,7 @@ public final class PomodoroTimer: ObservableObject {
     private func runLoop() {
         cancelLoop()
         lastTickDate = .now
+        syncPrecise()
         tickTask = Task { @MainActor [weak self] in
             while !Task.isCancelled, let s = self, s.isRunning {
                 try? await Task.sleep(for: .milliseconds(200))
@@ -167,19 +186,26 @@ public final class PomodoroTimer: ObservableObject {
                 s.lastTickDate = now
                 switch s.mode {
                 case .countdown:
-                    s.remainingSeconds -= dt
-                    s.elapsedSeconds += dt
+                    s.preciseRemaining -= dt
+                    s.preciseElapsed += dt
                 case .countUp:
-                    s.elapsedSeconds += dt
-                    s.remainingSeconds = max(0, s.totalSeconds - s.elapsedSeconds)
+                    s.preciseElapsed += dt
+                    s.preciseRemaining = max(0, s.totalSeconds - s.preciseElapsed)
+                }
+                if floor(s.preciseRemaining) != floor(s.remainingSeconds)
+                    || floor(s.preciseElapsed) != floor(s.elapsedSeconds) {
+                    s.remainingSeconds = s.preciseRemaining
+                    s.elapsedSeconds = s.preciseElapsed
                 }
                 s.tickChecks()
-                if s.remainingSeconds <= 0 && !s.isCountUpMode {
+                if s.preciseRemaining <= 0 && !s.isCountUpMode {
+                    s.preciseRemaining = 0
                     s.remainingSeconds = 0
                     s.phaseComplete()
                     return
                 }
-                if s.isCountUpMode && s.elapsedSeconds >= s.totalSeconds {
+                if s.isCountUpMode && s.preciseElapsed >= s.totalSeconds {
+                    s.elapsedSeconds = s.preciseElapsed
                     s.phaseComplete()
                     return
                 }

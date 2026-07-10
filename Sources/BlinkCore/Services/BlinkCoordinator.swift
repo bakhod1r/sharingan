@@ -150,6 +150,10 @@ public final class BlinkCoordinator: ObservableObject {
         publishSnapshot()
     }
 
+    /// Reference point of the last write, used to skip writes the CLI can
+    /// reconstruct on its own (the natural 1 s countdown).
+    private var lastSnapshotRef: (remaining: TimeInterval, at: Date)?
+
     public func publishSnapshot() {
         let snap = CLIBridge.StateSnapshot(
             phase: timer.phase,
@@ -157,29 +161,35 @@ public final class BlinkCoordinator: ObservableObject {
             totalSeconds: timer.totalSeconds,
             isRunning: timer.isRunning,
             cyclesCompletedToday: timer.stats.completedTodayCount(),
-            streak: timer.stats.streak.currentStreak
+            streak: timer.stats.streak.currentStreak,
+            updatedAt: Date()
         )
+        lastSnapshotRef = (timer.remainingSeconds, Date())
         CLIBridge.writeSnapshot(snap)
     }
 
+    // NOTE: all sinks hop via DispatchQueue.main, NOT RunLoop.main — the
+    // RunLoop scheduler only fires in the .default run-loop mode, so an open
+    // menu or a drag/scroll (event-tracking mode) would stall the break
+    // overlay, alarm, and DND toggle until tracking ends.
     private func observe() {
         NotificationCenter.default.publisher(for: .phaseDidComplete)
-            .receive(on: RunLoop.main)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] note in self?.handlePhaseComplete(note) }
             .store(in: &cancellables)
 
         NotificationCenter.default.publisher(for: .focusFiveMinLeft)
-            .receive(on: RunLoop.main)
+            .receive(on: DispatchQueue.main)
             .sink { _ in NotificationService.shared.focusFiveMinLeft() }
             .store(in: &cancellables)
 
         NotificationCenter.default.publisher(for: .streakUpdated)
-            .receive(on: RunLoop.main)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] note in self?.handleStreakUpdate(note) }
             .store(in: &cancellables)
 
         NotificationCenter.default.publisher(for: .dailyGoalReached)
-            .receive(on: RunLoop.main)
+            .receive(on: DispatchQueue.main)
             .sink { note in
                 let n = note.userInfo?["count"] as? Int ?? 0
                 NotificationService.shared.notify(
@@ -190,7 +200,7 @@ public final class BlinkCoordinator: ObservableObject {
             .store(in: &cancellables)
 
         timer.$isRunning
-            .receive(on: RunLoop.main)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] running in
                 guard let self else { return }
                 // Floating timer is shown only while a pomodoro is actually running.
@@ -203,33 +213,83 @@ public final class BlinkCoordinator: ObservableObject {
                 // a focus session releases them, resuming re-blocks.
                 self.refreshAppBlocker()
                 self.syncDND()
+                self.publishSnapshot()
             }
             .store(in: &cancellables)
 
         timer.$settings
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
-                self?.syncAll()
+            .receive(on: DispatchQueue.main)
+            .removeDuplicates()
+            .sink { [weak self] s in
+                self?.syncChanged(s)
                 self?.syncDND()
             }
             .store(in: &cancellables)
 
         timer.$phase
-            .receive(on: RunLoop.main)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.publishSnapshot()
                 self?.refreshAppBlocker()
             }
             .store(in: &cancellables)
+        // The CLI reconstructs a running countdown from `updatedAt`, so the
+        // per-second tick needs no write — only publish when remaining jumps
+        // in a way wall-clock can't explain (addTime, set, stop, …).
         timer.$remainingSeconds
-            .receive(on: RunLoop.main)
+            .receive(on: DispatchQueue.main)
             .dropFirst()
-            .sink { [weak self] _ in self?.publishSnapshot() }
+            .sink { [weak self] rem in
+                guard let self else { return }
+                guard let last = self.lastSnapshotRef else { self.publishSnapshot(); return }
+                let elapsed = Date().timeIntervalSince(last.at)
+                let expected = self.timer.isRunning ? last.remaining - elapsed : last.remaining
+                if abs(rem - expected) > 2 { self.publishSnapshot() }
+            }
             .store(in: &cancellables)
-        timer.$isRunning
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in self?.publishSnapshot() }
-            .store(in: &cancellables)
+    }
+
+    /// The last settings value each service group was synced against. Syncing
+    /// everything on every `$settings` emission re-registered all Carbon
+    /// hotkeys and re-queried SMAppService dozens of times per second while a
+    /// slider was being dragged — so each group only syncs when its own slice
+    /// of the settings actually changed.
+    private var lastSyncedSettings: PomodoroSettings?
+
+    private func syncChanged(_ new: PomodoroSettings) {
+        guard let old = lastSyncedSettings else {
+            lastSyncedSettings = new
+            syncAll()
+            return
+        }
+        lastSyncedSettings = new
+        if old.alarmSoundEnabled != new.alarmSoundEnabled
+            || old.alarmSound != new.alarmSound { syncAlarm() }
+        if old.globalShortcutsEnabled != new.globalShortcutsEnabled
+            || old.shortcutBindings != new.shortcutBindings { installShortcuts() }
+        if old.cameraEyeTrackingEnabled != new.cameraEyeTrackingEnabled { syncCamera() }
+        if old.floatingTimerEnabled != new.floatingTimerEnabled
+            || old.floatingOpacity != new.floatingOpacity
+            || old.floatingCompact != new.floatingCompact
+            || old.floatingAlwaysOnTop != new.floatingAlwaysOnTop { syncFloating() }
+        if old.appBlockerSettings != new.appBlockerSettings
+            || old.blockScreenDuringBreak != new.blockScreenDuringBreak
+            || old.blockAppsDuringFocus != new.blockAppsDuringFocus { refreshAppBlocker() }
+        if old.ttsSettings.enabled != new.ttsSettings.enabled { syncTTS() }
+        if old.ambienceEnabled != new.ambienceEnabled
+            || old.ambienceSound != new.ambienceSound { syncAmbience() }
+        if old.reminderSettings != new.reminderSettings { syncReminders() }
+        if old.launchAtLogin != new.launchAtLogin { syncLaunchAtLogin() }
+        if old.ttsSettings != new.ttsSettings
+            || old.ttsRate != new.ttsRate
+            || old.ttsPitch != new.ttsPitch {
+            TTSKalibrator.shared.update(settings: new.ttsSettings,
+                                        rate: new.ttsRate,
+                                        pitch: new.ttsPitch)
+        }
+        if old.exerciseSettings != new.exerciseSettings {
+            ExerciseValidator.shared.exercises = new.exerciseSettings.buildSequence()
+        }
     }
 
     private func syncAll() {

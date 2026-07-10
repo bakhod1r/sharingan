@@ -54,7 +54,7 @@ struct CircularRunButton: View {
         }
         .buttonStyle(.pressable)
         .onAppear { syncPulse() }
-        .onChange(of: isRunning) { _ in syncPulse() }
+        .onChange(of: isRunning) { syncPulse() }
     }
 
     /// The glow breathes only while the timer runs; at rest it sits still so the

@@ -182,7 +182,7 @@ struct TaskEditorView: View {
                 TextField("add a tag", text: $tagDraft)
                     .textFieldStyle(.plain)
                     .font(.system(.callout, design: .rounded))
-                    .onChange(of: tagDraft) { v in
+                    .onChange(of: tagDraft) { _, v in
                         if v.hasSuffix(",") || v.hasSuffix(" ") { commitTag() }
                     }
                     .onSubmit { commitTag() }

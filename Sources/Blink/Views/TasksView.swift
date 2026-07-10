@@ -85,11 +85,11 @@ struct TasksView: View {
                            settings: timer.settings)
         }
         .onAppear(perform: consumeDeepLink)
-        .onChange(of: router.pendingTaskFilter) { _ in consumeDeepLink() }
-        .onChange(of: router.pendingTaskCategory) { _ in consumeDeepLink() }
-        .onChange(of: router.pendingTaskTag) { _ in consumeDeepLink() }
-        .onChange(of: router.pendingTaskPriority) { _ in consumeDeepLink() }
-        .onChange(of: router.focusTaskSearch) { _ in consumeDeepLink() }
+        .onChange(of: router.pendingTaskFilter) { consumeDeepLink() }
+        .onChange(of: router.pendingTaskCategory) { consumeDeepLink() }
+        .onChange(of: router.pendingTaskTag) { consumeDeepLink() }
+        .onChange(of: router.pendingTaskPriority) { consumeDeepLink() }
+        .onChange(of: router.focusTaskSearch) { consumeDeepLink() }
     }
 
     /// Applies (and clears) one-shot sidebar deep-links: smart filter, one
@@ -551,7 +551,7 @@ struct TasksView: View {
                             .font(.system(.caption, design: .rounded))
                             .foregroundStyle(.white)
                             .frame(minWidth: 60)
-                            .onChange(of: tagDraft) { v in
+                            .onChange(of: tagDraft) { _, v in
                                 // Commit on comma/space so typing flows into chips.
                                 if v.hasSuffix(",") || v.hasSuffix(" ") { commitTagDraft() }
                             }

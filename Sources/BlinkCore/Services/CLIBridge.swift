@@ -24,16 +24,24 @@ public enum CLIBridge {
         public var isRunning: Bool
         public var cyclesCompletedToday: Int
         public var streak: Int
+        /// When the snapshot was written. The app only writes on state *changes*
+        /// (not per tick), so a running countdown is reconstructed CLI-side as
+        /// `remainingSeconds - (now - updatedAt)` — and a snapshot whose countdown
+        /// ran out long ago exposes a crashed/quit app instead of a phantom
+        /// "Focus 12:34 ●" forever. Optional so pre-field snapshots still decode.
+        public var updatedAt: Date?
 
         public init(phase: PomodoroPhase, remainingSeconds: TimeInterval,
                     totalSeconds: TimeInterval, isRunning: Bool,
-                    cyclesCompletedToday: Int, streak: Int) {
+                    cyclesCompletedToday: Int, streak: Int,
+                    updatedAt: Date? = nil) {
             self.phase = phase
             self.remainingSeconds = remainingSeconds
             self.totalSeconds = totalSeconds
             self.isRunning = isRunning
             self.cyclesCompletedToday = cyclesCompletedToday
             self.streak = streak
+            self.updatedAt = updatedAt
         }
     }
 
@@ -77,15 +85,21 @@ public enum CLIBridge {
         let center = CFNotificationCenterGetDarwinNotifyCenter()
         if let p = payload {
             try? Data(p.utf8).write(to: payloadURL(name), options: .atomic)
+        } else {
+            // Darwin notifications carry no data — the payload rides in a side
+            // file. Clear any leftover one, or a plain `tired start` after a
+            // `tired start 50m` would replay the stale "50m".
+            try? FileManager.default.removeItem(at: payloadURL(name))
         }
         CFNotificationCenterPostNotification(center,
                                               CFNotificationName(name as CFString),
                                               nil, nil, true)
     }
 
-    /// Reads the last payload written for a command (app side).
+    /// Reads (and consumes) the payload written for a command (app side).
     static func readPayload(_ name: String) -> String? {
         guard let d = try? Data(contentsOf: payloadURL(name)) else { return nil }
+        try? FileManager.default.removeItem(at: payloadURL(name))
         return String(decoding: d, as: UTF8.self)
     }
 

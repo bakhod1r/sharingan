@@ -94,15 +94,28 @@ struct TiredCLI {
 
     static func printStatus() {
         guard let s = CLIBridge.readSnapshot() else {
-            print("Blink is not running (no snapshot).")
+            print("Sharingan is not running (no snapshot).")
             return
         }
+        // The app writes the snapshot on state changes only; a running
+        // countdown is reconstructed from its timestamp.
+        var remaining = s.remainingSeconds
+        if s.isRunning, let at = s.updatedAt {
+            let age = Date().timeIntervalSince(at)
+            // Countdown ran out long ago and nothing rewrote the snapshot —
+            // the app crashed or quit; don't report a phantom session forever.
+            if age > s.remainingSeconds + 120 {
+                print("Sharingan is not running (stale snapshot).")
+                return
+            }
+            remaining = max(0, s.remainingSeconds - age)
+        }
         let symbol = s.isRunning ? "●" : "⏸"
-        let m = Int(s.remainingSeconds) / 60
-        let sec = Int(s.remainingSeconds) % 60
+        let m = Int(remaining) / 60
+        let sec = Int(remaining) % 60
         let time = String(format: "%02d:%02d", m, sec)
         let pct = s.totalSeconds > 0
-            ? Int((1 - s.remainingSeconds / s.totalSeconds) * 100)
+            ? Int((1 - remaining / s.totalSeconds) * 100)
             : 0
         print("Sharingan — \(s.phase.label) \(time) \(symbol)  \(pct)%")
         print("\(s.cyclesCompletedToday) completed today · streak \(s.streak) days")

@@ -108,7 +108,11 @@ public final class CameraService: NSObject, ObservableObject {
 
     public func frames() -> AsyncStream<CVImageBuffer> {
         if let pipe = framePipe { return pipe }
-        let (pipe, cont) = AsyncStream<CVImageBuffer>.makeStream()
+        // Only the newest frame matters — the default .unbounded policy retains
+        // every CVImageBuffer the consumer falls behind on, growing memory and
+        // gaze latency for the whole break whenever Vision is slower than 30fps.
+        let (pipe, cont) = AsyncStream<CVImageBuffer>.makeStream(
+            bufferingPolicy: .bufferingNewest(1))
         self.framePipe = pipe
         self.sink.set(cont)
         return pipe
