@@ -108,6 +108,10 @@ public final class PomodoroTimer: ObservableObject {
     }
 
     public func skip() {
+        // Skipping while paused must advance from the REAL phase — falling
+        // into transitionToNext's `.paused: break` arm changed nothing yet
+        // still wiped durationOverride and repeatIndex.
+        if phase == .paused { phase = previousPhase }
         transitionToNext()
     }
 
@@ -182,7 +186,12 @@ public final class PomodoroTimer: ObservableObject {
                 try? await Task.sleep(for: .milliseconds(200))
                 guard !Task.isCancelled else { return }
                 let now = Date.now
-                let dt = now.timeIntervalSince(s.lastTickDate ?? now)
+                var dt = now.timeIntervalSince(s.lastTickDate ?? now)
+                // Ticks land every ~200 ms; a gap of 30+ s means the machine
+                // was asleep (the process suspended). Counting that gap as
+                // focus time credited entire lid-closed hours as completed
+                // pomodoros — treat it as a single ordinary tick instead.
+                if dt > 30 { dt = 0.2 }
                 s.lastTickDate = now
                 switch s.mode {
                 case .countdown:

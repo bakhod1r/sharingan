@@ -56,14 +56,22 @@ public final class BrightnessService: ObservableObject {
     // MARK: - Gamma apply
 
     private func applyFactor(_ factor: Double) {
-        let gamma: CGGammaValue = CGGammaValue(max(0.1, 1.0 / max(0.05, factor)))
-        let mainID = CGMainDisplayID()
+        // Scale the MAX output (out = factor · in), not the gamma exponent:
+        // in^γ maps 1.0 → 1.0 for any γ, so a pure-gamma dim left full-white
+        // pixels at 100% brightness and only darkened midtones.
+        let f = CGGammaValue(max(0.05, min(1.0, factor)))
         let zero: CGGammaValue = 0.0
         let one: CGGammaValue = 1.0
-        CGSetDisplayTransferByFormula(mainID,
-                                       zero, one, gamma,
-                                       zero, one, gamma,
-                                       zero, one, gamma)
+        var ids = [CGDirectDisplayID](repeating: 0, count: 16)
+        var count: UInt32 = 0
+        CGGetActiveDisplayList(UInt32(ids.count), &ids, &count)
+        // Dim every active display, not just the main one.
+        for id in ids.prefix(Int(count)) {
+            CGSetDisplayTransferByFormula(id,
+                                           zero, f, one,
+                                           zero, f, one,
+                                           zero, f, one)
+        }
         currentFactor = factor
     }
 

@@ -25,6 +25,10 @@ final class BreakWindowManager: BreakPresenter {
                          onTapSkip: @escaping () -> Void) {
         guard !isBlocking else { return }
         isBlocking = true
+        // Session side effects live HERE, not in BreakView.onAppear — a view
+        // is created per screen, so on multi-display setups the validator was
+        // reset and the camera started once per monitor.
+        beginBreakSession(timer: timer)
         NSApp.activate(ignoringOtherApps: true)
 
         for screen in NSScreen.screens {
@@ -65,6 +69,7 @@ final class BreakWindowManager: BreakPresenter {
     }
 
     func dismissAll() {
+        if isBlocking { endBreakSession() }
         let fading = panels
         panels.removeAll()
         isBlocking = false
@@ -78,6 +83,38 @@ final class BreakWindowManager: BreakPresenter {
                 p.orderOut(nil)
             }
         })
+    }
+}
+
+extension BreakWindowManager {
+    /// Runs once per break (the TTS announcement itself comes from
+    /// BlinkCoordinator on real breaks; the preview stays silent).
+    private func beginBreakSession(timer: PomodoroTimer) {
+        TTSKalibrator.shared.update(settings: timer.settings.ttsSettings,
+                                    rate: timer.settings.ttsRate,
+                                    pitch: timer.settings.ttsPitch)
+        TTSKalibrator.shared.attach(to: ExerciseValidator.shared)
+        let validator = ExerciseValidator.shared
+        validator.exercises = timer.settings.exerciseSettings.buildSequence()
+        validator.reset()
+        validator.start()
+        // Camera runs only for the duration of the break screen, never in focus.
+        if timer.settings.cameraEyeTrackingEnabled {
+            Task { @MainActor in
+                _ = await CameraService.shared.requestPermission()
+                CameraService.shared.start()
+                EyeTracker.shared.resetBlinkWindow()
+                EyeTracker.shared.start()
+            }
+        }
+    }
+
+    private func endBreakSession() {
+        TTSService.shared.stop()
+        TTSKalibrator.shared.stop()
+        ExerciseValidator.shared.stop()
+        EyeTracker.shared.stop()
+        CameraService.shared.stop()
     }
 }
 

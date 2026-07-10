@@ -30,7 +30,7 @@ public struct BlockedApp: Codable, Equatable, Hashable, Sendable, Identifiable {
         .init(bundleID: "com.microsoft.VSCode", name: "VS Code"),
         .init(bundleID: "com.tinyspeck.slackmacgap", name: "Slack"),
         .init(bundleID: "ru.keepcoder.Telegram", name: "Telegram"),
-        .init(bundleID: "com.apple.mobilesms", name: "Messages"),
+        .init(bundleID: "com.apple.MobileSMS", name: "Messages"),
     ]
 }
 
@@ -46,6 +46,10 @@ public struct AppBlockerSettings: Codable, Equatable, Sendable {
 
     public func matches(bundleID: String) -> Bool {
         guard enabled else { return false }
-        return blockedApps.contains { $0.bundleID == bundleID && $0.isEnabled }
+        // Case-insensitive: settings saved before the Messages preset was
+        // corrected still carry "com.apple.mobilesms" and must keep matching.
+        return blockedApps.contains {
+            $0.isEnabled && $0.bundleID.caseInsensitiveCompare(bundleID) == .orderedSame
+        }
     }
 }

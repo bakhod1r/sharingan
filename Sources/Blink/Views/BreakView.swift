@@ -80,8 +80,9 @@ struct BreakView: View {
                 }
             }
         }
-        .onAppear(perform: startBreak)
-        .onDisappear(perform: endBreak)
+        // Break session start/stop (TTS, validator, camera) lives in
+        // BreakWindowManager — one view is created PER SCREEN, so doing it
+        // here ran everything once per monitor.
         .onReceive(eyeTracker.$state) { state in
             validator.ingest(gaze: state.gaze, isBlinking: state.isBlinking)
         }
@@ -146,37 +147,4 @@ struct BreakView: View {
         }
     }
 
-    // MARK: - Lifecycle
-
-    private func startBreak() {
-        TTSKalibrator.shared.update(settings: timer.settings.ttsSettings,
-                                    rate: timer.settings.ttsRate,
-                                    pitch: timer.settings.ttsPitch)
-        TTSKalibrator.shared.attach(to: validator)
-        if timer.settings.ttsSettings.enabled {
-            TTSService.shared.speak("Starting break. " + timer.settings.breakMessage,
-                                    rate: timer.settings.ttsRate,
-                                    pitch: timer.settings.ttsPitch)
-        }
-        validator.exercises = timer.settings.exerciseSettings.buildSequence()
-        validator.reset()
-        validator.start()
-        // Camera runs only for the duration of this break screen, never in focus.
-        if timer.settings.cameraEyeTrackingEnabled {
-            Task { @MainActor in
-                _ = await CameraService.shared.requestPermission()
-                CameraService.shared.start()
-                EyeTracker.shared.resetBlinkWindow()
-                EyeTracker.shared.start()
-            }
-        }
-    }
-
-    private func endBreak() {
-        TTSService.shared.stop()
-        TTSKalibrator.shared.stop()
-        validator.stop()
-        EyeTracker.shared.stop()
-        CameraService.shared.stop()
-    }
 }

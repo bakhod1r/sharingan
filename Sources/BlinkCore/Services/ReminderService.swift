@@ -50,7 +50,10 @@ public final class ReminderService: ObservableObject {
         ticker = Task { @MainActor [weak self] in
             var nextReminder: [ReminderItem: Date] = [:]
             let now = Date()
-            for r in reminders { nextReminder[r] = now }
+            // First fire lands a full interval from now. Seeding with `now`
+            // made every reminder fire ~60 s after any (re)schedule — i.e.
+            // right after each break and after every settings change.
+            for r in reminders { nextReminder[r] = now.addingTimeInterval(r.intervalSeconds) }
             while !Task.isCancelled {
                 guard let self else { return }
                 try? await Task.sleep(for: .seconds(60))

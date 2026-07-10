@@ -315,7 +315,21 @@ struct WallpaperEyesView: View {
 @MainActor
 final class WallpaperWindowManager {
     static let shared = WallpaperWindowManager()
-    private init() {}
+    private init() {
+        // Displays come and go (monitor plug/unplug, resolution change) —
+        // rebuild the per-screen windows so a new display gets its eyes and a
+        // removed one doesn't leave a stale window at dead coordinates.
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated {
+                let manager = WallpaperWindowManager.shared
+                guard manager.isActive else { return }
+                manager.hide()
+                manager.show()
+            }
+        }
+    }
 
     private var windows: [NSWindow] = []
     private var currentConfig = WallpaperConfig()
@@ -353,7 +367,13 @@ final class WallpaperWindowManager {
     }
 
     private func hide() {
-        windows.forEach { $0.orderOut(nil) }
+        // Drop the content view explicitly: SwiftUI does not reliably fire
+        // .onDisappear when the hosting window merely deallocates, which
+        // leaked the view's global click monitor on every disable/rebuild.
+        windows.forEach {
+            $0.orderOut(nil)
+            $0.contentView = nil
+        }
         windows.removeAll()
     }
 }

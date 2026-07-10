@@ -261,7 +261,9 @@ struct MenuBarWeekView: View {
     // MARK: - Cards
 
     private func card(_ task: TaskItem) -> some View {
-        let color = Color(hex: TaskCategory.color(for: task.category))
+        // Resolve through the store, like WeeklyBoardView — the static preset
+        // table renders custom categories and user recolors as gray.
+        let color = Color(hex: store.color(for: task.category))
         return VStack(alignment: .leading, spacing: 4) {
             Text(task.title)
                 .font(.system(.caption, design: .rounded).weight(.semibold))
