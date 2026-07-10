@@ -61,15 +61,19 @@ struct WallpaperConfig: Equatable {
     var spinTrigger: WallpaperSpinTrigger = .idle
     var spinDuration: Double = 1.6
     var idleDelay: Double = 1.2
+    /// Seconds of mouse stillness before the eyes drift fully shut.
+    var dozeSeconds: Double = 60
 
     init(style: SharinganStyle = .classic,
          spinTrigger: WallpaperSpinTrigger = .idle,
          spinDuration: Double = 1.6,
-         idleDelay: Double = 1.2) {
+         idleDelay: Double = 1.2,
+         dozeSeconds: Double = 60) {
         self.style = style
         self.spinTrigger = spinTrigger
         self.spinDuration = spinDuration
         self.idleDelay = idleDelay
+        self.dozeSeconds = dozeSeconds
     }
 
     init(from settings: PomodoroSettings) {
@@ -77,6 +81,7 @@ struct WallpaperConfig: Equatable {
         spinTrigger = settings.wallpaperSpinTrigger
         spinDuration = settings.wallpaperSpinDuration
         idleDelay = settings.wallpaperIdleDelay
+        dozeSeconds = settings.wallpaperDozeSeconds
     }
 }
 
@@ -102,8 +107,8 @@ struct WallpaperEyesView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Seconds of stillness before the eyes start winking at the user.
     private let winkIdleDelay: TimeInterval = 6
-    /// Seconds of stillness before the eyes drift fully shut.
-    private let dozeDelay: TimeInterval = 30
+    /// Seconds of stillness before the eyes drift fully shut (user setting).
+    private var dozeDelay: TimeInterval { config.dozeSeconds }
     private let ticker = Timer.publish(every: 0.2, on: .main, in: .common).autoconnect()
 
     var body: some View {

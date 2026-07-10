@@ -635,6 +635,15 @@ struct SettingsView: View {
                             Slider(value: $settings.wallpaperIdleDelay, in: 0.5...5, step: 0.5)
                         }
                     }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Close eyes after: \(Int(settings.wallpaperDozeSeconds))s of stillness")
+                            .font(.system(.caption, design: .rounded).weight(.medium))
+                        Slider(value: $settings.wallpaperDozeSeconds, in: 10...300, step: 10)
+                    }
+                    Text("When the mouse hasn't moved for this long, the eyes doze off; they wake on the first move.")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.65))
                 }
                 .onChange(of: settings.eyesWallpaperEnabled) { on in
                     WallpaperWindowManager.shared.setEnabled(on, config: WallpaperConfig(from: settings))
@@ -642,6 +651,7 @@ struct SettingsView: View {
                 .onChange(of: settings.wallpaperSpinTrigger) { _ in refreshWallpaper() }
                 .onChange(of: settings.wallpaperSpinDuration) { _ in refreshWallpaper() }
                 .onChange(of: settings.wallpaperIdleDelay) { _ in refreshWallpaper() }
+                .onChange(of: settings.wallpaperDozeSeconds) { _ in refreshWallpaper() }
                 .onChange(of: settings.sharinganStyle) { _ in refreshWallpaper() }
 
         case .general:

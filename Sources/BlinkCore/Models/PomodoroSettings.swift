@@ -46,6 +46,8 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var wallpaperSpinDuration: Double = 1.6
     /// Aylanish boshlanishidan oldin kutish (idle), soniya.
     public var wallpaperIdleDelay: Double = 1.2
+    /// Mouse shuncha soniya tinch tursa wallpaper ko'zlari yumilib mudraydi.
+    public var wallpaperDozeSeconds: Double = 60
     public var theme: BlinkTheme = .liquidGlass
     public var repeatConfig: RepeatConfig = .init()
     public var flashAtFiveSecLeft: Bool = true
@@ -130,6 +132,7 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
         wallpaperSpinTrigger = try c.decodeIfPresent(WallpaperSpinTrigger.self, forKey: .wallpaperSpinTrigger) ?? d.wallpaperSpinTrigger
         wallpaperSpinDuration = try c.decodeIfPresent(Double.self, forKey: .wallpaperSpinDuration) ?? d.wallpaperSpinDuration
         wallpaperIdleDelay = try c.decodeIfPresent(Double.self, forKey: .wallpaperIdleDelay) ?? d.wallpaperIdleDelay
+        wallpaperDozeSeconds = try c.decodeIfPresent(Double.self, forKey: .wallpaperDozeSeconds) ?? d.wallpaperDozeSeconds
         theme = try c.decodeIfPresent(BlinkTheme.self, forKey: .theme) ?? d.theme
         repeatConfig = try c.decodeIfPresent(RepeatConfig.self, forKey: .repeatConfig) ?? d.repeatConfig
         flashAtFiveSecLeft = try c.decodeIfPresent(Bool.self, forKey: .flashAtFiveSecLeft) ?? d.flashAtFiveSecLeft
