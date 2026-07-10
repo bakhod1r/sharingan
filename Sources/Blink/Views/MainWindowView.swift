@@ -15,10 +15,17 @@ struct MainWindowView: View {
     @State private var newCatColor = TaskCategory.palette[0]
     /// Priority level whose name/color editor popover is open.
     @State private var editingPriority: TaskPriority?
+    /// Category whose editor popover is open, and the rename draft.
+    @State private var editingCategory: String?
+    @State private var editCatName = ""
     /// Tag whose icon/color editor popover is open.
     @State private var editingTag: String?
     /// Sidebar filter row under the pointer — reveals its edit pencil.
     @State private var hoveredRowKey: String?
+    /// Accordion state of the sidebar groups, persisted across launches.
+    @AppStorage("sidebar.collapsed.categories") private var catsCollapsed = false
+    @AppStorage("sidebar.collapsed.tags") private var tagsCollapsed = false
+    @AppStorage("sidebar.collapsed.priority") private var prioCollapsed = false
 
     private var accent: Color { timer.settings.theme.accent }
 
@@ -141,23 +148,17 @@ struct MainWindowView: View {
     private var categoriesSection: some View {
         let counts = Dictionary(grouping: tasks.tasks.filter { !$0.isDone },
                                 by: \.category).mapValues(\.count)
-        sectionHeader("Categories", addHelp: "New category") {
+        sectionHeader("Categories", collapsed: $catsCollapsed,
+                      addHelp: "New category") {
             showAddCategory = true
         }
         .popover(isPresented: $showAddCategory, arrowEdge: .trailing) {
             addCategoryPopover
         }
-        ForEach(tasks.allCategories) { cat in
-            categoryRow(cat, count: counts[cat.name] ?? 0)
-                .contextMenu {
-                    if tasks.isCustomCategory(cat.name) {
-                        Button("Delete category", role: .destructive) {
-                            tasks.deleteCategory(cat.name)
-                        }
-                    } else {
-                        Text("Preset — can't be deleted")
-                    }
-                }
+        if !catsCollapsed {
+            ForEach(tasks.allCategories) { cat in
+                categoryRow(cat, count: counts[cat.name] ?? 0)
+            }
         }
     }
 
@@ -220,11 +221,98 @@ struct MainWindowView: View {
         .padding(.horizontal, 8)
     }
 
+    /// Category row: Todoist-style "#" mark, a hover pencil opening the editor
+    /// (rename for custom categories, recolor for all, delete for custom).
     private func categoryRow(_ cat: TaskCategory, count: Int) -> some View {
-        filterRow(mark: "#", markTint: Color(hex: cat.colorHex),
-                  title: cat.name, count: count) {
-            router.openTasks(category: cat.name)
+        let key = "cat:\(cat.name)"
+        return Button { router.openTasks(category: cat.name) } label: {
+            HStack(spacing: 11) {
+                Text("#")
+                    .font(.system(.body, design: .rounded).weight(.bold))
+                    .foregroundStyle(Color(hex: cat.colorHex))
+                    .frame(width: 20, alignment: .center)
+                Text(cat.name)
+                    .font(.system(size: 13, design: .rounded))
+                    .foregroundStyle(.white.opacity(count > 0 ? 0.75 : 0.45))
+                    .lineLimit(1)
+                Spacer()
+                if hoveredRowKey == key {
+                    editPencil {
+                        editCatName = ""
+                        editingCategory = cat.name
+                    }
+                } else if count > 0 {
+                    Text("\(count)")
+                        .font(.system(size: 11, design: .rounded).monospacedDigit())
+                        .foregroundStyle(.white.opacity(0.45))
+                }
+            }
+            .padding(.horizontal, 10).padding(.vertical, 7)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.pressableSubtle)
+        .padding(.horizontal, 8)
+        .onHover { inside in
+            if inside { hoveredRowKey = key }
+            else if hoveredRowKey == key { hoveredRowKey = nil }
+        }
+        .popover(isPresented: Binding(
+            get: { editingCategory == cat.name },
+            set: { if !$0 { editingCategory = nil } }
+        ), arrowEdge: .trailing) {
+            categoryEditorPopover(cat)
+        }
+    }
+
+    /// Rename (custom only) + color editor for a category, with
+    /// delete-and-reassign at the bottom for custom categories.
+    private func categoryEditorPopover(_ cat: TaskCategory) -> some View {
+        let custom = tasks.isCustomCategory(cat.name)
+        return VStack(alignment: .leading, spacing: 10) {
+            Text("#\(cat.name)").dsSectionLabel()
+            if custom {
+                TextField(cat.name, text: $editCatName)
+                    .textFieldStyle(DarkGlassFieldStyle())
+                    .frame(width: 180)
+                    .onSubmit {
+                        if tasks.renameCategory(cat.name, to: editCatName) {
+                            editingCategory = nil
+                        }
+                    }
+            }
+            HStack(spacing: 6) {
+                ForEach(TaskCategory.palette, id: \.self) { hex in
+                    Button {
+                        tasks.setColor(for: cat.name, colorHex: hex)
+                    } label: {
+                        Circle()
+                            .fill(Color(hex: hex))
+                            .frame(width: 16, height: 16)
+                            .overlay(Circle().stroke(
+                                .white.opacity(tasks.color(for: cat.name) == hex ? 0.9 : 0),
+                                lineWidth: 2))
+                    }
+                    .buttonStyle(.pressableSubtle)
+                }
+            }
+            HStack {
+                Spacer()
+                if custom {
+                    Button(role: .destructive) {
+                        tasks.deleteCategory(cat.name)
+                        editingCategory = nil
+                    } label: {
+                        Text("Delete category")
+                            .foregroundStyle(.red.opacity(0.9))
+                    }
+                } else {
+                    Text("Preset — rename & delete unavailable")
+                        .foregroundStyle(.white.opacity(0.5))
+                }
+            }
+            .font(.system(.caption, design: .rounded))
+        }
+        .padding(14)
     }
 
     /// Todoist's "Labels": free-form tags across all tasks, most-used first.
@@ -237,15 +325,17 @@ struct MainWindowView: View {
             for tag in t.tags { acc[tag, default: 0] += 1 }
         }
         let names = tasks.allTags.prefix(8)
-        sectionHeader("Tags")
-        if names.isEmpty {
-            Text("Type #tag when adding a task")
-                .font(.system(.caption2, design: .rounded))
-                .foregroundStyle(.white.opacity(0.4))
-                .padding(.horizontal, 18).padding(.bottom, 4)
-        } else {
-            ForEach(Array(names), id: \.self) { tag in
-                tagRow(tag, count: counts[tag] ?? 0)
+        sectionHeader("Tags", collapsed: $tagsCollapsed)
+        if !tagsCollapsed {
+            if names.isEmpty {
+                Text("Type #tag when adding a task")
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.4))
+                    .padding(.horizontal, 18).padding(.bottom, 4)
+            } else {
+                ForEach(Array(names), id: \.self) { tag in
+                    tagRow(tag, count: counts[tag] ?? 0)
+                }
             }
         }
     }
@@ -369,9 +459,11 @@ struct MainWindowView: View {
     @ViewBuilder
     private var prioritySection: some View {
         let open = tasks.tasks.filter { !$0.isDone }
-        sectionHeader("Priority")
-        ForEach([TaskPriority.high, .medium, .low, .none], id: \.self) { p in
-            priorityRow(p, count: open.filter { $0.priority == p }.count)
+        sectionHeader("Priority", collapsed: $prioCollapsed)
+        if !prioCollapsed {
+            ForEach([TaskPriority.high, .medium, .low, .none], id: \.self) { p in
+                priorityRow(p, count: open.filter { $0.priority == p }.count)
+            }
         }
     }
 
@@ -525,10 +617,30 @@ struct MainWindowView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private func sectionHeader(_ title: String) -> some View {
-        sidebarHeaderLabel(title)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 18).padding(.top, 16).padding(.bottom, 5)
+    private func sectionHeader(_ title: String,
+                               collapsed: Binding<Bool>) -> some View {
+        HStack(spacing: 6) {
+            sidebarHeaderLabel(title)
+            Spacer()
+            collapseChevron(collapsed.wrappedValue)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { toggle(collapsed) }
+        .padding(.horizontal, 18).padding(.top, 16).padding(.bottom, 5)
+    }
+
+    /// Rotating accordion indicator shared by all sidebar group headers.
+    private func collapseChevron(_ collapsed: Bool) -> some View {
+        Image(systemName: "chevron.down")
+            .font(.system(size: 9, weight: .bold))
+            .foregroundStyle(.white.opacity(0.45))
+            .rotationEffect(.degrees(collapsed ? -90 : 0))
+    }
+
+    private func toggle(_ collapsed: Binding<Bool>) {
+        withAnimation(.easeInOut(duration: 0.18)) {
+            collapsed.wrappedValue.toggle()
+        }
     }
 
     /// Todoist-style sidebar group label: sentence case at row size, instead
@@ -541,7 +653,8 @@ struct MainWindowView: View {
     }
 
     /// Section header with a trailing "+" action (e.g. Categories → new).
-    private func sectionHeader(_ title: String, addHelp: String,
+    private func sectionHeader(_ title: String, collapsed: Binding<Bool>,
+                               addHelp: String,
                                onAdd: @escaping () -> Void) -> some View {
         HStack(spacing: 6) {
             sidebarHeaderLabel(title)
@@ -555,7 +668,10 @@ struct MainWindowView: View {
             }
             .buttonStyle(.pressableSubtle)
             .help(addHelp)
+            collapseChevron(collapsed.wrappedValue)
         }
+        .contentShape(Rectangle())
+        .onTapGesture { toggle(collapsed) }
         .padding(.horizontal, 18).padding(.top, 16).padding(.bottom, 5)
     }
 
