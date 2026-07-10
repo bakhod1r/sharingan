@@ -530,6 +530,10 @@ struct MoveEyePair: View {
     var gaze: GazeDirection
     var eyeSize: CGFloat = 92
     var style: SharinganStyle = .classic
+    /// Duration of the current step; lets path animations (circle, figure-8)
+    /// finish cleanly — the iris eases back to center as the step ends
+    /// instead of cutting off mid-sweep. 0 = unknown (ease-in only).
+    var holdSeconds: Double = 0
 
     private var isPath: Bool {
         direction == "circle_cw" || direction == "circle_ccw" || direction == "figure8"
@@ -629,11 +633,33 @@ struct MoveEyePair: View {
     }
 
     private func offset(at t: TimeInterval) -> (x: Double, y: Double) {
+        let tp = max(0, t - phaseStart)
         switch direction {
-        case "circle_cw":  let a = t * 1.7;  return (cos(a), sin(a))
-        case "circle_ccw": let a = -t * 1.7; return (cos(a), sin(a))
-        case "figure8":    let a = t * 1.7;  return (sin(a), sin(2 * a) / 2)
-        default:           return (gaze.dx, gaze.dy)
+        case "circle_cw":
+            let a = tp * 1.7, r = pathEnvelope(tp)
+            return (cos(a) * r, sin(a) * r)
+        case "circle_ccw":
+            let a = -tp * 1.7, r = pathEnvelope(tp)
+            return (cos(a) * r, sin(a) * r)
+        case "figure8":
+            let a = tp * 1.7, r = pathEnvelope(tp)
+            return (sin(a) * r, sin(2 * a) / 2 * r)
+        default:
+            return (gaze.dx, gaze.dy)
         }
+    }
+
+    /// Radius envelope for path sweeps: the iris eases out from center when
+    /// the step starts and eases back to center as the hold runs out, so the
+    /// animation always completes instead of cutting off mid-sweep.
+    private func pathEnvelope(_ tp: Double) -> Double {
+        func smooth(_ u: Double) -> Double {
+            let c = min(max(u, 0), 1)
+            return c * c * (3 - 2 * c)
+        }
+        let rampIn = smooth(tp / 0.6)
+        guard holdSeconds > 1.4 else { return rampIn }
+        let rampOut = smooth((holdSeconds - tp) / 0.6)
+        return min(rampIn, rampOut)
     }
 }

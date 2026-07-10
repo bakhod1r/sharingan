@@ -15,27 +15,45 @@ struct BreakView: View {
         let remaining = max(0, timer.remainingSeconds)
 
         GeometryReader { geo in
-            // Eyes scale with the screen. Big and centred on pure black — no card.
+            // Eyes scale with the screen, centred inside a rounded card that
+            // sits slightly lighter than the backdrop (like the design video).
             let eyeH = min(geo.size.width * 0.15, geo.size.height * 0.22)
+            let bg = timer.settings.breakBackgroundStyle
 
             ZStack {
-                // Fully black backdrop.
-                Color.black.ignoresSafeArea()
+                Color(red: bg.base.r, green: bg.base.g, blue: bg.base.b)
+                    .ignoresSafeArea()
 
                 VStack(spacing: 0) {
-                    titleRow(remaining: remaining)
-                        .padding(.horizontal, max(40, geo.size.width * 0.05))
-                        .padding(.top, max(34, geo.size.height * 0.05))
+                    Spacer(minLength: max(24, geo.size.height * 0.06))
 
-                    Spacer()
+                    // Card — title + eyes over a slow breathing halo.
+                    VStack(spacing: 0) {
+                        titleRow(remaining: remaining)
+                            .padding(.horizontal, 38)
+                            .padding(.top, 30)
 
-                    // Center — big Sharingan eyes over a slow breathing halo.
-                    ZStack {
-                        breathingGuide(size: min(geo.size.width, geo.size.height) * 0.5)
-                        MoveEyePair(direction: validator.currentStep?.direction ?? "center",
-                                    gaze: validator.currentStep?.targetGaze ?? .center,
-                                    eyeSize: eyeH,
-                                    style: timer.settings.sharinganStyle)
+                        Spacer(minLength: 0)
+
+                        ZStack {
+                            breathingGuide(size: min(geo.size.width, geo.size.height) * 0.5)
+                            MoveEyePair(direction: validator.currentStep?.direction ?? "center",
+                                        gaze: validator.currentStep?.targetGaze ?? .center,
+                                        eyeSize: eyeH,
+                                        style: timer.settings.sharinganStyle,
+                                        holdSeconds: validator.currentStep?.holdSeconds ?? 0)
+                                .padding(.bottom, 26)
+                        }
+
+                        Spacer(minLength: 0)
+                    }
+                    .frame(width: min(geo.size.width * 0.78, 1220),
+                           height: min(geo.size.height * 0.64, 780))
+                    .background {
+                        if let p = bg.panel {
+                            RoundedRectangle(cornerRadius: 44, style: .continuous)
+                                .fill(Color(red: p.r, green: p.g, blue: p.b))
+                        }
                     }
 
                     Spacer()
@@ -110,8 +128,8 @@ struct BreakView: View {
     private func titleRow(remaining: TimeInterval) -> some View {
         HStack(alignment: .center) {
             Text(validator.currentExercise?.name ?? "Sharingan exercises")
-                .font(.system(size: 24, weight: .semibold, design: .rounded))
-                .foregroundStyle(.white.opacity(0.9))
+                .font(.system(size: 34, weight: .bold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.95))
                 .lineLimit(1).minimumScaleFactor(0.7)
 
             Spacer(minLength: 12)
@@ -134,9 +152,9 @@ struct BreakView: View {
     private var caption: some View {
         VStack(spacing: 8) {
             Text(captionText)
-                .font(.system(.callout, design: .rounded).weight(.medium))
+                .font(.system(size: 20, weight: .semibold, design: .rounded))
                 .foregroundStyle(validator.needsRetry ? .red.opacity(0.95)
-                                                       : .white.opacity(0.7))
+                                                       : .white.opacity(0.85))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 30)
                 .animation(.easeInOut(duration: 0.25), value: captionText)

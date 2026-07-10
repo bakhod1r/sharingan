@@ -561,6 +561,26 @@ struct SettingsView: View {
                         .foregroundStyle(.white.opacity(0.65))
                 }
 
+                Section("Break screen") {
+                    HStack {
+                        Text("Background")
+                            .font(.system(.body, design: .rounded))
+                        Spacer()
+                        breakBackgroundSwatch(settings.breakBackgroundStyle)
+                        Picker("", selection: $settings.breakBackgroundStyle) {
+                            ForEach(BreakBackgroundStyle.allCases) { s in
+                                Text(s.label).tag(s)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .fixedSize()
+                    }
+                    Text("Graphite and Slate show the eyes on a soft gray card; Pure black keeps the screen fully dark.")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.65))
+                }
+
                 Section("Desktop wallpaper") {
                     ToggleRow(title: "Show eyes on the desktop",
                               isOn: $settings.eyesWallpaperEnabled)
@@ -842,6 +862,22 @@ struct SettingsView: View {
         }
         .padding(14)
         .glassRounded(DS.Radius.lg, material: .thin)
+    }
+
+    /// Small two-tone preview of a break background: base + card colors.
+    private func breakBackgroundSwatch(_ style: BreakBackgroundStyle) -> some View {
+        RoundedRectangle(cornerRadius: 6, style: .continuous)
+            .fill(Color(red: style.base.r, green: style.base.g, blue: style.base.b))
+            .overlay {
+                if let p = style.panel {
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .fill(Color(red: p.r, green: p.g, blue: p.b))
+                        .padding(5)
+                }
+            }
+            .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .strokeBorder(.white.opacity(0.25), lineWidth: 1))
+            .frame(width: 44, height: 28)
     }
 
     /// Wallpaper yoqilgan bo'lsa, yangi sozlamalar bilan qayta quradi.

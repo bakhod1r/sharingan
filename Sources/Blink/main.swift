@@ -69,6 +69,30 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-eyes-preview"),
     exit(0)
 }
 
+// Headless preview of the full break screen (debug utility):
+// `Blink --render-break-preview <path> [styleRawValue]`.
+if let i = CommandLine.arguments.firstIndex(of: "--render-break-preview"),
+   i + 1 < CommandLine.arguments.count {
+    let out = CommandLine.arguments[i + 1]
+    MainActor.assumeIsolated {
+        let timer = PomodoroTimer()
+        if i + 2 < CommandLine.arguments.count,
+           let style = BreakBackgroundStyle(rawValue: CommandLine.arguments[i + 2]) {
+            timer.settings.breakBackgroundStyle = style
+        }
+        let preview = BreakView(timer: timer, onTapSkip: {}, forceExit: true)
+            .frame(width: 1440, height: 900)
+        let renderer = ImageRenderer(content: preview)
+        renderer.scale = 1
+        if let cg = renderer.cgImage {
+            let rep = NSBitmapImageRep(cgImage: cg)
+            try? rep.representation(using: .png, properties: [:])?
+                .write(to: URL(fileURLWithPath: out))
+        }
+    }
+    exit(0)
+}
+
 // Headless preview of iris gaze placement and eyelid morph (debug utility):
 // `Blink --render-gaze-grid <path>`.
 if let i = CommandLine.arguments.firstIndex(of: "--render-gaze-grid"),
