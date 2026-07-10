@@ -51,8 +51,10 @@ struct TasksView: View {
     @State private var filter: TaskFilter = .all
     @State private var search = ""
     @FocusState private var searchFocused: Bool
-    /// Sidebar category deep-link: when set, only this category's group shows.
+    /// Sidebar deep-link narrowing — at most one is active at a time.
     @State private var categoryFilter: String?
+    @State private var tagFilter: String?
+    @State private var priorityFilter: TaskPriority?
     @ObservedObject private var router = AppRouter.shared
 
     private var newCategoryAccent: Color { Color(hex: store.color(for: newCategory)) }
@@ -65,9 +67,8 @@ struct TasksView: View {
                 emptyState
             } else {
                 viewBar
-                if let cat = categoryFilter { categoryFilterChip(cat) }
-                let all = store.grouped(filter: filter, search: search)
-                let groups = categoryFilter.map { c in all.filter { $0.category == c } } ?? all
+                narrowFilterChip
+                let groups = narrowed(store.grouped(filter: filter, search: search))
                 if groups.isEmpty {
                     noResults
                 } else if embeddedInScroll {
@@ -89,17 +90,22 @@ struct TasksView: View {
         .onChange(of: router.focusTaskSearch) { _ in consumeDeepLink() }
     }
 
-    /// Applies (and clears) one-shot sidebar deep-links: smart filter, category
-    /// narrowing, or search-field focus.
+    /// Applies (and clears) one-shot sidebar deep-links: smart filter, one
+    /// narrowing dimension (category / tag / priority), or search focus.
     private func consumeDeepLink() {
         if let f = router.pendingTaskFilter {
             filter = f
             router.pendingTaskFilter = nil
         }
-        if let c = router.pendingTaskCategory {
-            categoryFilter = c
+        if router.pendingTaskCategory != nil || router.pendingTaskTag != nil
+            || router.pendingTaskPriority != nil {
+            categoryFilter = router.pendingTaskCategory
+            tagFilter = router.pendingTaskTag
+            priorityFilter = router.pendingTaskPriority
             if filter == .completed { filter = .all }
             router.pendingTaskCategory = nil
+            router.pendingTaskTag = nil
+            router.pendingTaskPriority = nil
         }
         if router.focusTaskSearch {
             searchFocused = true
@@ -107,27 +113,56 @@ struct TasksView: View {
         }
     }
 
-    /// "Filtered by #Category" pill with a clear button.
-    private func categoryFilterChip(_ cat: String) -> some View {
-        HStack(spacing: 6) {
-            Text("#")
-                .font(.system(.caption, design: .rounded).weight(.bold))
-                .foregroundStyle(Color(hex: store.color(for: cat)))
-            Text(cat)
-                .font(.system(.caption, design: .rounded).weight(.semibold))
-            Button {
-                withAnimation(.easeInOut(duration: 0.15)) { categoryFilter = nil }
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.pressableSubtle)
-            .help("Clear category filter")
-            Spacer()
+    /// Applies the active sidebar narrowing to the smart-view groups, dropping
+    /// groups that end up empty.
+    private func narrowed(_ groups: [(category: String, items: [TaskItem])])
+        -> [(category: String, items: [TaskItem])] {
+        guard categoryFilter != nil || tagFilter != nil || priorityFilter != nil else {
+            return groups
         }
-        .padding(.horizontal, 10).padding(.vertical, 5)
-        .background(Capsule().fill(Color(hex: store.color(for: cat)).opacity(0.14)))
+        return groups.compactMap { g in
+            if let c = categoryFilter, g.category != c { return nil }
+            var items = g.items
+            if let t = tagFilter { items = items.filter { $0.tags.contains(t) } }
+            if let p = priorityFilter { items = items.filter { $0.priority == p } }
+            return items.isEmpty ? nil : (g.category, items)
+        }
+    }
+
+    /// "Filtered by …" pill (category / tag / priority) with a clear button.
+    @ViewBuilder
+    private var narrowFilterChip: some View {
+        if categoryFilter != nil || tagFilter != nil || priorityFilter != nil {
+            let (symbol, label, tint): (String, String, Color) = {
+                if let c = categoryFilter { return ("#", c, Color(hex: store.color(for: c))) }
+                if let t = tagFilter { return ("@", t, .accentColor) }
+                if let p = priorityFilter {
+                    return ("⚑", p.menuLabel, p.colorHex.map { Color(hex: $0) } ?? .secondary)
+                }
+                return ("", "", .secondary)
+            }()
+            HStack(spacing: 6) {
+                Text(symbol)
+                    .font(.system(.caption, design: .rounded).weight(.bold))
+                    .foregroundStyle(tint)
+                Text(label)
+                    .font(.system(.caption, design: .rounded).weight(.semibold))
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        categoryFilter = nil; tagFilter = nil; priorityFilter = nil
+                    }
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.pressableSubtle)
+                .help("Clear filter")
+                Spacer()
+            }
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .background(Capsule().fill(tint.opacity(0.14)))
+        }
     }
 
     /// The grouped section stack, shared by the embedded and popover layouts.

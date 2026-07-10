@@ -80,23 +80,8 @@ struct SettingsView: View {
         .frame(maxWidth: 600)
     }
 
-    /// The real app icon (same asset the main-window sidebar uses), so the app
-    /// presents one brand mark instead of an eye glyph here and the icon there.
-    private var appIcon: Image {
-        if let url = Bundle.blinkAppResources.url(forResource: "AppIcon", withExtension: "png"),
-           let ns = NSImage(contentsOf: url) {
-            return Image(nsImage: ns)
-        }
-        return Image(systemName: "eye.fill")
-    }
-
     private var rootHeader: some View {
         VStack(spacing: 10) {
-            appIcon
-                .resizable()
-                .frame(width: 62, height: 62)
-                .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
-                .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
             Text("Settings")
                 .font(.system(.largeTitle, design: .rounded).weight(.bold))
                 .foregroundStyle(.white)

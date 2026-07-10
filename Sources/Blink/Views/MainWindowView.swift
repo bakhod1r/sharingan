@@ -48,23 +48,29 @@ struct MainWindowView: View {
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 4) {
             addTaskButton
-            shortcutRow(icon: "magnifyingglass", title: "Search") {
-                router.openTasks(focusSearch: true)
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 4) {
+                    shortcutRow(icon: "magnifyingglass", title: "Search") {
+                        router.openTasks(focusSearch: true)
+                    }
+                    shortcutRow(icon: "calendar.badge.exclamationmark", title: "Today",
+                                count: tasks.count(.today), countTint: accent) {
+                        router.openTasks(filter: .today)
+                    }
+                    shortcutRow(icon: "calendar", title: "Upcoming",
+                                count: tasks.count(.upcoming)) {
+                        router.openTasks(filter: .upcoming)
+                    }
+                    navRow(.timer)
+                    navRow(.tasks)
+                    navRow(.week)
+                    navRow(.stats)
+                    navRow(.settings)
+                    categoriesSection
+                    tagsSection
+                    prioritySection
+                }
             }
-            shortcutRow(icon: "calendar.badge.exclamationmark", title: "Today",
-                        count: tasks.count(.today), countTint: accent) {
-                router.openTasks(filter: .today)
-            }
-            shortcutRow(icon: "calendar", title: "Upcoming",
-                        count: tasks.count(.upcoming)) {
-                router.openTasks(filter: .upcoming)
-            }
-            navRow(.timer)
-            navRow(.tasks)
-            navRow(.week)
-            navRow(.stats)
-            navRow(.settings)
-            categoriesSection
             Spacer(minLength: 12)
             sidebarFooter
         }
@@ -163,13 +169,83 @@ struct MainWindowView: View {
     }
 
     private func categoryRow(_ cat: TaskCategory, count: Int) -> some View {
-        Button { router.openTasks(category: cat.name) } label: {
+        filterRow(mark: "#", markTint: Color(hex: cat.colorHex),
+                  title: cat.name, count: count) {
+            router.openTasks(category: cat.name)
+        }
+    }
+
+    /// Todoist's "Labels": free-form tags currently in use on open tasks,
+    /// most-used first. Clicking narrows the Tasks list to that tag.
+    @ViewBuilder
+    private var tagsSection: some View {
+        let open = tasks.tasks.filter { !$0.isDone }
+        let counts: [String: Int] = open.reduce(into: [:]) { acc, t in
+            for tag in t.tags { acc[tag, default: 0] += 1 }
+        }
+        let names = tasks.allTags.filter { counts[$0] != nil }.prefix(8)
+        if !names.isEmpty {
+            sectionHeader("Tags")
+            ForEach(Array(names), id: \.self) { tag in
+                filterRow(mark: "@", markTint: accent,
+                          title: tag, count: counts[tag] ?? 0) {
+                    router.openTasks(tag: tag)
+                }
+            }
+        }
+    }
+
+    /// Priority shortcuts (P1–P3) with open-task counts; P4/none is the
+    /// default state so it gets no row.
+    @ViewBuilder
+    private var prioritySection: some View {
+        let open = tasks.tasks.filter { !$0.isDone }
+        let used = [TaskPriority.high, .medium, .low].compactMap { p -> (TaskPriority, Int)? in
+            let n = open.filter { $0.priority == p }.count
+            return n > 0 ? (p, n) : nil
+        }
+        if !used.isEmpty {
+            sectionHeader("Priority")
+            ForEach(used, id: \.0) { p, n in
+                priorityRow(p, count: n)
+            }
+        }
+    }
+
+    private func priorityRow(_ p: TaskPriority, count: Int) -> some View {
+        Button { router.openTasks(priority: p) } label: {
             HStack(spacing: 11) {
-                Text("#")
-                    .font(.system(.body, design: .rounded).weight(.bold))
-                    .foregroundStyle(Color(hex: cat.colorHex))
+                Image(systemName: "flag.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(p.colorHex.map { Color(hex: $0) } ?? .secondary)
                     .frame(width: 20, alignment: .center)
-                Text(cat.name)
+                Text(p.menuLabel)
+                    .font(.system(.callout, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.75))
+                    .lineLimit(1)
+                Spacer()
+                Text("\(count)")
+                    .font(.system(.caption, design: .rounded).monospacedDigit())
+                    .foregroundStyle(.white.opacity(0.45))
+            }
+            .padding(.horizontal, 10).padding(.vertical, 6)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.pressableSubtle)
+        .padding(.horizontal, 8)
+    }
+
+    /// Shared row shape for category/tag entries: colored text mark + name +
+    /// trailing count, Todoist-style.
+    private func filterRow(mark: String, markTint: Color, title: String,
+                           count: Int, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 11) {
+                Text(mark)
+                    .font(.system(.body, design: .rounded).weight(.bold))
+                    .foregroundStyle(markTint)
+                    .frame(width: 20, alignment: .center)
+                Text(title)
                     .font(.system(.callout, design: .rounded))
                     .foregroundStyle(.white.opacity(0.75))
                     .lineLimit(1)
