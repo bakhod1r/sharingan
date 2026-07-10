@@ -203,16 +203,10 @@ struct FloatingTimerView: View {
             }
             .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
         }
-        .glassRounded(corner, material: .regular)
-        .overlay {
-            RoundedRectangle(cornerRadius: corner, style: .continuous)
-                .stroke(
-                    LinearGradient(colors: [Color.white.opacity(0.5),
-                                             themeColors.last ?? Color.white.opacity(0.2)],
-                                   startPoint: .topLeading, endPoint: .bottomTrailing),
-                    lineWidth: 1)
-                .allowsHitTesting(false)
-        }
+        // Borderless glass: material backdrop only — no hairline ring (the
+        // glassRounded stroke read as a gray border around the pill).
+        .background(.regularMaterial,
+                    in: RoundedRectangle(cornerRadius: corner, style: .continuous))
         .liquidShadow(radius: 14, y: 8)
         .overlay {
             if timer.isFlashing {

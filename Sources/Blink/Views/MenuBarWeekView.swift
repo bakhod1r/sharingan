@@ -17,8 +17,14 @@ struct MenuBarWeekView: View {
     /// Draft for the quick-add field in the Unscheduled column.
     @State private var backlogDraft = ""
 
-    private let columnWidth: CGFloat = 150
-    private let columnHeight: CGFloat = 400
+    /// Column geometry, shared with `MenuBarView` so the popover can widen to
+    /// fit the full board (backlog + 7 days) when this tab is selected.
+    static let columnWidth: CGFloat = 140
+    static let columnSpacing: CGFloat = 8
+    /// Board content width: 8 columns + 7 gaps.
+    static let boardWidth: CGFloat = 8 * columnWidth + 7 * columnSpacing
+
+    private let columnHeight: CGFloat = 452
 
     private var cal: Calendar { Calendar.current }
     private var accent: Color { timer.settings.theme.accent }
@@ -30,8 +36,10 @@ struct MenuBarWeekView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
+            // The popover widens to fit all 8 columns (see MenuBarView); the
+            // scroll is a safety net for small screens where it can't.
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 8) {
+                HStack(alignment: .top, spacing: Self.columnSpacing) {
                     backlogColumn
                     ForEach(days, id: \.self) { day in
                         dayColumn(day)
@@ -217,7 +225,7 @@ struct MenuBarWeekView: View {
             Spacer(minLength: 0)
         }
         .padding(8)
-        .frame(width: columnWidth, alignment: .top)
+        .frame(width: Self.columnWidth, alignment: .top)
         .frame(height: columnHeight, alignment: .top)
         .background(columnBackground(isToday: isToday, targeted: targeted))
         .overlay(
