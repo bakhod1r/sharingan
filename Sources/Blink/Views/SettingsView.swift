@@ -420,22 +420,6 @@ struct SettingsView: View {
                                               set: { settings.exerciseSettings.rounds = max(1, $0) }),
                                unit: "×")
 
-                    HStack {
-                        Text("Sharingan eye")
-                            .font(.system(.body, design: .rounded))
-                        Spacer()
-                        MoveIrisView(diameter: 26, style: settings.sharinganStyle)
-                        Picker("", selection: $settings.sharinganStyle) {
-                            ForEach(SharinganStyle.allCases) { s in
-                                Text(s.label).tag(s)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        
-                        .fixedSize()
-                    }
-
                     Button {
                         BreakWindowManager.shared.presentPreview(timer: timer) {
                             BreakWindowManager.shared.dismissAll()
@@ -473,7 +457,46 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("Desktop eyes wallpaper") {
+                Section("Camera & Vision") {
+                    ToggleRow(title: "Eye tracking via camera",
+                              isOn: $settings.cameraEyeTrackingEnabled)
+                    if settings.cameraEyeTrackingEnabled {
+                        Text("Works during breaks only. Alerts when blink rate is low.")
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.65))
+                    }
+                }
+
+        case .sharingan:
+                Section("Iris style") {
+                    HStack {
+                        Spacer()
+                        MoveEyePair(direction: "center", gaze: .center,
+                                    eyeSize: 54, style: settings.sharinganStyle)
+                        Spacer()
+                    }
+                    .padding(.vertical, 6)
+
+                    HStack {
+                        Text("Sharingan eye")
+                            .font(.system(.body, design: .rounded))
+                        Spacer()
+                        MoveIrisView(diameter: 26, style: settings.sharinganStyle)
+                        Picker("", selection: $settings.sharinganStyle) {
+                            ForEach(SharinganStyle.allCases) { s in
+                                Text(s.label).tag(s)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .fixedSize()
+                    }
+                    Text("Used everywhere the eyes appear: break screen and desktop wallpaper.")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.65))
+                }
+
+                Section("Desktop wallpaper") {
                     ToggleRow(title: "Show eyes on the desktop",
                               isOn: $settings.eyesWallpaperEnabled)
                     Text("Live wallpaper: the eyes sit under your desktop icons and always follow the mouse.")
@@ -513,7 +536,7 @@ struct SettingsView: View {
                     if settings.wallpaperSpinTrigger.spinsOnIdle {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Idle delay: \(String(format: "%.1f", settings.wallpaperIdleDelay))s")
-                                .font(.caption.weight(.medium))
+                                .font(.system(.caption, design: .rounded).weight(.medium))
                             Slider(value: $settings.wallpaperIdleDelay, in: 0.5...5, step: 0.5)
                         }
                     }
@@ -525,16 +548,6 @@ struct SettingsView: View {
                 .onChange(of: settings.wallpaperSpinDuration) { _ in refreshWallpaper() }
                 .onChange(of: settings.wallpaperIdleDelay) { _ in refreshWallpaper() }
                 .onChange(of: settings.sharinganStyle) { _ in refreshWallpaper() }
-
-                Section("Camera & Vision") {
-                    ToggleRow(title: "Eye tracking via camera",
-                              isOn: $settings.cameraEyeTrackingEnabled)
-                    if settings.cameraEyeTrackingEnabled {
-                        Text("Works during breaks only. Alerts when blink rate is low.")
-                            .font(.system(.caption, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.65))
-                    }
-                }
 
         case .general:
                 Section("Auto-start") {
@@ -624,7 +637,7 @@ struct SettingsView: View {
 
     /// Groups of settings, shown as drill-down rows on the root Settings screen.
     enum SettingsCategory: String, CaseIterable, Identifiable, Hashable {
-        case timer, breaks, focus, eyeCare, general, voice, shortcuts
+        case timer, breaks, focus, eyeCare, sharingan, general, voice, shortcuts
         var id: String { rawValue }
         var title: String {
             switch self {
@@ -632,6 +645,7 @@ struct SettingsView: View {
             case .breaks:    return "Breaks"
             case .focus:     return "Focus & Blocking"
             case .eyeCare:   return "Eye Care"
+            case .sharingan: return "Sharingan Eyes"
             case .general:   return "General"
             case .voice:     return "Voice Guidance"
             case .shortcuts: return "Shortcuts"
@@ -643,6 +657,7 @@ struct SettingsView: View {
             case .breaks:    return "Break screen, ambience, brightness"
             case .focus:     return "App blocking, reminders"
             case .eyeCare:   return "Exercises, camera tracking"
+            case .sharingan: return "Iris style, desktop wallpaper, spin"
             case .general:   return "Auto-start, sound, notifications"
             case .voice:     return "Spoken instructions"
             case .shortcuts: return "Global keyboard shortcuts"
@@ -654,6 +669,7 @@ struct SettingsView: View {
             case .breaks:    return "cup.and.saucer.fill"
             case .focus:     return "hand.raised.fill"
             case .eyeCare:   return "eye.fill"
+            case .sharingan: return "eye.circle.fill"
             case .general:   return "gearshape.fill"
             case .voice:     return "waveform"
             case .shortcuts: return "keyboard.fill"
@@ -665,6 +681,7 @@ struct SettingsView: View {
             case .breaks:    return .teal
             case .focus:     return .indigo
             case .eyeCare:   return .green
+            case .sharingan: return .red
             case .general:   return Color(white: 0.5)
             case .voice:     return .orange
             case .shortcuts: return .purple
@@ -686,8 +703,11 @@ struct SettingsView: View {
                 return ["app", "block", "blocker", "distraction", "reminder",
                         "posture", "water", "stand"]
             case .eyeCare:
-                return ["eye", "exercise", "sharingan", "camera", "vision", "gaze",
+                return ["eye", "exercise", "camera", "vision", "gaze",
                         "blink", "20-20-20"]
+            case .sharingan:
+                return ["sharingan", "iris", "style", "tomoe", "mangekyou",
+                        "wallpaper", "desktop", "spin", "eyes", "follow", "mouse"]
             case .general:
                 return ["auto-start", "auto start", "sound", "alarm", "chime",
                         "notification", "launch at login", "startup"]
