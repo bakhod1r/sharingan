@@ -163,7 +163,6 @@ struct SettingsView: View {
         .buttonStyle(.pressableSubtle)
     }
 
-    @ViewBuilder
     /// One DND shortcut: editable name + Test button + last-run status.
     @ViewBuilder
     private func dndShortcutRow(label: String, name: Binding<String>) -> some View {
@@ -192,6 +191,7 @@ struct SettingsView: View {
         }
     }
 
+    @ViewBuilder
     private func categorySections(_ cat: SettingsCategory) -> some View {
         switch cat {
         case .timer:
