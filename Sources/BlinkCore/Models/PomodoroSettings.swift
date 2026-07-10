@@ -93,6 +93,11 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     /// Show the MM:SS countdown next to the menu-bar icon while a session
     /// is engaged (off = icon only).
     public var showMenuBarCountdown: Bool = true
+    /// Toggle macOS Focus during focus sessions by running user-created
+    /// Shortcuts (there is no public Focus API).
+    public var dndEnabled: Bool = false
+    public var dndShortcutOn: String = "Blink Focus On"
+    public var dndShortcutOff: String = "Blink Focus Off"
 
     public init() {}
 
@@ -154,6 +159,9 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
         priorityColors = try c.decodeIfPresent([String: String].self, forKey: .priorityColors) ?? d.priorityColors
         tagStyles = try c.decodeIfPresent([String: TagStyle].self, forKey: .tagStyles) ?? d.tagStyles
         showMenuBarCountdown = try c.decodeIfPresent(Bool.self, forKey: .showMenuBarCountdown) ?? d.showMenuBarCountdown
+        dndEnabled = try c.decodeIfPresent(Bool.self, forKey: .dndEnabled) ?? d.dndEnabled
+        dndShortcutOn = try c.decodeIfPresent(String.self, forKey: .dndShortcutOn) ?? d.dndShortcutOn
+        dndShortcutOff = try c.decodeIfPresent(String.self, forKey: .dndShortcutOff) ?? d.dndShortcutOff
     }
 
     /// Custom flag color (hex) for a tag, nil when the default should apply.

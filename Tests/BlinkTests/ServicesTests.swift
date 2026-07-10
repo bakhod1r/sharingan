@@ -443,3 +443,88 @@ struct DailyGoalTriggerTests {
         #expect(!PomodoroTimer.goalJustReached(count: 5, goal: 0))
     }
 }
+
+@Suite("DND shortcut service")
+struct DNDShortcutServiceTests {
+    /// Captures runner invocations synchronously.
+    final class Spy {
+        var calls: [(path: String, args: [String])] = []
+        func runner(_ path: String, _ args: [String],
+                    _ done: @escaping (Int32, String) -> Void) {
+            calls.append((path, args))
+            done(0, "")
+        }
+    }
+
+    func makeSettings(enabled: Bool = true) -> PomodoroSettings {
+        var s = PomodoroSettings()
+        s.dndEnabled = enabled
+        return s
+    }
+
+    @Test func focusStartRunsTheOnShortcutOnce() {
+        let spy = Spy()
+        let svc = DNDShortcutService(runner: spy.runner)
+        let s = makeSettings()
+        svc.sync(focusActive: true, settings: s)
+        svc.sync(focusActive: true, settings: s)   // no edge — no extra run
+        #expect(spy.calls.count == 1)
+        #expect(spy.calls[0].path == "/usr/bin/shortcuts")
+        #expect(spy.calls[0].args == ["run", "Blink Focus On"])
+    }
+
+    @Test func focusEndRunsTheOffShortcut() {
+        let spy = Spy()
+        let svc = DNDShortcutService(runner: spy.runner)
+        let s = makeSettings()
+        svc.sync(focusActive: true, settings: s)
+        svc.sync(focusActive: false, settings: s)
+        #expect(spy.calls.map(\.args) == [["run", "Blink Focus On"],
+                                          ["run", "Blink Focus Off"]])
+    }
+
+    @Test func disabledSettingIsANoOp() {
+        let spy = Spy()
+        let svc = DNDShortcutService(runner: spy.runner)
+        svc.sync(focusActive: true, settings: makeSettings(enabled: false))
+        #expect(spy.calls.isEmpty)
+    }
+
+    @Test func disablingMidFocusTearsDown() {
+        let spy = Spy()
+        let svc = DNDShortcutService(runner: spy.runner)
+        svc.sync(focusActive: true, settings: makeSettings())
+        svc.sync(focusActive: true, settings: makeSettings(enabled: false))
+        #expect(spy.calls.map(\.args) == [["run", "Blink Focus On"],
+                                          ["run", "Blink Focus Off"]])
+    }
+
+    @Test func deactivateIsBestEffortAndIdempotent() {
+        let spy = Spy()
+        let svc = DNDShortcutService(runner: spy.runner)
+        let s = makeSettings()
+        svc.deactivate(settings: s)                 // never engaged — no run
+        svc.sync(focusActive: true, settings: s)
+        svc.deactivate(settings: s)
+        svc.deactivate(settings: s)                 // second call — no run
+        #expect(spy.calls.map(\.args) == [["run", "Blink Focus On"],
+                                          ["run", "Blink Focus Off"]])
+    }
+
+    @Test func emptyShortcutNameNeverSpawnsAProcess() {
+        let spy = Spy()
+        let svc = DNDShortcutService(runner: spy.runner)
+        svc.run("   ")
+        #expect(spy.calls.isEmpty)
+    }
+
+    @Test func settingsFieldsDefaultAndDecode() throws {
+        let d = PomodoroSettings()
+        #expect(d.dndEnabled == false)
+        #expect(d.dndShortcutOn == "Blink Focus On")
+        #expect(d.dndShortcutOff == "Blink Focus Off")
+        let old = try JSONSerialization.data(withJSONObject: ["focusMinutes": 25])
+        let s = try JSONDecoder().decode(PomodoroSettings.self, from: old)
+        #expect(s.dndEnabled == false)
+    }
+}
