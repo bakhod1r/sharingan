@@ -313,9 +313,18 @@ struct MoveIrisView: View {
     var diameter: CGFloat
     var spin: Double = 0
     var style: SharinganStyle = .classic
+    /// 0…1 — how far the black pattern has whirled out of the pupil. It scales
+    /// up from the pupil with an extra swirl of rotation as it opens; 0 hides
+    /// the pattern entirely (bare red iris), 1 is fully formed.
+    var emergence: CGFloat = 1
+    /// Continuous tomoe count (1…3) for the classic family. A fractional
+    /// value is mid-awakening: existing tomoe glide to their new slots while
+    /// the newest grows out of the ring. nil = whole stages from the style.
+    var tomoeStage: CGFloat? = nil
 
     var body: some View {
         let r = diameter / 2
+        let e = min(max(emergence, 0), 1)
         ZStack {
             Circle()
                 .fill(
@@ -330,8 +339,12 @@ struct MoveIrisView: View {
                 .stroke(rimColor.opacity(0.9), lineWidth: 0.05 * r)
                 .padding(0.02 * r)
 
-            pattern(r: r)
-                .rotationEffect(.degrees(spin))
+            if e > 0.001 {
+                pattern(r: r)
+                    .scaleEffect(0.08 + 0.92 * e)
+                    .opacity(Double(min(1, e * 2.4)))
+                    .rotationEffect(.degrees(spin - Double(1 - e) * 260))
+            }
 
             Circle()
                 .fill(Color.black)
@@ -372,25 +385,11 @@ struct MoveIrisView: View {
         let ringR = 0.52 * r
         switch style {
         case .classic:
-            ZStack {
-                Circle()
-                    .stroke(Color(red: 0.22, green: 0.0, blue: 0.01).opacity(0.85), lineWidth: 0.035 * r)
-                    .frame(width: ringR * 2, height: ringR * 2)
-                ForEach(0..<3, id: \.self) { i in
-                    let head = Angle(degrees: -80 + Double(i) * 120)
-                    MoveTomoeTail(
-                        ringRadius: ringR,
-                        headAngle: head,
-                        sweep: .degrees(-60),
-                        startWidth: 0.20 * r
-                    )
-                    .fill(Color.black)
-                    Circle()
-                        .fill(Color.black)
-                        .frame(width: 0.28 * r, height: 0.28 * r)
-                        .offset(x: ringR * cos(head.radians), y: ringR * sin(head.radians))
-                }
-            }
+            classicTomoe(stage: tomoeStage ?? 3, r: r, ringR: ringR)
+        case .tomoe1:
+            classicTomoe(stage: tomoeStage ?? 1, r: r, ringR: ringR)
+        case .tomoe2:
+            classicTomoe(stage: tomoeStage ?? 2, r: r, ringR: ringR)
         case .mangekyou:
             MovePinwheelShape(blades: 3, lean: 0.62, rootWidth: 0.26)
                 .fill(Color.black)
@@ -522,6 +521,39 @@ struct MoveIrisView: View {
         }
     }
 
+    /// Classic-family pattern at a continuous stage (1…3 tomoe). Whole
+    /// numbers are resting states; a fractional stage is mid-awakening —
+    /// the existing tomoe glide toward their new slots while the newest one
+    /// grows out of the ring (head swells in place, tail sweeps out behind).
+    @ViewBuilder
+    private func classicTomoe(stage: CGFloat, r: CGFloat, ringR: CGFloat) -> some View {
+        let s = min(max(stage, 1), 3)
+        let grown = Int(s)
+        let frac = s - CGFloat(grown)
+        let count = frac > 0.001 ? grown + 1 : grown
+        ZStack {
+            Circle()
+                .stroke(Color(red: 0.22, green: 0.0, blue: 0.01).opacity(0.85), lineWidth: 0.035 * r)
+                .frame(width: ringR * 2, height: ringR * 2)
+            ForEach(0..<count, id: \.self) { i in
+                let head = Angle(degrees: -80 + Double(i) * 360 / Double(s))
+                let grow = i < grown ? CGFloat(1) : frac
+                MoveTomoeTail(
+                    ringRadius: ringR,
+                    headAngle: head,
+                    sweep: .degrees(-60 * Double(grow)),
+                    startWidth: 0.20 * r * grow
+                )
+                .fill(Color.black)
+                Circle()
+                    .fill(Color.black)
+                    .frame(width: max(0.28 * r * grow, 0.001),
+                           height: max(0.28 * r * grow, 0.001))
+                    .offset(x: ringR * cos(head.radians), y: ringR * sin(head.radians))
+            }
+        }
+    }
+
     /// One comma tomoe riding a ring: filled head + tapering tail.
     @ViewBuilder
     private func tomoe(ringRadius: CGFloat, head: Angle, r: CGFloat) -> some View {
@@ -602,6 +634,10 @@ struct MoveEyeView: View {
     var style: SharinganStyle = .classic
     /// Eyelid position, 1 = fully open, 0 = closed.
     var openness: CGFloat = 1
+    /// Pattern emergence passed through to the iris (see MoveIrisView).
+    var emergence: CGFloat = 1
+    /// Fractional tomoe stage passed through to the iris (see MoveIrisView).
+    var tomoeStage: CGFloat? = nil
 
     var body: some View {
         let h = size
@@ -650,7 +686,8 @@ struct MoveEyeView: View {
                             )
                         )
                         .frame(width: irisD * 1.6, height: irisD * 1.6)
-                    MoveIrisView(diameter: irisD, spin: spin, style: style)
+                    MoveIrisView(diameter: irisD, spin: spin, style: style,
+                                 emergence: emergence, tomoeStage: tomoeStage)
                 }
                 .offset(x: off.x, y: off.y)
             }
@@ -700,6 +737,12 @@ struct MoveEyePair: View {
     /// finish cleanly — the iris eases back to center as the step ends
     /// instead of cutting off mid-sweep. 0 = unknown (ease-in only).
     var holdSeconds: Double = 0
+    /// Pattern opening/closing animation: the pattern whirls out of the pupil
+    /// at break start, collapses and reopens as the NEXT style on every step
+    /// change, and collapses shut at break end. Off = static pattern.
+    var transition: PatternTransitionSpeed = .normal
+    /// When the break ends — drives the closing bookend (pattern + lids).
+    var endDate: Date? = nil
 
     private var isPath: Bool {
         direction == "circle_cw" || direction == "circle_ccw" || direction == "figure8"
@@ -714,6 +757,8 @@ struct MoveEyePair: View {
     @State private var transitionFrom: Double = 1
     /// Previous step direction, so the blend can start from its lid value.
     @State private var lastDirection: String = ""
+    /// How many steps the pattern has evolved past the configured base style.
+    @State private var evolutionCount: Int = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let spinDuration: Double = 1.6
     private let spinTurns: Double = 3.0
@@ -724,12 +769,15 @@ struct MoveEyePair: View {
             let off = offset(at: t)
             let live = GazeDirection(dx: off.x, dy: off.y)
             let s = activationSpin(at: t)
-            let lid = openness(at: t)
+            let pf = evolution.frame(at: t)
+            let lid = openness(at: t) * CGFloat(pf.endFade)
             HStack(spacing: eyeSize * 0.42) {
-                MoveEyeView(gaze: live, spin: s, size: eyeSize, style: style,
-                            openness: lid)
+                MoveEyeView(gaze: live, spin: s, size: eyeSize,
+                            style: pf.left, openness: lid,
+                            emergence: pf.emergence, tomoeStage: pf.tomoeStage)
                 MoveEyeView(gaze: live, spin: s, size: eyeSize, mirrored: true,
-                            style: rightStyle ?? style, openness: lid)
+                            style: pf.right, openness: lid,
+                            emergence: pf.emergence, tomoeStage: pf.tomoeStage)
             }
             .animation(isPath ? nil : .easeInOut(duration: 0.5), value: gaze)
         }
@@ -748,15 +796,29 @@ struct MoveEyePair: View {
             lastDirection = newDirection
             phaseStart = now
             spinStart = now
+            evolutionCount += 1
         }
+    }
+
+    /// The evolution timeline for the current state — pure math shared with
+    /// the headless GIF renderer, so previews match the app exactly.
+    private var evolution: PatternEvolution {
+        PatternEvolution(transition: transition,
+                         appearStart: appearStart,
+                         phaseStart: phaseStart,
+                         evolutionCount: evolutionCount,
+                         end: endDate?.timeIntervalSinceReferenceDate,
+                         reduceMotion: reduceMotion,
+                         baseLeft: style,
+                         baseRight: rightStyle ?? style)
     }
 
     /// Activation burst: tomoe accelerate, whirl and settle (smootherstep).
     private func activationSpin(at t: TimeInterval) -> Double {
         if reduceMotion { return 0 }
-        let u = min(max((t - spinStart) / spinDuration, 0), 1)
-        let eased = u * u * u * (u * (u * 6 - 15) + 10)
-        return spinTurns * 360 * eased
+        return PatternEvolution.activationSpin(at: t, since: spinStart,
+                                               duration: spinDuration,
+                                               turns: spinTurns)
     }
 
     // MARK: - Eyelids
@@ -768,14 +830,7 @@ struct MoveEyePair: View {
         if reduceMotion { return direction == "closed" ? 0 : 1 }
 
         // Awakening: eyes hold shut, then open once at break start.
-        let ta = t - appearStart
-        let awaken: Double
-        if ta < 0.35 {
-            awaken = 0
-        } else {
-            let u = min(max((ta - 0.35) / 0.9, 0), 1)
-            awaken = u * u * u * (u * (u * 6 - 15) + 10)
-        }
+        let awaken = PatternEvolution.awakenOpenness(at: t, since: appearStart)
 
         let mode = steadyOpenness(of: direction, at: t)
         let blend = min(max((t - phaseStart) / 0.35, 0), 1)

@@ -150,8 +150,9 @@ struct WallpaperEyesView: View {
         }
         .onReceive(ticker) { _ in
             updateEyelids()
-            guard config.spinTrigger.spinsOnIdle else { return }
-            let idle = Date().timeIntervalSince(mouse.lastMoved) > config.idleDelay
+            guard config.spinTrigger.spinsOnIdle || config.spinTrigger.spinsAlways else { return }
+            let idle = config.spinTrigger.spinsAlways
+                || Date().timeIntervalSince(mouse.lastMoved) > config.idleDelay
             if idle && !spinning {
                 spinning = true
                 withAnimation(.linear(duration: config.spinDuration).repeatForever(autoreverses: false)) {

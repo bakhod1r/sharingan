@@ -13,3 +13,8 @@ Package.resolved
 /dist/*
 !/dist/Sharingan.app
 .vscode/
+# Generated animation preview GIFs and reference videos
+/previews/
+/sharingan animation.gif
+/sharingan animation.mp4
+/original-*.mp4

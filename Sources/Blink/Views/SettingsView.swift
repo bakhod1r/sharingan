@@ -538,7 +538,8 @@ struct SettingsView: View {
                         Spacer()
                         MoveEyePair(direction: "center", gaze: .center,
                                     eyeSize: 54, style: settings.sharinganStyle,
-                                    rightStyle: settings.sharinganStyleRight)
+                                    rightStyle: settings.sharinganStyleRight,
+                                    transition: .off)
                         Spacer()
                     }
                     .padding(.vertical, 6)
@@ -606,6 +607,23 @@ struct SettingsView: View {
                         .fixedSize()
                     }
                     Text("One flat tone across the whole break screen. Graphite matches the design video; Slate is a touch lighter.")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.65))
+
+                    HStack {
+                        Text("Pattern animation")
+                            .font(.system(.body, design: .rounded))
+                        Spacer()
+                        Picker("", selection: $settings.breakPatternTransition) {
+                            ForEach(PatternTransitionSpeed.allCases) { s in
+                                Text(s.label).tag(s)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(width: 260)
+                    }
+                    Text("The pattern whirls open at break start, evolves into the next pattern on every exercise step, and whirls shut as the break ends.")
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(.white.opacity(0.65))
 
