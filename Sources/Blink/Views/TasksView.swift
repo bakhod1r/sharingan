@@ -912,7 +912,10 @@ struct TasksView: View {
                     Label(task.priority.label, systemImage: "flag.fill")
                         .foregroundStyle(Color(hex: hex))
                 }
-                ForEach(task.tags.prefix(2), id: \.self) { TaskTag(tag: $0) }
+                ForEach(task.tags.prefix(2), id: \.self) { t in
+                    TaskTag(tag: t,
+                            tint: timer.settings.tagColorHex(t).map { Color(hex: $0) })
+                }
                 if task.tags.count > 2 { TaskTagOverflow(count: task.tags.count - 2) }
                 if task.subtaskProgress.total > 0 {
                     Label("\(task.subtaskProgress.done)/\(task.subtaskProgress.total)",

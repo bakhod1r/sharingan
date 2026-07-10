@@ -1,5 +1,24 @@
 import Foundation
 
+/// Per-tag (label) appearance: an SF Symbol and a flag color. Both optional —
+/// missing fields fall back to the app defaults ("at" mark, accent color).
+public struct TagStyle: Codable, Equatable, Sendable {
+    public var colorHex: String?
+    public var icon: String?
+    public init(colorHex: String? = nil, icon: String? = nil) {
+        self.colorHex = colorHex
+        self.icon = icon
+    }
+    public var isEmpty: Bool { colorHex == nil && icon == nil }
+
+    /// SF Symbols offered in the tag editor.
+    public static let iconChoices: [String] = [
+        "at", "tag.fill", "star.fill", "flame.fill", "bolt.fill", "book.fill",
+        "briefcase.fill", "heart.fill", "leaf.fill", "moon.fill",
+        "graduationcap.fill", "gamecontroller.fill",
+    ]
+}
+
 public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var focusMinutes: Int = 25
     public var shortBreakMinutes: Int = 5
@@ -69,6 +88,8 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var priorityNames: [String: String] = [:]
     /// Custom flag colors (hex) per priority level, keyed by String(rawValue).
     public var priorityColors: [String: String] = [:]
+    /// Custom icon/color per tag (label), keyed by the tag text.
+    public var tagStyles: [String: TagStyle] = [:]
 
     public init() {}
 
@@ -128,6 +149,17 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
         showPomodoroBadges = try c.decodeIfPresent(Bool.self, forKey: .showPomodoroBadges) ?? d.showPomodoroBadges
         priorityNames = try c.decodeIfPresent([String: String].self, forKey: .priorityNames) ?? d.priorityNames
         priorityColors = try c.decodeIfPresent([String: String].self, forKey: .priorityColors) ?? d.priorityColors
+        tagStyles = try c.decodeIfPresent([String: TagStyle].self, forKey: .tagStyles) ?? d.tagStyles
+    }
+
+    /// Custom flag color (hex) for a tag, nil when the default should apply.
+    public func tagColorHex(_ tag: String) -> String? {
+        tagStyles[tag]?.colorHex
+    }
+
+    /// SF Symbol for a tag's mark ("at" by default).
+    public func tagIcon(_ tag: String) -> String {
+        tagStyles[tag]?.icon ?? "at"
     }
 
     /// Display name for a priority level — custom override, else the built-in.

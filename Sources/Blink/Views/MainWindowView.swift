@@ -15,6 +15,10 @@ struct MainWindowView: View {
     @State private var newCatColor = TaskCategory.palette[0]
     /// Priority level whose name/color editor popover is open.
     @State private var editingPriority: TaskPriority?
+    /// Tag whose icon/color editor popover is open.
+    @State private var editingTag: String?
+    /// Sidebar filter row under the pointer — reveals its edit pencil.
+    @State private var hoveredRowKey: String?
 
     private var accent: Color { timer.settings.theme.accent }
 
@@ -241,17 +245,122 @@ struct MainWindowView: View {
                 .padding(.horizontal, 18).padding(.bottom, 4)
         } else {
             ForEach(Array(names), id: \.self) { tag in
-                filterRow(mark: "@", markTint: accent,
-                          title: tag, count: counts[tag] ?? 0) {
-                    router.openTasks(tag: tag)
-                }
-                .contextMenu {
-                    Button("Delete label everywhere", role: .destructive) {
-                        tasks.removeTag(tag)
-                    }
-                }
+                tagRow(tag, count: counts[tag] ?? 0)
             }
         }
+    }
+
+    /// Tag row: custom icon + color, a hover pencil opening the style editor.
+    private func tagRow(_ tag: String, count: Int) -> some View {
+        let key = "tag:\(tag)"
+        let tint = timer.settings.tagColorHex(tag).map { Color(hex: $0) } ?? accent
+        return Button { router.openTasks(tag: tag) } label: {
+            HStack(spacing: 11) {
+                Image(systemName: timer.settings.tagIcon(tag))
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 20, alignment: .center)
+                Text(tag)
+                    .font(.system(.footnote, design: .rounded))
+                    .foregroundStyle(.white.opacity(count > 0 ? 0.75 : 0.45))
+                    .lineLimit(1)
+                Spacer()
+                if hoveredRowKey == key {
+                    editPencil { editingTag = tag }
+                } else if count > 0 {
+                    Text("\(count)")
+                        .font(.system(.caption2, design: .rounded).monospacedDigit())
+                        .foregroundStyle(.white.opacity(0.45))
+                }
+            }
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.pressableSubtle)
+        .padding(.horizontal, 8)
+        .onHover { inside in
+            if inside { hoveredRowKey = key }
+            else if hoveredRowKey == key { hoveredRowKey = nil }
+        }
+        .popover(isPresented: Binding(
+            get: { editingTag == tag },
+            set: { if !$0 { editingTag = nil } }
+        ), arrowEdge: .trailing) {
+            tagEditorPopover(tag)
+        }
+    }
+
+    /// Icon + color editor for a tag, with delete-everywhere at the bottom.
+    private func tagEditorPopover(_ tag: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("@\(tag)").dsSectionLabel()
+            HStack(spacing: 5) {
+                ForEach(TagStyle.iconChoices, id: \.self) { icon in
+                    Button {
+                        var s = timer.settings.tagStyles[tag] ?? TagStyle()
+                        s.icon = icon == "at" ? nil : icon
+                        timer.settings.tagStyles[tag] = s.isEmpty ? nil : s
+                    } label: {
+                        Image(systemName: icon)
+                            .font(.system(size: 11))
+                            .foregroundStyle(timer.settings.tagIcon(tag) == icon
+                                             ? Color.accentColor : .white.opacity(0.7))
+                            .frame(width: 22, height: 22)
+                            .background(RoundedRectangle(cornerRadius: 5)
+                                .fill(Color.white.opacity(
+                                    timer.settings.tagIcon(tag) == icon ? 0.14 : 0.05)))
+                    }
+                    .buttonStyle(.pressableSubtle)
+                }
+            }
+            HStack(spacing: 6) {
+                ForEach(TaskCategory.palette, id: \.self) { hex in
+                    Button {
+                        var s = timer.settings.tagStyles[tag] ?? TagStyle()
+                        s.colorHex = hex
+                        timer.settings.tagStyles[tag] = s
+                    } label: {
+                        Circle()
+                            .fill(Color(hex: hex))
+                            .frame(width: 16, height: 16)
+                            .overlay(Circle().stroke(
+                                .white.opacity(timer.settings.tagColorHex(tag) == hex ? 0.9 : 0),
+                                lineWidth: 2))
+                    }
+                    .buttonStyle(.pressableSubtle)
+                }
+            }
+            HStack {
+                if timer.settings.tagStyles[tag] != nil {
+                    Button("Reset") { timer.settings.tagStyles[tag] = nil }
+                }
+                Spacer()
+                Button(role: .destructive) {
+                    timer.settings.tagStyles[tag] = nil
+                    tasks.removeTag(tag)
+                    editingTag = nil
+                } label: {
+                    Text("Delete label")
+                        .foregroundStyle(.red.opacity(0.9))
+                }
+            }
+            .font(.system(.caption, design: .rounded))
+        }
+        .padding(14)
+    }
+
+    /// The little hover pencil shared by editable sidebar rows.
+    private func editPencil(_ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: "pencil")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(.white.opacity(0.8))
+                .frame(width: 18, height: 18)
+                .background(Circle().fill(Color.white.opacity(0.12)))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.pressableSubtle)
+        .help("Edit")
     }
 
     /// Every priority level, always visible; zero-count rows render dimmed.
@@ -267,7 +376,8 @@ struct MainWindowView: View {
     }
 
     private func priorityRow(_ p: TaskPriority, count: Int) -> some View {
-        Button { router.openTasks(priority: p) } label: {
+        let key = "prio:\(p.rawValue)"
+        return Button { router.openTasks(priority: p) } label: {
             HStack(spacing: 11) {
                 Image(systemName: p == .none ? "flag.slash" : "flag.fill")
                     .font(.system(size: 11))
@@ -279,7 +389,9 @@ struct MainWindowView: View {
                     .foregroundStyle(.white.opacity(count > 0 ? 0.75 : 0.45))
                     .lineLimit(1)
                 Spacer()
-                if count > 0 {
+                if hoveredRowKey == key {
+                    editPencil { editingPriority = p }
+                } else if count > 0 {
                     Text("\(count)")
                         .font(.system(.caption2, design: .rounded).monospacedDigit())
                         .foregroundStyle(.white.opacity(0.45))
@@ -290,15 +402,9 @@ struct MainWindowView: View {
         }
         .buttonStyle(.pressableSubtle)
         .padding(.horizontal, 8)
-        .contextMenu {
-            Button("Edit name & color…") { editingPriority = p }
-            if timer.settings.priorityNames[String(p.rawValue)] != nil
-                || timer.settings.priorityColors[String(p.rawValue)] != nil {
-                Button("Reset to default") {
-                    timer.settings.priorityNames[String(p.rawValue)] = nil
-                    timer.settings.priorityColors[String(p.rawValue)] = nil
-                }
-            }
+        .onHover { inside in
+            if inside { hoveredRowKey = key }
+            else if hoveredRowKey == key { hoveredRowKey = nil }
         }
         .popover(isPresented: Binding(
             get: { editingPriority == p },
@@ -332,6 +438,17 @@ struct MainWindowView: View {
                     }
                     .buttonStyle(.pressableSubtle)
                 }
+            }
+            HStack {
+                if timer.settings.priorityNames[String(p.rawValue)] != nil
+                    || timer.settings.priorityColors[String(p.rawValue)] != nil {
+                    Button("Reset to default") {
+                        timer.settings.priorityNames[String(p.rawValue)] = nil
+                        timer.settings.priorityColors[String(p.rawValue)] = nil
+                    }
+                    .font(.system(.caption, design: .rounded))
+                }
+                Spacer()
             }
             Text("Empty name = default. Applies everywhere flags show.")
                 .font(.system(.caption2, design: .rounded))

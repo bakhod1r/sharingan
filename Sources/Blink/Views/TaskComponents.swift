@@ -9,11 +9,15 @@ import BlinkCore
 struct TaskTag: View {
     let tag: String
     var onRemove: (() -> Void)? = nil
+    /// Custom label color (from the sidebar tag editor); nil keeps the chip
+    /// neutral as designed.
+    var tint: Color? = nil
 
     var body: some View {
         HStack(spacing: 4) {
             Text("#\(tag)")
                 .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .foregroundStyle(tint ?? (onRemove == nil ? Color.dsSecondary : Color.dsPrimary))
                 .lineLimit(1)
             if let onRemove {
                 Button(action: onRemove) {
