@@ -29,10 +29,23 @@ struct MenuBarView: View {
 
     private enum Tab: Hashable { case timer, tasks, week }
 
-    /// Fixed height for the switchable tab area so the popover is ONE size across
-    /// Timer / Tasks. Sized to fit the timer tab's controls (the stats strip is
+    /// Fixed height for the switchable tab area so the popover keeps one height
+    /// across tabs. Sized to fit the timer tab's controls (the stats strip is
     /// pinned separately below); a very long task list scrolls within.
     private let tabContentHeight: CGFloat = 512
+
+    /// Outer popover padding — also part of the Week-tab width math below, so
+    /// tweaking one can't silently clip the board.
+    private static let outerPadding: CGFloat = 18
+
+    /// Week-tab popover width: the full 8-column board plus padding, capped to
+    /// the current screen so narrow displays keep every column reachable via
+    /// the board's own horizontal scroll.
+    private static var weekPopoverWidth: CGFloat {
+        let ideal = MenuBarWeekView.boardWidth + outerPadding * 2
+        let screen = (NSScreen.main?.visibleFrame.width ?? 1440) - 40
+        return min(ideal, screen)
+    }
 
     var body: some View {
         VStack(spacing: 14) {
@@ -66,11 +79,12 @@ struct MenuBarView: View {
             footer
         }
         .onAppear { heartbeat = true }
-        .padding(18)
+        .padding(Self.outerPadding)
         // The Week tab widens the popover to fit the full board (backlog +
         // 7 day columns); NSHostingController tracks preferredContentSize, so
-        // the popover follows this frame automatically.
-        .frame(width: tab == .week ? MenuBarWeekView.boardWidth + 36 : 360)
+        // the popover follows this frame automatically. Capped to the screen —
+        // when it can't fit, the board's horizontal scroll takes over.
+        .frame(width: tab == .week ? Self.weekPopoverWidth : 360)
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: tab)
         // One app accent: controls follow the chosen theme, not system blue.
         .tint(timer.settings.theme.accent)
@@ -593,6 +607,12 @@ struct MenuBarView: View {
                 Label("Priority", systemImage: "flag.fill")
             }
             Menu {
+                // Subtask estimates outrank the task's own in every badge/ring
+                // (displayEstimate) — say so here instead of looking broken.
+                if let sum = task.subtaskEstimateTotal {
+                    Text("Using subtask total: \(sum) 🍅").disabled(true)
+                    Divider()
+                }
                 Button("No estimate") { tasks.setEstimate(task.id, nil) }
                 Divider()
                 ForEach(1...8, id: \.self) { n in

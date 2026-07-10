@@ -1132,6 +1132,12 @@ struct TasksView: View {
             } label: { Label("Category", systemImage: "folder.fill") }
             Divider()
             Menu {
+                // Subtask estimates outrank the task's own in every badge/ring
+                // (displayEstimate) — say so here instead of looking broken.
+                if let sum = task.subtaskEstimateTotal {
+                    Text("Using subtask total: \(sum) 🍅").disabled(true)
+                    Divider()
+                }
                 Button("No estimate") { store.setEstimate(task.id, nil) }
                 Divider()
                 ForEach(1...8, id: \.self) { n in

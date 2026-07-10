@@ -71,7 +71,7 @@ struct WeeklyBoardView: View {
             }
         }
         .sheet(item: $editorTask) { task in
-            TaskEditorView(task: task, accent: accent)
+            TaskEditorView(task: task, accent: accent, settings: timer.settings)
         }
     }
 

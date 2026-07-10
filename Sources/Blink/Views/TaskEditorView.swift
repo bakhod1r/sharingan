@@ -18,11 +18,12 @@ struct TaskEditorView: View {
 
     var accent: Color = .paletteFocusStart
     /// Snapshot of app settings for defaults & badge visibility (value copy is
-    /// fine for a modal sheet).
-    var settings: PomodoroSettings = .init()
+    /// fine for a modal sheet). No default value on purpose: a call site that
+    /// forgets it would silently run the editor on factory settings.
+    let settings: PomodoroSettings
 
     init(task: TaskItem, accent: Color = .paletteFocusStart,
-         settings: PomodoroSettings = .init()) {
+         settings: PomodoroSettings) {
         _draft = State(initialValue: task)
         self.accent = accent
         self.settings = settings
