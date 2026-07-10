@@ -19,6 +19,12 @@ final class MenuBarController: NSObject {
         self.coordinator = coordinator
 
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        // Persist the item's menu-bar slot. On notched MacBooks a crowded menu
+        // bar pushes the newest (leftmost) status item under the camera housing
+        // where it renders invisible; with an autosave name the position can be
+        // seeded/moved (defaults key "NSStatusItem Preferred Position
+        // blink.menubar") and any manual ⌘-drag by the user sticks.
+        item.autosaveName = "blink.menubar"
         statusItem = item
         updateTitle()
 
