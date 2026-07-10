@@ -33,6 +33,7 @@ struct BreakView: View {
                                 gaze: validator.currentStep?.targetGaze ?? .center,
                                 eyeSize: eyeH,
                                 style: timer.settings.sharinganStyle,
+                                rightStyle: timer.settings.sharinganStyleRight,
                                 holdSeconds: validator.currentStep?.holdSeconds ?? 0)
 
                     Spacer()

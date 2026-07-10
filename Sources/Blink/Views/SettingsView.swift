@@ -537,13 +537,15 @@ struct SettingsView: View {
                     HStack {
                         Spacer()
                         MoveEyePair(direction: "center", gaze: .center,
-                                    eyeSize: 54, style: settings.sharinganStyle)
+                                    eyeSize: 54, style: settings.sharinganStyle,
+                                    rightStyle: settings.sharinganStyleRight)
                         Spacer()
                     }
                     .padding(.vertical, 6)
 
                     HStack {
-                        Text("Sharingan eye")
+                        Text(settings.sharinganStyleRight == nil ? "Sharingan eye"
+                                                                 : "Left eye")
                             .font(.system(.body, design: .rounded))
                         Spacer()
                         MoveIrisView(diameter: 26, style: settings.sharinganStyle)
@@ -555,6 +557,33 @@ struct SettingsView: View {
                         .labelsHidden()
                         .pickerStyle(.menu)
                         .fixedSize()
+                    }
+
+                    ToggleRow(title: "Different style per eye",
+                              isOn: Binding(
+                                get: { settings.sharinganStyleRight != nil },
+                                set: { on in
+                                    settings.sharinganStyleRight =
+                                        on ? settings.sharinganStyle : nil
+                                }))
+
+                    if let right = settings.sharinganStyleRight {
+                        HStack {
+                            Text("Right eye")
+                                .font(.system(.body, design: .rounded))
+                            Spacer()
+                            MoveIrisView(diameter: 26, style: right)
+                            Picker("", selection: Binding(
+                                get: { settings.sharinganStyleRight ?? settings.sharinganStyle },
+                                set: { settings.sharinganStyleRight = $0 })) {
+                                ForEach(SharinganStyle.allCases) { s in
+                                    Text(s.label).tag(s)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+                            .fixedSize()
+                        }
                     }
                     Text("Used everywhere the eyes appear: break screen and desktop wallpaper.")
                         .font(.system(.caption, design: .rounded))
@@ -653,6 +682,7 @@ struct SettingsView: View {
                 .onChange(of: settings.wallpaperIdleDelay) { _ in refreshWallpaper() }
                 .onChange(of: settings.wallpaperDozeSeconds) { _ in refreshWallpaper() }
                 .onChange(of: settings.sharinganStyle) { _ in refreshWallpaper() }
+                .onChange(of: settings.sharinganStyleRight) { _ in refreshWallpaper() }
 
         case .general:
                 Section("Auto-start") {

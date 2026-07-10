@@ -36,6 +36,8 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var timeFormat: TimeDisplayFormat = .minutesSeconds
     public var showExitBreakButton: Bool = false
     public var sharinganStyle: SharinganStyle = .classic
+    /// O'ng ko'z uchun alohida uslub; nil = ikkala ko'z bir xil (sharinganStyle).
+    public var sharinganStyleRight: SharinganStyle? = nil
     /// Break ekrani orqa foni (videodagi kulrang "graphite" default).
     public var breakBackgroundStyle: BreakBackgroundStyle = .graphite
     /// MoveEyes ko'zlarini ish stoli orqa foni (jonli wallpaper) sifatida ko'rsatish.
@@ -127,6 +129,7 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
         timeFormat = try c.decodeIfPresent(TimeDisplayFormat.self, forKey: .timeFormat) ?? d.timeFormat
         showExitBreakButton = try c.decodeIfPresent(Bool.self, forKey: .showExitBreakButton) ?? d.showExitBreakButton
         sharinganStyle = try c.decodeIfPresent(SharinganStyle.self, forKey: .sharinganStyle) ?? d.sharinganStyle
+        sharinganStyleRight = try c.decodeIfPresent(SharinganStyle.self, forKey: .sharinganStyleRight) ?? d.sharinganStyleRight
         breakBackgroundStyle = try c.decodeIfPresent(BreakBackgroundStyle.self, forKey: .breakBackgroundStyle) ?? d.breakBackgroundStyle
         eyesWallpaperEnabled = try c.decodeIfPresent(Bool.self, forKey: .eyesWallpaperEnabled) ?? d.eyesWallpaperEnabled
         wallpaperSpinTrigger = try c.decodeIfPresent(WallpaperSpinTrigger.self, forKey: .wallpaperSpinTrigger) ?? d.wallpaperSpinTrigger

@@ -58,6 +58,8 @@ final class WallpaperTrackerNSView: NSView {
 /// Everything the wallpaper scene needs from user settings.
 struct WallpaperConfig: Equatable {
     var style: SharinganStyle = .classic
+    /// O'ng ko'z uchun alohida uslub; nil = ikkala ko'z bir xil.
+    var rightStyle: SharinganStyle? = nil
     var spinTrigger: WallpaperSpinTrigger = .idle
     var spinDuration: Double = 1.6
     var idleDelay: Double = 1.2
@@ -65,11 +67,13 @@ struct WallpaperConfig: Equatable {
     var dozeSeconds: Double = 60
 
     init(style: SharinganStyle = .classic,
+         rightStyle: SharinganStyle? = nil,
          spinTrigger: WallpaperSpinTrigger = .idle,
          spinDuration: Double = 1.6,
          idleDelay: Double = 1.2,
          dozeSeconds: Double = 60) {
         self.style = style
+        self.rightStyle = rightStyle
         self.spinTrigger = spinTrigger
         self.spinDuration = spinDuration
         self.idleDelay = idleDelay
@@ -78,6 +82,7 @@ struct WallpaperConfig: Equatable {
 
     init(from settings: PomodoroSettings) {
         style = settings.sharinganStyle
+        rightStyle = settings.sharinganStyleRight
         spinTrigger = settings.wallpaperSpinTrigger
         spinDuration = settings.wallpaperSpinDuration
         idleDelay = settings.wallpaperIdleDelay
@@ -132,7 +137,8 @@ struct WallpaperEyesView: View {
                             style: config.style, openness: leftLid)
                     .position(leftC)
                 MoveEyeView(gaze: gaze(from: rightC), spin: spinAngle, size: eyeH,
-                            mirrored: true, style: config.style, openness: rightLid)
+                            mirrored: true, style: config.rightStyle ?? config.style,
+                            openness: rightLid)
                     .position(rightC)
 
                 if trackingEnabled {

@@ -13,6 +13,12 @@ public enum SharinganStyle: String, CaseIterable, Codable, Sendable, Identifiabl
     case orbit
     case crescent
     case fourBlade
+    case madara
+    case shuriken
+    case swirl
+    case triangleTomoe
+    case ringCrescents
+    case rinnegan
 
     public var id: String { rawValue }
 
@@ -28,6 +34,12 @@ public enum SharinganStyle: String, CaseIterable, Codable, Sendable, Identifiabl
         case .orbit:           return "Orbit rings"
         case .crescent:        return "Triple crescent"
         case .fourBlade:       return "Four-blade"
+        case .madara:          return "Madara — fan blades"
+        case .shuriken:        return "Shuriken"
+        case .swirl:           return "Single swirl"
+        case .triangleTomoe:   return "Triangle tomoe"
+        case .ringCrescents:   return "Ring + crescents"
+        case .rinnegan:        return "Rinnegan"
         }
     }
 }

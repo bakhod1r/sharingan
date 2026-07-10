@@ -156,6 +156,8 @@ struct MovePinwheelShape: Shape {
 struct MoveSpiralShape: Shape {
     var arms = 3
     var turns: Double = 0.9
+    /// Arm thickness at the center, as a fraction of radius (tapers to 0).
+    var width: CGFloat = 0.10
 
     func path(in rect: CGRect) -> Path {
         let c = CGPoint(x: rect.midX, y: rect.midY)
@@ -170,7 +172,7 @@ struct MoveSpiralShape: Shape {
                 let t = Double(i) / Double(steps)
                 let a = phase + t * turns * 2 * .pi
                 let radius = R * (0.16 + 0.84 * t)
-                let w = R * 0.10 * (1 - t)
+                let w = R * width * (1 - t)
                 outer.append(CGPoint(x: c.x + (radius + w) * cos(a), y: c.y + (radius + w) * sin(a)))
                 inner.append(CGPoint(x: c.x + max(radius - w, 0) * cos(a), y: c.y + max(radius - w, 0) * sin(a)))
             }
@@ -233,6 +235,56 @@ struct MoveArcBandShape: Shape {
     }
 }
 
+/// N straight-edged shuriken wings: sharp tip at the rim, wide root near the
+/// pupil. `lean` skews the tip sideways for a thrown-blade look.
+struct MoveShurikenShape: Shape {
+    var blades = 3
+    var lean: Double = 0.30
+    /// Half-width of the root, in radians at the root circle.
+    var rootHalfWidth: Double = 0.42
+    /// Root circle radius as a fraction of the outer radius.
+    var rootRadius: CGFloat = 0.24
+
+    func path(in rect: CGRect) -> Path {
+        let c = CGPoint(x: rect.midX, y: rect.midY)
+        let R = min(rect.width, rect.height) / 2
+        let r0 = R * rootRadius
+        var p = Path()
+        for i in 0..<blades {
+            let base = Double(i) * 2 * .pi / Double(blades) - .pi / 2
+            let p1 = CGPoint(x: c.x + r0 * cos(base - rootHalfWidth),
+                             y: c.y + r0 * sin(base - rootHalfWidth))
+            let tip = CGPoint(x: c.x + R * cos(base + lean),
+                              y: c.y + R * sin(base + lean))
+            let p2 = CGPoint(x: c.x + r0 * cos(base + rootHalfWidth),
+                             y: c.y + r0 * sin(base + rootHalfWidth))
+            p.move(to: p1)
+            p.addLine(to: tip)
+            p.addLine(to: p2)
+            p.closeSubpath()
+        }
+        return p
+    }
+}
+
+/// A regular polygon, first vertex pointing up. Stroked for ring outlines.
+struct MovePolygonShape: Shape {
+    var sides = 3
+
+    func path(in rect: CGRect) -> Path {
+        let c = CGPoint(x: rect.midX, y: rect.midY)
+        let R = min(rect.width, rect.height) / 2
+        var p = Path()
+        for i in 0..<sides {
+            let a = Double(i) * 2 * .pi / Double(sides) - .pi / 2
+            let pt = CGPoint(x: c.x + R * cos(a), y: c.y + R * sin(a))
+            i == 0 ? p.move(to: pt) : p.addLine(to: pt)
+        }
+        p.closeSubpath()
+        return p
+    }
+}
+
 /// A rounded rosette: N petals as overlapping circles around the pupil.
 struct MoveRosetteShape: Shape {
     var petals = 3
@@ -268,20 +320,14 @@ struct MoveIrisView: View {
             Circle()
                 .fill(
                     RadialGradient(
-                        stops: [
-                            .init(color: Color(red: 0.58, green: 0.02, blue: 0.03), location: 0.0),
-                            .init(color: Color(red: 0.65, green: 0.05, blue: 0.05), location: 0.45),
-                            .init(color: Color(red: 0.71, green: 0.08, blue: 0.07), location: 0.65),
-                            .init(color: Color(red: 0.52, green: 0.02, blue: 0.02), location: 0.88),
-                            .init(color: Color(red: 0.34, green: 0.00, blue: 0.01), location: 1.0),
-                        ],
+                        stops: baseStops,
                         center: .center,
                         startRadius: 0,
                         endRadius: r
                     )
                 )
             Circle()
-                .stroke(Color(red: 0.08, green: 0.0, blue: 0.0).opacity(0.9), lineWidth: 0.05 * r)
+                .stroke(rimColor.opacity(0.9), lineWidth: 0.05 * r)
                 .padding(0.02 * r)
 
             pattern(r: r)
@@ -292,6 +338,32 @@ struct MoveIrisView: View {
                 .frame(width: 0.26 * r, height: 0.26 * r)
         }
         .frame(width: diameter, height: diameter)
+    }
+
+    /// Iris base: Sharingan red for every style except the purple Rinnegan.
+    private var baseStops: [Gradient.Stop] {
+        if style == .rinnegan {
+            return [
+                .init(color: Color(red: 0.80, green: 0.72, blue: 0.93), location: 0.0),
+                .init(color: Color(red: 0.66, green: 0.53, blue: 0.85), location: 0.45),
+                .init(color: Color(red: 0.58, green: 0.44, blue: 0.80), location: 0.65),
+                .init(color: Color(red: 0.44, green: 0.30, blue: 0.66), location: 0.88),
+                .init(color: Color(red: 0.30, green: 0.17, blue: 0.50), location: 1.0),
+            ]
+        }
+        return [
+            .init(color: Color(red: 0.58, green: 0.02, blue: 0.03), location: 0.0),
+            .init(color: Color(red: 0.65, green: 0.05, blue: 0.05), location: 0.45),
+            .init(color: Color(red: 0.71, green: 0.08, blue: 0.07), location: 0.65),
+            .init(color: Color(red: 0.52, green: 0.02, blue: 0.02), location: 0.88),
+            .init(color: Color(red: 0.34, green: 0.00, blue: 0.01), location: 1.0),
+        ]
+    }
+
+    private var rimColor: Color {
+        style == .rinnegan
+            ? Color(red: 0.12, green: 0.04, blue: 0.22)
+            : Color(red: 0.08, green: 0.0, blue: 0.0)
     }
 
     /// The spinning black pattern for each style.
@@ -374,7 +446,96 @@ struct MoveIrisView: View {
             MovePinwheelShape(blades: 4, lean: 0.55, rootWidth: 0.20)
                 .fill(Color.black)
                 .frame(width: 1.72 * r, height: 1.72 * r)
+        case .madara:
+            // Wide, hooked fan blades that nearly close into a ring.
+            MovePinwheelShape(blades: 3, lean: 0.95, rootWidth: 0.50)
+                .fill(Color.black)
+                .frame(width: 1.9 * r, height: 1.9 * r)
+        case .shuriken:
+            ZStack {
+                Circle()
+                    .stroke(Color.black, lineWidth: 0.07 * r)
+                    .frame(width: ringR * 2, height: ringR * 2)
+                MoveShurikenShape(blades: 3, lean: 0.30, rootHalfWidth: 0.42)
+                    .fill(Color.black)
+                    .frame(width: 1.8 * r, height: 1.8 * r)
+            }
+        case .swirl:
+            MoveSpiralShape(arms: 1, turns: 2.1, width: 0.22)
+                .fill(Color.black)
+                .frame(width: 1.76 * r, height: 1.76 * r)
+        case .triangleTomoe:
+            ZStack {
+                MovePolygonShape(sides: 3)
+                    .stroke(Color.black, lineWidth: 0.06 * r)
+                    .frame(width: 1.16 * r, height: 1.16 * r)
+                ForEach(0..<3, id: \.self) { i in
+                    let head = Angle(degrees: -90 + Double(i) * 120)
+                    MoveTomoeTail(
+                        ringRadius: 0.58 * r,
+                        headAngle: head,
+                        sweep: .degrees(-50),
+                        startWidth: 0.16 * r
+                    )
+                    .fill(Color.black)
+                    Circle()
+                        .fill(Color.black)
+                        .frame(width: 0.26 * r, height: 0.26 * r)
+                        .offset(x: 0.58 * r * cos(head.radians),
+                                y: 0.58 * r * sin(head.radians))
+                }
+            }
+        case .ringCrescents:
+            ZStack {
+                Circle()
+                    .stroke(Color.black, lineWidth: 0.05 * r)
+                    .frame(width: 1.56 * r, height: 1.56 * r)
+                ForEach(0..<3, id: \.self) { i in
+                    MoveArcBandShape(
+                        ringRadius: 0.44 * r,
+                        centerAngle: .degrees(-90 + Double(i) * 120),
+                        sweep: .degrees(110),
+                        maxWidth: 0.24 * r
+                    )
+                    .fill(Color.black)
+                }
+            }
+        case .rinnegan:
+            // Concentric rings with two staggered tomoe orbits (Rinne look).
+            ZStack {
+                ForEach(0..<3, id: \.self) { i in
+                    let rr = (0.30 + 0.25 * CGFloat(i)) * r
+                    Circle()
+                        .stroke(Color.black.opacity(0.78), lineWidth: 0.035 * r)
+                        .frame(width: rr * 2, height: rr * 2)
+                }
+                ForEach(0..<3, id: \.self) { i in
+                    let head = Angle(degrees: -90 + Double(i) * 120)
+                    tomoe(ringRadius: 0.55 * r, head: head, r: r)
+                }
+                ForEach(0..<3, id: \.self) { i in
+                    let head = Angle(degrees: -30 + Double(i) * 120)
+                    tomoe(ringRadius: 0.80 * r, head: head, r: r)
+                }
+            }
         }
+    }
+
+    /// One comma tomoe riding a ring: filled head + tapering tail.
+    @ViewBuilder
+    private func tomoe(ringRadius: CGFloat, head: Angle, r: CGFloat) -> some View {
+        MoveTomoeTail(
+            ringRadius: ringRadius,
+            headAngle: head,
+            sweep: .degrees(-45),
+            startWidth: 0.11 * r
+        )
+        .fill(Color.black)
+        Circle()
+            .fill(Color.black)
+            .frame(width: 0.18 * r, height: 0.18 * r)
+            .offset(x: ringRadius * cos(head.radians),
+                    y: ringRadius * sin(head.radians))
     }
 }
 
@@ -532,6 +693,8 @@ struct MoveEyePair: View {
     var gaze: GazeDirection
     var eyeSize: CGFloat = 92
     var style: SharinganStyle = .classic
+    /// Separate style for the right (mirrored) eye; nil = same as `style`.
+    var rightStyle: SharinganStyle? = nil
     /// Duration of the current step; lets path animations (circle, figure-8)
     /// finish cleanly — the iris eases back to center as the step ends
     /// instead of cutting off mid-sweep. 0 = unknown (ease-in only).
@@ -565,7 +728,7 @@ struct MoveEyePair: View {
                 MoveEyeView(gaze: live, spin: s, size: eyeSize, style: style,
                             openness: lid)
                 MoveEyeView(gaze: live, spin: s, size: eyeSize, mirrored: true,
-                            style: style, openness: lid)
+                            style: rightStyle ?? style, openness: lid)
             }
             .animation(isPath ? nil : .easeInOut(duration: 0.5), value: gaze)
         }
