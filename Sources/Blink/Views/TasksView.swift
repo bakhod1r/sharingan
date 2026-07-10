@@ -851,6 +851,7 @@ struct TasksView: View {
         }
         .buttonStyle(.pressableSubtle)
         .help(help)
+        .accessibilityLabel(help)
     }
 
     private func row(_ task: TaskItem) -> some View {
@@ -870,6 +871,7 @@ struct TasksView: View {
             }
             .buttonStyle(.pressableSubtle)
             .help(task.priority == .none ? "" : task.priority.menuLabel)
+            .accessibilityLabel(task.isDone ? "Mark \(task.title) not done" : "Mark \(task.title) done")
 
             VStack(alignment: .leading, spacing: 3) {
                 if editingTaskID == task.id {
@@ -925,6 +927,7 @@ struct TasksView: View {
                 }
                 .buttonStyle(.pressableSubtle)
                 .help("Subtasks & notes")
+                .accessibilityLabel("Show subtasks and notes")
             }
 
             // Secondary actions live together in one quiet pill that only
@@ -956,6 +959,7 @@ struct TasksView: View {
             }
             .buttonStyle(.pressableSubtle)
             .help("Run a focus pomodoro on this task")
+            .accessibilityLabel(isActive && timer.isRunning ? "Pause focus" : "Start focus on \(task.title)")
         }
         .animation(.easeInOut(duration: 0.15), value: hovered)
         .padding(.leading, 14).padding(.trailing, 12).padding(.vertical, 10)
