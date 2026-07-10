@@ -57,6 +57,13 @@ final class MenuBarController: NSObject {
         }
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        // Best-effort: never leave the user's Focus stuck on after quit.
+        if let timer {
+            DNDShortcutService.shared.deactivate(settings: timer.settings)
+        }
+    }
+
     private func updateTitle() {
         guard let timer, let button = statusItem?.button else { return }
         // Todoist-style minimal menu bar: just the stopwatch icon at rest, and

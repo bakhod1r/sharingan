@@ -31,7 +31,7 @@
 **Interfaces:**
 - Produces: `PomodoroSettings.showMenuBarCountdown: Bool` (default `true`) — read by `AppDelegate.updateTitle()`.
 
-- [ ] **Step 1: Write the failing test** (append to `PomodoroModelsTests.swift`)
+- [x] **Step 1: Write the failing test** (append to `PomodoroModelsTests.swift`)
 
 ```swift
 @Suite("Menu bar countdown setting")
@@ -57,12 +57,12 @@ struct MenuBarCountdownSettingTests {
 }
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `swift test --filter MenuBarCountdownSettingTests`
 Expected: compile error — `showMenuBarCountdown` not defined.
 
-- [ ] **Step 3: Add the setting**
+- [x] **Step 3: Add the setting**
 
 In `PomodoroSettings.swift`, after the `tagStyles` property:
 
@@ -78,12 +78,12 @@ At the end of `init(from:)`, after the `tagStyles` line:
         showMenuBarCountdown = try c.decodeIfPresent(Bool.self, forKey: .showMenuBarCountdown) ?? d.showMenuBarCountdown
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `swift test --filter MenuBarCountdownSettingTests`
 Expected: 3 PASS.
 
-- [ ] **Step 5: Honor it in the menu bar**
+- [x] **Step 5: Honor it in the menu bar**
 
 In `AppDelegate.updateTitle()` replace the `engaged` line pair:
 
@@ -94,7 +94,7 @@ In `AppDelegate.updateTitle()` replace the `engaged` line pair:
         button.title = show ? String(format: " %02d:%02d", Int(s) / 60, Int(s) % 60) : ""
 ```
 
-- [ ] **Step 6: Settings toggle**
+- [x] **Step 6: Settings toggle**
 
 In `SettingsView.categorySections`, case `.timer`, directly after the closing brace of `Section("Floating timer") { … }`:
 
@@ -105,12 +105,12 @@ In `SettingsView.categorySections`, case `.timer`, directly after the closing br
                 }
 ```
 
-- [ ] **Step 7: Build + full tests**
+- [x] **Step 7: Build + full tests**
 
 Run: `swift build && swift test`
 Expected: Build complete, all tests pass.
 
-- [ ] **Step 8: Commit + push**
+- [x] **Step 8: Commit + push**
 
 ```bash
 git add Sources/BlinkCore/Models/PomodoroSettings.swift Sources/Blink/AppDelegate.swift Sources/Blink/Views/SettingsView.swift Tests/BlinkTests/PomodoroModelsTests.swift
@@ -131,7 +131,7 @@ git push
 - Consumes: `stats.registerFocusCompletion()`, `stats.completedTodayCount()`, `settings.dailyPomodoroGoal`.
 - Produces: `PomodoroTimer.goalJustReached(count:goal:) -> Bool` (static, pure); `Notification.Name.dailyGoalReached` posted with `userInfo: ["count": Int]`.
 
-- [ ] **Step 1: Write the failing test** (append to `ServicesTests.swift`)
+- [x] **Step 1: Write the failing test** (append to `ServicesTests.swift`)
 
 ```swift
 @Suite("Daily goal trigger")
@@ -150,12 +150,12 @@ struct DailyGoalTriggerTests {
 }
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `swift test --filter DailyGoalTriggerTests`
 Expected: compile error — `goalJustReached` not defined.
 
-- [ ] **Step 3: Implement trigger + post**
+- [x] **Step 3: Implement trigger + post**
 
 In `PomodoroTimer`, add near `phaseComplete()`:
 
@@ -184,12 +184,12 @@ In the `Notification.Name` extension at the bottom of the file:
     static let dailyGoalReached = Notification.Name("blink.dailyGoalReached")
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `swift test --filter DailyGoalTriggerTests`
 Expected: 3 PASS.
 
-- [ ] **Step 5: Surface it as a macOS notification**
+- [x] **Step 5: Surface it as a macOS notification**
 
 In `BlinkCoordinator.observe()`, after the `.streakUpdated` subscription block:
 
@@ -206,12 +206,12 @@ In `BlinkCoordinator.observe()`, after the `.streakUpdated` subscription block:
             .store(in: &cancellables)
 ```
 
-- [ ] **Step 6: Build + full tests**
+- [x] **Step 6: Build + full tests**
 
 Run: `swift build && swift test`
 Expected: all pass.
 
-- [ ] **Step 7: Commit + push**
+- [x] **Step 7: Commit + push**
 
 ```bash
 git add Sources/BlinkCore/Services/PomodoroTimer.swift Sources/BlinkCore/Services/BlinkCoordinator.swift Tests/BlinkTests/ServicesTests.swift
@@ -232,7 +232,7 @@ git push
 
 No unit test — pure SwiftUI presentation; verified by build + manual look.
 
-- [ ] **Step 1: Thread the goal into the view**
+- [x] **Step 1: Thread the goal into the view**
 
 In `StatsSummaryView`, add below `var accent`:
 
@@ -261,7 +261,7 @@ with:
                        ? "goal reached 🎯" : nil),
 ```
 
-- [ ] **Step 2: Pass it at the call site**
+- [x] **Step 2: Pass it at the call site**
 
 In `MainWindowView` (case `.stats`), extend the existing call:
 
@@ -274,12 +274,12 @@ In `MainWindowView` (case `.stats`), extend the existing call:
 
 (Keep whatever argument list already exists — only add `dailyGoal:` last.)
 
-- [ ] **Step 3: Build**
+- [x] **Step 3: Build**
 
 Run: `swift build`
 Expected: Build complete.
 
-- [ ] **Step 4: Commit + push**
+- [x] **Step 4: Commit + push**
 
 ```bash
 git add Sources/Blink/Views/StatsSummaryView.swift Sources/Blink/Views/MainWindowView.swift
@@ -300,7 +300,7 @@ git push
 - Produces: `PomodoroSettings.dndEnabled: Bool` (default `false`), `dndShortcutOn: String` (default `"Blink Focus On"`), `dndShortcutOff: String` (default `"Blink Focus Off"`).
 - Produces: `DNDShortcutService` with `static let shared`, `init(runner:)`, `sync(focusActive:settings:)`, `deactivate(settings:)`, `run(_ name: String)`, `@Published private(set) var lastResult: [String: RunResult]`, `enum RunResult: Equatable { case success; case failure(String) }`, `typealias Runner = (String, [String], @escaping (Int32, String) -> Void) -> Void`.
 
-- [ ] **Step 1: Write the failing tests** (append to `ServicesTests.swift`)
+- [x] **Step 1: Write the failing tests** (append to `ServicesTests.swift`)
 
 ```swift
 @Suite("DND shortcut service")
@@ -389,12 +389,12 @@ struct DNDShortcutServiceTests {
 }
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `swift test --filter DNDShortcutServiceTests`
 Expected: compile error — `DNDShortcutService` / `dndEnabled` not defined.
 
-- [ ] **Step 3: Add the settings fields**
+- [x] **Step 3: Add the settings fields**
 
 In `PomodoroSettings.swift`, after `showMenuBarCountdown` (Task 1):
 
@@ -414,7 +414,7 @@ In `init(from:)`, after the `showMenuBarCountdown` line:
         dndShortcutOff = try c.decodeIfPresent(String.self, forKey: .dndShortcutOff) ?? d.dndShortcutOff
 ```
 
-- [ ] **Step 4: Create the service**
+- [x] **Step 4: Create the service**
 
 `Sources/BlinkCore/Services/DNDShortcutService.swift`:
 
@@ -506,12 +506,12 @@ public final class DNDShortcutService: ObservableObject {
 }
 ```
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 Run: `swift test --filter DNDShortcutServiceTests`
 Expected: 7 PASS.
 
-- [ ] **Step 6: Build + full tests, commit + push**
+- [x] **Step 6: Build + full tests, commit + push**
 
 ```bash
 swift build && swift test
@@ -532,7 +532,7 @@ git push
 
 No unit test — SwiftUI form; verified by build + manual look.
 
-- [ ] **Step 1: Add the section**
+- [x] **Step 1: Add the section**
 
 Insert between `Section("App blocking")` and `Section("Reminders …")` in case `.focus`:
 
@@ -560,7 +560,7 @@ Insert between `Section("App blocking")` and `Section("Reminders …")` in case 
                 }
 ```
 
-- [ ] **Step 2: Add the row helper**
+- [x] **Step 2: Add the row helper**
 
 Add as a private method on `SettingsView` (next to the other private helpers, e.g. below `categorySections`):
 
@@ -600,12 +600,12 @@ And add the observed service near `@Binding var settings` at the top of `Setting
     @ObservedObject private var dndService = DNDShortcutService.shared
 ```
 
-- [ ] **Step 3: Build**
+- [x] **Step 3: Build**
 
 Run: `swift build`
 Expected: Build complete. (If `switch` in a ViewBuilder complains on the optional, bind it first: `let result = dndService.lastResult[…]` then `if case`.)
 
-- [ ] **Step 4: Commit + push**
+- [x] **Step 4: Commit + push**
 
 ```bash
 git add Sources/Blink/Views/SettingsView.swift
@@ -625,7 +625,7 @@ git push
 - Consumes: `DNDShortcutService.shared.sync(focusActive:settings:)`, `.deactivate(settings:)`; `timer.$isRunning`, `timer.phase`, `.phaseDidComplete`.
 - Produces: `BlinkCoordinator.syncDND()` (public, also called on settings changes).
 
-- [ ] **Step 1: Add syncDND to the coordinator**
+- [x] **Step 1: Add syncDND to the coordinator**
 
 ```swift
     /// DND follows "a focus session is actually running" — pausing or
@@ -642,7 +642,7 @@ Call it from the existing subscriptions in `observe()`:
 - inside the `timer.$settings` sink, after `self?.syncAll()`: `self?.syncDND()`
 - at the top of `handlePhaseComplete(_:)`, first line after the `guard`: `syncDND()`
 
-- [ ] **Step 2: Best-effort teardown on quit**
+- [x] **Step 2: Best-effort teardown on quit**
 
 In `AppDelegate` (it already has the `timer` property), add:
 
@@ -656,16 +656,16 @@ In `AppDelegate` (it already has the `timer` property), add:
 
 (If `timer` is non-optional there, drop the `if let`.)
 
-- [ ] **Step 3: Build + full tests**
+- [x] **Step 3: Build + full tests**
 
 Run: `swift build && swift test`
 Expected: all pass.
 
-- [ ] **Step 4: Manual smoke test**
+- [x] **Step 4: Manual smoke test**
 
 Run the app (`swift run Blink` or `make`), enable DND in Settings → Focus, press Test on both shortcuts (⚠︎ expected if the user hasn't created them yet — the indicator must show the warning, not crash). Start/stop a focus session and confirm `shortcuts run` fires (status indicator updates).
 
-- [ ] **Step 5: Commit + push**
+- [x] **Step 5: Commit + push**
 
 ```bash
 git add Sources/BlinkCore/Services/BlinkCoordinator.swift Sources/Blink/AppDelegate.swift

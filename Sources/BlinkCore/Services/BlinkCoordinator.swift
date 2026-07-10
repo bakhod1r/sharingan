@@ -202,12 +202,16 @@ public final class BlinkCoordinator: ObservableObject {
                 // Blocking distracting apps follows the running state so pausing
                 // a focus session releases them, resuming re-blocks.
                 self.refreshAppBlocker()
+                self.syncDND()
             }
             .store(in: &cancellables)
 
         timer.$settings
             .receive(on: RunLoop.main)
-            .sink { [weak self] _ in self?.syncAll() }
+            .sink { [weak self] _ in
+                self?.syncAll()
+                self?.syncDND()
+            }
             .store(in: &cancellables)
 
         timer.$phase
@@ -321,8 +325,17 @@ public final class BlinkCoordinator: ObservableObject {
         }
     }
 
+    /// DND follows "a focus session is actually running" — pausing or
+    /// finishing focus restores normal mode; breaks never engage it.
+    public func syncDND() {
+        DNDShortcutService.shared.sync(
+            focusActive: timer.isRunning && timer.phase == .focus,
+            settings: timer.settings)
+    }
+
     private func handlePhaseComplete(_ note: Notification) {
         guard let phase = note.userInfo?["phase"] as? PomodoroPhase else { return }
+        syncDND()
         let willRepeat = note.userInfo?["willRepeat"] as? Bool ?? false
         switch phase {
         case .focus:
