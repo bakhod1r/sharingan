@@ -96,6 +96,17 @@ public final class PomodoroTimer: ObservableObject {
         transitionToNext()
     }
 
+    /// Starts (or resumes) a focus session — the single entry point for every
+    /// task-row play button. A session paused mid-focus resumes where it left
+    /// off (a plain `phase != .focus` check would wrongly reset it, because
+    /// pausing rewrites `phase` to `.paused`); a break is reset to a fresh
+    /// focus session first.
+    public func startFocusSession() {
+        let effective = phase == .paused ? previousPhase : phase
+        if effective != .focus { stop() }
+        start()
+    }
+
     public func toggle() {
         isRunning ? pause() : start()
     }

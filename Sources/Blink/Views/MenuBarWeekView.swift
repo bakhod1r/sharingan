@@ -356,7 +356,6 @@ struct MenuBarWeekView: View {
             return
         }
         store.setActive(task.id)
-        if timer.phase != .focus { timer.stop() }
-        timer.start()
+        timer.startFocusSession()
     }
 }

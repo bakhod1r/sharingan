@@ -233,8 +233,7 @@ struct TaskPickerSheet: View {
     }
 
     private func startFocus() {
-        if timer.phase != .focus { timer.stop() }
-        timer.start()
+        timer.startFocusSession()
         dismiss()
     }
 }

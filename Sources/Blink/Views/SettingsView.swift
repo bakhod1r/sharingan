@@ -722,15 +722,15 @@ struct SettingsView: View {
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(.white.opacity(0.65))
                 }
-                .onChange(of: settings.eyesWallpaperEnabled) { on in
+                .onChange(of: settings.eyesWallpaperEnabled) { _, on in
                     WallpaperWindowManager.shared.setEnabled(on, config: WallpaperConfig(from: settings))
                 }
-                .onChange(of: settings.wallpaperSpinTrigger) { _ in refreshWallpaper() }
-                .onChange(of: settings.wallpaperSpinDuration) { _ in refreshWallpaper() }
-                .onChange(of: settings.wallpaperIdleDelay) { _ in refreshWallpaper() }
-                .onChange(of: settings.wallpaperDozeSeconds) { _ in refreshWallpaper() }
-                .onChange(of: settings.sharinganStyle) { _ in refreshWallpaper() }
-                .onChange(of: settings.sharinganStyleRight) { _ in refreshWallpaper() }
+                .onChange(of: settings.wallpaperSpinTrigger) { refreshWallpaper() }
+                .onChange(of: settings.wallpaperSpinDuration) { refreshWallpaper() }
+                .onChange(of: settings.wallpaperIdleDelay) { refreshWallpaper() }
+                .onChange(of: settings.wallpaperDozeSeconds) { refreshWallpaper() }
+                .onChange(of: settings.sharinganStyle) { refreshWallpaper() }
+                .onChange(of: settings.sharinganStyleRight) { refreshWallpaper() }
 
         case .general:
                 Section("Auto-start") {
@@ -783,13 +783,23 @@ struct SettingsView: View {
                             .font(.system(.caption, design: .rounded).weight(.medium))
                         ForEach(settings.ttsSettings.globalKalib.indices, id: \.self) { idx in
                             HStack {
+                                // SwiftUI keeps stale index bindings alive briefly
+                                // after a row is removed — an unguarded subscript
+                                // here crashes on deleting the last row.
                                 TextField("Reminder", text: Binding(
-                                    get: { settings.ttsSettings.globalKalib[idx] },
-                                    set: { settings.ttsSettings.globalKalib[idx] = $0 }
+                                    get: {
+                                        let pool = settings.ttsSettings.globalKalib
+                                        return pool.indices.contains(idx) ? pool[idx] : ""
+                                    },
+                                    set: {
+                                        guard settings.ttsSettings.globalKalib.indices.contains(idx) else { return }
+                                        settings.ttsSettings.globalKalib[idx] = $0
+                                    }
                                 ))
                                 .textFieldStyle(DarkGlassFieldStyle())
                                 if settings.ttsSettings.globalKalib.count > 1 {
                                     Button {
+                                        guard settings.ttsSettings.globalKalib.indices.contains(idx) else { return }
                                         settings.ttsSettings.globalKalib.remove(at: idx)
                                     } label: {
                                         Image(systemName: "minus.circle.fill")

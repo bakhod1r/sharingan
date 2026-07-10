@@ -441,8 +441,7 @@ struct WeeklyBoardView: View {
 
     private func startFocus(_ task: TaskItem) {
         store.setActive(task.id)
-        if timer.phase != .focus { timer.stop() }
-        timer.start()
+        timer.startFocusSession()
     }
 
     private func weekdayName(_ d: Date) -> String { fmt("EEE", d) }

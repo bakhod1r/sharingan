@@ -95,14 +95,14 @@ final class TaskDatabase {
 
     func saveTasks(_ tasks: [TaskItem]) {
         transaction {
-            exec("DELETE FROM tasks;")
+            guard exec("DELETE FROM tasks;") else { return false }
             let sql = """
             INSERT INTO tasks (id,title,category,tags,isDone,pomodorosDone,createdAt,dueDate,\
             sortOrder,estimatedPomodoros,plannedDate,notes,subtasks,recurrence,project,priority) \
             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);
             """
             var stmt: OpaquePointer?
-            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
             defer { sqlite3_finalize(stmt) }
             for t in tasks {
                 sqlite3_reset(stmt)
@@ -123,8 +123,9 @@ final class TaskDatabase {
                 bindText(stmt, 14, t.recurrence.rawValue)
                 if let p = t.project { bindText(stmt, 15, p) } else { sqlite3_bind_null(stmt, 15) }
                 sqlite3_bind_int(stmt, 16, Int32(t.priority.rawValue))
-                sqlite3_step(stmt)
+                guard sqlite3_step(stmt) == SQLITE_DONE else { return false }
             }
+            return true
         }
     }
 
@@ -146,29 +147,36 @@ final class TaskDatabase {
 
     func saveCategories(_ cats: [TaskCategory]) {
         transaction {
-            exec("DELETE FROM categories;")
+            guard exec("DELETE FROM categories;") else { return false }
             let sql = "INSERT INTO categories (name,colorHex,icon) VALUES (?,?,?);"
             var stmt: OpaquePointer?
-            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
             defer { sqlite3_finalize(stmt) }
             for c in cats {
                 sqlite3_reset(stmt)
                 bindText(stmt, 1, c.name)
                 bindText(stmt, 2, c.colorHex)
                 bindText(stmt, 3, c.icon)
-                sqlite3_step(stmt)
+                guard sqlite3_step(stmt) == SQLITE_DONE else { return false }
             }
+            return true
         }
     }
 
     // MARK: - Low-level helpers
 
-    private func exec(_ sql: String) { sqlite3_exec(db, sql, nil, nil, nil) }
+    @discardableResult
+    private func exec(_ sql: String) -> Bool { sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK }
 
-    private func transaction(_ body: () -> Void) {
-        exec("BEGIN;")
-        body()
-        exec("COMMIT;")
+    /// Runs `body` inside BEGIN…COMMIT and rolls back if any step reports
+    /// failure — a half-failed replace must never commit the bare DELETE.
+    private func transaction(_ body: () -> Bool) {
+        guard exec("BEGIN;") else { return }
+        if body() {
+            exec("COMMIT;")
+        } else {
+            exec("ROLLBACK;")
+        }
     }
 
     private func bindText(_ stmt: OpaquePointer?, _ i: Int32, _ value: String) {

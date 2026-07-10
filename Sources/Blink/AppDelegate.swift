@@ -57,13 +57,6 @@ final class MenuBarController: NSObject {
         }
     }
 
-    func applicationWillTerminate(_ notification: Notification) {
-        // Best-effort: never leave the user's Focus stuck on after quit.
-        if let timer {
-            DNDShortcutService.shared.deactivate(settings: timer.settings)
-        }
-    }
-
     private func updateTitle() {
         guard let timer, let button = statusItem?.button else { return }
         // Todoist-style minimal menu bar: just the stopwatch icon at rest, and
@@ -189,6 +182,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         MenuBarController.shared.install(timer: timer, coordinator: coord)
 
+        // Without this, notify()/schedule() silently no-op on a fresh install:
+        // UNUserNotificationCenter.add fails while status is .notDetermined.
+        Task { await NotificationService.shared.requestAuthorization() }
+
         // Eyes wallpaper: restore on launch if the user left it enabled.
         if timer.settings.eyesWallpaperEnabled {
             WallpaperWindowManager.shared.setEnabled(true, config: WallpaperConfig(from: timer.settings))
@@ -207,5 +204,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         MainWindowManager.shared.show()
         return false
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        // Best-effort: never leave the user's Focus stuck on after quit.
+        if let timer {
+            DNDShortcutService.shared.deactivate(settings: timer.settings)
+        }
     }
 }

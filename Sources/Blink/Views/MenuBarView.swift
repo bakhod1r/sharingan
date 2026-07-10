@@ -874,8 +874,7 @@ struct MenuBarView: View {
             return
         }
         tasks.setActive(task.id)
-        if timer.phase != .focus { timer.stop() }
-        timer.start()
+        timer.startFocusSession()
     }
 
     // MARK: - Pieces

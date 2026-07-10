@@ -38,6 +38,13 @@ public final class CameraService: NSObject, ObservableObject {
     private var framePipe: AsyncStream<CVImageBuffer>?
     private var configured = false
 
+    /// The caller-intended state. `isRunning` only flips true via an async
+    /// session-queue hop, so a stop() landing inside that window used to no-op
+    /// (`guard isRunning`) and leave the camera — and its indicator light —
+    /// running through the whole focus session. Guarding on intent instead
+    /// closes that race.
+    private var wantsRunning = false
+
     public override init() {
         self.permissionStatus = AVCaptureDevice.authorizationStatus(for: .video)
         super.init()
@@ -64,27 +71,35 @@ public final class CameraService: NSObject, ObservableObject {
 
     public func start() {
         guard permissionStatus == .authorized else { return }
-        guard !isRunning else { return }
+        guard !wantsRunning else { return }
+        wantsRunning = true
         if !configured { configureSessionIfNeeded(); configured = true }
         let session = self.session
         sessionQueue.async {
             session.startRunning()
             DispatchQueue.main.async { [weak self] in
-                self?.isRunning = session.isRunning
+                guard let self else { return }
+                // A stop() issued while startRunning was in flight has already
+                // queued stopRunning behind us — don't flip the flag back on.
+                self.isRunning = self.wantsRunning && session.isRunning
             }
         }
     }
 
     public func stop() {
-        guard isRunning else { return }
+        guard wantsRunning || isRunning else { return }
+        wantsRunning = false
+        // Tear down the frame stream immediately: a deferred finish() used to
+        // land *after* a rapid follow-up start()/frames() and kill the fresh
+        // stream, leaving eye tracking silently dead for that break.
+        sink.finish()
+        framePipe = nil
         let session = self.session
         sessionQueue.async {
             session.stopRunning()
             DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
+                guard let self, !self.wantsRunning else { return }
                 self.isRunning = false
-                self.sink.finish()
-                self.framePipe = nil
             }
         }
     }
