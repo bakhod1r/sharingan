@@ -32,9 +32,9 @@ public enum SharinganStyle: String, CaseIterable, Codable, Sendable, Identifiabl
     }
 }
 
-/// Break-screen backdrop. `base` fills the whole screen; `panel` (when
-/// non-nil) is a slightly lighter rounded card behind the title and eyes,
-/// matching the reference design video. Colors are linear RGB 0…1.
+/// Break-screen backdrop: one flat color across the entire screen — no
+/// panels or seams. Graphite matches the reference video's card gray.
+/// Colors are linear RGB 0…1.
 public enum BreakBackgroundStyle: String, CaseIterable, Codable, Sendable, Identifiable {
     case pureBlack
     case graphite
@@ -50,18 +50,10 @@ public enum BreakBackgroundStyle: String, CaseIterable, Codable, Sendable, Ident
         }
     }
 
-    public var base: (r: Double, g: Double, b: Double) {
+    public var color: (r: Double, g: Double, b: Double) {
         switch self {
         case .pureBlack: return (0, 0, 0)
-        case .graphite:  return (0.035, 0.035, 0.043)   // #09090B — video backdrop
-        case .slate:     return (0.055, 0.063, 0.071)   // #0E1012
-        }
-    }
-
-    public var panel: (r: Double, g: Double, b: Double)? {
-        switch self {
-        case .pureBlack: return nil
-        case .graphite:  return (0.067, 0.075, 0.078)   // #111314 — video card
+        case .graphite:  return (0.067, 0.075, 0.078)   // #111314 — video gray
         case .slate:     return (0.098, 0.106, 0.118)   // #191B1E
         }
     }

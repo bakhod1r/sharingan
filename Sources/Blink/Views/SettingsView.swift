@@ -576,7 +576,7 @@ struct SettingsView: View {
                         .pickerStyle(.menu)
                         .fixedSize()
                     }
-                    Text("Graphite and Slate show the eyes on a soft gray card; Pure black keeps the screen fully dark.")
+                    Text("One flat tone across the whole break screen. Graphite matches the design video; Slate is a touch lighter.")
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(.white.opacity(0.65))
                 }
@@ -864,17 +864,10 @@ struct SettingsView: View {
         .glassRounded(DS.Radius.lg, material: .thin)
     }
 
-    /// Small two-tone preview of a break background: base + card colors.
+    /// Small color preview of a break background.
     private func breakBackgroundSwatch(_ style: BreakBackgroundStyle) -> some View {
         RoundedRectangle(cornerRadius: 6, style: .continuous)
-            .fill(Color(red: style.base.r, green: style.base.g, blue: style.base.b))
-            .overlay {
-                if let p = style.panel {
-                    RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .fill(Color(red: p.r, green: p.g, blue: p.b))
-                        .padding(5)
-                }
-            }
+            .fill(Color(red: style.color.r, green: style.color.g, blue: style.color.b))
             .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .strokeBorder(.white.opacity(0.25), lineWidth: 1))
             .frame(width: 44, height: 28)

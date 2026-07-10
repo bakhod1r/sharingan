@@ -51,18 +51,33 @@ final class BreakWindowManager: BreakPresenter {
             let hosting = NSHostingView(rootView: view)
             hosting.translatesAutoresizingMaskIntoConstraints = false
             panel.contentView = hosting
+            // Fade the whole overlay in so the screen never recolors in one
+            // jarring frame — the break eases over what the user was doing.
+            panel.alphaValue = 0
             panel.orderFrontRegardless()
             panels.append(panel)
+        }
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.6
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            for p in panels { p.animator().alphaValue = 1 }
         }
     }
 
     func dismissAll() {
-        for p in panels {
-            p.contentView = nil
-            p.orderOut(nil)
-        }
+        let fading = panels
         panels.removeAll()
         isBlocking = false
+        NSAnimationContext.runAnimationGroup({ ctx in
+            ctx.duration = 0.35
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            for p in fading { p.animator().alphaValue = 0 }
+        }, completionHandler: {
+            for p in fading {
+                p.contentView = nil
+                p.orderOut(nil)
+            }
+        })
     }
 }
 

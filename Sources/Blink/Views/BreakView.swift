@@ -9,52 +9,31 @@ struct BreakView: View {
     /// Force-show the Exit button regardless of the user setting (used by the
     /// Settings "Preview break screen" so the preview can always be closed).
     var forceExit: Bool = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     var body: some View {
         let remaining = max(0, timer.remainingSeconds)
 
         GeometryReader { geo in
-            // Eyes scale with the screen, centred inside a rounded card that
-            // sits slightly lighter than the backdrop (like the design video).
+            // Eyes scale with the screen, centred on one flat backdrop color —
+            // no cards or seams, the whole screen is a single tone.
             let eyeH = min(geo.size.width * 0.15, geo.size.height * 0.22)
             let bg = timer.settings.breakBackgroundStyle
 
             ZStack {
-                Color(red: bg.base.r, green: bg.base.g, blue: bg.base.b)
+                Color(red: bg.color.r, green: bg.color.g, blue: bg.color.b)
                     .ignoresSafeArea()
 
                 VStack(spacing: 0) {
-                    Spacer(minLength: max(24, geo.size.height * 0.06))
+                    titleRow(remaining: remaining)
+                        .padding(.horizontal, max(40, geo.size.width * 0.05))
+                        .padding(.top, max(34, geo.size.height * 0.05))
 
-                    // Card — title + eyes over a slow breathing halo.
-                    VStack(spacing: 0) {
-                        titleRow(remaining: remaining)
-                            .padding(.horizontal, 38)
-                            .padding(.top, 30)
+                    Spacer()
 
-                        Spacer(minLength: 0)
-
-                        ZStack {
-                            breathingGuide(size: min(geo.size.width, geo.size.height) * 0.5)
-                            MoveEyePair(direction: validator.currentStep?.direction ?? "center",
-                                        gaze: validator.currentStep?.targetGaze ?? .center,
-                                        eyeSize: eyeH,
-                                        style: timer.settings.sharinganStyle,
-                                        holdSeconds: validator.currentStep?.holdSeconds ?? 0)
-                                .padding(.bottom, 26)
-                        }
-
-                        Spacer(minLength: 0)
-                    }
-                    .frame(width: min(geo.size.width * 0.78, 1220),
-                           height: min(geo.size.height * 0.64, 780))
-                    .background {
-                        if let p = bg.panel {
-                            RoundedRectangle(cornerRadius: 44, style: .continuous)
-                                .fill(Color(red: p.r, green: p.g, blue: p.b))
-                        }
-                    }
+                    MoveEyePair(direction: validator.currentStep?.direction ?? "center",
+                                gaze: validator.currentStep?.targetGaze ?? .center,
+                                eyeSize: eyeH,
+                                style: timer.settings.sharinganStyle,
+                                holdSeconds: validator.currentStep?.holdSeconds ?? 0)
 
                     Spacer()
 
@@ -104,26 +83,6 @@ struct BreakView: View {
     }
 
     private var showExit: Bool { timer.settings.showExitBreakButton || forceExit }
-
-    /// A soft ring that expands and contracts on a ~5s cycle — a gentle
-    /// breathe-in / breathe-out pacer behind the eyes.
-    private func breathingGuide(size: CGFloat) -> some View {
-        TimelineView(.animation(paused: reduceMotion)) { ctx in
-            let t = ctx.date.timeIntervalSinceReferenceDate
-            let phase = (sin(t * (2 * .pi / 5.0)) + 1) / 2   // 0…1
-            let scale = 0.82 + phase * 0.5
-            Circle()
-                .stroke(
-                    RadialGradient(colors: [Color.white.opacity(0.14), .clear],
-                                   center: .center, startRadius: 0, endRadius: size * 0.7),
-                    lineWidth: size * 0.14)
-                .frame(width: size, height: size)
-                .scaleEffect(scale)
-                .opacity(0.35 + phase * 0.45)
-                .blur(radius: 6)
-        }
-        .allowsHitTesting(false)
-    }
 
     private func titleRow(remaining: TimeInterval) -> some View {
         HStack(alignment: .center) {
