@@ -73,6 +73,17 @@ struct MenuBarView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .top)
                 }
+                // Overflowing content dissolves at the bottom edge instead of
+                // being sliced mid-row — and the fade hints there's more to
+                // scroll. No-op when the content fits.
+                .mask(
+                    VStack(spacing: 0) {
+                        Rectangle()
+                        LinearGradient(colors: [.black, .clear],
+                                       startPoint: .top, endPoint: .bottom)
+                            .frame(height: 26)
+                    }
+                )
                 if tab == .timer {
                     statusHeader
                     controls
