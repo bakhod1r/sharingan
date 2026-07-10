@@ -41,8 +41,11 @@ struct BreakView: View {
                     Spacer()
 
                     caption
-                        .padding(.bottom, showExit ? 18 : 44)
+                        .padding(.bottom, 18)
 
+                    // A break should never fully trap the user. When the exit
+                    // button is enabled it's a clear glass button; otherwise a
+                    // quiet low-key "Skip break", so there is always an escape.
                     if showExit {
                         GlassButton(label: "Exit break",
                                     systemImage: "xmark.circle.fill",
@@ -50,6 +53,16 @@ struct BreakView: View {
                                     action: onTapSkip)
                             .frame(maxWidth: 220)
                             .padding(.bottom, 40)
+                            .accessibilityLabel("Exit break")
+                    } else {
+                        Button(action: onTapSkip) {
+                            Text("Skip break")
+                                .font(.system(.caption, design: .rounded).weight(.medium))
+                                .foregroundStyle(.white.opacity(0.32))
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.bottom, 30)
+                        .accessibilityLabel("Skip break")
                     }
                 }
 

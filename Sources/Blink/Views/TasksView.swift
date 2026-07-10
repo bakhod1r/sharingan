@@ -157,6 +157,7 @@ struct TasksView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.pressableSubtle)
+                .accessibilityLabel("Clear search")
             }
         }
         .padding(.horizontal, 10).padding(.vertical, 6)
@@ -204,6 +205,7 @@ struct TasksView: View {
                 }
                 .buttonStyle(.pressableSubtle)
                 .disabled(newTitle.trimmingCharacters(in: .whitespaces).isEmpty)
+                .accessibilityLabel("Add task")
 
                 TextField("Add a task…", text: $newTitle, onCommit: add)
                     .textFieldStyle(.plain)
@@ -735,6 +737,7 @@ struct TasksView: View {
                             .foregroundStyle(sub.isDone ? Color.green : .secondary)
                     }
                     .buttonStyle(.pressableSubtle)
+                    .accessibilityLabel(sub.isDone ? "Mark \(sub.title) not done" : "Mark \(sub.title) done")
                     Text(sub.title)
                         .font(.system(.caption, design: .rounded))
                         .strikethrough(sub.isDone, color: .secondary)
@@ -745,6 +748,7 @@ struct TasksView: View {
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.pressableSubtle)
+                    .accessibilityLabel("Delete subtask \(sub.title)")
                 }
             }
             HStack(spacing: 8) {
