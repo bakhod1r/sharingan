@@ -63,21 +63,73 @@ final class MenuBarController: NSObject {
     }
 
     /// The menu-bar icon: the app's own red Sharingan iris, kept in colour
-    /// (not a template) so its identity carries into the menu bar. Rendered
-    /// from the vector artwork — no PNG assets. Falls back to a template
-    /// stopwatch glyph if rendering fails.
+    /// (not a template) so its identity carries into the menu bar. Drawn with
+    /// CoreGraphics directly — SwiftUI's ImageRenderer produced a fully
+    /// transparent bitmap when invoked during applicationDidFinishLaunching in
+    /// the bundled accessory app, leaving the status item invisible (an empty
+    /// clickable gap in the menu bar). Falls back to a template stopwatch glyph.
     @MainActor
     private static func menuBarIcon() -> NSImage? {
-        let renderer = ImageRenderer(
-            content: MoveIrisView(diameter: 16).frame(width: 16, height: 16)
-        )
-        renderer.scale = 2
-        if let cg = renderer.cgImage {
-            let img = NSImage(cgImage: cg, size: NSSize(width: 16, height: 16))
-            img.isTemplate = false
-            return img
+        let side: CGFloat = 18
+        let img = NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
+            guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
+            let r = rect.width / 2
+            let c = CGPoint(x: rect.midX, y: rect.midY)
+
+            // Iris: bright-centre red radial gradient (brighter than the
+            // full-size artwork so it stays legible at 18 pt on dark menu bars).
+            let stops: [(CGFloat, CGColor)] = [
+                (0.00, CGColor(red: 0.85, green: 0.10, blue: 0.10, alpha: 1)),
+                (0.55, CGColor(red: 0.78, green: 0.08, blue: 0.08, alpha: 1)),
+                (0.85, CGColor(red: 0.58, green: 0.03, blue: 0.03, alpha: 1)),
+                (1.00, CGColor(red: 0.38, green: 0.01, blue: 0.02, alpha: 1)),
+            ]
+            if let gradient = CGGradient(
+                colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                colors: stops.map(\.1) as CFArray,
+                locations: stops.map(\.0)
+            ) {
+                ctx.saveGState()
+                ctx.addEllipse(in: rect)
+                ctx.clip()
+                ctx.drawRadialGradient(
+                    gradient,
+                    startCenter: c, startRadius: 0,
+                    endCenter: c, endRadius: r,
+                    options: []
+                )
+                ctx.restoreGState()
+            }
+
+            // Dark rim so the disc separates from light menu bars.
+            ctx.setStrokeColor(CGColor(red: 0.10, green: 0, blue: 0, alpha: 0.9))
+            ctx.setLineWidth(0.8)
+            ctx.strokeEllipse(in: rect.insetBy(dx: 0.4, dy: 0.4))
+
+            // Pupil + three tomoe dots on the classic ring.
+            ctx.setFillColor(CGColor(gray: 0, alpha: 1))
+            let pupilR = 0.16 * r
+            ctx.fillEllipse(in: CGRect(x: c.x - pupilR, y: c.y - pupilR, width: pupilR * 2, height: pupilR * 2))
+            let ringR = 0.52 * r
+            let tomoeR = 0.17 * r
+            for i in 0..<3 {
+                let a = (-80.0 + Double(i) * 120.0) * .pi / 180.0
+                let p = CGPoint(x: c.x + ringR * cos(a), y: c.y + ringR * sin(a))
+                ctx.fillEllipse(in: CGRect(x: p.x - tomoeR, y: p.y - tomoeR, width: tomoeR * 2, height: tomoeR * 2))
+            }
+            return true
         }
+        img.isTemplate = false
+        if img.size.width > 0 { return img }
         return NSImage(systemSymbolName: "stopwatch", accessibilityDescription: "Blink")
+    }
+
+    /// Opens the popover if it isn't already visible. Used on launch/reopen so
+    /// starting a menu-bar-only app gives visible feedback instead of nothing.
+    func showPopover() {
+        guard let popover, let button = statusItem?.button, !popover.isShown else { return }
+        NSApp.activate(ignoringOtherApps: true)
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
     }
 
     @objc private func togglePopover() {
@@ -127,5 +179,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if timer.settings.eyesWallpaperEnabled {
             WallpaperWindowManager.shared.setEnabled(true, config: WallpaperConfig(from: timer.settings))
         }
+
+        // A menu-bar-only app (LSUIElement) shows no window and no Dock icon,
+        // so double-clicking Blink in Finder looks like "nothing happened".
+        // Open the popover once on launch so the user lands in the timer.
+        DispatchQueue.main.async {
+            MenuBarController.shared.showPopover()
+        }
+    }
+
+    // Finder/Launchpad re-launch of an already-running accessory app fires
+    // reopen — surface the popover instead of silently doing nothing.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        MenuBarController.shared.showPopover()
+        return false
     }
 }
