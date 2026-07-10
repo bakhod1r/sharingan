@@ -20,6 +20,23 @@ enum DS {
         static let lg: CGFloat = 16
         static let xl: CGFloat = 20
     }
+
+    /// Motion tokens — one shared animation "hand". Every surface had its own
+    /// hand-tuned spring/ease before this (20+ distinct timings); these five
+    /// roles cover them all. Deliberate one-offs (breathing loops, celebration
+    /// flights, continuous TimelineView drivers) stay hand-tuned.
+    enum Motion {
+        /// Numeric counters, small state flips.
+        static let snappy = Animation.snappy(duration: 0.3)
+        /// Tab switches, list insert/remove, layout moves, drag targets.
+        static let standard = Animation.spring(response: 0.35, dampingFraction: 0.85)
+        /// Fades, disclosures, section cross-fades.
+        static let gentle = Animation.easeInOut(duration: 0.25)
+        /// Hover highlights and press states.
+        static let hover = Animation.easeOut(duration: 0.15)
+        /// Streak / completion celebrations.
+        static let celebrate = Animation.bouncy(duration: 0.45)
+    }
 }
 
 extension Color {
