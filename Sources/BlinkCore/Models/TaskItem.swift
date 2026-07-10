@@ -5,11 +5,29 @@ public struct Subtask: Identifiable, Codable, Equatable, Sendable {
     public var id: UUID
     public var title: String
     public var isDone: Bool
+    /// Planned pomodoros for this step (nil = no estimate).
+    public var estimatedPomodoros: Int?
+    /// Focus sessions credited to this step.
+    public var pomodorosDone: Int
 
-    public init(id: UUID = UUID(), title: String, isDone: Bool = false) {
+    public init(id: UUID = UUID(), title: String, isDone: Bool = false,
+                estimatedPomodoros: Int? = nil, pomodorosDone: Int = 0) {
         self.id = id
         self.title = title
         self.isDone = isDone
+        self.estimatedPomodoros = estimatedPomodoros
+        self.pomodorosDone = pomodorosDone
+    }
+
+    // Pomodoro fields were added after subtasks first shipped — decode them
+    // as optional so older persisted rows (subtasks JSON column) still load.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        title = try c.decode(String.self, forKey: .title)
+        isDone = try c.decodeIfPresent(Bool.self, forKey: .isDone) ?? false
+        estimatedPomodoros = try c.decodeIfPresent(Int.self, forKey: .estimatedPomodoros)
+        pomodorosDone = try c.decodeIfPresent(Int.self, forKey: .pomodorosDone) ?? 0
     }
 }
 
@@ -171,6 +189,15 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
     public var subtaskProgress: (done: Int, total: Int) {
         (subtasks.filter(\.isDone).count, subtasks.count)
     }
+
+    /// Sum of subtask estimates, nil when no subtask has one.
+    public var subtaskEstimateTotal: Int? {
+        let ests = subtasks.compactMap(\.estimatedPomodoros)
+        return ests.isEmpty ? nil : ests.reduce(0, +)
+    }
+
+    /// Estimate to display: subtask sum wins, else the task's own estimate.
+    public var displayEstimate: Int? { subtaskEstimateTotal ?? estimatedPomodoros }
 
     /// True when this task is on today's plan.
     public func isPlannedToday(now: Date = Date()) -> Bool {

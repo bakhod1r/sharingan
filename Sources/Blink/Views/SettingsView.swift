@@ -228,21 +228,6 @@ struct SettingsView: View {
                                unit: "pomodoros")
                 }
 
-                Section("Tasks") {
-                    ToggleRow(title: "Require a task to start focus",
-                              isOn: $settings.requireTaskForFocus)
-                    Text("A focus pomodoro won't start until you pick a task. The quick-add hotkey (below, in Global shortcuts) pops up a capture window.")
-                        .font(.system(.caption2, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.6))
-                    StepperRow(title: "Daily pomodoro goal",
-                               value: $settings.dailyPomodoroGoal,
-                               unit: "🍅",
-                               range: 0...20)
-                    Text("Shows a progress bar in the menu bar. Set to 0 to hide.")
-                        .font(.system(.caption2, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.6))
-                }
-
                 Section("Repeat") {
                     ToggleRow(title: "Repeat enabled",
                               isOn: $settings.repeatConfig.enabled)
@@ -282,6 +267,45 @@ struct SettingsView: View {
                             .font(.system(.caption2, design: .rounded))
                             .foregroundStyle(.white.opacity(0.6))
                     }
+                }
+
+        case .tasks:
+                Section("Tasks") {
+                    ToggleRow(title: "Require a task to start focus",
+                              isOn: $settings.requireTaskForFocus)
+                    Text("A focus pomodoro won't start until you pick a task. The quick-add hotkey (in Global shortcuts) pops up a capture window.")
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.6))
+                    StepperRow(title: "Daily pomodoro goal",
+                               value: $settings.dailyPomodoroGoal,
+                               unit: "🍅",
+                               range: 0...20)
+                    Text("Shows a progress bar in the menu bar. Set to 0 to hide.")
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+
+                Section("Planning") {
+                    ToggleRow(title: "Week starts on Monday",
+                              isOn: $settings.weekStartsOnMonday)
+                    Text("Applies to the weekly board and the menu bar Week tab.")
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+
+                Section("Estimates & badges") {
+                    StepperRow(title: "Default subtask estimate",
+                               value: $settings.defaultSubtaskEstimate,
+                               unit: "🍅",
+                               range: 0...8)
+                    Text("Applied to newly added steps. Set to 0 for no estimate.")
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.6))
+                    ToggleRow(title: "Show pomodoro badges",
+                              isOn: $settings.showPomodoroBadges)
+                    Text("The 🍅 done/estimate chips on task and subtask rows.")
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.6))
                 }
 
         case .breaks:
@@ -637,11 +661,12 @@ struct SettingsView: View {
 
     /// Groups of settings, shown as drill-down rows on the root Settings screen.
     enum SettingsCategory: String, CaseIterable, Identifiable, Hashable {
-        case timer, breaks, focus, eyeCare, sharingan, general, voice, shortcuts
+        case timer, tasks, breaks, focus, eyeCare, sharingan, general, voice, shortcuts
         var id: String { rawValue }
         var title: String {
             switch self {
             case .timer:     return "Timer"
+            case .tasks:     return "Tasks & Planning"
             case .breaks:    return "Breaks"
             case .focus:     return "Focus & Blocking"
             case .eyeCare:   return "Eye Care"
@@ -654,6 +679,7 @@ struct SettingsView: View {
         var subtitle: String {
             switch self {
             case .timer:     return "Durations, mode, repeat, floating timer"
+            case .tasks:     return "Goal, estimates, weekly planning, badges"
             case .breaks:    return "Break screen, ambience, brightness"
             case .focus:     return "App blocking, reminders"
             case .eyeCare:   return "Exercises, camera tracking"
@@ -666,6 +692,7 @@ struct SettingsView: View {
         var icon: String {
             switch self {
             case .timer:     return "timer"
+            case .tasks:     return "checklist"
             case .breaks:    return "cup.and.saucer.fill"
             case .focus:     return "hand.raised.fill"
             case .eyeCare:   return "eye.fill"
@@ -678,6 +705,7 @@ struct SettingsView: View {
         var tint: Color {
             switch self {
             case .timer:     return .blue
+            case .tasks:     return .mint
             case .breaks:    return .teal
             case .focus:     return .indigo
             case .eyeCare:   return .green
@@ -696,6 +724,9 @@ struct SettingsView: View {
                 return ["duration", "minutes", "pomodoro", "focus length", "mode",
                         "countdown", "count up", "repeat", "endless", "floating",
                         "float", "opacity", "always on top", "compact"]
+            case .tasks:
+                return ["task", "subtask", "estimate", "goal", "week", "weekly",
+                        "monday", "sunday", "badge", "plan", "planner", "🍅"]
             case .breaks:
                 return ["break", "message", "ambience", "rain", "forest", "white noise",
                         "brightness", "dim", "screen", "exit"]

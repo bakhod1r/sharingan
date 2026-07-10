@@ -301,3 +301,130 @@ struct SettingsExtrasTests {
         #expect(TimeDisplayFormat.compact.string(3661) == "1:01:01")
     }
 }
+
+@MainActor
+@Suite("Subtask pomodoros")
+struct SubtaskPomodoroTests {
+    private func tempStore() -> TaskStore {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("blink-subpomo-\(UUID().uuidString).sqlite")
+        return TaskStore(fileURL: url)
+    }
+
+    /// One task with two open subtasks; returns (store, taskID, subA, subB).
+    private func seeded() -> (TaskStore, UUID, UUID, UUID) {
+        let s = tempStore()
+        s.add(title: "Feature")
+        let id = s.tasks[0].id
+        s.addSubtask(id, title: "design", estimate: 2)
+        s.addSubtask(id, title: "build")
+        return (s, id, s.tasks[0].subtasks[0].id, s.tasks[0].subtasks[1].id)
+    }
+
+    @Test func creditsTaskAndActiveSubtask() {
+        let (s, id, subA, _) = seeded()
+        s.setActiveSubtask(taskID: id, subtaskID: subA)
+        s.incrementPomodoro(id)
+        s.incrementPomodoro(id)
+        #expect(s.tasks[0].pomodorosDone == 2)                // aggregate always rolls up
+        #expect(s.tasks[0].subtasks[0].pomodorosDone == 2)    // breakdown credit
+        #expect(s.tasks[0].subtasks[1].pomodorosDone == 0)
+    }
+
+    @Test func noActiveSubtaskCreditsTaskOnly() {
+        let (s, id, _, _) = seeded()
+        s.setActive(id)
+        s.incrementPomodoro(id)
+        #expect(s.tasks[0].pomodorosDone == 1)
+        #expect(s.tasks[0].subtasks.allSatisfy { $0.pomodorosDone == 0 })
+    }
+
+    @Test func completingTargetClearsIt() {
+        let (s, id, subA, _) = seeded()
+        s.setActiveSubtask(taskID: id, subtaskID: subA)
+        s.toggleSubtask(id, subA)
+        #expect(s.activeSubtaskID == nil)
+        s.incrementPomodoro(id)
+        #expect(s.tasks[0].pomodorosDone == 1)
+        #expect(s.tasks[0].subtasks[0].pomodorosDone == 0)    // done step gets no credit
+    }
+
+    @Test func deletingTargetClearsIt() {
+        let (s, id, subA, _) = seeded()
+        s.setActiveSubtask(taskID: id, subtaskID: subA)
+        s.deleteSubtask(id, subA)
+        #expect(s.activeSubtaskID == nil)
+    }
+
+    @Test func switchingTaskClearsTarget() {
+        let (s, id, subA, _) = seeded()
+        s.add(title: "Other")
+        let other = s.tasks.first { $0.title == "Other" }!.id
+        s.setActiveSubtask(taskID: id, subtaskID: subA)
+        s.setActive(other)
+        #expect(s.activeSubtaskID == nil)
+        #expect(s.activeTaskID == other)
+    }
+
+    @Test func editorSaveRemovingTargetClearsIt() {
+        let (s, id, subA, _) = seeded()
+        s.setActiveSubtask(taskID: id, subtaskID: subA)
+        var edited = s.tasks[0]
+        edited.subtasks.removeAll { $0.id == subA }
+        s.update(edited)
+        #expect(s.activeSubtaskID == nil)
+    }
+
+    @Test func staleTargetSelfHealsOnIncrement() {
+        let (s, id, subA, _) = seeded()
+        s.setActiveSubtask(taskID: id, subtaskID: subA)
+        // Simulate the pointer going stale without passing through a mutator.
+        var edited = s.tasks[0]
+        edited.subtasks[0].isDone = true
+        edited.subtasks[0].id = subA           // keep id; mark done directly
+        s.setActiveSubtask(taskID: id, subtaskID: subA)   // re-arm after update clears
+        s.update(edited)
+        #expect(s.activeSubtaskID == nil)      // update() sees a done target and clears
+        s.incrementPomodoro(id)
+        #expect(s.tasks[0].pomodorosDone == 1)
+        #expect(s.tasks[0].subtasks[0].pomodorosDone == 0)
+    }
+
+    @Test func recurrenceResetsSubtaskCountersKeepsEstimates() {
+        let (s, id, subA, _) = seeded()
+        s.setRecurrence(id, .daily)
+        s.setActiveSubtask(taskID: id, subtaskID: subA)
+        s.incrementPomodoro(id)
+        s.toggleDone(id)                       // spawns the next occurrence
+        let next = s.tasks.first { $0.title == "Feature" && !$0.isDone }
+        #expect(next != nil)
+        #expect(next!.subtasks.allSatisfy { $0.pomodorosDone == 0 })
+        #expect(next!.subtasks[0].estimatedPomodoros == 2)   // estimate carried over
+    }
+
+    @Test func addSubtaskDefaultEstimate() {
+        let s = tempStore()
+        s.add(title: "T")
+        let id = s.tasks[0].id
+        s.addSubtask(id, title: "with", estimate: 3)
+        s.addSubtask(id, title: "without", estimate: nil)
+        #expect(s.tasks[0].subtasks[0].estimatedPomodoros == 3)
+        #expect(s.tasks[0].subtasks[1].estimatedPomodoros == nil)
+    }
+
+    @Test func subtaskPomodorosPersist() {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("blink-subpersist-\(UUID().uuidString).sqlite")
+        let a = TaskStore(fileURL: url)
+        a.add(title: "P")
+        let id = a.tasks[0].id
+        a.addSubtask(id, title: "step", estimate: 2)
+        a.setActiveSubtask(taskID: id, subtaskID: a.tasks[0].subtasks[0].id)
+        a.incrementPomodoro(id)
+        let b = TaskStore(fileURL: url)
+        let loaded = b.tasks.first { $0.id == id }
+        #expect(loaded?.subtasks[0].pomodorosDone == 1)
+        #expect(loaded?.subtasks[0].estimatedPomodoros == 2)
+        #expect(b.activeSubtaskID == nil)      // transient — never persisted
+    }
+}

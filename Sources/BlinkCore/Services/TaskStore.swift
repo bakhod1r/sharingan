@@ -37,6 +37,9 @@ public final class TaskStore: ObservableObject {
 
     @Published public private(set) var tasks: [TaskItem] = []
     @Published public var activeTaskID: UUID?
+    /// Subtask of the active task the current focus session is aimed at.
+    /// Transient session state, like `activeTaskID` — never persisted.
+    @Published public var activeSubtaskID: UUID?
     /// User-created categories, persisted alongside (and merged after) the presets.
     @Published public private(set) var customCategories: [TaskCategory] = []
 
@@ -225,7 +228,7 @@ public final class TaskStore: ObservableObject {
     public func clearCompleted() {
         for id in tasks.filter(\.isDone).map(\.id) {
             NotificationService.shared.cancel(identifier: dueNoteID(id))
-            if activeTaskID == id { activeTaskID = nil }
+            if activeTaskID == id { activeTaskID = nil; activeSubtaskID = nil }
         }
         tasks.removeAll(where: \.isDone)
         persist()
@@ -376,7 +379,10 @@ public final class TaskStore: ObservableObject {
         next.createdAt = Date()
         next.plannedDate = nil
         next.sortOrder = (tasks.map(\.sortOrder).max() ?? 0) + 1
-        for k in next.subtasks.indices { next.subtasks[k].isDone = false }
+        for k in next.subtasks.indices {
+            next.subtasks[k].isDone = false
+            next.subtasks[k].pomodorosDone = 0   // keep estimates, reset progress
+        }
         // Only carry a due date forward if the task had one. Advancing from the
         // later of the old due date and now keeps a long-overdue task's next
         // occurrence in the future instead of spawning another past copy. A task
@@ -392,11 +398,12 @@ public final class TaskStore: ObservableObject {
 
     // MARK: - Subtasks / notes / recurrence / project
 
-    public func addSubtask(_ taskID: UUID, title: String) {
+    public func addSubtask(_ taskID: UUID, title: String, estimate: Int? = nil) {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty,
               let i = tasks.firstIndex(where: { $0.id == taskID }) else { return }
-        tasks[i].subtasks.append(Subtask(title: trimmed))
+        tasks[i].subtasks.append(Subtask(title: trimmed,
+                                         estimatedPomodoros: estimate.map { max(1, $0) }))
         persist()
     }
 
@@ -404,12 +411,15 @@ public final class TaskStore: ObservableObject {
         guard let i = tasks.firstIndex(where: { $0.id == taskID }),
               let j = tasks[i].subtasks.firstIndex(where: { $0.id == subID }) else { return }
         tasks[i].subtasks[j].isDone.toggle()
+        // Completing the focus target ends its targeting (un-completing does not restore it).
+        if tasks[i].subtasks[j].isDone && subID == activeSubtaskID { activeSubtaskID = nil }
         persist()
     }
 
     public func deleteSubtask(_ taskID: UUID, _ subID: UUID) {
         guard let i = tasks.firstIndex(where: { $0.id == taskID }) else { return }
         tasks[i].subtasks.removeAll { $0.id == subID }
+        if subID == activeSubtaskID { activeSubtaskID = nil }
         persist()
     }
 
@@ -454,13 +464,18 @@ public final class TaskStore: ObservableObject {
     public func delete(_ id: UUID) {
         NotificationService.shared.cancel(identifier: dueNoteID(id))
         tasks.removeAll { $0.id == id }
-        if activeTaskID == id { activeTaskID = nil }
+        if activeTaskID == id { activeTaskID = nil; activeSubtaskID = nil }
         persist()
     }
 
     public func update(_ item: TaskItem) {
         guard let i = tasks.firstIndex(where: { $0.id == item.id }) else { return }
         tasks[i] = item
+        // An edit can remove or complete the focus-target subtask.
+        if item.id == activeTaskID, let sid = activeSubtaskID,
+           !item.subtasks.contains(where: { $0.id == sid && !$0.isDone }) {
+            activeSubtaskID = nil
+        }
         // Re-sync the deadline reminder: a due date added/changed via edit would
         // otherwise never fire (it was only scheduled at creation time).
         NotificationService.shared.cancel(identifier: dueNoteID(item.id))
@@ -468,15 +483,32 @@ public final class TaskStore: ObservableObject {
         persist()
     }
 
-    /// Records one completed pomodoro against the given task.
+    /// Records one completed pomodoro against the given task. The task counter
+    /// is the aggregate source of truth; the active subtask (if any, and still
+    /// open) additionally receives an attribution credit.
     public func incrementPomodoro(_ id: UUID) {
         guard let i = tasks.firstIndex(where: { $0.id == id }) else { return }
         tasks[i].pomodorosDone += 1
+        if id == activeTaskID, let sid = activeSubtaskID {
+            if let j = tasks[i].subtasks.firstIndex(where: { $0.id == sid && !$0.isDone }) {
+                tasks[i].subtasks[j].pomodorosDone += 1
+            } else {
+                activeSubtaskID = nil   // stale: deleted or completed mid-session
+            }
+        }
         persist()
     }
 
     public func setActive(_ id: UUID?) {
+        if activeTaskID != id { activeSubtaskID = nil }
         activeTaskID = id
+    }
+
+    /// Marks one subtask as the focus target (also activates its parent task).
+    /// Pass nil to clear the target while keeping the task active.
+    public func setActiveSubtask(taskID: UUID, subtaskID: UUID?) {
+        setActive(taskID)
+        activeSubtaskID = subtaskID
     }
 
     // MARK: - Persistence

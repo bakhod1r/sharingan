@@ -65,4 +65,65 @@ struct PomodoroModelsTests {
         #expect(PomodoroPhase.longBreak.gradient == [.paletteLongStart, .paletteLongEnd])
         #expect(PomodoroPhase.paused.gradient == [.paletteMutedStart, .paletteMutedEnd])
     }
+
+    @Test("old subtask JSON without pomodoro keys still decodes")
+    func subtaskDecodeDrift() throws {
+        let old = #"{"id":"00000000-0000-0000-0000-000000000001","title":"step","isDone":false}"#
+        let sub = try JSONDecoder().decode(Subtask.self, from: Data(old.utf8))
+        #expect(sub.title == "step")
+        #expect(sub.estimatedPomodoros == nil)
+        #expect(sub.pomodorosDone == 0)
+    }
+
+    @Test("displayEstimate: subtask sum wins, else task estimate, else nil")
+    func displayEstimatePrecedence() {
+        var t = TaskItem(title: "t", estimatedPomodoros: 5)
+        #expect(t.displayEstimate == 5)
+        t.subtasks = [Subtask(title: "a", estimatedPomodoros: 2),
+                      Subtask(title: "b", estimatedPomodoros: 3),
+                      Subtask(title: "c")]                    // no estimate — excluded
+        #expect(t.subtaskEstimateTotal == 5)
+        #expect(t.displayEstimate == 5)
+        t.subtasks[0].estimatedPomodoros = 4
+        #expect(t.displayEstimate == 7)                       // sum overrides task's own
+        t.subtasks = [Subtask(title: "a")]
+        t.estimatedPomodoros = nil
+        #expect(t.displayEstimate == nil)
+    }
+
+    @Test("settings blob missing the planning keys decodes to defaults")
+    func planningSettingsDecodeDrift() throws {
+        let decoded = try JSONDecoder().decode(PomodoroSettings.self,
+                                               from: Data("{}".utf8))
+        #expect(decoded.weekStartsOnMonday == true)
+        #expect(decoded.defaultSubtaskEstimate == 0)
+        #expect(decoded.showPomodoroBadges == true)
+    }
+
+    @Test("weekStart anchors on Monday or Sunday and shifts by whole weeks")
+    func weekStartMath() {
+        let cal = Calendar.current
+        // A known Thursday: 2026-07-09.
+        var comps = DateComponents(); comps.year = 2026; comps.month = 7; comps.day = 9
+        let thursday = cal.date(from: comps)!
+
+        var s = PomodoroSettings()
+        s.weekStartsOnMonday = true
+        let mon = s.weekStart(offset: 0, now: thursday, calendar: cal)
+        #expect(cal.component(.weekday, from: mon) == 2)      // Monday
+        #expect(cal.component(.day, from: mon) == 6)          // Jul 6
+
+        s.weekStartsOnMonday = false
+        let sun = s.weekStart(offset: 0, now: thursday, calendar: cal)
+        #expect(cal.component(.weekday, from: sun) == 1)      // Sunday
+        #expect(cal.component(.day, from: sun) == 5)          // Jul 5
+
+        let nextSun = s.weekStart(offset: 1, now: thursday, calendar: cal)
+        #expect(cal.dateComponents([.day], from: sun, to: nextSun).day == 7)
+
+        // A week-start day maps onto itself.
+        s.weekStartsOnMonday = true
+        let selfStart = s.weekStart(offset: 0, now: mon, calendar: cal)
+        #expect(cal.isDate(selfStart, inSameDayAs: mon))
+    }
 }

@@ -17,10 +17,15 @@ struct TaskEditorView: View {
     @FocusState private var titleFocused: Bool
 
     var accent: Color = .paletteFocusStart
+    /// Snapshot of app settings for defaults & badge visibility (value copy is
+    /// fine for a modal sheet).
+    var settings: PomodoroSettings = .init()
 
-    init(task: TaskItem, accent: Color = .paletteFocusStart) {
+    init(task: TaskItem, accent: Color = .paletteFocusStart,
+         settings: PomodoroSettings = .init()) {
         _draft = State(initialValue: task)
         self.accent = accent
+        self.settings = settings
     }
 
     var body: some View {
@@ -260,7 +265,15 @@ struct TaskEditorView: View {
 
     private var subtasksSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Subtasks").dsSectionLabel()
+            HStack(spacing: 8) {
+                Text("Subtasks").dsSectionLabel()
+                Spacer()
+                if settings.showPomodoroBadges, let est = draft.displayEstimate {
+                    Text("🍅 \(draft.pomodorosDone)/\(est)")
+                        .font(.system(.caption2, design: .rounded).weight(.semibold))
+                        .foregroundStyle(draft.pomodorosDone >= est ? Color.green : Color.dsSecondary)
+                }
+            }
             ForEach($draft.subtasks) { $sub in
                 HStack(spacing: 8) {
                     Button { sub.isDone.toggle() } label: {
@@ -273,6 +286,21 @@ struct TaskEditorView: View {
                         .strikethrough(sub.isDone, color: .dsTertiary)
                         .foregroundStyle(sub.isDone ? Color.dsTertiary : Color.dsPrimary)
                     Spacer()
+                    if settings.showPomodoroBadges, sub.pomodorosDone > 0 {
+                        Text("🍅\(sub.pomodorosDone)")
+                            .font(.system(size: 10, design: .rounded))
+                            .foregroundStyle(Color.dsSecondary)
+                    }
+                    // Estimate stepper stays visible even with badges hidden —
+                    // the editor is the only place estimates can be set.
+                    Text(sub.estimatedPomodoros.map { "est \($0)" } ?? "no est")
+                        .font(.system(size: 10, design: .rounded))
+                        .foregroundStyle(Color.dsTertiary)
+                    DSStepper(value: Binding(
+                        get: { sub.estimatedPomodoros ?? 0 },
+                        set: { sub.estimatedPomodoros = $0 == 0 ? nil : $0 }),
+                              range: 0...8)
+                        .scaleEffect(0.8)
                     Button { draft.subtasks.removeAll { $0.id == sub.id } } label: {
                         Image(systemName: "xmark").font(.system(size: 10)).foregroundStyle(Color.dsTertiary)
                     }
@@ -374,7 +402,8 @@ struct TaskEditorView: View {
     private func commitSubtask() {
         let t = subtaskDraft.trimmingCharacters(in: .whitespaces)
         guard !t.isEmpty else { return }
-        draft.subtasks.append(Subtask(title: t))
+        let est = settings.defaultSubtaskEstimate
+        draft.subtasks.append(Subtask(title: t, estimatedPomodoros: est > 0 ? est : nil))
         subtaskDraft = ""
     }
 

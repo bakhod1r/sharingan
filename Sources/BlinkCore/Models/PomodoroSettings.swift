@@ -58,6 +58,12 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var blockAppsDuringFocus: Bool = false
     /// Target number of focus pomodoros per day (0 = no goal).
     public var dailyPomodoroGoal: Int = 8
+    /// Week columns/rows start on Monday (false = Sunday) in both week views.
+    public var weekStartsOnMonday: Bool = true
+    /// Estimate pre-filled on newly added subtasks (0 = none).
+    public var defaultSubtaskEstimate: Int = 0
+    /// Show 🍅 done/estimate badges on task & subtask rows.
+    public var showPomodoroBadges: Bool = true
 
     public init() {}
 
@@ -112,6 +118,9 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
         requireTaskForFocus = try c.decodeIfPresent(Bool.self, forKey: .requireTaskForFocus) ?? d.requireTaskForFocus
         blockAppsDuringFocus = try c.decodeIfPresent(Bool.self, forKey: .blockAppsDuringFocus) ?? d.blockAppsDuringFocus
         dailyPomodoroGoal = try c.decodeIfPresent(Int.self, forKey: .dailyPomodoroGoal) ?? d.dailyPomodoroGoal
+        weekStartsOnMonday = try c.decodeIfPresent(Bool.self, forKey: .weekStartsOnMonday) ?? d.weekStartsOnMonday
+        defaultSubtaskEstimate = try c.decodeIfPresent(Int.self, forKey: .defaultSubtaskEstimate) ?? d.defaultSubtaskEstimate
+        showPomodoroBadges = try c.decodeIfPresent(Bool.self, forKey: .showPomodoroBadges) ?? d.showPomodoroBadges
     }
 
     /// "Auto" mode: the whole focus ↔ break cycle runs hands-free (25 focus →
@@ -136,5 +145,18 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
         case .longBreak:  return max(1, longBreakSeconds)
         case .paused:     return 0
         }
+    }
+
+    /// Start of the week containing `now`, shifted by `offset` whole weeks.
+    /// Anchored on Monday or Sunday per `weekStartsOnMonday` — the single week
+    /// origin shared by the main-window board and the menu bar Week tab.
+    public func weekStart(offset: Int = 0, now: Date = Date(),
+                          calendar: Calendar = .current) -> Date {
+        let today = calendar.startOfDay(for: now)
+        let weekday = calendar.component(.weekday, from: today)     // 1=Sun … 7=Sat
+        let target = weekStartsOnMonday ? 2 : 1
+        let sinceStart = (weekday - target + 7) % 7
+        let start = calendar.date(byAdding: .day, value: -sinceStart, to: today) ?? today
+        return calendar.date(byAdding: .day, value: offset * 7, to: start) ?? start
     }
 }

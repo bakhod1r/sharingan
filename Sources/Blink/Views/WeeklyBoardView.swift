@@ -25,13 +25,9 @@ struct WeeklyBoardView: View {
     private var cal: Calendar { Calendar.current }
     private var accent: Color { timer.settings.theme.accent }
 
-    /// Monday that starts the visible week.
+    /// First day (Monday or Sunday, per settings) of the visible week.
     private var weekStart: Date {
-        let today = cal.startOfDay(for: Date())
-        let weekday = cal.component(.weekday, from: today)   // 1=Sun … 7=Sat
-        let sinceMonday = (weekday + 5) % 7
-        let thisMonday = cal.date(byAdding: .day, value: -sinceMonday, to: today) ?? today
-        return cal.date(byAdding: .day, value: weekOffset * 7, to: thisMonday) ?? thisMonday
+        timer.settings.weekStart(offset: weekOffset, calendar: cal)
     }
 
     private var days: [Date] {
@@ -337,9 +333,10 @@ struct WeeklyBoardView: View {
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
 
+            let showBadge = timer.settings.showPomodoroBadges
+                && (task.pomodorosDone > 0 || task.displayEstimate != nil)
             let hasMeta = task.dueDate != nil || task.subtaskProgress.total > 0
-                || task.pomodorosDone > 0 || task.estimatedPomodoros != nil
-                || !task.tags.isEmpty || task.priority != .none
+                || showBadge || !task.tags.isEmpty || task.priority != .none
             if hasMeta {
                 HStack(spacing: 7) {
                     if task.priority != .none, let hex = task.priority.colorHex {
@@ -366,8 +363,8 @@ struct WeeklyBoardView: View {
                                              ? Color.green : .white.opacity(0.55))
                     }
                     Spacer(minLength: 0)
-                    if task.pomodorosDone > 0 || task.estimatedPomodoros != nil {
-                        Text(task.estimatedPomodoros.map { "🍅\(task.pomodorosDone)/\($0)" }
+                    if showBadge {
+                        Text(task.displayEstimate.map { "🍅\(task.pomodorosDone)/\($0)" }
                              ?? "🍅\(task.pomodorosDone)")
                             .font(.system(size: 10, design: .rounded))
                             .foregroundStyle(.white.opacity(0.6))

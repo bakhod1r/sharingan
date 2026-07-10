@@ -27,7 +27,7 @@ struct MenuBarView: View {
     @State private var editorTask: TaskItem?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private enum Tab: Hashable { case timer, tasks }
+    private enum Tab: Hashable { case timer, tasks, week }
 
     /// Fixed height for the switchable tab area so the popover is ONE size across
     /// Timer / Tasks. Sized to fit the timer tab's controls (the stats strip is
@@ -39,6 +39,7 @@ struct MenuBarView: View {
             Picker("", selection: $tab) {
                 Label("Timer", systemImage: "timer").tag(Tab.timer)
                 Label("Tasks", systemImage: "checklist").tag(Tab.tasks)
+                Label("Week", systemImage: "calendar").tag(Tab.week)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -50,6 +51,7 @@ struct MenuBarView: View {
                     switch tab {
                     case .timer: timerTab
                     case .tasks: TasksView(timer: timer)
+                    case .week:  MenuBarWeekView(timer: timer)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .top)
@@ -70,7 +72,8 @@ struct MenuBarView: View {
         .tint(timer.settings.theme.accent)
         .sheet(item: $editorTask) { task in
             TaskEditorView(task: task,
-                           accent: timer.settings.theme.accent)
+                           accent: timer.settings.theme.accent,
+                           settings: timer.settings)
         }
     }
 
@@ -666,6 +669,7 @@ struct MenuBarView: View {
     private func subtaskPanel(_ task: TaskItem) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             ForEach(task.subtasks) { sub in
+                let isTarget = tasks.activeSubtaskID == sub.id
                 HStack(spacing: 8) {
                     Button {
                         tasks.toggleSubtask(task.id, sub.id)
@@ -678,9 +682,34 @@ struct MenuBarView: View {
                     Text(sub.title)
                         .font(.system(.caption, design: .rounded))
                         .strikethrough(sub.isDone, color: .secondary)
-                        .foregroundStyle(sub.isDone ? .secondary : .primary)
+                        .foregroundStyle(sub.isDone ? AnyShapeStyle(.secondary)
+                                         : isTarget ? AnyShapeStyle(Color.accentColor)
+                                         : AnyShapeStyle(.primary))
                         .lineLimit(1)
                     Spacer()
+                    if timer.settings.showPomodoroBadges,
+                       sub.pomodorosDone > 0 || sub.estimatedPomodoros != nil {
+                        Text(sub.estimatedPomodoros.map { "🍅\(sub.pomodorosDone)/\($0)" }
+                             ?? "🍅\(sub.pomodorosDone)")
+                            .font(.system(size: 10, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    }
+                    if !sub.isDone {
+                        Button {
+                            tasks.setActiveSubtask(taskID: task.id,
+                                                   subtaskID: isTarget ? nil : sub.id)
+                        } label: {
+                            Image(systemName: isTarget ? "scope" : "circle.dashed")
+                                .font(.system(size: 11))
+                                .foregroundStyle(isTarget ? Color.accentColor : .secondary)
+                                .frame(width: 22, height: 22)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.pressableSubtle)
+                        .help("Focus pomodoros credit this step")
+                        .accessibilityLabel(isTarget ? "Stop targeting \(sub.title)"
+                                                     : "Target focus at \(sub.title)")
+                    }
                     Button { tasks.deleteSubtask(task.id, sub.id) } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 10, weight: .bold))
@@ -720,21 +749,25 @@ struct MenuBarView: View {
     private func commitSubtask(_ taskID: UUID) {
         let text = (subtaskDrafts[taskID] ?? "").trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty else { return }
-        tasks.addSubtask(taskID, title: text)
+        let est = timer.settings.defaultSubtaskEstimate
+        tasks.addSubtask(taskID, title: text, estimate: est > 0 ? est : nil)
         subtaskDrafts[taskID] = ""
     }
 
     /// Pomodoro progress: "🍅done/est" when estimated, else "🍅done".
+    /// Estimate is the subtask sum when subtasks carry estimates.
     @ViewBuilder
     private func pomodoroBadge(_ task: TaskItem) -> some View {
-        if let est = task.estimatedPomodoros {
-            Text("🍅\(task.pomodorosDone)/\(est)")
-                .font(.system(.caption2, design: .rounded).weight(.medium))
-                .foregroundStyle(task.pomodorosDone >= est ? Color.green : .secondary)
-        } else if task.pomodorosDone > 0 {
-            Text("🍅\(task.pomodorosDone)")
-                .font(.system(.caption2, design: .rounded))
-                .foregroundStyle(.secondary)
+        if timer.settings.showPomodoroBadges {
+            if let est = task.displayEstimate {
+                Text("🍅\(task.pomodorosDone)/\(est)")
+                    .font(.system(.caption2, design: .rounded).weight(.medium))
+                    .foregroundStyle(task.pomodorosDone >= est ? Color.green : .secondary)
+            } else if task.pomodorosDone > 0 {
+                Text("🍅\(task.pomodorosDone)")
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 

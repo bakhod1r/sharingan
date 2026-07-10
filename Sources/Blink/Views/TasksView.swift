@@ -75,7 +75,8 @@ struct TasksView: View {
         }
         .sheet(item: $editorTask) { task in
             TaskEditorView(task: task,
-                           accent: timer.settings.theme.accent)
+                           accent: timer.settings.theme.accent,
+                           settings: timer.settings)
         }
     }
 
@@ -730,6 +731,7 @@ struct TasksView: View {
     private func subtaskPanel(_ task: TaskItem) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             ForEach(task.subtasks) { sub in
+                let isTarget = store.activeSubtaskID == sub.id
                 HStack(spacing: 8) {
                     Button { store.toggleSubtask(task.id, sub.id) } label: {
                         Image(systemName: sub.isDone ? "checkmark.circle.fill" : "circle")
@@ -741,8 +743,31 @@ struct TasksView: View {
                     Text(sub.title)
                         .font(.system(.caption, design: .rounded))
                         .strikethrough(sub.isDone, color: .secondary)
-                        .foregroundStyle(sub.isDone ? .secondary : .primary)
+                        .foregroundStyle(sub.isDone ? AnyShapeStyle(.secondary)
+                                         : isTarget ? AnyShapeStyle(Color.accentColor)
+                                         : AnyShapeStyle(.primary))
                     Spacer()
+                    if timer.settings.showPomodoroBadges,
+                       sub.pomodorosDone > 0 || sub.estimatedPomodoros != nil {
+                        Text(sub.estimatedPomodoros.map { "🍅\(sub.pomodorosDone)/\($0)" }
+                             ?? "🍅\(sub.pomodorosDone)")
+                            .font(.system(size: 10, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    }
+                    if !sub.isDone {
+                        Button {
+                            store.setActiveSubtask(taskID: task.id,
+                                                   subtaskID: isTarget ? nil : sub.id)
+                        } label: {
+                            Image(systemName: isTarget ? "scope" : "circle.dashed")
+                                .font(.system(size: 11))
+                                .foregroundStyle(isTarget ? Color.accentColor : .secondary)
+                        }
+                        .buttonStyle(.pressableSubtle)
+                        .help("Focus pomodoros credit this step")
+                        .accessibilityLabel(isTarget ? "Stop targeting \(sub.title)"
+                                                     : "Target focus at \(sub.title)")
+                    }
                     Button { store.deleteSubtask(task.id, sub.id) } label: {
                         Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
                             .foregroundStyle(.secondary)
@@ -775,7 +800,8 @@ struct TasksView: View {
     private func commitSubtask(_ taskID: UUID) {
         let text = (subtaskDrafts[taskID] ?? "").trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty else { return }
-        store.addSubtask(taskID, title: text)
+        let est = timer.settings.defaultSubtaskEstimate
+        store.addSubtask(taskID, title: text, estimate: est > 0 ? est : nil)
         subtaskDrafts[taskID] = ""
     }
 
@@ -906,12 +932,15 @@ struct TasksView: View {
             }
 
             // Estimate progress ring (or a plain count when no estimate).
-            if let est = task.estimatedPomodoros {
-                estimateRing(done: task.pomodorosDone, total: est, color: accent)
-            } else if task.pomodorosDone > 0 {
-                Text("🍅\(task.pomodorosDone)")
-                    .font(.system(.caption, design: .rounded).weight(.medium))
-                    .foregroundStyle(Color.dsSecondary)
+            // Estimate is the subtask sum when subtasks carry estimates.
+            if timer.settings.showPomodoroBadges {
+                if let est = task.displayEstimate {
+                    estimateRing(done: task.pomodorosDone, total: est, color: accent)
+                } else if task.pomodorosDone > 0 {
+                    Text("🍅\(task.pomodorosDone)")
+                        .font(.system(.caption, design: .rounded).weight(.medium))
+                        .foregroundStyle(Color.dsSecondary)
+                }
             }
 
             // Expand chevron — an info affordance, only when there's more to see.
