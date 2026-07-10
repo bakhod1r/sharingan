@@ -19,9 +19,9 @@ struct ReminderRow: View {
                 Toggle("", isOn: $item.enabled).tint(.green).labelsHidden()
             }
             HStack {
-                Text("Every").foregroundStyle(.white.opacity(0.8))
-                Stepper("\(item.intervalMinutes) min", value: $item.intervalMinutes, in: 1...300)
-                    .tint(.white)
+                Text("Every \(item.intervalMinutes) min").foregroundStyle(.white.opacity(0.8))
+                Spacer()
+                DSStepper(value: $item.intervalMinutes, range: 1...300)
             }
             TextField("Message", text: $item.message, axis: .vertical)
                 .textFieldStyle(DarkGlassFieldStyle())
