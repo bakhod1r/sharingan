@@ -6,32 +6,52 @@ import BlinkCore
 
 /// Flat almond eye outline drawn as the LEFT eye: sharp outer tip at minX
 /// (high), inner/nasal tip at maxX (low). `mirrored` flips for the right eye.
+/// `openness` morphs the upper lid down onto the lower lash line (1 = open,
+/// 0 = closed) — the corner tips stay fixed, so the shape blinks in place.
 struct MoveEyeShape: Shape {
     var mirrored = false
+    var openness: CGFloat = 1
 
     static let outerTip = CGPoint(x: 0.00, y: 0.06)
     static let innerTip = CGPoint(x: 1.00, y: 0.94)
+    /// Open upper-lid cubic controls (outer→inner).
+    static let upperC1 = CGPoint(x: 0.32, y: -0.10)
+    static let upperC2 = CGPoint(x: 0.76, y: 0.20)
+    /// Lower-lid cubic controls traversed outer→inner — also the closed
+    /// position of the upper lid, so at openness 0 the lids coincide.
+    static let lowerC1 = CGPoint(x: 0.07, y: 0.86)
+    static let lowerC2 = CGPoint(x: 0.52, y: 1.08)
+
+    var animatableData: CGFloat {
+        get { openness }
+        set { openness = newValue }
+    }
 
     func path(in rect: CGRect) -> Path {
         var p = upperLidPath(in: rect)
         p.addCurve(
             to: pt(Self.outerTip, rect),
-            control1: pt(CGPoint(x: 0.52, y: 1.08), rect),
-            control2: pt(CGPoint(x: 0.07, y: 0.86), rect)
+            control1: pt(Self.lowerC2, rect),
+            control2: pt(Self.lowerC1, rect)
         )
         p.closeSubpath()
         return p
     }
 
     func upperLidPath(in rect: CGRect) -> Path {
+        let k = 1 - min(max(openness, 0), 1)
         var p = Path()
         p.move(to: pt(Self.outerTip, rect))
         p.addCurve(
             to: pt(Self.innerTip, rect),
-            control1: pt(CGPoint(x: 0.32, y: -0.10), rect),
-            control2: pt(CGPoint(x: 0.76, y: 0.20), rect)
+            control1: pt(Self.lerp(Self.upperC1, Self.lowerC1, k), rect),
+            control2: pt(Self.lerp(Self.upperC2, Self.lowerC2, k), rect)
         )
         return p
+    }
+
+    private static func lerp(_ a: CGPoint, _ b: CGPoint, _ k: CGFloat) -> CGPoint {
+        CGPoint(x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k)
     }
 
     func lowerLidPath(in rect: CGRect) -> Path {
@@ -39,8 +59,8 @@ struct MoveEyeShape: Shape {
         p.move(to: pt(Self.innerTip, rect))
         p.addCurve(
             to: pt(Self.outerTip, rect),
-            control1: pt(CGPoint(x: 0.52, y: 1.08), rect),
-            control2: pt(CGPoint(x: 0.07, y: 0.86), rect)
+            control1: pt(Self.lowerC2, rect),
+            control2: pt(Self.lowerC1, rect)
         )
         return p
     }
@@ -360,6 +380,54 @@ struct MoveIrisView: View {
 
 // MARK: - Single eye
 
+/// Sampled geometry of the OPEN eye aperture in unit space (the almond's
+/// bounding square, unmirrored). For a horizontal position x it answers:
+/// where is the opening's vertical midline, and how tall is the opening?
+/// Built once from the same Bézier control points `MoveEyeShape` draws with.
+private enum EyeAperture {
+    static let steps = 16
+    static let table: [(midY: CGFloat, halfH: CGFloat)] = {
+        func bez(_ p0: CGPoint, _ c1: CGPoint, _ c2: CGPoint, _ p3: CGPoint,
+                 _ t: CGFloat) -> CGPoint {
+            let m = 1 - t
+            let a = m * m * m, b = 3 * m * m * t, c = 3 * m * t * t, d = t * t * t
+            return CGPoint(x: a * p0.x + b * c1.x + c * c2.x + d * p3.x,
+                           y: a * p0.y + b * c1.y + c * c2.y + d * p3.y)
+        }
+        // Both lids traversed outer→inner so x grows monotonically.
+        let upper = (0...32).map {
+            bez(MoveEyeShape.outerTip, MoveEyeShape.upperC1,
+                MoveEyeShape.upperC2, MoveEyeShape.innerTip, CGFloat($0) / 32)
+        }
+        let lower = (0...32).map {
+            bez(MoveEyeShape.outerTip, MoveEyeShape.lowerC1,
+                MoveEyeShape.lowerC2, MoveEyeShape.innerTip, CGFloat($0) / 32)
+        }
+        func y(at x: CGFloat, on pts: [CGPoint]) -> CGFloat {
+            guard x > pts[0].x else { return pts[0].y }
+            for i in 1..<pts.count where pts[i].x >= x {
+                let a = pts[i - 1], b = pts[i]
+                let f = (x - a.x) / max(b.x - a.x, 0.0001)
+                return a.y + (b.y - a.y) * f
+            }
+            return pts[pts.count - 1].y
+        }
+        return (0...steps).map { i in
+            let x = CGFloat(i) / CGFloat(steps)
+            let yu = y(at: x, on: upper), yl = y(at: x, on: lower)
+            return (midY: (yu + yl) / 2, halfH: max(0, (yl - yu) / 2))
+        }
+    }()
+
+    static func sample(at x: CGFloat) -> (midY: CGFloat, halfH: CGFloat) {
+        let u = min(max(x, 0), 1) * CGFloat(steps)
+        let i = min(Int(u), steps - 1)
+        let f = u - CGFloat(i)
+        let a = table[i], b = table[i + 1]
+        return (a.midY + (b.midY - a.midY) * f, a.halfH + (b.halfH - a.halfH) * f)
+    }
+}
+
 /// One MoveEyes-style eye. `gaze` is a normalized look direction (−1…1 per
 /// axis); the iris travels inside the sclera and clips behind the lids.
 /// Mirroring happens inside the shape, so gaze applies unflipped to both eyes.
@@ -370,6 +438,8 @@ struct MoveEyeView: View {
     var size: CGFloat = 96
     var mirrored: Bool = false
     var style: SharinganStyle = .classic
+    /// Eyelid position, 1 = fully open, 0 = closed.
+    var openness: CGFloat = 1
 
     var body: some View {
         let h = size
@@ -378,8 +448,8 @@ struct MoveEyeView: View {
         let sh = 0.96 * h
         let scleraDX = (mirrored ? -1 : 1) * (w - sw) / 2
         let irisD = 0.52 * sh
-        let shape = MoveEyeShape(mirrored: mirrored)
-        let off = CGPoint(x: CGFloat(gaze.dx) * 0.30 * w, y: CGFloat(gaze.dy) * 0.34 * h)
+        let shape = MoveEyeShape(mirrored: mirrored, openness: openness)
+        let off = irisOffset(sw: sw, sh: sh, irisD: irisD)
 
         ZStack {
             // subtle gray edge highlights peeking out from behind the black
@@ -420,16 +490,33 @@ struct MoveEyeView: View {
                         .frame(width: irisD * 1.6, height: irisD * 1.6)
                     MoveIrisView(diameter: irisD, spin: spin, style: style)
                 }
-                .offset(
-                    x: (mirrored ? -1 : 1) * 0.025 * sw + off.x,
-                    y: 0.08 * sh + off.y
-                )
+                .offset(x: off.x, y: off.y)
             }
             .frame(width: sw, height: sh)
             .clipShape(shape)
             .offset(x: scleraDX, y: -0.047 * h)
         }
         .frame(width: w, height: size)
+    }
+
+    /// Iris offset from the sclera-frame center, in points. The iris rides the
+    /// eye's actual opening: horizontally it stops short of the pointed tips,
+    /// vertically it stays level for left/right gazes but is clamped into the
+    /// slanted aperture band so it never vanishes into a corner.
+    private func irisOffset(sw: CGFloat, sh: CGFloat, irisD: CGFloat) -> CGPoint {
+        // Horizontal position across the eye, in screen terms.
+        let uScreen = min(max(0.5 + CGFloat(gaze.dx) * 0.30, 0.12), 0.88)
+        // The aperture table describes the unmirrored shape.
+        let uShape = mirrored ? 1 - uScreen : uScreen
+        let ap = EyeAperture.sample(at: uShape)
+        let irisUnitR = irisD / 2 / sh
+        // Vertical slack inside the opening at this x; lets up/down gazes tuck
+        // the iris under the lids without losing it entirely.
+        let slack = max(0, ap.halfH - irisUnitR * 0.45)
+        let baseY = EyeAperture.sample(at: 0.5).midY
+        let y = min(max(baseY + CGFloat(gaze.dy) * slack, ap.midY - slack),
+                    ap.midY + slack)
+        return CGPoint(x: (uScreen - 0.5) * sw, y: (y - 0.5) * sh)
     }
 }
 
@@ -449,6 +536,14 @@ struct MoveEyePair: View {
     }
 
     @State private var spinStart: TimeInterval = 0
+    /// When the pair appeared — drives the closed→open "awakening" reveal.
+    @State private var appearStart: TimeInterval = 0
+    /// When the current step began — clock for blink cycles and lid eases.
+    @State private var phaseStart: TimeInterval = 0
+    /// Lid position at the moment the step changed, for a continuous blend.
+    @State private var transitionFrom: Double = 1
+    /// Previous step direction, so the blend can start from its lid value.
+    @State private var lastDirection: String = ""
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let spinDuration: Double = 1.6
     private let spinTurns: Double = 3.0
@@ -459,15 +554,30 @@ struct MoveEyePair: View {
             let off = offset(at: t)
             let live = GazeDirection(dx: off.x, dy: off.y)
             let s = activationSpin(at: t)
+            let lid = openness(at: t)
             HStack(spacing: eyeSize * 0.42) {
-                MoveEyeView(gaze: live, spin: s, size: eyeSize, style: style)
-                MoveEyeView(gaze: live, spin: s, size: eyeSize, mirrored: true, style: style)
+                MoveEyeView(gaze: live, spin: s, size: eyeSize, style: style,
+                            openness: lid)
+                MoveEyeView(gaze: live, spin: s, size: eyeSize, mirrored: true,
+                            style: style, openness: lid)
             }
             .animation(isPath ? nil : .easeInOut(duration: 0.5), value: gaze)
         }
-        .onAppear { spinStart = Date().timeIntervalSinceReferenceDate }
-        .onChange(of: direction) { _ in
-            spinStart = Date().timeIntervalSinceReferenceDate
+        .onAppear {
+            let now = Date().timeIntervalSinceReferenceDate
+            appearStart = now
+            phaseStart = now
+            // Delay the tomoe whirl so it plays just as the lids finish opening.
+            spinStart = now + 1.1
+            transitionFrom = 1
+            lastDirection = direction
+        }
+        .onChange(of: direction) { newDirection in
+            let now = Date().timeIntervalSinceReferenceDate
+            transitionFrom = steadyOpenness(of: lastDirection, at: now)
+            lastDirection = newDirection
+            phaseStart = now
+            spinStart = now
         }
     }
 
@@ -477,6 +587,45 @@ struct MoveEyePair: View {
         let u = min(max((t - spinStart) / spinDuration, 0), 1)
         let eased = u * u * u * (u * (u * 6 - 15) + 10)
         return spinTurns * 360 * eased
+    }
+
+    // MARK: - Eyelids
+
+    /// Lid position for the current frame: the break-start awakening gates a
+    /// per-step value (blink wave, closed hold, or open), blended smoothly
+    /// from wherever the lids were when the step changed.
+    private func openness(at t: TimeInterval) -> CGFloat {
+        if reduceMotion { return direction == "closed" ? 0 : 1 }
+
+        // Awakening: eyes hold shut, then open once at break start.
+        let ta = t - appearStart
+        let awaken: Double
+        if ta < 0.35 {
+            awaken = 0
+        } else {
+            let u = min(max((ta - 0.35) / 0.9, 0), 1)
+            awaken = u * u * u * (u * (u * 6 - 15) + 10)
+        }
+
+        let mode = steadyOpenness(of: direction, at: t)
+        let blend = min(max((t - phaseStart) / 0.35, 0), 1)
+        let eased = blend * blend * (3 - 2 * blend)
+        let value = transitionFrom + (mode - transitionFrom) * eased
+        return CGFloat(min(awaken, value))
+    }
+
+    /// The step's own lid value, ignoring transitions: closed steps hold shut,
+    /// the blink step sweeps shut-and-open once per second, all else is open.
+    private func steadyOpenness(of dir: String, at t: TimeInterval) -> Double {
+        switch dir {
+        case "closed":
+            return 0
+        case "blink":
+            let ph = max(0, t - phaseStart).truncatingRemainder(dividingBy: 1.0)
+            return ph < 0.3 ? 0.5 + 0.5 * cos(2 * .pi * ph / 0.3) : 1
+        default:
+            return 1
+        }
     }
 
     private func offset(at t: TimeInterval) -> (x: Double, y: Double) {

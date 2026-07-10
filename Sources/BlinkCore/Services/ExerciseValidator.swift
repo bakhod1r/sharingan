@@ -77,11 +77,12 @@ public final class ExerciseValidator: ObservableObject {
         let target = step.targetGaze
 
         // Step varieties: "blink" checks blink count over hold window;
-        // "far" / "center" pass without gaze match.
+        // "far" / "center" / "closed" pass without gaze match ("closed"
+        // is guidance only — the user's eyes are shut and can't see a retry).
         let matched: Bool
         switch step.direction.lowercased() {
         case "blink": matched = isBlinking
-        case "far", "center": matched = true
+        case "far", "center", "closed": matched = true
         // Match on the 8-way direction label so the requirement is literally the
         // same as the on-screen eye: the detected gaze must point the same way the
         // Sharingan iris does. Comparing distance to the unit target was too strict

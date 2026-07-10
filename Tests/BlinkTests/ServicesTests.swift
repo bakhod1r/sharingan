@@ -98,12 +98,44 @@ struct BreakExerciseTests {
     @Test func targetGazeMapping() {
         #expect(BreakExerciseStep(direction: "up", holdSeconds: 1).targetGaze == .up)
         #expect(BreakExerciseStep(direction: "right", holdSeconds: 1).targetGaze == .right)
+        #expect(BreakExerciseStep(direction: "closed", holdSeconds: 1).targetGaze == .center)
         #expect(BreakExerciseStep(direction: "unknown", holdSeconds: 1).targetGaze == .center)
     }
 
     @Test func libraryNonEmpty() {
         #expect(!BreakExercise.library().isEmpty)
         #expect(!BreakExercise.twentyRule.steps.isEmpty)
+    }
+
+    @Test func eyesClosedStepsUseClosedDirection() {
+        #expect(BreakExercise.twentyRule.steps.last?.direction == "closed")
+        #expect(BreakExercise.blink.steps.last?.direction == "closed")
+    }
+
+    @Test @MainActor func closedStepNeverFlagsRetry() {
+        let v = ExerciseValidator()
+        v.exercises = [BreakExercise(name: "test", steps: [
+            .init(direction: "closed", holdSeconds: 2),
+        ])]
+        // Make any mismatch flag a retry immediately, so the pass-through is
+        // what the assertion actually exercises.
+        v.minHoldSeconds = -1
+        v.start()
+        defer { v.stop() }
+        v.ingest(gaze: .right, isBlinking: false)
+        #expect(!v.needsRetry)
+    }
+
+    @Test @MainActor func mismatchedGazeStillFlagsRetry() {
+        let v = ExerciseValidator()
+        v.exercises = [BreakExercise(name: "test", steps: [
+            .init(direction: "left", holdSeconds: 2),
+        ])]
+        v.minHoldSeconds = -1
+        v.start()
+        defer { v.stop() }
+        v.ingest(gaze: .right, isBlinking: false)
+        #expect(v.needsRetry)
     }
 }
 

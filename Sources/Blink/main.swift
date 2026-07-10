@@ -69,6 +69,52 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-eyes-preview"),
     exit(0)
 }
 
+// Headless preview of iris gaze placement and eyelid morph (debug utility):
+// `Blink --render-gaze-grid <path>`.
+if let i = CommandLine.arguments.firstIndex(of: "--render-gaze-grid"),
+   i + 1 < CommandLine.arguments.count {
+    let out = CommandLine.arguments[i + 1]
+    MainActor.assumeIsolated {
+        let gazes: [(String, GazeDirection)] = [
+            ("center", .center), ("left", .left), ("right", .right),
+            ("up", .up), ("down", .down), ("up left", .upLeft),
+            ("down right", .downRight),
+        ]
+        let lids: [CGFloat] = [1, 0.66, 0.33, 0]
+        let grid = VStack(alignment: .leading, spacing: 14) {
+            ForEach(gazes, id: \.0) { name, gaze in
+                HStack(spacing: 18) {
+                    Text(name)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.7))
+                        .frame(width: 80, alignment: .trailing)
+                    MoveEyeView(gaze: gaze, size: 72)
+                    MoveEyeView(gaze: gaze, size: 72, mirrored: true)
+                }
+            }
+            HStack(spacing: 18) {
+                Text("blink")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .frame(width: 80, alignment: .trailing)
+                ForEach(lids, id: \.self) { lid in
+                    MoveEyeView(gaze: .center, size: 72, openness: lid)
+                }
+            }
+        }
+        .padding(24)
+        .background(Color.black)
+        let renderer = ImageRenderer(content: grid)
+        renderer.scale = 2
+        if let cg = renderer.cgImage {
+            let rep = NSBitmapImageRep(cgImage: cg)
+            try? rep.representation(using: .png, properties: [:])?
+                .write(to: URL(fileURLWithPath: out))
+        }
+    }
+    exit(0)
+}
+
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate

@@ -23,6 +23,7 @@ public struct BreakExerciseStep: Equatable, Sendable, Codable {
         case "up_right", "upright": return .upRight
         case "down_left", "downleft": return .downLeft
         case "down_right", "downright": return .downRight
+        case "closed":                 return .center
         default:                            return .center
         }
     }
@@ -34,6 +35,7 @@ public struct BreakExerciseStep: Equatable, Sendable, Codable {
         case "left":     return "left"
         case "right":    return "right"
         case "center":   return "center"
+        case "closed":   return "ahead with your eyes closed"
         case "up_left":  return "up and to the left"
         case "up_right": return "up and to the right"
         case "down_left": return "down and to the left"
@@ -57,7 +59,7 @@ public struct BreakExercise: Equatable, Sendable, Codable {
         steps: [
             .init(direction: "far", holdSeconds: 20,
                   instruction: "Look at something 20 feet away for 20 seconds"),
-            .init(direction: "center", holdSeconds: 5,
+            .init(direction: "closed", holdSeconds: 5,
                   instruction: "Close your eyes and breathe"),
         ]
     )
@@ -92,7 +94,7 @@ public struct BreakExercise: Equatable, Sendable, Codable {
         steps: [
             .init(direction: "blink",       holdSeconds: 8,
                   instruction: "Blink quickly 8 times"),
-            .init(direction: "center",      holdSeconds: 4,
+            .init(direction: "closed",      holdSeconds: 4,
                   instruction: "Now keep your eyes softly closed for 4 seconds"),
         ]
     )
