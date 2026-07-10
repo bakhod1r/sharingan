@@ -68,7 +68,7 @@ public final class ReminderService: ObservableObject {
 
     private func fire(_ reminder: ReminderItem) {
         NotificationService.shared.notify(
-            title: "Blink — \(reminder.kind.label)",
+            title: "Sharingan — \(reminder.kind.label)",
             body: reminder.resolvedMessage,
             identifier: "blink.reminder.\(reminder.id)"
         )

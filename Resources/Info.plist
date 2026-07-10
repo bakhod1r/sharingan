@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>Blink</string>
+    <string>Sharingan</string>
     <key>CFBundleDisplayName</key>
-    <string>Blink</string>
+    <string>Sharingan</string>
     <key>CFBundleIdentifier</key>
     <string>com.blink.app</string>
     <key>CFBundleVersion</key>
@@ -13,7 +13,7 @@
     <key>CFBundleShortVersionString</key>
     <string>1.0.0</string>
     <key>CFBundleExecutable</key>
-    <string>Blink</string>
+    <string>Sharingan</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleIconFile</key>
@@ -27,8 +27,8 @@
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSCameraUsageDescription</key>
-    <string>Blink uses the camera to check your eye exercises during breaks (break time only, private).</string>
+    <string>Sharingan uses the camera to check your eye exercises during breaks (break time only, private).</string>
     <key>NSUserNotificationsUsageDescription</key>
-    <string>Blink sends notifications to remind you when pomodoros and breaks start.</string>
+    <string>Sharingan sends notifications to remind you when pomodoros and breaks start.</string>
 </dict>
 </plist>

@@ -35,7 +35,7 @@ public final class NotificationService {
     }
 
     public func focusFiveMinLeft() {
-        notify(title: "Blink",
+        notify(title: "Sharingan",
                body: "Pomodoro ends in 5 minutes. Break coming up soon.",
                identifier: "blink.fiveMinLeft")
     }

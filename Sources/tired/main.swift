@@ -104,7 +104,7 @@ struct TiredCLI {
         let pct = s.totalSeconds > 0
             ? Int((1 - s.remainingSeconds / s.totalSeconds) * 100)
             : 0
-        print("Blink — \(s.phase.label) \(time) \(symbol)  \(pct)%")
+        print("Sharingan — \(s.phase.label) \(time) \(symbol)  \(pct)%")
         print("\(s.cyclesCompletedToday) completed today · streak \(s.streak) days")
     }
 }

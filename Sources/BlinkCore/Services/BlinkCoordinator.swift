@@ -393,7 +393,7 @@ public final class BlinkCoordinator: ObservableObject {
             return
         }
         NotificationService.shared.notify(
-            title: "Blink — Milestone achieved",
+            title: "Sharingan — Milestone achieved",
             body: "\(reward.badge.emoji) \(reward.badge.title): \(reward.badge.subtitle)",
             identifier: "blink.streak.\(reward.badge.id)"
         )

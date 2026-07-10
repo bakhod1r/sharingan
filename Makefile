@@ -10,7 +10,9 @@
 #   make open       # open the assembled app
 #   make clean      # remove build artifacts
 
-APP      := Blink
+# SwiftPM product (module names are unchanged); the shipped bundle is branded.
+PRODUCT  := Blink
+APP      := Sharingan
 SCRIPTS  := Scripts
 
 .DEFAULT_GOAL := build
@@ -20,7 +22,7 @@ build:
 	swift build
 
 run:
-	swift run $(APP)
+	swift run $(PRODUCT)
 
 release:
 	swift build -c release

@@ -22,7 +22,10 @@ ARCH_FLAGS=()
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-APP_NAME="Blink"
+# The SwiftPM product is still `Blink` (module rename would churn the whole
+# tree); the shipped bundle and executable are branded `Sharingan`.
+PRODUCT_NAME="Blink"
+APP_NAME="Sharingan"
 DIST="$ROOT/dist"
 APP="$DIST/$APP_NAME.app"
 
@@ -33,14 +36,14 @@ BINDIR="$(build --show-bin-path)"
 
 label="$CONFIG"; [[ "${1:-}" == "--universal" ]] && label="$label, universal"
 echo "▸ Building ($label)…"
-build --product "$APP_NAME"
+build --product "$PRODUCT_NAME"
 
 echo "▸ Assembling $APP …"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
-# Executable
-cp "$BINDIR/$APP_NAME" "$APP/Contents/MacOS/$APP_NAME"
+# Executable (built as $PRODUCT_NAME, shipped under the brand name)
+cp "$BINDIR/$PRODUCT_NAME" "$APP/Contents/MacOS/$APP_NAME"
 
 # Info.plist
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"

@@ -32,7 +32,7 @@ final class MainWindowManager: NSObject, NSWindowDelegate {
             styleMask: [.titled, .closable, .miniaturizable, .resizable,
                         .fullSizeContentView],
             backing: .buffered, defer: false)
-        win.title = "Blink"
+        win.title = "Sharingan"
         win.titleVisibility = .hidden
         win.titlebarAppearsTransparent = true
         win.isReleasedWhenClosed = false

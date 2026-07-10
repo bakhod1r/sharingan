@@ -17,7 +17,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-APP_NAME="Blink"
+APP_NAME="Sharingan"
 SRC="$ROOT/dist/$APP_NAME.app"
 DEST="/Applications/$APP_NAME.app"
 
@@ -32,8 +32,10 @@ fi
 # 2) Replace any previous install (quit a running copy first).
 echo "▸ Installing to $DEST …"
 pkill -f "$APP_NAME.app/Contents/MacOS/$APP_NAME" 2>/dev/null || true
+# Also retire a pre-rename install, which lived at /Applications/Blink.app.
+pkill -f "Blink.app/Contents/MacOS/Blink" 2>/dev/null || true
 sleep 1
-rm -rf "$DEST"
+rm -rf "$DEST" "/Applications/Blink.app"
 cp -R "$SRC" "$DEST"
 
 # 3) The universal unlock: drop the quarantine flag (from a git-zip / AirDrop /
@@ -47,12 +49,12 @@ sleep 2
 
 # 5) Confirm, or hand off to the one manual step macOS may still require.
 if pgrep -f "$APP_NAME.app/Contents/MacOS/$APP_NAME" >/dev/null; then
-  echo "✅ Blink is running — look for the stopwatch icon in your menu bar."
+  echo "✅ $APP_NAME is running — look for the Sharingan icon in your menu bar."
 else
   cat <<EOF
 ⚠️  macOS is still holding the first launch. One-time unlock:
     1) Open  System Settings → Privacy & Security
-    2) Scroll down — you'll see: '"Blink" was blocked'
+    2) Scroll down — you'll see: '"$APP_NAME" was blocked'
     3) Click  Open Anyway,  then re-run:  Scripts/install.sh
   (This only happens once per Mac for an ad-hoc-signed app.)
 EOF

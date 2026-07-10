@@ -127,7 +127,7 @@ final class MenuBarController: NSObject {
         }
         img.isTemplate = false
         if img.size.width > 0 { return img }
-        return NSImage(systemSymbolName: "stopwatch", accessibilityDescription: "Blink")
+        return NSImage(systemSymbolName: "stopwatch", accessibilityDescription: "Sharingan")
     }
 
     /// Opens the popover if it isn't already visible. Used on launch/reopen so

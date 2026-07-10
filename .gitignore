@@ -11,5 +11,5 @@ Package.resolved
 # Track the built app so a second (same-arch) Mac can `git pull` and run it
 # directly, but keep other build artifacts (e.g. the .dmg) out of git.
 /dist/*
-!/dist/Blink.app
+!/dist/Sharingan.app
 .vscode/

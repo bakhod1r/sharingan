@@ -88,7 +88,7 @@ struct MainWindowView: View {
                 .frame(width: 28, height: 28)
                 .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
                 .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
-            Text("Blink")
+            Text("Sharingan")
                 .font(.system(.title2, design: .rounded).weight(.bold))
                 .foregroundStyle(.white)
             Spacer()
