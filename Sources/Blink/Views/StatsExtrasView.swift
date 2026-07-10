@@ -179,6 +179,8 @@ struct StatsExtrasView: View {
                             Text("\(row.count)")
                                 .font(.system(.caption2, design: .rounded).weight(.bold).monospacedDigit())
                                 .foregroundStyle(Color.dsSecondary)
+                                .contentTransition(.numericText())
+                                .animation(DS.Motion.snappy, value: row.count)
                         }
                     }
                 }
@@ -235,6 +237,8 @@ struct StatsExtrasView: View {
                             Text("\(row.count)")
                                 .font(.system(.caption2, design: .rounded).weight(.bold).monospacedDigit())
                                 .foregroundStyle(Color.dsSecondary)
+                                .contentTransition(.numericText())
+                                .animation(DS.Motion.snappy, value: row.count)
                         }
                     }
                 }
@@ -287,6 +291,8 @@ struct StatsExtrasView: View {
             Text(value)
                 .font(.system(.caption, design: .rounded).weight(.bold).monospacedDigit())
                 .foregroundStyle(Color.dsSecondary)
+                .contentTransition(.numericText())
+                .animation(DS.Motion.snappy, value: value)
         }
     }
 

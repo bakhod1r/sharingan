@@ -14,13 +14,18 @@ struct StreakBadgeView: View {
                     .font(.system(size: 18, weight: .bold))
                     .symbolRenderingMode(.palette)
                     .foregroundStyle(.white, .orange)
+                    .symbolEffect(.bounce, value: streak.currentStreak)
                 Text("\(streak.currentStreak) day streak")
                     .font(.system(.headline, design: .rounded).weight(.bold))
                     .foregroundStyle(.white)
+                    .contentTransition(.numericText())
+                    .animation(DS.Motion.celebrate, value: streak.currentStreak)
                 Spacer()
                 Text("Best: \(streak.longestStreak)")
                     .font(.system(.caption, design: .rounded).weight(.medium))
                     .foregroundStyle(.white.opacity(0.7))
+                    .contentTransition(.numericText())
+                    .animation(DS.Motion.snappy, value: streak.longestStreak)
             }
 
             if let nm = next {
@@ -64,6 +69,7 @@ struct StreakBadgeView: View {
                     Capsule().fill(LinearGradient(colors: [.orange, .yellow],
                                                   startPoint: .leading, endPoint: .trailing))
                         .frame(width: max(3, geo.size.width * pct))
+                        .animation(DS.Motion.standard, value: pct)
                 }
             }
             .frame(height: 5)
