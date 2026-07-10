@@ -89,7 +89,7 @@ struct StatsChartView: View {
             ForEach(ChartRange.allCases) { r in
                 let selected = r == range
                 Button {
-                    withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) { range = r }
+                    withAnimation(DS.Motion.standard) { range = r }
                 } label: {
                     Text(r.rawValue)
                         .font(.system(.caption, design: .rounded).weight(.bold))
@@ -166,7 +166,7 @@ struct StatsChartView: View {
             }
         }
         .frame(height: 180)
-        .animation(.easeInOut(duration: 0.3), value: range)
+        .animation(DS.Motion.gentle, value: range)
     }
 
     /// Slim, evenly-breathing bars per range — wide 7-day bars read as slabs.

@@ -23,6 +23,11 @@ struct ContentView: View {
     @State private var nextBlink = Date().addingTimeInterval(.random(in: 2...5))
     /// Winklar navbat bilan: o'ng, keyin chap, keyin o'ng…
     @State private var winkRightNext = true
+    /// 0…1 — iris naqshining qorachiqdan ochilishi: ilova ochilganda aylanib
+    /// chiqadi, mudroqda yig'iladi, uyg'onishda qaytadan ochiladi.
+    @State private var patternEmergence: CGFloat = 0
+    /// Har uyg'onishda tomoe soni bittaga oshadi: 1 → 2 → 3 → 1…
+    @State private var tomoeStage = 3
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Shuncha soniya jimlikdan keyin ko'z qisa boshlaydi.
     private let winkIdleDelay: TimeInterval = 6
@@ -50,6 +55,16 @@ struct ContentView: View {
             .ignoresSafeArea()
         }
         .onReceive(ticker) { _ in updateEyelids() }
+        .onAppear {
+            // Uyg'onish: naqsh qorachiqdan aylanib ochiladi.
+            if reduceMotion {
+                patternEmergence = 1
+            } else {
+                withAnimation(.easeOut(duration: 0.9).delay(0.4)) {
+                    patternEmergence = 1
+                }
+            }
+        }
     }
 
     /// Qovoq holat mashinasi — Blink ilovasidagi wallpaper bilan bir xil:
@@ -63,12 +78,25 @@ struct ContentView: View {
                 leftLid = 0
                 rightLid = 0
             }
+            // Naqsh qovoqlar bilan birga qorachiqqa yig'iladi.
+            if !reduceMotion {
+                withAnimation(.easeIn(duration: 0.7)) { patternEmergence = 0 }
+            }
         } else if stillFor <= dozeDelay, dozing {
             dozing = false
             nextBlink = Date().addingTimeInterval(.random(in: 2...5))
+            // Uyg'onish: navbatdagi tomoe bosqichi aylanib ochiladi (1→2→3).
+            if !reduceMotion { tomoeStage = tomoeStage % 3 + 1 }
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) {
                 leftLid = 1
                 rightLid = 1
+            }
+            if reduceMotion {
+                patternEmergence = 1
+            } else {
+                withAnimation(.easeOut(duration: 0.8).delay(0.1)) {
+                    patternEmergence = 1
+                }
             }
         }
         guard !reduceMotion, !dozing, Date() >= nextBlink else { return }
@@ -166,7 +194,9 @@ struct ContentView: View {
                 mirrored: false,
                 eyeCenter: P(180, 330),
                 mouse: mouse,
-                openness: leftLid
+                openness: leftLid,
+                emergence: patternEmergence,
+                tomoeCount: tomoeStage
             )
             .position(P(180, 330))
 
@@ -175,7 +205,9 @@ struct ContentView: View {
                 mirrored: true,
                 eyeCenter: P(620, 330),
                 mouse: mouse,
-                openness: rightLid
+                openness: rightLid,
+                emergence: patternEmergence,
+                tomoeCount: tomoeStage
             )
             .position(P(620, 330))
         }

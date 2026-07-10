@@ -150,13 +150,20 @@ struct TomoeTailShape: Shape {
     }
 }
 
-/// Qizil iris: radial gradient, markaziy qorachiq, ingichka halqa va 3 ta tomoe.
+/// Qizil iris: radial gradient, markaziy qorachiq, ingichka halqa va tomoe.
 struct IrisView: View {
     var diameter: CGFloat
+    /// 0…1 — naqshning qorachiqdan "ochilish" darajasi: 0 = yashiringan
+    /// (yalang qizil iris), 1 = to'liq shakllangan. Ochilishda qo'shimcha
+    /// burilish bilan aylanib chiqadi.
+    var emergence: CGFloat = 1
+    /// Tomoe soni (1…3) — har mudroq-uyg'onish siklida bittaga oshadi.
+    var tomoeCount: Int = 3
 
     var body: some View {
         let r = diameter / 2
         let ringR = 0.52 * r
+        let e = min(max(emergence, 0), 1)
         ZStack {
             // o'rta bandda yorqinroq, markaz va chetlarda to'qroq qizil
             Circle()
@@ -178,32 +185,39 @@ struct IrisView: View {
             Circle()
                 .stroke(Color(red: 0.08, green: 0.0, blue: 0.0).opacity(0.9), lineWidth: 0.05 * r)
                 .padding(0.02 * r)
-            // tomoe orqali o'tuvchi xira to'q-qizil halqa
-            Circle()
-                .stroke(Color(red: 0.22, green: 0.0, blue: 0.01).opacity(0.85), lineWidth: 0.035 * r)
-                .frame(width: ringR * 2, height: ringR * 2)
+            // naqsh qatlami (halqa + tomoe) — qorachiqdan aylanib ochiladi;
+            // strukturaviy if yo'q, shunda withAnimation collapse'ni chizadi
+            ZStack {
+                // tomoe orqali o'tuvchi xira to'q-qizil halqa
+                Circle()
+                    .stroke(Color(red: 0.22, green: 0.0, blue: 0.01).opacity(0.85), lineWidth: 0.035 * r)
+                    .frame(width: ringR * 2, height: ringR * 2)
+                // tomoe: bosh + soatga qarshi buriluvchi dum
+                ForEach(0..<max(tomoeCount, 1), id: \.self) { i in
+                    let head = Angle(degrees: -80 + Double(i) * 360 / Double(max(tomoeCount, 1)))
+                    TomoeTailShape(
+                        ringRadius: ringR,
+                        headAngle: head,
+                        sweep: .degrees(-60),
+                        startWidth: 0.20 * r
+                    )
+                    .fill(Color.black)
+                    Circle()
+                        .fill(Color.black)
+                        .frame(width: 0.28 * r, height: 0.28 * r)
+                        .offset(
+                            x: ringR * cos(head.radians),
+                            y: ringR * sin(head.radians)
+                        )
+                }
+            }
+            .scaleEffect(max(0.08 + 0.92 * e, 0.001))
+            .opacity(Double(min(1, e * 2.4)))
+            .rotationEffect(.degrees(-Double(1 - e) * 260))
             // markaziy qorachiq
             Circle()
                 .fill(Color.black)
                 .frame(width: 0.26 * r, height: 0.26 * r)
-            // 3 ta tomoe: bosh + soatga qarshi buriluvchi dum
-            ForEach(0..<3, id: \.self) { i in
-                let head = Angle(degrees: -80 + Double(i) * 120)
-                TomoeTailShape(
-                    ringRadius: ringR,
-                    headAngle: head,
-                    sweep: .degrees(-60),
-                    startWidth: 0.20 * r
-                )
-                .fill(Color.black)
-                Circle()
-                    .fill(Color.black)
-                    .frame(width: 0.28 * r, height: 0.28 * r)
-                    .offset(
-                        x: ringR * cos(head.radians),
-                        y: ringR * sin(head.radians)
-                    )
-            }
         }
         .frame(width: diameter, height: diameter)
     }
@@ -212,6 +226,8 @@ struct IrisView: View {
 /// Iris — sichqoncha tinch turganda silliq aylanadi, harakatda to'xtaydi.
 struct SpinningIris: View {
     var diameter: CGFloat
+    var emergence: CGFloat = 1
+    var tomoeCount: Int = 3
     @ObservedObject var mouse: MouseState
 
     @AppStorage(Settings.spinEnabledKey) private var spinEnabled = true
@@ -223,7 +239,7 @@ struct SpinningIris: View {
     private let ticker = Timer.publish(every: 0.2, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        IrisView(diameter: diameter)
+        IrisView(diameter: diameter, emergence: emergence, tomoeCount: tomoeCount)
             .rotationEffect(.degrees(angle))
             .onReceive(ticker) { _ in
                 let idle = Date().timeIntervalSince(mouse.lastMoved) > idleDelay
@@ -254,6 +270,10 @@ struct EyeView: View {
     @ObservedObject var mouse: MouseState
     /// Qovoq holati: 1 = ochiq, 0 = yumuq.
     var openness: CGFloat = 1
+    /// Iris naqshining ochilish darajasi (IrisView'ga uzatiladi).
+    var emergence: CGFloat = 1
+    /// Tomoe soni (IrisView'ga uzatiladi).
+    var tomoeCount: Int = 3
 
     var body: some View {
         let w = size.width
@@ -304,7 +324,8 @@ struct EyeView: View {
                             )
                         )
                         .frame(width: irisD * 1.6, height: irisD * 1.6)
-                    SpinningIris(diameter: irisD, mouse: mouse)
+                    SpinningIris(diameter: irisD, emergence: emergence,
+                                 tomoeCount: tomoeCount, mouse: mouse)
                 }
                 // iris ko'z tuynugining o'rta chizig'i bo'ylab yuradi
                 .offset(x: offset.x, y: offset.y)

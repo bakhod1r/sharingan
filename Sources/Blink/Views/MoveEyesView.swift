@@ -339,12 +339,12 @@ struct MoveIrisView: View {
                 .stroke(rimColor.opacity(0.9), lineWidth: 0.05 * r)
                 .padding(0.02 * r)
 
-            if e > 0.001 {
-                pattern(r: r)
-                    .scaleEffect(0.08 + 0.92 * e)
-                    .opacity(Double(min(1, e * 2.4)))
-                    .rotationEffect(.degrees(spin - Double(1 - e) * 260))
-            }
+            // Always in the tree (no structural if) so withAnimation-driven
+            // emergence changes animate the whirl instead of a removal fade.
+            pattern(r: r)
+                .scaleEffect(max(0.08 + 0.92 * e, 0.001))
+                .opacity(Double(min(1, e * 2.4)))
+                .rotationEffect(.degrees(spin - Double(1 - e) * 260))
 
             Circle()
                 .fill(Color.black)

@@ -109,6 +109,12 @@ struct WallpaperEyesView: View {
     @State private var nextBlink = Date().addingTimeInterval(.random(in: 2...5))
     /// Winks alternate sides: right, then left, then right…
     @State private var winkRightNext = true
+    /// 0…1 — the iris pattern's whirl out of the pupil. Opens when the
+    /// wallpaper appears, folds shut while dozing, and whirls back open on
+    /// wake — revealing the next pattern in the evolution chain.
+    @State private var patternEmergence: CGFloat = 0
+    /// Steps taken along the evolution chain (advances on every wake).
+    @State private var chainOffset = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Seconds of stillness before the eyes start winking at the user.
     private let winkIdleDelay: TimeInterval = 6
@@ -134,11 +140,13 @@ struct WallpaperEyesView: View {
                     .position(x: w / 2, y: h * 0.68)
 
                 MoveEyeView(gaze: gaze(from: leftC), spin: spinAngle, size: eyeH,
-                            style: config.style, openness: leftLid)
+                            style: evolvedStyle(base: config.style),
+                            openness: leftLid, emergence: patternEmergence)
                     .position(leftC)
                 MoveEyeView(gaze: gaze(from: rightC), spin: spinAngle, size: eyeH,
-                            mirrored: true, style: config.rightStyle ?? config.style,
-                            openness: rightLid)
+                            mirrored: true,
+                            style: evolvedStyle(base: config.rightStyle ?? config.style),
+                            openness: rightLid, emergence: patternEmergence)
                     .position(rightC)
 
                 if trackingEnabled {
@@ -163,6 +171,14 @@ struct WallpaperEyesView: View {
             }
         }
         .onAppear {
+            // Awakening: the pattern whirls out of the pupil on first show.
+            if reduceMotion {
+                patternEmergence = 1
+            } else {
+                withAnimation(.easeOut(duration: 0.9).delay(0.4)) {
+                    patternEmergence = 1
+                }
+            }
             guard trackingEnabled, config.spinTrigger.spinsOnClick else { return }
             // The wallpaper window ignores mouse events, so listen globally.
             clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown]) { _ in
@@ -189,12 +205,25 @@ struct WallpaperEyesView: View {
                 leftLid = 0
                 rightLid = 0
             }
+            // The pattern folds into the pupil together with the lids.
+            if !reduceMotion {
+                withAnimation(.easeIn(duration: 0.7)) { patternEmergence = 0 }
+            }
         } else if stillFor <= dozeDelay, dozing {
             dozing = false
             nextBlink = Date().addingTimeInterval(.random(in: 2...5))
+            // Wake with the next pattern in the chain whirling open.
+            if !reduceMotion { chainOffset += 1 }
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) {
                 leftLid = 1
                 rightLid = 1
+            }
+            if reduceMotion {
+                patternEmergence = 1
+            } else {
+                withAnimation(.easeOut(duration: 0.8).delay(0.1)) {
+                    patternEmergence = 1
+                }
             }
         }
         guard !reduceMotion, !dozing, Date() >= nextBlink else { return }
@@ -257,6 +286,15 @@ struct WallpaperEyesView: View {
         withTransaction(t) {
             spinAngle = spinAngle.truncatingRemainder(dividingBy: 360)
         }
+    }
+
+    /// The configured style advanced `chainOffset` steps along the evolution
+    /// chain — every doze/wake cycle reveals the next pattern.
+    private func evolvedStyle(base: SharinganStyle) -> SharinganStyle {
+        guard chainOffset > 0 else { return base }
+        let chain = PatternEvolution.chain
+        let i = chain.firstIndex(of: base) ?? 0
+        return chain[(i + chainOffset) % chain.count]
     }
 
     private func gaze(from center: CGPoint) -> GazeDirection {

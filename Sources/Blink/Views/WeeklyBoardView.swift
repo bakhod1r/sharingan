@@ -94,7 +94,7 @@ struct WeeklyBoardView: View {
 
             if weekOffset != 0 {
                 Button {
-                    withAnimation(.spring(response: 0.42, dampingFraction: 0.85)) { weekOffset = 0 }
+                    withAnimation(DS.Motion.standard) { weekOffset = 0 }
                 } label: {
                     Text("Today")
                         .font(.system(.callout, design: .rounded).weight(.semibold))
@@ -126,7 +126,7 @@ struct WeeklyBoardView: View {
 
     private func navButton(_ icon: String, _ action: @escaping () -> Void) -> some View {
         Button {
-            withAnimation(.spring(response: 0.42, dampingFraction: 0.85)) { action() }
+            withAnimation(DS.Motion.standard) { action() }
         } label: {
             Image(systemName: icon)
                 .font(.system(size: 13, weight: .bold))
@@ -199,7 +199,7 @@ struct WeeklyBoardView: View {
     private func addBacklog() {
         let t = backlogDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { store.add(title: t) }
+        withAnimation(DS.Motion.standard) { store.add(title: t) }
         backlogDraft = ""
     }
 
@@ -270,10 +270,10 @@ struct WeeklyBoardView: View {
         )
         .shadow(color: .black.opacity(0.28), radius: 16, y: 8)
         .scaleEffect(targeted ? 1.015 : 1)
-        .animation(.spring(response: 0.32, dampingFraction: 0.7), value: targeted)
+        .animation(DS.Motion.standard, value: targeted)
         .dropDestination(for: String.self) { dropped, _ in
             guard let s = dropped.first, let id = UUID(uuidString: s) else { return false }
-            withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) { onDrop(id) }
+            withAnimation(DS.Motion.standard) { onDrop(id) }
             return true
         } isTargeted: { hovering in
             targetedColumn = hovering ? id : (targetedColumn == id ? nil : targetedColumn)
@@ -318,7 +318,7 @@ struct WeeklyBoardView: View {
             }
         }
         .frame(maxWidth: .infinity, minHeight: 60)
-        .animation(.easeInOut(duration: 0.2), value: targeted)
+        .animation(DS.Motion.gentle, value: targeted)
     }
 
     // MARK: - Card
@@ -397,7 +397,7 @@ struct WeeklyBoardView: View {
         )
         .scaleEffect(hovered ? 1.035 : 1)
         .shadow(color: .black.opacity(hovered ? 0.3 : 0.12), radius: hovered ? 9 : 4, y: hovered ? 5 : 2)
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: hovered)
+        .animation(DS.Motion.standard, value: hovered)
         .onHover { inside in
             hoveredCard = inside ? task.id : (hoveredCard == task.id ? nil : hoveredCard)
         }

@@ -85,7 +85,7 @@ struct MenuBarView: View {
         // the popover follows this frame automatically. Capped to the screen —
         // when it can't fit, the board's horizontal scroll takes over.
         .frame(width: tab == .week ? Self.weekPopoverWidth : 360)
-        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: tab)
+        .animation(DS.Motion.standard, value: tab)
         // One app accent: controls follow the chosen theme, not system blue.
         .tint(timer.settings.theme.accent)
         .sheet(item: $editorTask) { task in
@@ -140,7 +140,7 @@ struct MenuBarView: View {
                     }
                 }
                 .frame(height: 6)
-                .animation(.easeInOut(duration: 0.3), value: frac)
+                .animation(DS.Motion.gentle, value: frac)
             }
         }
     }
@@ -259,7 +259,7 @@ struct MenuBarView: View {
                         }
                     }
                     .padding(.vertical, 1)
-                    .animation(.spring(response: 0.35, dampingFraction: 0.82),
+                    .animation(DS.Motion.standard,
                                value: groupedOpen.map(\.category))
                 }
                 // Size to the actual content (headers + expanded rows) so a short
@@ -279,7 +279,7 @@ struct MenuBarView: View {
         if !done.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
                 Button {
-                    withAnimation(.easeInOut(duration: 0.2)) { showCompleted.toggle() }
+                    withAnimation(DS.Motion.gentle) { showCompleted.toggle() }
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "chevron.right")
@@ -371,7 +371,7 @@ struct MenuBarView: View {
         let isCollapsed = collapsedCategories.contains(group.category)
         VStack(alignment: .leading, spacing: 6) {
             Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
+                withAnimation(DS.Motion.gentle) {
                     if isCollapsed { collapsedCategories.remove(group.category) }
                     else { collapsedCategories.insert(group.category) }
                 }
@@ -434,7 +434,7 @@ struct MenuBarView: View {
                             removal: .opacity.combined(with: .scale(scale: 0.9))))
                     }
                 }
-                .animation(.spring(response: 0.35, dampingFraction: 0.82),
+                .animation(DS.Motion.standard,
                            value: group.items.map(\.id))
             }
         }
@@ -514,7 +514,7 @@ struct MenuBarView: View {
 
             // Expand to manage subtasks / notes.
             Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
+                withAnimation(DS.Motion.gentle) {
                     if expandedTasks.contains(task.id) { expandedTasks.remove(task.id) }
                     else { expandedTasks.insert(task.id) }
                 }
@@ -538,7 +538,7 @@ struct MenuBarView: View {
             }
             .buttonStyle(.pressableSubtle)
             .opacity(hoveredTask == task.id ? 1 : 0)
-            .animation(.easeInOut(duration: 0.15), value: hoveredTask)
+            .animation(DS.Motion.hover, value: hoveredTask)
             .help("Delete task")
 
             Button {
@@ -562,7 +562,7 @@ struct MenuBarView: View {
             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                 .stroke(isActive ? accent.opacity(0.5) : .clear, lineWidth: 1)
         )
-        .animation(.easeInOut(duration: 0.15), value: hoveredTask)
+        .animation(DS.Motion.hover, value: hoveredTask)
         .onHover { inside in
             if inside { hoveredTask = task.id }
             else if hoveredTask == task.id { hoveredTask = nil }
@@ -882,12 +882,12 @@ struct MenuBarView: View {
                     .font(.dsTimer(20))
                     .foregroundStyle(.secondary)
                     .contentTransition(.numericText())
-                    .animation(.snappy(duration: 0.3), value: timer.remainingSeconds)
+                    .animation(DS.Motion.snappy, value: timer.remainingSeconds)
             }
             Spacer()
         }
         // Icon, label and glow cross-fade when the phase changes.
-        .animation(.easeInOut(duration: 0.4), value: timer.phase)
+        .animation(DS.Motion.gentle, value: timer.phase)
     }
 
     private var controls: some View {

@@ -151,7 +151,7 @@ struct TasksView: View {
                 Text(label)
                     .font(.system(.caption, design: .rounded).weight(.semibold))
                 Button {
-                    withAnimation(.easeInOut(duration: 0.15)) {
+                    withAnimation(DS.Motion.gentle) {
                         categoryFilter = nil; tagFilter = nil; priorityFilter = nil
                     }
                 } label: {
@@ -206,7 +206,7 @@ struct TasksView: View {
         let n = store.count(f)
         let accent = timer.settings.theme.accent
         return Button {
-            withAnimation(.easeInOut(duration: 0.15)) { filter = f }
+            withAnimation(DS.Motion.gentle) { filter = f }
         } label: {
             HStack(spacing: 4) {
                 Text(f.label)
@@ -310,7 +310,7 @@ struct TasksView: View {
                 Spacer(minLength: 4)
                 // Everything else (tags, estimate, repeat, project, notes).
                 Button {
-                    withAnimation(.easeInOut(duration: 0.2)) { showDetails.toggle() }
+                    withAnimation(DS.Motion.gentle) { showDetails.toggle() }
                 } label: {
                     chip(icon: "slider.horizontal.3",
                          text: showDetails ? "Less" : "More", active: showDetails)
@@ -589,11 +589,11 @@ struct TasksView: View {
         let t = raw.trimmingCharacters(in: .whitespaces)
             .replacingOccurrences(of: "#", with: "")
         guard !t.isEmpty, !newTagList.contains(t) else { return }
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { newTagList.append(t) }
+        withAnimation(DS.Motion.standard) { newTagList.append(t) }
     }
 
     private func removeTag(_ tag: String) {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+        withAnimation(DS.Motion.standard) {
             newTagList.removeAll { $0 == tag }
         }
     }
@@ -640,7 +640,7 @@ struct TasksView: View {
                     .fill(Color(hex: hex))
                     .frame(width: 18, height: 18)
                     .overlay(Circle().stroke(Color.white, lineWidth: selected == hex ? 2 : 0))
-                    .onTapGesture { withAnimation(.easeInOut(duration: 0.15)) { pick(hex) } }
+                    .onTapGesture { withAnimation(DS.Motion.hover) { pick(hex) } }
             }
         }
     }
@@ -655,7 +655,7 @@ struct TasksView: View {
                         .foregroundStyle(selected == icon ? .white : .white.opacity(0.6))
                         .frame(width: 26, height: 26)
                         .background(Circle().fill(Color.white.opacity(selected == icon ? 0.18 : 0.05)))
-                        .onTapGesture { withAnimation(.easeInOut(duration: 0.15)) { pick(icon) } }
+                        .onTapGesture { withAnimation(DS.Motion.hover) { pick(icon) } }
                 }
             }
         }
@@ -1037,7 +1037,7 @@ struct TasksView: View {
             // Expand chevron — an info affordance, only when there's more to see.
             if task.subtaskProgress.total > 0 || !task.notes.isEmpty {
                 Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    withAnimation(DS.Motion.gentle) {
                         if expanded.contains(task.id) { expanded.remove(task.id) }
                         else { expanded.insert(task.id) }
                     }
@@ -1085,7 +1085,7 @@ struct TasksView: View {
             .help("Run a focus pomodoro on this task")
             .accessibilityLabel(isActive && timer.isRunning ? "Pause focus" : "Start focus on \(task.title)")
         }
-        .animation(.easeInOut(duration: 0.15), value: hovered)
+        .animation(DS.Motion.hover, value: hovered)
         .padding(.leading, 14).padding(.trailing, 12).padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
@@ -1105,7 +1105,7 @@ struct TasksView: View {
         )
         .shadow(color: .black.opacity(hovered ? 0.18 : 0), radius: 6, y: 3)
         .scaleEffect(hovered && !isActive ? 1.006 : 1)
-        .animation(.easeInOut(duration: 0.15), value: hovered)
+        .animation(DS.Motion.hover, value: hovered)
         .onHover { inside in
             if inside { hoveredTask = task.id }
             else if hoveredTask == task.id { hoveredTask = nil }

@@ -52,7 +52,7 @@ struct MainWindowView: View {
                         insertion: .opacity.combined(with: .offset(y: 8)),
                         removal: .opacity))
             }
-            .animation(.easeInOut(duration: 0.24), value: section)
+            .animation(DS.Motion.gentle, value: section)
         }
         .frame(minWidth: 920, minHeight: 620)
         // One app accent: controls (pickers, toggles, sliders, menus) follow the
@@ -638,7 +638,7 @@ struct MainWindowView: View {
     }
 
     private func toggle(_ collapsed: Binding<Bool>) {
-        withAnimation(.easeInOut(duration: 0.18)) {
+        withAnimation(DS.Motion.gentle) {
             collapsed.wrappedValue.toggle()
         }
     }
@@ -735,8 +735,8 @@ struct MainWindowView: View {
             if inside { hoveredNav = s }
             else if hoveredNav == s { hoveredNav = nil }
         }
-        .animation(.easeOut(duration: 0.15), value: selected)
-        .animation(.easeOut(duration: 0.15), value: hovered)
+        .animation(DS.Motion.hover, value: selected)
+        .animation(DS.Motion.hover, value: hovered)
     }
 
     // MARK: - Detail

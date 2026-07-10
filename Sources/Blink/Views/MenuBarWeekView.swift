@@ -55,7 +55,7 @@ struct MenuBarWeekView: View {
     private var header: some View {
         HStack(spacing: 8) {
             Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { weekOffset -= 1 }
+                withAnimation(DS.Motion.standard) { weekOffset -= 1 }
             } label: {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 11, weight: .bold))
@@ -70,7 +70,7 @@ struct MenuBarWeekView: View {
                 .frame(maxWidth: .infinity)
 
             Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { weekOffset += 1 }
+                withAnimation(DS.Motion.standard) { weekOffset += 1 }
             } label: {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 11, weight: .bold))
@@ -82,7 +82,7 @@ struct MenuBarWeekView: View {
 
             if weekOffset != 0 {
                 Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { weekOffset = 0 }
+                    withAnimation(DS.Motion.standard) { weekOffset = 0 }
                 } label: {
                     Text("This week")
                         .font(.system(.caption2, design: .rounded).weight(.semibold))
@@ -157,7 +157,7 @@ struct MenuBarWeekView: View {
     private func addBacklog() {
         let t = backlogDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { store.add(title: t) }
+        withAnimation(DS.Motion.standard) { store.add(title: t) }
         backlogDraft = ""
     }
 
@@ -235,10 +235,10 @@ struct MenuBarWeekView: View {
                         lineWidth: targeted ? 2 : 1)
         )
         .scaleEffect(targeted ? 1.015 : 1)
-        .animation(.spring(response: 0.32, dampingFraction: 0.7), value: targeted)
+        .animation(DS.Motion.standard, value: targeted)
         .dropDestination(for: String.self) { dropped, _ in
             guard let s = dropped.first, let id = UUID(uuidString: s) else { return false }
-            withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) { onDrop(id) }
+            withAnimation(DS.Motion.standard) { onDrop(id) }
             return true
         } isTargeted: { hovering in
             targetedColumn = hovering ? id : (targetedColumn == id ? nil : targetedColumn)

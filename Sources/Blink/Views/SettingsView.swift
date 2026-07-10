@@ -21,7 +21,7 @@ struct SettingsView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .animation(.easeInOut(duration: 0.26), value: openCategory)
+        .animation(DS.Motion.gentle, value: openCategory)
     }
 
     // MARK: - Root: category list (macOS System Settings style)
