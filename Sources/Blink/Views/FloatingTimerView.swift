@@ -173,7 +173,7 @@ struct FloatingTimerView: View {
         let remaining = max(0, timer.remainingSeconds)
         let showTodo = height >= 104
         let timeSize = min(max(height * 0.34, 20), 54)
-        let corner = min(22, height * 0.22)
+        let corner = min(DS.Radius.xl, height * 0.22)
 
         VStack(spacing: 3) {
             Text(timer.settings.timeFormat.string(remaining))

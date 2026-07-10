@@ -156,10 +156,20 @@ struct MainWindowView: View {
             .padding(.horizontal, 18).padding(.top, 16).padding(.bottom, 5)
     }
 
+    /// Sidebar badge count per section: open tasks for Tasks, still-unscheduled
+    /// tasks for Week (the board's backlog). Zero hides the badge.
+    private func badgeCount(for s: Section) -> Int {
+        switch s {
+        case .tasks: return tasks.tasks.filter { !$0.isDone }.count
+        case .week:  return tasks.unscheduledTasks.count
+        default:     return 0
+        }
+    }
+
     private func navRow(_ s: Section) -> some View {
         let selected = section == s
         let hovered = hoveredNav == s
-        let openCount = tasks.tasks.filter { !$0.isDone }.count
+        let badge = badgeCount(for: s)
         return Button {
             section = s
         } label: {
@@ -175,8 +185,8 @@ struct MainWindowView: View {
                     .font(.system(.body, design: .rounded).weight(selected ? .semibold : .regular))
                     .foregroundStyle(selected ? Color.white : .white.opacity(0.7))
                 Spacer()
-                if s == .tasks, openCount > 0 {
-                    Text("\(openCount)")
+                if badge > 0 {
+                    Text("\(badge)")
                         .font(.system(.caption2, design: .rounded).weight(.bold).monospacedDigit())
                         .foregroundStyle(selected ? accent : .white.opacity(0.5))
                         .padding(.horizontal, 7).padding(.vertical, 2)
