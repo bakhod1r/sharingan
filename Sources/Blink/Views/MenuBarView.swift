@@ -59,15 +59,24 @@ struct MenuBarView: View {
 
             // Fixed-height area so switching Timer ↔ Tasks never resizes the
             // popover. Content is top-aligned; an over-long list scrolls within.
-            ScrollView(.vertical, showsIndicators: false) {
-                Group {
-                    switch tab {
-                    case .timer: timerTab
-                    case .tasks: TasksView(timer: timer)
-                    case .week:  MenuBarWeekView(timer: timer)
+            // On the Timer tab the status + controls are pinned BELOW the
+            // scroll — only the plan (goal bar + tasks) scrolls — so Start /
+            // Skip / +5m can never be pushed out of sight by a long list.
+            VStack(spacing: 14) {
+                ScrollView(.vertical, showsIndicators: false) {
+                    Group {
+                        switch tab {
+                        case .timer: timerTab
+                        case .tasks: TasksView(timer: timer)
+                        case .week:  MenuBarWeekView(timer: timer)
+                        }
                     }
+                    .frame(maxWidth: .infinity, alignment: .top)
                 }
-                .frame(maxWidth: .infinity, alignment: .top)
+                if tab == .timer {
+                    statusHeader
+                    controls
+                }
             }
             .frame(height: tabContentHeight)
 
@@ -102,11 +111,9 @@ struct MenuBarView: View {
             StreakRewardBanner(center: StreakRewardCenter.shared)
             dailyGoalBar
             // Task list is the primary plan — it sits at the very top so the
-            // user's added todos are the first thing shown. The pomodoro status
-            // and controls sit below as a secondary layer.
+            // user's added todos are the first thing shown. The pomodoro
+            // status and controls are pinned below the scroll (see `body`).
             taskList
-            statusHeader
-            controls
         }
     }
 
