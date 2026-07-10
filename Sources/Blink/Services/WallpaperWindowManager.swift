@@ -89,16 +89,21 @@ struct WallpaperEyesView: View {
     @State private var spinAngle: Double = 0
     @State private var spinning = false
     @State private var clickMonitor: Any?
-    /// Eyelids: occasional blinks while the mouse is active, and a slow doze
-    /// (lids fully closed) once it has been still for a while. Both animate
-    /// via the shape's animatableData off the existing ticker — no
-    /// continuous render loop needed.
-    @State private var eyelid: CGFloat = 1
+    /// Eyelids (per eye — sometimes one winks): occasional blinks while the
+    /// mouse is active, and a slow doze (lids fully closed) once it has been
+    /// still for a while. Everything animates via the shape's animatableData
+    /// off the existing ticker — no continuous render loop needed.
+    @State private var leftLid: CGFloat = 1
+    @State private var rightLid: CGFloat = 1
     @State private var dozing = false
     @State private var nextBlink = Date().addingTimeInterval(.random(in: 2...5))
+    /// Winks alternate sides: right, then left, then right…
+    @State private var winkRightNext = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// Seconds of mouse stillness before the eyes drift shut.
-    private let dozeDelay: TimeInterval = 6
+    /// Seconds of stillness before the eyes start winking at the user.
+    private let winkIdleDelay: TimeInterval = 6
+    /// Seconds of stillness before the eyes drift fully shut.
+    private let dozeDelay: TimeInterval = 30
     private let ticker = Timer.publish(every: 0.2, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -119,10 +124,10 @@ struct WallpaperEyesView: View {
                     .position(x: w / 2, y: h * 0.68)
 
                 MoveEyeView(gaze: gaze(from: leftC), spin: spinAngle, size: eyeH,
-                            style: config.style, openness: eyelid)
+                            style: config.style, openness: leftLid)
                     .position(leftC)
                 MoveEyeView(gaze: gaze(from: rightC), spin: spinAngle, size: eyeH,
-                            mirrored: true, style: config.style, openness: eyelid)
+                            mirrored: true, style: config.style, openness: rightLid)
                     .position(rightC)
 
                 if trackingEnabled {
@@ -160,30 +165,67 @@ struct WallpaperEyesView: View {
         }
     }
 
-    /// Doze when the mouse has been still, wake when it moves, and blink
-    /// now and then while awake.
+    /// Eyelid state machine, driven by how long the mouse has been still:
+    /// active → natural blinks (with an occasional wink); still for a few
+    /// seconds → playful winks alternating right/left; still for a long
+    /// while → the lids drift fully shut, snapping open on the next move.
     private func updateEyelids() {
         let stillFor = Date().timeIntervalSince(mouse.lastMoved)
         if stillFor > dozeDelay, !dozing {
             dozing = true
-            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.9)) { eyelid = 0 }
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.9)) {
+                leftLid = 0
+                rightLid = 0
+            }
         } else if stillFor <= dozeDelay, dozing {
             dozing = false
             nextBlink = Date().addingTimeInterval(.random(in: 2...5))
-            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) { eyelid = 1 }
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) {
+                leftLid = 1
+                rightLid = 1
+            }
         }
-        if !reduceMotion, !dozing, Date() >= nextBlink {
+        guard !reduceMotion, !dozing, Date() >= nextBlink else { return }
+        if stillFor > winkIdleDelay {
+            // Idle: wink at the user — right, then left, then right…
+            wink(hold: 0.45)
+            nextBlink = Date().addingTimeInterval(.random(in: 2.5...4))
+        } else {
             blinkOnce()
         }
     }
 
-    /// A quick natural blink, then schedule the next one a few seconds out.
+    /// A quick natural blink — or, now and then, an alternating-side wink.
     private func blinkOnce() {
         nextBlink = Date().addingTimeInterval(.random(in: 3.5...8))
-        withAnimation(.easeIn(duration: 0.09)) { eyelid = 0 }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.11) {
+        if Double.random(in: 0...1) < 0.3 {
+            wink(hold: 0.4)
+        } else {
+            withAnimation(.easeIn(duration: 0.09)) {
+                leftLid = 0
+                rightLid = 0
+            }
+            reopen(after: 0.11)
+        }
+    }
+
+    /// Close one eye (sides alternate), hold it, reopen.
+    private func wink(hold: TimeInterval) {
+        let right = winkRightNext
+        winkRightNext.toggle()
+        withAnimation(.easeIn(duration: 0.09)) {
+            if right { rightLid = 0 } else { leftLid = 0 }
+        }
+        reopen(after: hold)
+    }
+
+    private func reopen(after delay: TimeInterval) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
             withAnimation(.easeOut(duration: 0.16)) {
-                if !dozing { eyelid = 1 }
+                if !dozing {
+                    leftLid = 1
+                    rightLid = 1
+                }
             }
         }
     }

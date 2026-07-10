@@ -14,13 +14,20 @@ struct ContentView: View {
     private let designW: CGFloat = 800
     private let designH: CGFloat = 600
 
-    /// Qovoqlar: mouse harakatda — vaqti-vaqti bilan blink, jim tursa —
-    /// sekin yumilib "mudraydi", qimirlashi bilan ochiladi.
-    @State private var eyelid: CGFloat = 1
+    /// Qovoqlar (har ko'z alohida — ba'zan bittasi qisiladi): mouse harakatda
+    /// vaqti-vaqti bilan blink yoki wink, jim tursa sekin yumilib "mudraydi",
+    /// qimirlashi bilan ochiladi.
+    @State private var leftLid: CGFloat = 1
+    @State private var rightLid: CGFloat = 1
     @State private var dozing = false
     @State private var nextBlink = Date().addingTimeInterval(.random(in: 2...5))
+    /// Winklar navbat bilan: o'ng, keyin chap, keyin o'ng…
+    @State private var winkRightNext = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private let dozeDelay: TimeInterval = 6
+    /// Shuncha soniya jimlikdan keyin ko'z qisa boshlaydi.
+    private let winkIdleDelay: TimeInterval = 6
+    /// Shuncha soniya jimlikdan keyin butunlay yumilib mudraydi.
+    private let dozeDelay: TimeInterval = 30
     private let ticker = Timer.publish(every: 0.2, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -45,24 +52,59 @@ struct ContentView: View {
         .onReceive(ticker) { _ in updateEyelids() }
     }
 
-    /// Mudrash/uyg'onish/blink sikli — Blink ilovasidagi wallpaper bilan
-    /// bir xil xatti-harakat.
+    /// Qovoq holat mashinasi — Blink ilovasidagi wallpaper bilan bir xil:
+    /// faol → tabiiiy blink (ba'zan wink); bir necha soniya jim → navbat
+    /// bilan o'ng/chap ko'z qisadi; uzoq jim → butunlay yumilib mudraydi.
     private func updateEyelids() {
         let stillFor = Date().timeIntervalSince(mouse.lastMoved)
         if stillFor > dozeDelay, !dozing {
             dozing = true
-            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.9)) { eyelid = 0 }
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.9)) {
+                leftLid = 0
+                rightLid = 0
+            }
         } else if stillFor <= dozeDelay, dozing {
             dozing = false
             nextBlink = Date().addingTimeInterval(.random(in: 2...5))
-            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) { eyelid = 1 }
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) {
+                leftLid = 1
+                rightLid = 1
+            }
         }
-        if !reduceMotion, !dozing, Date() >= nextBlink {
+        guard !reduceMotion, !dozing, Date() >= nextBlink else { return }
+        if stillFor > winkIdleDelay {
+            wink(hold: 0.45)
+            nextBlink = Date().addingTimeInterval(.random(in: 2.5...4))
+        } else {
             nextBlink = Date().addingTimeInterval(.random(in: 3.5...8))
-            withAnimation(.easeIn(duration: 0.09)) { eyelid = 0 }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.11) {
-                withAnimation(.easeOut(duration: 0.16)) {
-                    if !dozing { eyelid = 1 }
+            if Double.random(in: 0...1) < 0.3 {
+                wink(hold: 0.4)
+            } else {
+                withAnimation(.easeIn(duration: 0.09)) {
+                    leftLid = 0
+                    rightLid = 0
+                }
+                reopen(after: 0.11)
+            }
+        }
+    }
+
+    /// Bitta ko'zni qisish (tomonlar navbatlashadi), ushlab turib ochish.
+    private func wink(hold: TimeInterval) {
+        let right = winkRightNext
+        winkRightNext.toggle()
+        withAnimation(.easeIn(duration: 0.09)) {
+            if right { rightLid = 0 } else { leftLid = 0 }
+        }
+        reopen(after: hold)
+    }
+
+    private func reopen(after delay: TimeInterval) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            withAnimation(.easeOut(duration: 0.16)) {
+                if !dozing {
+                    leftLid = 1
+                    rightLid = 1
                 }
             }
         }
@@ -124,7 +166,7 @@ struct ContentView: View {
                 mirrored: false,
                 eyeCenter: P(180, 330),
                 mouse: mouse,
-                openness: eyelid
+                openness: leftLid
             )
             .position(P(180, 330))
 
@@ -133,7 +175,7 @@ struct ContentView: View {
                 mirrored: true,
                 eyeCenter: P(620, 330),
                 mouse: mouse,
-                openness: eyelid
+                openness: rightLid
             )
             .position(P(620, 330))
         }
