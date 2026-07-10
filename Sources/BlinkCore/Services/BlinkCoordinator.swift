@@ -178,6 +178,17 @@ public final class BlinkCoordinator: ObservableObject {
             .sink { [weak self] note in self?.handleStreakUpdate(note) }
             .store(in: &cancellables)
 
+        NotificationCenter.default.publisher(for: .dailyGoalReached)
+            .receive(on: RunLoop.main)
+            .sink { note in
+                let n = note.userInfo?["count"] as? Int ?? 0
+                NotificationService.shared.notify(
+                    title: "Daily goal reached 🎯",
+                    body: "\(n)/\(n) pomodoros today. Great work!",
+                    identifier: "blink.dailyGoal")
+            }
+            .store(in: &cancellables)
+
         timer.$isRunning
             .receive(on: RunLoop.main)
             .sink { [weak self] running in

@@ -428,3 +428,18 @@ struct SubtaskPomodoroTests {
         #expect(b.activeSubtaskID == nil)      // transient — never persisted
     }
 }
+
+@Suite("Daily goal trigger")
+struct DailyGoalTriggerTests {
+    @Test func firesExactlyAtTheGoal() {
+        #expect(PomodoroTimer.goalJustReached(count: 8, goal: 8))
+    }
+    @Test func silentBeforeAndAfterTheGoal() {
+        #expect(!PomodoroTimer.goalJustReached(count: 7, goal: 8))
+        #expect(!PomodoroTimer.goalJustReached(count: 9, goal: 8))
+    }
+    @Test func disabledGoalNeverFires() {
+        #expect(!PomodoroTimer.goalJustReached(count: 0, goal: 0))
+        #expect(!PomodoroTimer.goalJustReached(count: 5, goal: 0))
+    }
+}

@@ -181,6 +181,12 @@ public final class PomodoroTimer: ObservableObject {
         tickTask = nil
     }
 
+    /// True only at the exact completion that lands on the goal, so the
+    /// celebration fires once per day without any extra persisted state.
+    public static func goalJustReached(count: Int, goal: Int) -> Bool {
+        goal > 0 && count == goal
+    }
+
     private func phaseComplete() {
         isRunning = false
         cancelLoop()
@@ -191,6 +197,12 @@ public final class PomodoroTimer: ObservableObject {
             NotificationCenter.default.post(name: .streakUpdated,
                                             object: self,
                                             userInfo: ["streak": stats.streak])
+            if Self.goalJustReached(count: stats.completedTodayCount(),
+                                    goal: settings.dailyPomodoroGoal) {
+                NotificationCenter.default.post(
+                    name: .dailyGoalReached, object: self,
+                    userInfo: ["count": settings.dailyPomodoroGoal])
+            }
         }
         // A repetition restarts focus WITHOUT an intervening break, so tell the
         // coordinator not to run the break sequence (overlay/dim/ambience) for it.
@@ -334,4 +346,5 @@ extension Notification.Name {
     static let breakShouldStart = Notification.Name("blink.breakShouldStart")
     static let breakShouldEnd   = Notification.Name("blink.breakShouldEnd")
     static let streakUpdated    = Notification.Name("blink.streakUpdated")
+    static let dailyGoalReached = Notification.Name("blink.dailyGoalReached")
 }
