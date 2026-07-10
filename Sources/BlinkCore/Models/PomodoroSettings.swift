@@ -90,6 +90,9 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var priorityColors: [String: String] = [:]
     /// Custom icon/color per tag (label), keyed by the tag text.
     public var tagStyles: [String: TagStyle] = [:]
+    /// Show the MM:SS countdown next to the menu-bar icon while a session
+    /// is engaged (off = icon only).
+    public var showMenuBarCountdown: Bool = true
 
     public init() {}
 
@@ -150,6 +153,7 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
         priorityNames = try c.decodeIfPresent([String: String].self, forKey: .priorityNames) ?? d.priorityNames
         priorityColors = try c.decodeIfPresent([String: String].self, forKey: .priorityColors) ?? d.priorityColors
         tagStyles = try c.decodeIfPresent([String: TagStyle].self, forKey: .tagStyles) ?? d.tagStyles
+        showMenuBarCountdown = try c.decodeIfPresent(Bool.self, forKey: .showMenuBarCountdown) ?? d.showMenuBarCountdown
     }
 
     /// Custom flag color (hex) for a tag, nil when the default should apply.

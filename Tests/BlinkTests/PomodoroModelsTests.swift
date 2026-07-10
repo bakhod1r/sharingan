@@ -127,3 +127,24 @@ struct PomodoroModelsTests {
         #expect(cal.isDate(selfStart, inSameDayAs: mon))
     }
 }
+@Suite("Menu bar countdown setting")
+struct MenuBarCountdownSettingTests {
+    @Test func defaultsToOn() {
+        #expect(PomodoroSettings().showMenuBarCountdown == true)
+    }
+
+    @Test func decodingOldBlobWithoutKeyFallsBackToDefault() throws {
+        let old = try JSONSerialization.data(withJSONObject: ["focusMinutes": 30])
+        let s = try JSONDecoder().decode(PomodoroSettings.self, from: old)
+        #expect(s.showMenuBarCountdown == true)
+        #expect(s.focusMinutes == 30)
+    }
+
+    @Test func roundTripsWhenOff() throws {
+        var s = PomodoroSettings()
+        s.showMenuBarCountdown = false
+        let back = try JSONDecoder().decode(PomodoroSettings.self,
+                                            from: JSONEncoder().encode(s))
+        #expect(back.showMenuBarCountdown == false)
+    }
+}

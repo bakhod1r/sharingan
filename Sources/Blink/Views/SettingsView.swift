@@ -254,6 +254,11 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("Menu bar") {
+                    ToggleRow(title: "Show countdown in menu bar",
+                              isOn: $settings.showMenuBarCountdown)
+                }
+
         case .tasks:
                 Section("Tasks") {
                     ToggleRow(title: "Require a task to start focus",

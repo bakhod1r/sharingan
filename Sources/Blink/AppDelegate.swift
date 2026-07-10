@@ -65,7 +65,8 @@ final class MenuBarController: NSObject {
         let s = max(0, timer.remainingSeconds)
         let engaged = timer.isRunning
             || (timer.remainingSeconds > 0 && timer.remainingSeconds < timer.totalSeconds)
-        button.title = engaged ? String(format: " %02d:%02d", Int(s) / 60, Int(s) % 60) : ""
+        let show = engaged && timer.settings.showMenuBarCountdown
+        button.title = show ? String(format: " %02d:%02d", Int(s) / 60, Int(s) % 60) : ""
     }
 
     /// The menu-bar icon: the app's own red Sharingan iris, kept in colour
