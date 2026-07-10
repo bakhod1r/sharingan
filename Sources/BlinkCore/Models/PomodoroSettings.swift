@@ -42,6 +42,13 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var breakBackgroundStyle: BreakBackgroundStyle = .graphite
     /// Break ekranida naqsh ochilish/yopilish (evolyutsiya) animatsiyasi tezligi.
     public var breakPatternTransition: PatternTransitionSpeed = .normal
+    /// Aralash rejim: true = break davomida naqsh butun zanjir bo'ylab
+    /// evolyutsiya qiladi (1 tomoe → 2 → 3 → Mangekyō…); false = faqat
+    /// tanlangan uslub ko'rsatiladi (ochilish/yopilish saqlanadi).
+    public var breakPatternMixed: Bool = false
+    /// Break ekranida naqshning uzluksiz aylanishi: bir to'la aylanish
+    /// davomiyligi soniyada (0 = aylanmaydi).
+    public var breakPatternSpinSeconds: Double = 8
     /// MoveEyes ko'zlarini ish stoli orqa foni (jonli wallpaper) sifatida ko'rsatish.
     public var eyesWallpaperEnabled: Bool = false
     /// Wallpaper rejimida Sharingan qachon aylanadi.
@@ -134,6 +141,8 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
         sharinganStyleRight = try c.decodeIfPresent(SharinganStyle.self, forKey: .sharinganStyleRight) ?? d.sharinganStyleRight
         breakBackgroundStyle = try c.decodeIfPresent(BreakBackgroundStyle.self, forKey: .breakBackgroundStyle) ?? d.breakBackgroundStyle
         breakPatternTransition = try c.decodeIfPresent(PatternTransitionSpeed.self, forKey: .breakPatternTransition) ?? d.breakPatternTransition
+        breakPatternMixed = try c.decodeIfPresent(Bool.self, forKey: .breakPatternMixed) ?? d.breakPatternMixed
+        breakPatternSpinSeconds = try c.decodeIfPresent(Double.self, forKey: .breakPatternSpinSeconds) ?? d.breakPatternSpinSeconds
         eyesWallpaperEnabled = try c.decodeIfPresent(Bool.self, forKey: .eyesWallpaperEnabled) ?? d.eyesWallpaperEnabled
         wallpaperSpinTrigger = try c.decodeIfPresent(WallpaperSpinTrigger.self, forKey: .wallpaperSpinTrigger) ?? d.wallpaperSpinTrigger
         wallpaperSpinDuration = try c.decodeIfPresent(Double.self, forKey: .wallpaperSpinDuration) ?? d.wallpaperSpinDuration

@@ -36,7 +36,9 @@ struct BreakView: View {
                                 rightStyle: timer.settings.sharinganStyleRight,
                                 holdSeconds: validator.currentStep?.holdSeconds ?? 0,
                                 transition: timer.settings.breakPatternTransition,
-                                endDate: Date().addingTimeInterval(remaining))
+                                endDate: Date().addingTimeInterval(remaining),
+                                evolves: timer.settings.breakPatternMixed,
+                                spinSeconds: timer.settings.breakPatternSpinSeconds)
 
                     Spacer()
 

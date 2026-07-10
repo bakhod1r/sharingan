@@ -746,6 +746,9 @@ struct MoveEyePair: View {
     /// false = play the opening/closing whirls with the configured styles
     /// but never evolve along the chain (style-picker previews).
     var evolves = true
+    /// Continuous ambient rotation: seconds per full turn (0 = off). The
+    /// activation whirls layer on top of it.
+    var spinSeconds: Double = 0
 
     private var isPath: Bool {
         direction == "circle_cw" || direction == "circle_ccw" || direction == "figure8"
@@ -817,12 +820,17 @@ struct MoveEyePair: View {
                          evolves: evolves)
     }
 
-    /// Activation burst: tomoe accelerate, whirl and settle (smootherstep).
+    /// Activation burst (tomoe accelerate, whirl and settle) layered on the
+    /// optional continuous ambient rotation.
     private func activationSpin(at t: TimeInterval) -> Double {
         if reduceMotion { return 0 }
-        return PatternEvolution.activationSpin(at: t, since: spinStart,
-                                               duration: spinDuration,
-                                               turns: spinTurns)
+        var s = PatternEvolution.activationSpin(at: t, since: spinStart,
+                                                duration: spinDuration,
+                                                turns: spinTurns)
+        if spinSeconds > 0 {
+            s += max(0, t - appearStart) * 360 / spinSeconds
+        }
+        return s
     }
 
     // MARK: - Eyelids

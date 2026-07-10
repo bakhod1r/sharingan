@@ -55,7 +55,8 @@ struct ExerciseSequenceView: View {
             // Animated Sharingan eyes demonstrate the movement to copy.
             MoveEyePair(direction: validator.currentStep?.direction ?? "center",
                         gaze: validator.currentStep?.targetGaze ?? .center,
-                        holdSeconds: validator.currentStep?.holdSeconds ?? 0)
+                        holdSeconds: validator.currentStep?.holdSeconds ?? 0,
+                        evolves: false)
                 .padding(.top, 4)
 
             if let step = validator.currentStep {

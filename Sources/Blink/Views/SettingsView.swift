@@ -623,7 +623,33 @@ struct SettingsView: View {
                         .pickerStyle(.segmented)
                         .frame(width: 260)
                     }
-                    Text("The pattern whirls open at break start, evolves into the next pattern on every exercise step, and whirls shut as the break ends.")
+                    Text("The pattern whirls open at break start and whirls shut as the break ends.")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.65))
+
+                    if settings.breakPatternTransition != .off {
+                        ToggleRow(title: "Mixed patterns",
+                                  isOn: $settings.breakPatternMixed)
+                        Text("On: the pattern evolves through the whole chain during the break — 1 tomoe → 2 → 3 → Mangekyō… Off: only your selected style.")
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.65))
+                    }
+
+                    HStack {
+                        Text("Pattern spin")
+                            .font(.system(.body, design: .rounded))
+                        Spacer()
+                        Picker("", selection: $settings.breakPatternSpinSeconds) {
+                            Text("Off").tag(0.0)
+                            Text("Slow").tag(12.0)
+                            Text("Normal").tag(8.0)
+                            Text("Fast").tag(4.0)
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(width: 260)
+                    }
+                    Text("Continuous rotation of the iris pattern while the break runs.")
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(.white.opacity(0.65))
 
