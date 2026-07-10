@@ -257,11 +257,11 @@ struct MainWindowView: View {
         return Button { router.openTasks(tag: tag) } label: {
             HStack(spacing: 11) {
                 Image(systemName: timer.settings.tagIcon(tag))
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(tint)
                     .frame(width: 20, alignment: .center)
                 Text(tag)
-                    .font(.system(.footnote, design: .rounded))
+                    .font(.system(size: 13, design: .rounded))
                     .foregroundStyle(.white.opacity(count > 0 ? 0.75 : 0.45))
                     .lineLimit(1)
                 Spacer()
@@ -269,11 +269,11 @@ struct MainWindowView: View {
                     editPencil { editingTag = tag }
                 } else if count > 0 {
                     Text("\(count)")
-                        .font(.system(.caption2, design: .rounded).monospacedDigit())
+                        .font(.system(size: 11, design: .rounded).monospacedDigit())
                         .foregroundStyle(.white.opacity(0.45))
                 }
             }
-            .padding(.horizontal, 10).padding(.vertical, 5)
+            .padding(.horizontal, 10).padding(.vertical, 7)
             .contentShape(Rectangle())
         }
         .buttonStyle(.pressableSubtle)
@@ -380,12 +380,12 @@ struct MainWindowView: View {
         return Button { router.openTasks(priority: p) } label: {
             HStack(spacing: 11) {
                 Image(systemName: p == .none ? "flag.slash" : "flag.fill")
-                    .font(.system(size: 11))
+                    .font(.system(size: 13))
                     .foregroundStyle(timer.settings.priorityColorHex(p)
                         .map { Color(hex: $0) } ?? .secondary)
                     .frame(width: 20, alignment: .center)
                 Text(timer.settings.priorityName(p))
-                    .font(.system(.footnote, design: .rounded))
+                    .font(.system(size: 13, design: .rounded))
                     .foregroundStyle(.white.opacity(count > 0 ? 0.75 : 0.45))
                     .lineLimit(1)
                 Spacer()
@@ -393,11 +393,11 @@ struct MainWindowView: View {
                     editPencil { editingPriority = p }
                 } else if count > 0 {
                     Text("\(count)")
-                        .font(.system(.caption2, design: .rounded).monospacedDigit())
+                        .font(.system(size: 11, design: .rounded).monospacedDigit())
                         .foregroundStyle(.white.opacity(0.45))
                 }
             }
-            .padding(.horizontal, 10).padding(.vertical, 5)
+            .padding(.horizontal, 10).padding(.vertical, 7)
             .contentShape(Rectangle())
         }
         .buttonStyle(.pressableSubtle)
@@ -468,17 +468,17 @@ struct MainWindowView: View {
                     .foregroundStyle(markTint)
                     .frame(width: 20, alignment: .center)
                 Text(title)
-                    .font(.system(.footnote, design: .rounded))
+                    .font(.system(size: 13, design: .rounded))
                     .foregroundStyle(.white.opacity(count > 0 ? 0.75 : 0.45))
                     .lineLimit(1)
                 Spacer()
                 if count > 0 {
                     Text("\(count)")
-                        .font(.system(.caption2, design: .rounded).monospacedDigit())
+                        .font(.system(size: 11, design: .rounded).monospacedDigit())
                         .foregroundStyle(.white.opacity(0.45))
                 }
             }
-            .padding(.horizontal, 10).padding(.vertical, 5)
+            .padding(.horizontal, 10).padding(.vertical, 7)
             .contentShape(Rectangle())
         }
         .buttonStyle(.pressableSubtle)
@@ -526,19 +526,25 @@ struct MainWindowView: View {
     }
 
     private func sectionHeader(_ title: String) -> some View {
-        // The one canonical group-label style — same as the task-list and
-        // Settings headers, instead of a hand-inlined copy at a dimmer opacity.
-        Text(title)
-            .dsSectionLabel()
+        sidebarHeaderLabel(title)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 18).padding(.top, 16).padding(.bottom, 5)
+    }
+
+    /// Todoist-style sidebar group label: sentence case at row size, instead
+    /// of the app-wide 10 pt uppercase `dsSectionLabel` (too small next to
+    /// 13 pt rows).
+    private func sidebarHeaderLabel(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 13, weight: .semibold, design: .rounded))
+            .foregroundStyle(.white.opacity(0.55))
     }
 
     /// Section header with a trailing "+" action (e.g. Categories → new).
     private func sectionHeader(_ title: String, addHelp: String,
                                onAdd: @escaping () -> Void) -> some View {
         HStack(spacing: 6) {
-            Text(title).dsSectionLabel()
+            sidebarHeaderLabel(title)
             Spacer()
             Button(action: onAdd) {
                 Image(systemName: "plus")
