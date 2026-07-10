@@ -103,7 +103,7 @@ struct StatsExtrasView: View {
     private var weekdayCard: some View {
         let totals = stats.weekdayTotals()
         let peak = max(1, totals.max() ?? 1)
-        let names = ["M","T","W","T","F","S","S"]
+        let names = ["Mo","Tu","We","Th","Fr","Sa","Su"]
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("By weekday").dsSectionLabel()

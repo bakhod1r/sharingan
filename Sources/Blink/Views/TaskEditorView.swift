@@ -89,7 +89,7 @@ struct TaskEditorView: View {
     private var chipsRow: some View {
         HStack(spacing: 8) {
             categoryMenu
-            priorityMenu
+            PriorityMenu(priority: $draft.priority)
             dueMenu
             Spacer(minLength: 0)
         }
@@ -115,30 +115,6 @@ struct TaskEditorView: View {
             .foregroundStyle(.white)
             .padding(.horizontal, 10).padding(.vertical, 6)
             .background(Capsule().fill(color.opacity(0.22)))
-        }
-        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-    }
-
-    private var priorityMenu: some View {
-        Menu {
-            ForEach(TaskPriority.allCases.reversed()) { p in
-                Button { draft.priority = p } label: {
-                    Label(p.menuLabel,
-                          systemImage: draft.priority == p ? "checkmark"
-                                       : (p == .none ? "flag.slash" : "flag.fill"))
-                }
-            }
-        } label: {
-            let hex = draft.priority.colorHex
-            HStack(spacing: 5) {
-                Image(systemName: draft.priority == .none ? "flag" : "flag.fill")
-                    .font(.system(size: 10, weight: .semibold))
-                Text(draft.priority == .none ? "Priority" : draft.priority.label)
-                    .font(.system(.caption, design: .rounded).weight(.medium))
-            }
-            .foregroundStyle(hex.map { Color(hex: $0) } ?? Color.dsSecondary)
-            .padding(.horizontal, 10).padding(.vertical, 6)
-            .background(Capsule().fill(Color.white.opacity(0.06)))
         }
         .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
     }

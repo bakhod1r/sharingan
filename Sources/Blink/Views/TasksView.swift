@@ -214,7 +214,7 @@ struct TasksView: View {
             // Row 2 — the three you set most: category, priority, due. One tap each.
             HStack(spacing: 8) {
                 categoryMenu
-                priorityMenu
+                PriorityMenu(priority: $newPriority)
                 dueMenu
                 Spacer(minLength: 4)
                 // Everything else (tags, estimate, repeat, project, notes).
@@ -237,35 +237,6 @@ struct TasksView: View {
         }
         .padding(12)
         .glassRounded(DS.Radius.lg, material: .thin)
-    }
-
-    /// Priority flag menu (P1–P4) for the quick-setter row.
-    private var priorityMenu: some View {
-        Menu {
-            ForEach(TaskPriority.allCases.reversed()) { p in
-                Button {
-                    newPriority = p
-                } label: {
-                    if p == .none {
-                        Label(p.menuLabel, systemImage: newPriority == p ? "checkmark" : "flag.slash")
-                    } else {
-                        Label(p.menuLabel, systemImage: newPriority == p ? "checkmark" : "flag.fill")
-                    }
-                }
-            }
-        } label: {
-            let hex = newPriority.colorHex
-            HStack(spacing: 5) {
-                Image(systemName: newPriority == .none ? "flag" : "flag.fill")
-                    .font(.system(size: 10, weight: .semibold))
-                Text(newPriority == .none ? "Priority" : newPriority.label)
-                    .font(.system(.caption, design: .rounded).weight(.medium))
-            }
-            .foregroundStyle(hex.map { Color(hex: $0) } ?? Color.dsSecondary)
-            .padding(.horizontal, 10).padding(.vertical, 6)
-            .background(Capsule().fill(Color.dsFill))
-        }
-        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
     }
 
     /// Due-date chip: quick options in a menu, plus a "Pick a date…" that opens
