@@ -126,6 +126,35 @@ struct BreakExerciseTests {
         #expect(!v.needsRetry)
     }
 
+    @Test @MainActor func pathStepsNeverFlagRetry() {
+        let v = ExerciseValidator()
+        v.exercises = [BreakExercise(name: "test", steps: [
+            .init(direction: "circle_cw", holdSeconds: 2),
+        ])]
+        v.minHoldSeconds = -1
+        v.start()
+        defer { v.stop() }
+        // Rolling eyes produce arbitrary gaze samples — none should retry.
+        v.ingest(gaze: .upLeft, isBlinking: false)
+        v.ingest(gaze: .down, isBlinking: false)
+        #expect(!v.needsRetry)
+    }
+
+    @Test @MainActor func blinkStepPassesAfterFirstBlink() {
+        let v = ExerciseValidator()
+        v.exercises = [BreakExercise(name: "test", steps: [
+            .init(direction: "blink", holdSeconds: 2),
+        ])]
+        v.minHoldSeconds = -1
+        v.start()
+        defer { v.stop() }
+        v.ingest(gaze: .center, isBlinking: false)
+        #expect(v.needsRetry)          // no blink seen yet
+        v.ingest(gaze: .center, isBlinking: true)
+        v.ingest(gaze: .center, isBlinking: false)
+        #expect(!v.needsRetry)         // one blink seen — stays matched
+    }
+
     @Test @MainActor func mismatchedGazeStillFlagsRetry() {
         let v = ExerciseValidator()
         v.exercises = [BreakExercise(name: "test", steps: [

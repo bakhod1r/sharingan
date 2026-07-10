@@ -25,6 +25,8 @@ public final class ExerciseValidator: ObservableObject {
 
     private var cancellable: AnyCancellable?
     private var ticker: Timer?
+    /// A blink was detected at least once during the current "blink" step.
+    private var blinkSeenInStep = false
 
     public init() {}
 
@@ -76,13 +78,18 @@ public final class ExerciseValidator: ObservableObject {
         guard isHolding, let step = currentStep else { return }
         let target = step.targetGaze
 
-        // Step varieties: "blink" checks blink count over hold window;
-        // "far" / "center" / "closed" pass without gaze match ("closed"
-        // is guidance only — the user's eyes are shut and can't see a retry).
+        // Step varieties: "blink" passes once a blink is seen in the hold
+        // window (single-frame blinks must not flash "Try again" between
+        // them); "far" / "center" / "closed" pass without gaze match
+        // ("closed" is guidance only — shut eyes can't read a retry prompt);
+        // path sweeps (circle / figure-8) have no single target to match.
         let matched: Bool
         switch step.direction.lowercased() {
-        case "blink": matched = isBlinking
-        case "far", "center", "closed": matched = true
+        case "blink":
+            if isBlinking { blinkSeenInStep = true }
+            matched = blinkSeenInStep
+        case "far", "center", "closed",
+             "circle_cw", "circle_ccw", "figure8": matched = true
         // Match on the 8-way direction label so the requirement is literally the
         // same as the on-screen eye: the detected gaze must point the same way the
         // Sharingan iris does. Comparing distance to the unit target was too strict
@@ -123,6 +130,7 @@ public final class ExerciseValidator: ObservableObject {
         stepHoldStart = .now
         heldSeconds = 0
         needsRetry = false
+        blinkSeenInStep = false
         isHolding = true
     }
 

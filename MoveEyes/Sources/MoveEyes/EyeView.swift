@@ -1,38 +1,51 @@
 import SwiftUI
 
 /// Badam (leaf) shaklidagi ko'z konturi. Birlik kvadratda chiziladi,
-/// `mirrored` o'ng ko'z uchun gorizontal aks ettiradi.
+/// `mirrored` o'ng ko'z uchun gorizontal aks ettiradi. `openness` ustki
+/// qovoqni pastki kiprik chizig'iga morph qiladi (1 = ochiq, 0 = yumuq) —
+/// burchak uchlari joyida qoladi, ko'z o'z o'rnida yumiladi.
 struct EyeShape: Shape {
     var mirrored = false
+    var openness: CGFloat = 1
 
     // Chap ko'z uchun birlik-koordinatalar (videodan o'lchab olingan):
     // tashqi uch — chap tepada, ichki uch — o'ngda pastroq.
     static let outerTip = CGPoint(x: 0.00, y: 0.06)
     static let innerTip = CGPoint(x: 1.00, y: 0.94)
+    /// Ochiq ustki qovoq kubik nazorat nuqtalari (tashqi→ichki).
+    static let upperC1 = CGPoint(x: 0.32, y: -0.10)
+    static let upperC2 = CGPoint(x: 0.76, y: 0.20)
+    /// Pastki qovoq nazorat nuqtalari tashqi→ichki tartibda — ayni paytda
+    /// yumuq ustki qovoqning holati (openness 0 da qovoqlar ustma-ust tushadi).
+    static let lowerC1 = CGPoint(x: 0.07, y: 0.86)
+    static let lowerC2 = CGPoint(x: 0.52, y: 1.08)
+
+    var animatableData: CGFloat {
+        get { openness }
+        set { openness = newValue }
+    }
 
     func path(in rect: CGRect) -> Path {
         var p = upperLidPath(in: rect)
-        let b = Self.innerTip
-        let a = Self.outerTip
         // pastki qovoq: ichki uch yaqinida deyarli tekis, o'rtada eng chuqur
         p.addCurve(
-            to: pt(a, rect),
-            control1: pt(CGPoint(x: 0.52, y: 1.08), rect),
-            control2: pt(CGPoint(x: 0.07, y: 0.86), rect)
+            to: pt(Self.outerTip, rect),
+            control1: pt(Self.lowerC2, rect),
+            control2: pt(Self.lowerC1, rect)
         )
-        _ = b
         p.closeSubpath()
         return p
     }
 
     /// Faqat ustki qovoq egri chizig'i — qalin qora chiziq va highlight uchun.
     func upperLidPath(in rect: CGRect) -> Path {
+        let k = 1 - min(max(openness, 0), 1)
         var p = Path()
         p.move(to: pt(Self.outerTip, rect))
         p.addCurve(
             to: pt(Self.innerTip, rect),
-            control1: pt(CGPoint(x: 0.32, y: -0.10), rect),
-            control2: pt(CGPoint(x: 0.76, y: 0.20), rect)
+            control1: pt(Self.lerp(Self.upperC1, Self.lowerC1, k), rect),
+            control2: pt(Self.lerp(Self.upperC2, Self.lowerC2, k), rect)
         )
         return p
     }
@@ -43,15 +56,64 @@ struct EyeShape: Shape {
         p.move(to: pt(Self.innerTip, rect))
         p.addCurve(
             to: pt(Self.outerTip, rect),
-            control1: pt(CGPoint(x: 0.52, y: 1.08), rect),
-            control2: pt(CGPoint(x: 0.07, y: 0.86), rect)
+            control1: pt(Self.lowerC2, rect),
+            control2: pt(Self.lowerC1, rect)
         )
         return p
+    }
+
+    private static func lerp(_ a: CGPoint, _ b: CGPoint, _ k: CGFloat) -> CGPoint {
+        CGPoint(x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k)
     }
 
     private func pt(_ u: CGPoint, _ rect: CGRect) -> CGPoint {
         let x = mirrored ? 1 - u.x : u.x
         return CGPoint(x: rect.minX + x * rect.width, y: rect.minY + u.y * rect.height)
+    }
+}
+
+/// Ochiq ko'z tuynugining birlik-fazodagi geometriyasi: berilgan gorizontal
+/// x uchun tuynuk o'rta chizig'i va yarim balandligi. Bir marta hisoblanadi.
+private enum EyeAperture {
+    static let steps = 16
+    static let table: [(midY: CGFloat, halfH: CGFloat)] = {
+        func bez(_ p0: CGPoint, _ c1: CGPoint, _ c2: CGPoint, _ p3: CGPoint,
+                 _ t: CGFloat) -> CGPoint {
+            let m = 1 - t
+            let a = m * m * m, b = 3 * m * m * t, c = 3 * m * t * t, d = t * t * t
+            return CGPoint(x: a * p0.x + b * c1.x + c * c2.x + d * p3.x,
+                           y: a * p0.y + b * c1.y + c * c2.y + d * p3.y)
+        }
+        let upper = (0...32).map {
+            bez(EyeShape.outerTip, EyeShape.upperC1,
+                EyeShape.upperC2, EyeShape.innerTip, CGFloat($0) / 32)
+        }
+        let lower = (0...32).map {
+            bez(EyeShape.outerTip, EyeShape.lowerC1,
+                EyeShape.lowerC2, EyeShape.innerTip, CGFloat($0) / 32)
+        }
+        func y(at x: CGFloat, on pts: [CGPoint]) -> CGFloat {
+            guard x > pts[0].x else { return pts[0].y }
+            for i in 1..<pts.count where pts[i].x >= x {
+                let a = pts[i - 1], b = pts[i]
+                let f = (x - a.x) / max(b.x - a.x, 0.0001)
+                return a.y + (b.y - a.y) * f
+            }
+            return pts[pts.count - 1].y
+        }
+        return (0...steps).map { i in
+            let x = CGFloat(i) / CGFloat(steps)
+            let yu = y(at: x, on: upper), yl = y(at: x, on: lower)
+            return (midY: (yu + yl) / 2, halfH: max(0, (yl - yu) / 2))
+        }
+    }()
+
+    static func sample(at x: CGFloat) -> (midY: CGFloat, halfH: CGFloat) {
+        let u = min(max(x, 0), 1) * CGFloat(steps)
+        let i = min(Int(u), steps - 1)
+        let f = u - CGFloat(i)
+        let a = table[i], b = table[i + 1]
+        return (a.midY + (b.midY - a.midY) * f, a.halfH + (b.halfH - a.halfH) * f)
     }
 }
 
@@ -190,6 +252,8 @@ struct EyeView: View {
     var mirrored: Bool
     var eyeCenter: CGPoint          // .global (oyna) koordinatalarida
     @ObservedObject var mouse: MouseState
+    /// Qovoq holati: 1 = ochiq, 0 = yumuq.
+    var openness: CGFloat = 1
 
     var body: some View {
         let w = size.width
@@ -199,8 +263,8 @@ struct EyeView: View {
         let sh = 0.96 * h
         let scleraDX = (mirrored ? -1 : 1) * (w - sw) / 2
         let irisD = 0.52 * sh
-        let offset = irisOffset(w: w, h: h)
-        let shape = EyeShape(mirrored: mirrored)
+        let offset = irisOffset(sw: sw, sh: sh, irisD: irisD)
+        let shape = EyeShape(mirrored: mirrored, openness: openness)
 
         ZStack {
             // qirralardagi nozik kulrang highlightlar (faqat qisman, qora ostidan)
@@ -242,11 +306,8 @@ struct EyeView: View {
                         .frame(width: irisD * 1.6, height: irisD * 1.6)
                     SpinningIris(diameter: irisD, mouse: mouse)
                 }
-                // tinch holatda iris sklera markazidan sal pastda, burun tomonda turadi
-                .offset(
-                    x: (mirrored ? -1 : 1) * 0.025 * sw + offset.x,
-                    y: 0.08 * sh + offset.y
-                )
+                // iris ko'z tuynugining o'rta chizig'i bo'ylab yuradi
+                .offset(x: offset.x, y: offset.y)
                 .animation(.interpolatingSpring(stiffness: 140, damping: 18), value: offset)
             }
             .frame(width: sw, height: sh)
@@ -257,20 +318,28 @@ struct EyeView: View {
         .frame(width: w, height: h)
     }
 
-    private func irisOffset(w: CGFloat, h: CGFloat) -> CGPoint {
+    /// Iris ko'zning haqiqiy tuynugi bo'ylab yuradi: gorizontalda qiya
+    /// burchak zonalariga kirmaydi, vertikalda tuynuk bandi ichida qisiladi —
+    /// iris hech qachon burchakka kirib yo'qolmaydi.
+    private func irisOffset(sw: CGFloat, sh: CGFloat, irisD: CGFloat) -> CGPoint {
         guard let m = mouse.location else { return .zero }
-        let dx = m.x - eyeCenter.x
-        let dy = m.y - eyeCenter.y
         // to'liq burilish uchun kerak bo'ladigan masofa
         let reach: CGFloat = 420
-        var nx = dx / reach
-        var ny = dy / reach
+        var nx = (m.x - eyeCenter.x) / reach
+        var ny = (m.y - eyeCenter.y) / reach
         let mag = sqrt(nx * nx + ny * ny)
         if mag > 1 {
             nx /= mag
             ny /= mag
         }
-        return CGPoint(x: nx * 0.30 * w, y: ny * 0.34 * h)
+        let uScreen = min(max(0.5 + nx * 0.20, 0.12), 0.88)
+        let uShape = mirrored ? 1 - uScreen : uScreen
+        let ap = EyeAperture.sample(at: uShape)
+        let irisUnitR = irisD / 2 / sh
+        let slack = max(0, ap.halfH - irisUnitR * 0.28)
+        let baseY = EyeAperture.sample(at: 0.5).midY
+        let y = min(max(baseY + ny * slack, ap.midY - slack), ap.midY + slack)
+        return CGPoint(x: (uScreen - 0.5) * sw, y: (y - 0.5) * sh)
     }
 }
 

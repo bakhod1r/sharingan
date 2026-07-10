@@ -89,6 +89,16 @@ struct WallpaperEyesView: View {
     @State private var spinAngle: Double = 0
     @State private var spinning = false
     @State private var clickMonitor: Any?
+    /// Eyelids: occasional blinks while the mouse is active, and a slow doze
+    /// (lids fully closed) once it has been still for a while. Both animate
+    /// via the shape's animatableData off the existing ticker — no
+    /// continuous render loop needed.
+    @State private var eyelid: CGFloat = 1
+    @State private var dozing = false
+    @State private var nextBlink = Date().addingTimeInterval(.random(in: 2...5))
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Seconds of mouse stillness before the eyes drift shut.
+    private let dozeDelay: TimeInterval = 6
     private let ticker = Timer.publish(every: 0.2, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -108,9 +118,11 @@ struct WallpaperEyesView: View {
                     .blur(radius: 60)
                     .position(x: w / 2, y: h * 0.68)
 
-                MoveEyeView(gaze: gaze(from: leftC), spin: spinAngle, size: eyeH, style: config.style)
+                MoveEyeView(gaze: gaze(from: leftC), spin: spinAngle, size: eyeH,
+                            style: config.style, openness: eyelid)
                     .position(leftC)
-                MoveEyeView(gaze: gaze(from: rightC), spin: spinAngle, size: eyeH, mirrored: true, style: config.style)
+                MoveEyeView(gaze: gaze(from: rightC), spin: spinAngle, size: eyeH,
+                            mirrored: true, style: config.style, openness: eyelid)
                     .position(rightC)
 
                 if trackingEnabled {
@@ -121,6 +133,7 @@ struct WallpaperEyesView: View {
             .ignoresSafeArea()
         }
         .onReceive(ticker) { _ in
+            updateEyelids()
             guard config.spinTrigger.spinsOnIdle else { return }
             let idle = Date().timeIntervalSince(mouse.lastMoved) > config.idleDelay
             if idle && !spinning {
@@ -144,6 +157,34 @@ struct WallpaperEyesView: View {
                 NSEvent.removeMonitor(clickMonitor)
             }
             clickMonitor = nil
+        }
+    }
+
+    /// Doze when the mouse has been still, wake when it moves, and blink
+    /// now and then while awake.
+    private func updateEyelids() {
+        let stillFor = Date().timeIntervalSince(mouse.lastMoved)
+        if stillFor > dozeDelay, !dozing {
+            dozing = true
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.9)) { eyelid = 0 }
+        } else if stillFor <= dozeDelay, dozing {
+            dozing = false
+            nextBlink = Date().addingTimeInterval(.random(in: 2...5))
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) { eyelid = 1 }
+        }
+        if !reduceMotion, !dozing, Date() >= nextBlink {
+            blinkOnce()
+        }
+    }
+
+    /// A quick natural blink, then schedule the next one a few seconds out.
+    private func blinkOnce() {
+        nextBlink = Date().addingTimeInterval(.random(in: 3.5...8))
+        withAnimation(.easeIn(duration: 0.09)) { eyelid = 0 }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.11) {
+            withAnimation(.easeOut(duration: 0.16)) {
+                if !dozing { eyelid = 1 }
+            }
         }
     }
 

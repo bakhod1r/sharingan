@@ -14,6 +14,15 @@ struct ContentView: View {
     private let designW: CGFloat = 800
     private let designH: CGFloat = 600
 
+    /// Qovoqlar: mouse harakatda — vaqti-vaqti bilan blink, jim tursa —
+    /// sekin yumilib "mudraydi", qimirlashi bilan ochiladi.
+    @State private var eyelid: CGFloat = 1
+    @State private var dozing = false
+    @State private var nextBlink = Date().addingTimeInterval(.random(in: 2...5))
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private let dozeDelay: TimeInterval = 6
+    private let ticker = Timer.publish(every: 0.2, on: .main, in: .common).autoconnect()
+
     var body: some View {
         GeometryReader { geo in
             let k = min(geo.size.width / designW, geo.size.height / designH)
@@ -32,6 +41,30 @@ struct ContentView: View {
                 }
             }
             .ignoresSafeArea()
+        }
+        .onReceive(ticker) { _ in updateEyelids() }
+    }
+
+    /// Mudrash/uyg'onish/blink sikli — Blink ilovasidagi wallpaper bilan
+    /// bir xil xatti-harakat.
+    private func updateEyelids() {
+        let stillFor = Date().timeIntervalSince(mouse.lastMoved)
+        if stillFor > dozeDelay, !dozing {
+            dozing = true
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.9)) { eyelid = 0 }
+        } else if stillFor <= dozeDelay, dozing {
+            dozing = false
+            nextBlink = Date().addingTimeInterval(.random(in: 2...5))
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) { eyelid = 1 }
+        }
+        if !reduceMotion, !dozing, Date() >= nextBlink {
+            nextBlink = Date().addingTimeInterval(.random(in: 3.5...8))
+            withAnimation(.easeIn(duration: 0.09)) { eyelid = 0 }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.11) {
+                withAnimation(.easeOut(duration: 0.16)) {
+                    if !dozing { eyelid = 1 }
+                }
+            }
         }
     }
 
@@ -90,7 +123,8 @@ struct ContentView: View {
                 size: CGSize(width: 306 * k, height: 145 * k),
                 mirrored: false,
                 eyeCenter: P(180, 330),
-                mouse: mouse
+                mouse: mouse,
+                openness: eyelid
             )
             .position(P(180, 330))
 
@@ -98,7 +132,8 @@ struct ContentView: View {
                 size: CGSize(width: 306 * k, height: 145 * k),
                 mirrored: true,
                 eyeCenter: P(620, 330),
-                mouse: mouse
+                mouse: mouse,
+                openness: eyelid
             )
             .position(P(620, 330))
         }
