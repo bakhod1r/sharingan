@@ -2,19 +2,24 @@ import AppKit
 import SwiftUI
 import BlinkCore
 
-/// Premium app-icon artwork, rendered from the app's own Sharingan asset so the
-/// icon and the in-app eye share one identity. Composition:
-///   dark-glass squircle → blue pomodoro countdown ring → red Sharingan iris.
+/// Premium app-icon artwork, rendered from the app's own Sharingan artwork so
+/// the icon and the in-app eye share one identity. Composition:
+///   dark-graphite squircle → soft red aura → almond eye with attached lid
+///   outline → big centered Sharingan iris (the app's `MoveIrisView`).
+/// The lid is a stroke of the almond itself, so nothing floats detached from
+/// the eye the way the old grey accent arcs did.
 struct AppIconArtwork: View {
+    private let eyeSize = CGSize(width: 780, height: 420)
+
     var body: some View {
         ZStack {
-            // Dark-glass squircle base (deep navy → near-black).
+            // Dark-graphite squircle base.
             RoundedRectangle(cornerRadius: 230, style: .continuous)
                 .fill(
                     LinearGradient(
                         colors: [
-                            Color(red: 0.11, green: 0.14, blue: 0.22),
-                            Color(red: 0.035, green: 0.05, blue: 0.10),
+                            Color(red: 0.14, green: 0.15, blue: 0.18),
+                            Color(red: 0.04, green: 0.04, blue: 0.06),
                         ],
                         startPoint: .top, endPoint: .bottom
                     )
@@ -24,7 +29,7 @@ struct AppIconArtwork: View {
             RoundedRectangle(cornerRadius: 230, style: .continuous)
                 .fill(
                     LinearGradient(
-                        colors: [Color.white.opacity(0.10), Color.clear],
+                        colors: [Color.white.opacity(0.09), Color.clear],
                         startPoint: .top, endPoint: .center
                     )
                 )
@@ -32,38 +37,57 @@ struct AppIconArtwork: View {
 
             // Center vignette to focus the eye.
             RadialGradient(
-                colors: [Color.clear, Color.black.opacity(0.35)],
-                center: .center, startRadius: 240, endRadius: 640
+                colors: [Color.clear, Color.black.opacity(0.32)],
+                center: .center, startRadius: 260, endRadius: 660
             )
 
-            // Blue countdown ring (pomodoro), open at the bottom, with glow.
-            Circle()
-                .trim(from: 0.0, to: 0.80)
-                .stroke(
-                    LinearGradient(
-                        colors: [
-                            Color(red: 0.36, green: 0.52, blue: 1.0),
-                            Color(red: 0.46, green: 0.40, blue: 1.0),
-                        ],
-                        startPoint: .topLeading, endPoint: .bottomTrailing
-                    ),
-                    style: StrokeStyle(lineWidth: 42, lineCap: .round)
-                )
-                .frame(width: 690, height: 690)
-                .rotationEffect(.degrees(126))   // move the gap to bottom-center
-                .shadow(color: Color(red: 0.34, green: 0.50, blue: 1.0).opacity(0.55), radius: 26)
+            // Warm red aura behind the eye.
+            Ellipse()
+                .fill(Color(red: 0.75, green: 0.08, blue: 0.09).opacity(0.32))
+                .frame(width: 760, height: 460)
+                .blur(radius: 80)
 
-            // Warm red glow behind the iris.
-            Circle()
-                .fill(Color(red: 0.80, green: 0.10, blue: 0.10).opacity(0.38))
-                .frame(width: 520, height: 520)
-                .blur(radius: 64)
-
-            // The Sharingan iris — the app's actual vector eye artwork.
-            MoveIrisView(diameter: 470)
-                .shadow(color: .black.opacity(0.45), radius: 22, y: 8)
+            eye.shadow(color: .black.opacity(0.45), radius: 24, y: 10)
         }
         .frame(width: 1024, height: 1024)
+    }
+
+    /// Almond eye: white sclera, big centered Sharingan iris clipped by the
+    /// lids, and a black lid outline stroked along the almond itself.
+    private var eye: some View {
+        let shape = AlmondEyeShape()
+        let irisD = eyeSize.height * 0.82
+        return ZStack {
+            // Sclera.
+            shape.fill(
+                LinearGradient(
+                    colors: [Color.white, Color(red: 0.91, green: 0.89, blue: 0.89)],
+                    startPoint: .top, endPoint: .bottom
+                )
+            )
+            // Pink glow around the iris + the iris itself, clipped by the lids.
+            ZStack {
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                Color(red: 0.95, green: 0.68, blue: 0.70).opacity(0.55),
+                                Color(red: 0.95, green: 0.74, blue: 0.76).opacity(0.0),
+                            ],
+                            center: .center,
+                            startRadius: irisD * 0.42,
+                            endRadius: irisD * 0.85
+                        )
+                    )
+                    .frame(width: irisD * 1.7, height: irisD * 1.7)
+                MoveIrisView(diameter: irisD)
+            }
+            .clipShape(shape)
+            // Lid outline hugging the almond — no detached arcs.
+            shape.stroke(Color(red: 0.07, green: 0.07, blue: 0.09),
+                         style: StrokeStyle(lineWidth: 30, lineCap: .round, lineJoin: .round))
+        }
+        .frame(width: eyeSize.width, height: eyeSize.height)
     }
 }
 

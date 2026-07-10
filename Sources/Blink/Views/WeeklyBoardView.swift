@@ -17,6 +17,8 @@ struct WeeklyBoardView: View {
     @State private var targetedColumn: String?
     /// Draft for the quick-add field in the Unscheduled column.
     @State private var backlogDraft = ""
+    /// Task being edited in the full editor sheet (context menu → Edit…).
+    @State private var editorTask: TaskItem?
 
     private let columnWidth: CGFloat = 204
 
@@ -71,6 +73,9 @@ struct WeeklyBoardView: View {
                     insertion: .opacity.combined(with: .offset(x: weekOffset >= 0 ? 44 : -44)),
                     removal: .opacity))
             }
+        }
+        .sheet(item: $editorTask) { task in
+            TaskEditorView(task: task, accent: accent)
         }
     }
 
@@ -334,9 +339,15 @@ struct WeeklyBoardView: View {
 
             let hasMeta = task.dueDate != nil || task.subtaskProgress.total > 0
                 || task.pomodorosDone > 0 || task.estimatedPomodoros != nil
-                || !task.tags.isEmpty
+                || !task.tags.isEmpty || task.priority != .none
             if hasMeta {
                 HStack(spacing: 7) {
+                    if task.priority != .none, let hex = task.priority.colorHex {
+                        Image(systemName: "flag.fill")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(Color(hex: hex))
+                            .help(task.priority.menuLabel)
+                    }
                     if let due = task.dueDate {
                         Label(shortDue(due), systemImage: "calendar")
                             .labelStyle(.titleAndIcon)
@@ -406,6 +417,19 @@ struct WeeklyBoardView: View {
             Button { startFocus(task) } label: {
                 Label("Start focus", systemImage: "play.fill")
             }
+            Button { editorTask = task } label: {
+                Label("Edit…", systemImage: "pencil")
+            }
+            Menu {
+                ForEach(TaskPriority.allCases.reversed()) { p in
+                    Button {
+                        store.setPriority(task.id, p)
+                    } label: {
+                        Label(p.menuLabel,
+                              systemImage: task.priority == p ? "checkmark" : "flag.fill")
+                    }
+                }
+            } label: { Label("Priority", systemImage: "flag.fill") }
             Button { store.setPlannedDate(task.id, nil) } label: {
                 Label("Unschedule", systemImage: "calendar.badge.minus")
             }

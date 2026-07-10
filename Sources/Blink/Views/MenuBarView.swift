@@ -574,6 +574,18 @@ struct MenuBarView: View {
                 Label("Change category", systemImage: "tag")
             }
             Menu {
+                ForEach(BlinkCore.TaskPriority.allCases.reversed()) { p in
+                    Button {
+                        tasks.setPriority(task.id, p)
+                    } label: {
+                        Label(p.menuLabel,
+                              systemImage: task.priority == p ? "checkmark" : "flag.fill")
+                    }
+                }
+            } label: {
+                Label("Priority", systemImage: "flag.fill")
+            }
+            Menu {
                 Button("No estimate") { tasks.setEstimate(task.id, nil) }
                 Divider()
                 ForEach(1...8, id: \.self) { n in

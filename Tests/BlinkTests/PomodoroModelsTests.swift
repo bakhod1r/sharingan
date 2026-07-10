@@ -36,7 +36,12 @@ struct PomodoroModelsTests {
         stats.registerFocusCompletion()
         #expect(stats.completedFocus == 2)
         #expect(stats.completedToday == 2)
+        // Same-day call is a no-op — a legitimate running count is never wiped.
         stats.resetTodayIfNeeded()
+        #expect(stats.completedToday == 2)
+        // The counter rolls to zero only once the stored day is in the past.
+        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date())!
+        stats.resetTodayIfNeeded(now: tomorrow)
         #expect(stats.completedToday == 0)
         #expect(stats.completedFocus == 2)
     }
