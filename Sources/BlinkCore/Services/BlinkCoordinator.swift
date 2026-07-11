@@ -133,6 +133,32 @@ public final class BlinkCoordinator: ObservableObject {
             }
     }
 
+    /// Dispatch a parsed `sharingan://` URL command through the exact same
+    /// paths the CLI bridge uses. `.show` is a UI concern (window managers
+    /// live in the app target) and is handled by the AppDelegate instead.
+    public func handle(_ command: URLCommand) {
+        switch command {
+        case .start(let interval):
+            if let interval { timer.setCustomDuration(interval) }
+            if !timer.isRunning { timer.start() }
+            publishSnapshot()
+        case .pause:
+            timer.pause()
+        case .resume:
+            timer.start()
+        case .skip:
+            timer.skip()
+        case .reset:
+            timer.stop()
+        case .addTask(let text):
+            cliTaskAdd(text)
+        case .toggleFloating:
+            floatingController?.toggleFloating(timer: timer)
+        case .show:
+            break
+        }
+    }
+
     private func cliTaskAdd(_ payload: String?) {
         guard let p = payload?.trimmingCharacters(in: .whitespacesAndNewlines),
               !p.isEmpty else { return }

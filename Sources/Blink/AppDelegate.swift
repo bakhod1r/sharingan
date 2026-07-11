@@ -262,6 +262,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    // sharingan:// URL scheme (Shortcuts/Raycast/browser automation). AppKit
+    // installs the kAEGetURL Apple-event handler for us because the delegate
+    // implements application(_:open:) — CFBundleURLTypes in Info.plist makes
+    // LaunchServices route the scheme here (bundle builds via make-app.sh).
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls {
+            guard let command = URLCommandRouter.parse(url) else { continue }
+            switch command {
+            case .show:
+                MainWindowManager.shared.show()
+            default:
+                coordinator?.handle(command)
+            }
+        }
+    }
+
     // Finder/Launchpad re-launch of an already-running accessory app fires
     // reopen — surface the main window instead of silently doing nothing.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

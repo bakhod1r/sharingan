@@ -67,6 +67,8 @@ struct TasksView: View {
     /// Smart-view filter + free-text search over the list.
     @State private var filter: TaskFilter = .all
     @State private var search = ""
+    /// Eisenhower matrix mode — replaces the grouped list with the 2×2 grid.
+    @State private var showEisenhower = false
     @FocusState private var searchFocused: Bool
     /// Sidebar deep-link narrowing — at most one is active at a time.
     @State private var categoryFilter: String?
@@ -84,15 +86,25 @@ struct TasksView: View {
                 emptyState
             } else {
                 viewBar
-                narrowFilterChip
-                let groups = narrowed(store.grouped(filter: filter, search: search))
-                if groups.isEmpty {
-                    noResults
-                } else if embeddedInScroll {
-                    taskList(groups)
+                if showEisenhower {
+                    let matrix = EisenhowerView(timer: timer) { editorTask = $0 }
+                    if embeddedInScroll {
+                        matrix
+                    } else {
+                        ScrollView { matrix.padding(.vertical, 2) }
+                            .frame(height: 320)
+                    }
                 } else {
-                    ScrollView { taskList(groups).padding(.vertical, 2) }
-                        .frame(height: 320)
+                    narrowFilterChip
+                    let groups = narrowed(store.grouped(filter: filter, search: search))
+                    if groups.isEmpty {
+                        noResults
+                    } else if embeddedInScroll {
+                        taskList(groups)
+                    } else {
+                        ScrollView { taskList(groups).padding(.vertical, 2) }
+                            .frame(height: 320)
+                    }
                 }
             }
         }
@@ -288,6 +300,7 @@ struct TasksView: View {
             }
             HStack(spacing: 8) {
                 searchField
+                matrixToggle
                 queueChip
                 if filter == .completed, store.count(.completed) > 0 {
                     Button { confirmClearCompleted = true } label: {
@@ -328,6 +341,24 @@ struct TasksView: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.pressableSubtle)
+    }
+
+    /// Compact grid icon that flips the list into the Eisenhower 2×2 matrix.
+    private var matrixToggle: some View {
+        Button {
+            withAnimation(DS.Motion.gentle) { showEisenhower.toggle() }
+        } label: {
+            Image(systemName: showEisenhower ? "square.grid.2x2.fill" : "square.grid.2x2")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(showEisenhower ? Color.accentColor : Color.dsSecondary)
+                .frame(width: 27, height: 27)
+                .background(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
+                    .fill(showEisenhower ? Color.accentColor.opacity(0.16) : Color.dsFill))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.pressableSubtle)
+        .help(showEisenhower ? "Back to the list" : "Eisenhower matrix — urgency × importance")
+        .accessibilityLabel(showEisenhower ? "Show task list" : "Show Eisenhower matrix")
     }
 
     private var searchField: some View {

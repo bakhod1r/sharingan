@@ -26,6 +26,17 @@
     <true/>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>com.blink.sharingan.url</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>sharingan</string>
+            </array>
+        </dict>
+    </array>
     <key>NSCameraUsageDescription</key>
     <string>Sharingan uses the camera to check your eye exercises during breaks (break time only, private).</string>
     <key>NSUserNotificationsUsageDescription</key>
