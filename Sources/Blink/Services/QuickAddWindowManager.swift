@@ -32,8 +32,15 @@ final class QuickAddWindowManager: QuickAddController {
         panel.isFloatingPanel = true
 
         let view = QuickAddTaskView(
-            onSubmit: { [weak self] title in
-                TaskStore.shared.add(title: title)
+            onSubmit: { [weak self] raw in
+                let p = TaskInputParser.parse(raw)
+                TaskStore.shared.add(title: p.title.isEmpty ? raw : p.title,
+                                     tags: p.tags,
+                                     dueDate: p.dueDate,
+                                     estimatedPomodoros: p.estimatedPomodoros,
+                                     recurrence: p.recurrence,
+                                     project: p.project,
+                                     priority: p.priority)
                 self?.hideQuickAdd()
             },
             onCancel: { [weak self] in self?.hideQuickAdd() }
@@ -91,6 +98,12 @@ private struct QuickAddTaskView: View {
                     .focused($focused)
                     .onSubmit(submit)
             }
+            if let hint = parsedHint {
+                Text(hint)
+                    .font(.system(.caption, design: .rounded).weight(.medium))
+                    .foregroundStyle(.tint)
+                    .lineLimit(1)
+            }
             HStack(spacing: 8) {
                 Text("Return")
                     .keycap()
@@ -119,6 +132,22 @@ private struct QuickAddTaskView: View {
         )
         .onExitCommand(perform: onCancel)
         .onAppear { focused = true }
+    }
+
+    /// One-line summary of what the NL parser detected ("P1 · #ish · Jul 13
+    /// 15:00"), nil while the input is just a plain title.
+    private var parsedHint: String? {
+        let p = TaskInputParser.parse(text)
+        var bits: [String] = []
+        if p.priority != .none { bits.append(p.priority.label) }
+        bits.append(contentsOf: p.tags.map { "#\($0)" })
+        if let project = p.project { bits.append("@\(project)") }
+        if let due = p.dueDate {
+            bits.append(due.formatted(.dateTime.month(.abbreviated).day().hour().minute()))
+        }
+        if let est = p.estimatedPomodoros { bits.append("~\(est)") }
+        if p.recurrence != .none { bits.append(p.recurrence.label) }
+        return bits.isEmpty ? nil : bits.joined(separator: " · ")
     }
 
     private func submit() {
