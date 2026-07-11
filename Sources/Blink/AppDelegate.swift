@@ -14,6 +14,15 @@ final class MenuBarController: NSObject {
     weak var timer: PomodoroTimer?
     weak var coordinator: BlinkCoordinator?
 
+    /// The state the current button image was drawn for — the bitmap is
+    /// re-rendered only when this changes (integer percent / phase / idle),
+    /// not on every 1 s tick.
+    private struct IconKey: Equatable {
+        var percent: Int?
+        var phase: PomodoroPhase
+    }
+    private var lastIconKey: IconKey?
+
     func install(timer: PomodoroTimer, coordinator: BlinkCoordinator) {
         self.timer = timer
         self.coordinator = coordinator
@@ -26,7 +35,6 @@ final class MenuBarController: NSObject {
         // blink.menubar") and any manual ⌘-drag by the user sticks.
         item.autosaveName = "blink.menubar"
         statusItem = item
-        updateTitle()
 
         let popover = NSPopover()
         popover.behavior = .transient
@@ -39,11 +47,11 @@ final class MenuBarController: NSObject {
         self.popover = popover
 
         if let button = item.button {
-            button.image = Self.menuBarIcon()
             button.imagePosition = .imageLeading
             button.action = #selector(togglePopover)
             button.target = self
         }
+        updateTitle() // seeds both the title and the initial icon
 
         // Sync coordinator services now that the menu bar is live.
         coordinator.syncAlarm()
@@ -67,6 +75,16 @@ final class MenuBarController: NSObject {
             || (timer.remainingSeconds > 0 && timer.remainingSeconds < timer.totalSeconds)
         let show = engaged && timer.settings.showMenuBarCountdown
         button.title = show ? String(format: " %02d:%02d", Int(s) / 60, Int(s) % 60) : ""
+
+        // Progress ring around the iris while a session is engaged.
+        let key = IconKey(percent: engaged ? Int(timer.progress * 100) : nil,
+                          phase: timer.phase)
+        if key != lastIconKey {
+            lastIconKey = key
+            button.image = Self.menuBarIcon(
+                progress: key.percent.map { Double($0) / 100 },
+                phase: key.phase)
+        }
     }
 
     /// The menu-bar icon: the app's own red Sharingan iris, kept in colour
@@ -75,13 +93,54 @@ final class MenuBarController: NSObject {
     /// transparent bitmap when invoked during applicationDidFinishLaunching in
     /// the bundled accessory app, leaving the status item invisible (an empty
     /// clickable gap in the menu bar). Falls back to a template stopwatch glyph.
+    ///
+    /// With `progress` set (an engaged session) the iris shrinks and a thin
+    /// ring draws around it: a dim full-circle track plus a bright elapsed arc
+    /// sweeping clockwise from 12 o'clock — red-orange in focus, green on
+    /// breaks, dimmed while paused.
     @MainActor
-    private static func menuBarIcon() -> NSImage? {
+    private static func menuBarIcon(progress: Double? = nil,
+                                    phase: PomodoroPhase = .focus) -> NSImage? {
         let side: CGFloat = 18
-        let img = NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
+        let img = NSImage(size: NSSize(width: side, height: side), flipped: false) { fullRect in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
+            let c = CGPoint(x: fullRect.midX, y: fullRect.midY)
+
+            var rect = fullRect
+            if let progress {
+                let ringWidth: CGFloat = 1.6
+                // Track: full dim circle, legible on light and dark menu bars.
+                ctx.setStrokeColor(CGColor(gray: 0.55, alpha: 0.35))
+                ctx.setLineWidth(ringWidth)
+                ctx.strokeEllipse(in: fullRect.insetBy(dx: ringWidth / 2, dy: ringWidth / 2))
+
+                // Elapsed arc, 12 o'clock clockwise (y-up coords: angles
+                // decrease going visually clockwise).
+                let clamped = max(0, min(1, progress))
+                if clamped > 0.01 {
+                    let arcColor: CGColor
+                    switch phase {
+                    case .focus:
+                        arcColor = CGColor(red: 1.0, green: 0.38, blue: 0.22, alpha: 1)
+                    case .shortBreak, .longBreak:
+                        arcColor = CGColor(red: 0.30, green: 0.85, blue: 0.45, alpha: 1)
+                    case .paused:
+                        arcColor = CGColor(gray: 0.9, alpha: 0.5)
+                    }
+                    ctx.setStrokeColor(arcColor)
+                    ctx.setLineWidth(ringWidth)
+                    ctx.setLineCap(.round)
+                    let start = CGFloat.pi / 2
+                    ctx.addArc(center: c, radius: fullRect.width / 2 - ringWidth / 2,
+                               startAngle: start,
+                               endAngle: start - clamped * 2 * .pi,
+                               clockwise: true)
+                    ctx.strokePath()
+                }
+                // Iris sits inside the ring with a small gap.
+                rect = fullRect.insetBy(dx: 3.2, dy: 3.2)
+            }
             let r = rect.width / 2
-            let c = CGPoint(x: rect.midX, y: rect.midY)
 
             // Iris: bright-centre red radial gradient (brighter than the
             // full-size artwork so it stays legible at 18 pt on dark menu bars).
