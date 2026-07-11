@@ -260,6 +260,50 @@ public final class TaskStore: ObservableObject {
         persist()
     }
 
+    /// Inserts a fully-formed task (e.g. one instantiated from a template) at
+    /// the bottom of the manual order, schedules its deadline reminders, and
+    /// persists. The caller is responsible for ids/createdAt (see
+    /// `TemplateStore.instantiate`).
+    public func insert(_ task: TaskItem) {
+        var task = task
+        task.sortOrder = (tasks.map(\.sortOrder).max() ?? 0) + 1
+        tasks.append(task)
+        syncDueNotifications(for: task)
+        persist()
+    }
+
+    /// Deep-copies a task: fresh ids for the task and every subtask, a
+    /// " (copy)" title suffix, and all progress state reset (not done, zero
+    /// pomodoros, no completion stamp) while metadata — category, tags,
+    /// project, priority, due/planned dates, estimates, notes, recurrence —
+    /// is kept. The copy slots directly after the original in the manual
+    /// order. Returns the new task's id, or nil for an unknown id.
+    @discardableResult
+    public func duplicate(_ id: UUID) -> UUID? {
+        guard let original = tasks.first(where: { $0.id == id }) else { return nil }
+        var copy = original
+        copy.id = UUID()
+        copy.title = original.title + " (copy)"
+        copy.isDone = false
+        copy.pomodorosDone = 0
+        copy.completedAt = nil
+        copy.createdAt = Date()
+        for k in copy.subtasks.indices {
+            copy.subtasks[k].id = UUID()
+            copy.subtasks[k].isDone = false
+            copy.subtasks[k].pomodorosDone = 0   // keep estimates, reset progress
+        }
+        // Open a gap right after the original so the copy lands next to it.
+        for i in tasks.indices where tasks[i].sortOrder > original.sortOrder {
+            tasks[i].sortOrder += 1
+        }
+        copy.sortOrder = original.sortOrder + 1
+        tasks.append(copy)
+        syncDueNotifications(for: copy)
+        persist()
+        return copy.id
+    }
+
     // MARK: - Planning
 
     /// Moves a task one place up or down within its own category (open tasks).

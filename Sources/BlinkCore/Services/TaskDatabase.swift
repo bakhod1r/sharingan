@@ -58,6 +58,13 @@ final class TaskDatabase {
             icon TEXT NOT NULL
         );
         """)
+        exec("""
+        CREATE TABLE IF NOT EXISTS templates (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            json TEXT NOT NULL
+        );
+        """)
         // Databases created before the column shipped need it added in place
         // (CREATE IF NOT EXISTS won't touch an existing table).
         if !tableHasColumn("tasks", "completedAt") {
@@ -180,6 +187,43 @@ final class TaskDatabase {
                 bindText(stmt, 1, c.name)
                 bindText(stmt, 2, c.colorHex)
                 bindText(stmt, 3, c.icon)
+                guard sqlite3_step(stmt) == SQLITE_DONE else { return false }
+            }
+            return true
+        }
+    }
+
+    // MARK: - Templates
+
+    /// The template's `TaskItem` is stored as one JSON blob — templates are
+    /// only ever read back whole, so there's nothing to gain from columns.
+    func loadTemplates() -> [TaskTemplate] {
+        var out: [TaskTemplate] = []
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, "SELECT id,name,json FROM templates;", -1, &stmt, nil) == SQLITE_OK
+        else { return out }
+        defer { sqlite3_finalize(stmt) }
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            guard let idText = text(stmt, 0), let id = UUID(uuidString: idText),
+                  let item = decodeJSON(TaskItem.self, text(stmt, 2)) else { continue }
+            out.append(TaskTemplate(id: id, name: text(stmt, 1) ?? "", item: item))
+        }
+        return out
+    }
+
+    func saveTemplates(_ templates: [TaskTemplate]) {
+        transaction {
+            guard exec("DELETE FROM templates;") else { return false }
+            let sql = "INSERT INTO templates (id,name,json) VALUES (?,?,?);"
+            var stmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
+            defer { sqlite3_finalize(stmt) }
+            for t in templates {
+                sqlite3_reset(stmt)
+                bindText(stmt, 1, t.id.uuidString)
+                bindText(stmt, 2, t.name)
+                guard let json = encodeJSON(t.item) else { return false }
+                bindText(stmt, 3, json)
                 guard sqlite3_step(stmt) == SQLITE_DONE else { return false }
             }
             return true
