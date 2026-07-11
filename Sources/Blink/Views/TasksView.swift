@@ -10,6 +10,10 @@ struct TasksView: View {
     var embeddedInScroll: Bool = false
     @ObservedObject private var store = TaskStore.shared
     @ObservedObject private var templates = TemplateStore.shared
+    /// The coordinator's focus queue — tasks worked through one pomodoro each.
+    @ObservedObject private var queue = AppServices.focusQueue
+    /// Small "Queue (N)" popover anchored to the chip in the view bar.
+    @State private var showQueuePanel = false
 
     @State private var newTitle = ""
     @State private var newCategory = TaskCategory.presets[0].name
@@ -284,6 +288,7 @@ struct TasksView: View {
             }
             HStack(spacing: 8) {
                 searchField
+                queueChip
                 if filter == .completed, store.count(.completed) > 0 {
                     Button { confirmClearCompleted = true } label: {
                         Label("Clear", systemImage: "trash")
@@ -349,6 +354,127 @@ struct TasksView: View {
         .padding(.horizontal, 10).padding(.vertical, 6)
         .frame(maxWidth: .infinity)
         .background(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous).fill(Color.dsFill))
+    }
+
+    // MARK: - Focus queue
+
+    /// Queued ids resolved against the store, in queue order — open tasks only
+    /// (a read-only mirror of what `FocusQueue.current` would walk, without
+    /// mutating queue state from a view).
+    private var queuedOpenTasks: [TaskItem] {
+        queue.taskIDs.compactMap { id in
+            store.tasks.first { $0.id == id && !$0.isDone }
+        }
+    }
+
+    /// 1-based position of a task among the (open) queued tasks, nil if unqueued.
+    private func queuePosition(_ id: UUID) -> Int? {
+        queuedOpenTasks.firstIndex { $0.id == id }.map { $0 + 1 }
+    }
+
+    /// Compact "Queue N" chip in the view bar — only when the queue has tasks.
+    @ViewBuilder
+    private var queueChip: some View {
+        let count = queuedOpenTasks.count
+        if count > 0 {
+            Button { showQueuePanel = true } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "list.number")
+                        .font(.system(size: 10, weight: .bold))
+                    Text("Queue \(count)")
+                        .font(.system(.caption, design: .rounded).weight(.semibold).monospacedDigit())
+                }
+                .foregroundStyle(Color.accentColor)
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .background(Capsule().fill(Color.accentColor.opacity(0.16)))
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.pressableSubtle)
+            .help("Focus queue — each finished session hands off to the next task")
+            .popover(isPresented: $showQueuePanel, arrowEdge: .bottom) { queuePanel }
+        }
+    }
+
+    /// Popover listing queued tasks in order: drag a row onto another to
+    /// reorder (drop-before, the list's drag idiom), ✕ removes, Clear empties.
+    private var queuePanel: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Focus Queue").dsSectionLabel()
+                Spacer()
+                Button {
+                    queue.clear()
+                    showQueuePanel = false
+                } label: {
+                    Text("Clear")
+                        .font(.system(.caption, design: .rounded).weight(.semibold))
+                        .foregroundStyle(Color.red.opacity(0.85))
+                }
+                .buttonStyle(.pressableSubtle)
+                .help("Empty the queue")
+            }
+            Text("Each finished focus session hands off to the next task.")
+                .font(.system(.caption2, design: .rounded))
+                .foregroundStyle(Color.dsTertiary)
+            VStack(spacing: 6) {
+                ForEach(Array(queuedOpenTasks.enumerated()), id: \.element.id) { idx, task in
+                    queueRow(task, position: idx + 1)
+                        .draggable(task.id.uuidString)
+                        .dropDestination(for: String.self) { dropped, _ in
+                            guard let s = dropped.first, let dragged = UUID(uuidString: s),
+                                  dragged != task.id else { return false }
+                            moveQueued(dragged, before: task.id)
+                            return true
+                        }
+                }
+            }
+        }
+        .padding(14)
+        .frame(width: 280)
+    }
+
+    private func queueRow(_ task: TaskItem, position: Int) -> some View {
+        HStack(spacing: 8) {
+            Text("\(position)")
+                .font(.system(size: 10, weight: .bold, design: .rounded).monospacedDigit())
+                .foregroundStyle(Color.dsSecondary)
+                .frame(width: 18, height: 18)
+                .background(Circle().fill(Color.white.opacity(0.08)))
+            Circle()
+                .fill(Color(hex: store.color(for: task.category)))
+                .frame(width: 8, height: 8)
+            Text(task.title)
+                .font(.system(.caption, design: .rounded).weight(.medium))
+                .foregroundStyle(Color.dsPrimary)
+                .lineLimit(1)
+            Spacer(minLength: 6)
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(Color.dsTertiary)
+                .help("Drag to reorder")
+            Button { withAnimation(DS.Motion.standard) { queue.remove(task.id) } } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.dsTertiary)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.pressableSubtle)
+            .help("Remove from queue")
+            .accessibilityLabel("Remove \(task.title) from queue")
+        }
+        .padding(.horizontal, 10).padding(.vertical, 7)
+        .background(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
+            .fill(Color.dsFill))
+    }
+
+    /// Reorders the id list so `dragged` sits before `target` (drop-before,
+    /// matching the task rows' drag idiom).
+    private func moveQueued(_ dragged: UUID, before target: UUID) {
+        guard let src = queue.taskIDs.firstIndex(of: dragged),
+              let dst = queue.taskIDs.firstIndex(of: target), src != dst else { return }
+        withAnimation(DS.Motion.standard) {
+            queue.move(from: IndexSet(integer: src), to: dst)
+        }
     }
 
     /// Shown when the list has tasks but none match the current view/search.
@@ -1280,6 +1406,18 @@ struct TasksView: View {
             }
             Spacer(minLength: 6)
 
+            // Subtle queue-position chip for queued tasks ("1", "2", …).
+            if !task.isDone, let pos = queuePosition(task.id) {
+                Text("\(pos)")
+                    .font(.system(size: 9, weight: .bold, design: .rounded).monospacedDigit())
+                    .foregroundStyle(Color.dsSecondary)
+                    .frame(minWidth: 10)
+                    .padding(.horizontal, 5).padding(.vertical, 2)
+                    .background(Capsule().fill(Color.white.opacity(0.08)))
+                    .help("Position \(pos) in the focus queue")
+                    .accessibilityLabel("Focus queue position \(pos)")
+            }
+
             if task.isPlannedToday() {
                 Image(systemName: "sun.max.fill")
                     .font(.system(size: 12))
@@ -1451,6 +1589,17 @@ struct TasksView: View {
                         Label("Pick date…", systemImage: "calendar.badge.clock")
                     }
                 } label: { Label("Snooze", systemImage: "zzz") }
+            }
+            if !task.isDone {
+                let queued = queue.taskIDs.contains(task.id)
+                Button {
+                    withAnimation(DS.Motion.standard) {
+                        if queued { queue.remove(task.id) } else { queue.enqueue(task.id) }
+                    }
+                } label: {
+                    Label(queued ? "Remove from Focus Queue" : "Add to Focus Queue",
+                          systemImage: queued ? "text.badge.minus" : "text.badge.plus")
+                }
             }
             Divider()
             Button { store.duplicate(task.id) } label: {

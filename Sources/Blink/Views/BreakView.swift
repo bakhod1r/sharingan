@@ -124,7 +124,27 @@ struct BreakView: View {
                 .padding(.horizontal, 30)
                 .animation(.easeInOut(duration: 0.25), value: captionText)
             stepDots
+            // Quiet hint: the queued task focus resumes on when the break ends.
+            if let next = nextQueuedTitle {
+                Text("Next: \(next)")
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.5))
+                    .lineLimit(1)
+                    .padding(.horizontal, 40)
+                    .padding(.top, 2)
+            }
         }
+    }
+
+    /// Title of the task the focus queue will hand off to next. Read-only scan
+    /// (not `current(validatedAgainst:)`) so rendering never mutates published
+    /// queue state mid view-update.
+    @MainActor
+    private var nextQueuedTitle: String? {
+        let store = TaskStore.shared
+        return AppServices.focusQueue.taskIDs.lazy
+            .compactMap { id in store.tasks.first { $0.id == id && !$0.isDone } }
+            .first?.title
     }
 
     private var captionText: String {

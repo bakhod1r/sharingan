@@ -4,8 +4,16 @@ import BlinkCore
 /// Presented before a focus pomodoro starts: the user picks (or quickly adds)
 /// the task to run the session against. Choosing a task makes it active and
 /// immediately starts the focus timer.
+///
+/// With `onPick` set the sheet runs in "pick" mode instead (the post-break
+/// "What's next?" prompt): choosing a task — or skipping — reports the id to
+/// the host (which answers `BlinkCoordinator.resolveTaskPick(with:)`) rather
+/// than starting a session itself.
 struct TaskPickerSheet: View {
     @ObservedObject var timer: PomodoroTimer
+    /// Pick-mode callback; nil id means "no task, thanks". nil closure =
+    /// classic pick-and-start behavior.
+    var onPick: ((UUID?) -> Void)? = nil
     @ObservedObject private var store = TaskStore.shared
     @Environment(\.dismiss) private var dismiss
 
@@ -43,16 +51,18 @@ struct TaskPickerSheet: View {
         }
         .frame(width: 400, height: 480)
         .background(backdrop)
+        .onExitCommand { onPick?(nil) }
     }
 
     // MARK: - Header
 
     private var header: some View {
         VStack(spacing: 4) {
-            Text("Choose a task")
+            Text(onPick == nil ? "Choose a task" : "What's next?")
                 .font(.system(.title2, design: .rounded).weight(.bold))
                 .foregroundStyle(.white)
-            Text("Pick what to focus on, then the pomodoro starts.")
+            Text(onPick == nil ? "Pick what to focus on, then the pomodoro starts."
+                               : "Pick the task for your next focus session.")
                 .font(.system(.caption, design: .rounded))
                 .foregroundStyle(.white.opacity(0.7))
         }
@@ -193,7 +203,7 @@ struct TaskPickerSheet: View {
             Button {
                 startWithoutTask()
             } label: {
-                Text("Start without a task")
+                Text(onPick == nil ? "Start without a task" : "Skip — no task for now")
                     .font(.system(.caption, design: .rounded).weight(.medium))
                     .foregroundStyle(.white.opacity(0.6))
             }
@@ -213,27 +223,32 @@ struct TaskPickerSheet: View {
 
     private func choose(_ task: TaskItem, subtask: UUID? = nil) {
         store.setActiveSubtask(taskID: task.id, subtaskID: subtask)
-        startFocus()
+        finish(with: task.id)
     }
 
     private func addAndStart() {
         let title = newTitle.trimmingCharacters(in: .whitespaces)
         guard !title.isEmpty else { return }
         store.add(title: title)
-        if let added = store.tasks.last(where: { $0.title == title }) {
-            store.setActive(added.id)
-        }
+        let added = store.tasks.last(where: { $0.title == title })
+        if let added { store.setActive(added.id) }
         newTitle = ""
-        startFocus()
+        finish(with: added?.id)
     }
 
     private func startWithoutTask() {
-        store.setActive(nil)
-        startFocus()
+        if onPick == nil { store.setActive(nil) }
+        finish(with: nil)
     }
 
-    private func startFocus() {
-        timer.startFocusSession()
-        dismiss()
+    /// Pick mode reports the choice to the host; classic mode starts the
+    /// focus session and closes the sheet.
+    private func finish(with id: UUID?) {
+        if let onPick {
+            onPick(id)
+        } else {
+            timer.startFocusSession()
+            dismiss()
+        }
     }
 }

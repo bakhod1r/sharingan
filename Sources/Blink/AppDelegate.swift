@@ -232,6 +232,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         coord.quickAddController = QuickAddWindowManager.shared
         self.timer = timer
         self.coordinator = coord
+        // Views reach shared services (focus queue) through this; the
+        // "What's next?" panel follows coordinator.needsTaskPick on its own.
+        AppServices.coordinator = coord
+        TaskPickWindowManager.shared.install(coordinator: coord)
 
         // Feed the AppKit-managed main window its SwiftUI content, otherwise
         // MainWindowManager.show() (used by the popover's "Open window" button
