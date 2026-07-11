@@ -511,6 +511,45 @@ public final class TaskStore: ObservableObject {
         persist()
     }
 
+    /// Applies a drag reorder (`onMove`) within one task's checklist.
+    public func reorderSubtasks(_ taskID: UUID, from source: IndexSet, to destination: Int) {
+        guard let i = tasks.firstIndex(where: { $0.id == taskID }) else { return }
+        tasks[i].subtasks.move(fromOffsets: source, toOffset: destination)
+        persist()
+    }
+
+    /// Lifts a checklist item out into a full task of its own: the new task
+    /// takes the subtask's title, estimate, and pomodoro credit, inherits the
+    /// parent's category, project, tags, and priority, and starts open (a
+    /// promotion implies remaining work, even for a checked-off step). No
+    /// dates, recurrence, notes, or subtasks carry over. The new task slots
+    /// directly after its former parent in the manual order (same gap trick
+    /// as `duplicate`). Returns the new task's id, or nil for unknown ids.
+    @discardableResult
+    public func promoteSubtask(_ taskID: UUID, _ subID: UUID) -> UUID? {
+        guard let i = tasks.firstIndex(where: { $0.id == taskID }),
+              let j = tasks[i].subtasks.firstIndex(where: { $0.id == subID }) else { return nil }
+        let parent = tasks[i]
+        let sub = parent.subtasks[j]
+        // Open a gap right after the parent so the promoted task lands next to it.
+        for k in tasks.indices where tasks[k].sortOrder > parent.sortOrder {
+            tasks[k].sortOrder += 1
+        }
+        let promoted = TaskItem(title: sub.title,
+                                category: parent.category,
+                                tags: parent.tags,
+                                pomodorosDone: sub.pomodorosDone,
+                                sortOrder: parent.sortOrder + 1,
+                                estimatedPomodoros: sub.estimatedPomodoros,
+                                project: parent.project,
+                                priority: parent.priority)
+        tasks[i].subtasks.remove(at: j)
+        tasks.append(promoted)
+        if subID == activeSubtaskID { activeSubtaskID = nil }
+        persist()
+        return promoted.id
+    }
+
     public func setNotes(_ id: UUID, _ notes: String) {
         guard let i = tasks.firstIndex(where: { $0.id == id }) else { return }
         tasks[i].notes = notes
