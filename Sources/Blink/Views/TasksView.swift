@@ -9,6 +9,7 @@ struct TasksView: View {
     /// the fixed-height inner scroll used by the compact menu-bar popover.
     var embeddedInScroll: Bool = false
     @ObservedObject private var store = TaskStore.shared
+    @ObservedObject private var templates = TemplateStore.shared
 
     @State private var newTitle = ""
     @State private var newCategory = TaskCategory.presets[0].name
@@ -33,6 +34,18 @@ struct TasksView: View {
     @State private var hoveredTask: UUID?
     /// Task currently open in the full editor sheet (nil = closed).
     @State private var editorTask: TaskItem?
+    /// Task being snoozed via "Pick date…" (nil = closed).
+    @State private var snoozeTask: TaskItem?
+    @State private var snoozeDate = Date()
+    /// Task being saved as a template (nil = no name prompt).
+    @State private var templateNamingTask: TaskItem?
+    @State private var templateName = ""
+    /// Small template list sheet (rename / delete).
+    @State private var showTemplateManager = false
+    @State private var templateRenameID: UUID?
+    @State private var templateRenameText = ""
+    /// Done view "Clear" asks before deleting permanently.
+    @State private var confirmClearCompleted = false
 
     // Inline "add category" form state.
     @State private var showNewCategory = false
@@ -83,6 +96,31 @@ struct TasksView: View {
             TaskEditorView(task: task,
                            accent: timer.settings.theme.accent,
                            settings: timer.settings)
+        }
+        .sheet(item: $snoozeTask) { task in snoozeSheet(task) }
+        .sheet(isPresented: $showTemplateManager) { templateManager }
+        .alert("Save as Template", isPresented: Binding(
+            get: { templateNamingTask != nil },
+            set: { if !$0 { templateNamingTask = nil } })) {
+            TextField("Template name", text: $templateName)
+            Button("Save") {
+                if let t = templateNamingTask {
+                    templates.saveTemplate(from: t, name: templateName)
+                }
+                templateNamingTask = nil
+            }
+            Button("Cancel", role: .cancel) { templateNamingTask = nil }
+        } message: {
+            Text("Saves the task's shape — subtasks, tags, estimates — for reuse.")
+        }
+        .alert("Clear completed tasks?", isPresented: $confirmClearCompleted) {
+            Button("Delete \(store.count(.completed))", role: .destructive) {
+                withAnimation { store.clearCompleted() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            let n = store.count(.completed)
+            Text("This permanently deletes \(n) completed task\(n == 1 ? "" : "s").")
         }
         .onAppear(perform: consumeDeepLink)
         .onChange(of: router.pendingTaskFilter) { consumeDeepLink() }
@@ -169,11 +207,70 @@ struct TasksView: View {
     }
 
     /// The grouped section stack, shared by the embedded and popover layouts.
+    /// The Done view regroups by completion day instead of category — history
+    /// reads chronologically, newest first.
     private func taskList(_ groups: [(category: String, items: [TaskItem])]) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            ForEach(groups, id: \.category) { group in
-                section(group.category, group.items)
+            if filter == .completed {
+                ForEach(doneGroups(groups), id: \.label) { group in
+                    doneSection(group.label, group.items)
+                }
+            } else {
+                ForEach(groups, id: \.category) { group in
+                    section(group.category, group.items)
+                }
             }
+        }
+    }
+
+    /// View-side regrouping of completed tasks by completion day — Today /
+    /// Yesterday / a medium date — newest first; tasks without a completion
+    /// stamp (pre-history data) land in a trailing "Earlier" bucket.
+    private func doneGroups(_ groups: [(category: String, items: [TaskItem])])
+        -> [(label: String, items: [TaskItem])] {
+        let all = groups.flatMap(\.items)
+        let dated = all.filter { $0.completedAt != nil }
+            .sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }
+        var out: [(label: String, items: [TaskItem])] = []
+        for task in dated {
+            let label = doneDayLabel(task.completedAt!)
+            if let i = out.firstIndex(where: { $0.label == label }) {
+                out[i].items.append(task)
+            } else {
+                out.append((label, [task]))
+            }
+        }
+        let undated = all.filter { $0.completedAt == nil }
+        if !undated.isEmpty { out.append(("Earlier", undated)) }
+        return out
+    }
+
+    private func doneDayLabel(_ d: Date) -> String {
+        let cal = Calendar.current
+        if cal.isDateInToday(d) { return "Today" }
+        if cal.isDateInYesterday(d) { return "Yesterday" }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US")
+        f.dateStyle = .medium; f.timeStyle = .none
+        return f.string(from: d)
+    }
+
+    /// One completion-day section of the Done history.
+    private func doneSection(_ label: String, _ items: [TaskItem]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Color.dsTertiary)
+                Text(label).dsSectionLabel()
+                Spacer()
+                Text("\(items.count)")
+                    .font(.system(.caption2, design: .rounded).weight(.bold).monospacedDigit())
+                    .foregroundStyle(Color.dsSecondary)
+                    .padding(.horizontal, 7).padding(.vertical, 2)
+                    .background(Capsule().fill(Color.white.opacity(0.06)))
+            }
+            ForEach(items) { task in row(task) }
         }
     }
 
@@ -188,7 +285,7 @@ struct TasksView: View {
             HStack(spacing: 8) {
                 searchField
                 if filter == .completed, store.count(.completed) > 0 {
-                    Button { withAnimation { store.clearCompleted() } } label: {
+                    Button { confirmClearCompleted = true } label: {
                         Label("Clear", systemImage: "trash")
                             .font(.system(.caption, design: .rounded).weight(.semibold))
                             .foregroundStyle(Color.red.opacity(0.85))
@@ -302,11 +399,20 @@ struct TasksView: View {
                     .focused($composerFocused)
             }
 
+            // Smart-parse preview — chips for every token the quick-add syntax
+            // found in the line (p1 / #tag / @project / times / ~2 / repeats).
+            let parsed = TaskInputParser.parse(newTitle, now: Date())
+            if hasSmartTokens(parsed) {
+                parsedChips(parsed)
+                    .transition(.opacity)
+            }
+
             // Row 2 — the three you set most: category, priority, due. One tap each.
             HStack(spacing: 8) {
                 categoryMenu
                 PriorityMenu(priority: $newPriority)
                 dueMenu
+                if !templates.templates.isEmpty { templateMenu }
                 Spacer(minLength: 4)
                 // Everything else (tags, estimate, repeat, project, notes).
                 Button {
@@ -505,6 +611,162 @@ struct TasksView: View {
             }
         }
         .padding(.horizontal, 12).padding(.bottom, 12)
+    }
+
+    // MARK: - Smart-parse chips
+
+    /// True when the composer line carries more than a bare title.
+    private func hasSmartTokens(_ p: ParsedTaskInput) -> Bool {
+        p.priority != .none || !p.tags.isEmpty || p.project != nil
+            || p.dueDate != nil || p.estimatedPomodoros != nil || p.recurrence != .none
+    }
+
+    /// Compact preview row of everything the parser detected while typing.
+    private func parsedChips(_ p: ParsedTaskInput) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                if p.priority != .none {
+                    parsedChip(p.priority.label,
+                               tint: p.priority.colorHex.map { Color(hex: $0) })
+                }
+                ForEach(p.tags, id: \.self) { parsedChip("#\($0)") }
+                if let project = p.project { parsedChip("@\(project)") }
+                if let due = p.dueDate { parsedChip(parsedDueText(due)) }
+                if let est = p.estimatedPomodoros { parsedChip("~\(est) 🍅") }
+                if p.recurrence != .none { parsedChip(p.recurrence.label) }
+            }
+        }
+    }
+
+    /// One tiny token pill — same quiet capsule as the tag suggestions.
+    private func parsedChip(_ text: String, tint: Color? = nil) -> some View {
+        Text(text)
+            .font(.system(size: 10, weight: .medium, design: .rounded))
+            .foregroundStyle(tint ?? .white.opacity(0.7))
+            .padding(.horizontal, 8).padding(.vertical, 3)
+            .background(Capsule().fill(Color.white.opacity(0.06)))
+    }
+
+    private func parsedDueText(_ d: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US")
+        f.dateFormat = "MMM d HH:mm"
+        return f.string(from: d)
+    }
+
+    // MARK: - Templates
+
+    /// Icon-only chip: instantiate a saved template, or open the manager.
+    private var templateMenu: some View {
+        Menu {
+            ForEach(templates.templates) { t in
+                Button(t.name) {
+                    if let task = templates.instantiate(t.id) {
+                        withAnimation(DS.Motion.standard) { store.insert(task) }
+                    }
+                }
+            }
+            Divider()
+            Button { showTemplateManager = true } label: {
+                Label("Manage…", systemImage: "slider.horizontal.3")
+            }
+        } label: {
+            Image(systemName: "doc.on.doc")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.85))
+                .padding(.horizontal, 8).padding(.vertical, 7)
+                .background(Capsule().fill(Color.white.opacity(0.06)))
+        }
+        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+        .help("New task from template")
+    }
+
+    /// Small sheet listing templates with rename / delete.
+    private var templateManager: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Templates")
+                    .font(.system(.headline, design: .rounded).weight(.bold))
+                    .foregroundStyle(.white)
+                Spacer()
+                Button { showTemplateManager = false } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                }
+                .buttonStyle(.pressableSubtle)
+            }
+            if templates.templates.isEmpty {
+                Text("No templates yet — right-click a task and choose “Save as Template…”.")
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(Color.dsSecondary)
+                    .padding(.vertical, 12)
+            }
+            ForEach(templates.templates) { t in
+                HStack(spacing: 8) {
+                    Image(systemName: "doc.on.doc")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Color.dsSecondary)
+                        .frame(width: 20)
+                    if templateRenameID == t.id {
+                        TextField("Name", text: $templateRenameText,
+                                  onCommit: { commitTemplateRename(t.id) })
+                            .textFieldStyle(.plain)
+                            .font(.system(.caption, design: .rounded).weight(.medium))
+                            .onSubmit { commitTemplateRename(t.id) }
+                    } else {
+                        Text(t.name)
+                            .font(.system(.caption, design: .rounded).weight(.medium))
+                            .foregroundStyle(.white)
+                    }
+                    Spacer()
+                    Button {
+                        templateRenameText = t.name; templateRenameID = t.id
+                    } label: {
+                        Image(systemName: "pencil").font(.system(size: 11))
+                            .foregroundStyle(.white.opacity(0.6)).frame(width: 22, height: 22)
+                    }
+                    .buttonStyle(.pressableSubtle).help("Rename")
+                    Button { templates.delete(t.id) } label: {
+                        Image(systemName: "trash").font(.system(size: 11))
+                            .foregroundStyle(.red.opacity(0.8)).frame(width: 22, height: 22)
+                    }
+                    .buttonStyle(.pressableSubtle).help("Delete template")
+                }
+                .padding(.vertical, 3)
+            }
+        }
+        .padding(16)
+        .frame(width: 320)
+        .background(Color.black.opacity(0.3).background(.ultraThinMaterial))
+    }
+
+    private func commitTemplateRename(_ id: UUID) {
+        templates.rename(id, to: templateRenameText)
+        templateRenameID = nil
+    }
+
+    /// Date-only calendar for the "Snooze → Pick date…" action.
+    private func snoozeSheet(_ task: TaskItem) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Snooze until").dsSectionLabel()
+            DatePicker("", selection: $snoozeDate, displayedComponents: [.date])
+                .datePickerStyle(.graphical)
+                .labelsHidden()
+                .frame(width: 260)
+            HStack {
+                Button("Cancel") { snoozeTask = nil }
+                    .buttonStyle(.pressableSubtle)
+                    .foregroundStyle(.white.opacity(0.7))
+                Spacer()
+                Button("Snooze") {
+                    store.snooze(task.id, to: snoozeDate)
+                    snoozeTask = nil
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(16)
+        .frame(width: 292)
+        .background(Color.black.opacity(0.3).background(.ultraThinMaterial))
     }
 
     /// A small labelled pill used for menu triggers in the details panel.
@@ -1114,6 +1376,12 @@ struct TasksView: View {
             else if hoveredTask == task.id { hoveredTask = nil }
         }
         .contextMenu {
+            if task.isDone {
+                Button { store.toggleDone(task.id) } label: {
+                    Label("Restore", systemImage: "arrow.uturn.backward")
+                }
+                Divider()
+            }
             Button { editorTask = task } label: {
                 Label("Edit…", systemImage: "pencil")
             }
@@ -1165,6 +1433,35 @@ struct TasksView: View {
                 Label(task.isPlannedToday() ? "Remove from today" : "Plan for today",
                       systemImage: "sun.max.fill")
             }
+            if !task.isDone {
+                Menu {
+                    Button { store.snoozeTomorrow(task.id) } label: {
+                        Label("Tomorrow", systemImage: "sun.max")
+                    }
+                    Button { store.snoozeNextWeek(task.id) } label: {
+                        Label("Next week", systemImage: "calendar")
+                    }
+                    Divider()
+                    Button {
+                        snoozeDate = task.dueDate
+                            ?? Calendar.current.date(byAdding: .day, value: 1, to: Date())
+                            ?? Date()
+                        snoozeTask = task
+                    } label: {
+                        Label("Pick date…", systemImage: "calendar.badge.clock")
+                    }
+                } label: { Label("Snooze", systemImage: "zzz") }
+            }
+            Divider()
+            Button { store.duplicate(task.id) } label: {
+                Label("Duplicate", systemImage: "plus.square.on.square")
+            }
+            Button {
+                templateName = task.title
+                templateNamingTask = task
+            } label: {
+                Label("Save as Template…", systemImage: "square.on.square.dashed")
+            }
             Divider()
             Button { store.move(task.id, up: true) } label: {
                 Label("Move up", systemImage: "arrow.up")
@@ -1198,13 +1495,19 @@ struct TasksView: View {
 
     private func add() {
         commitTagDraft()   // fold any half-typed tag in before saving
-        store.add(title: newTitle, category: newCategory, tags: newTagList,
-                  dueDate: hasDue ? newDue : nil,
-                  estimatedPomodoros: newEstimate > 0 ? newEstimate : nil,
-                  recurrence: newRecurrence,
-                  project: newProject.isEmpty ? nil : newProject,
+        // Merge smart-parsed tokens with the manual pickers: whatever the user
+        // set by hand wins; parsed values fill everything left untouched.
+        let parsed = TaskInputParser.parse(newTitle, now: Date())
+        var tags = newTagList
+        for t in parsed.tags where !tags.contains(t) { tags.append(t) }
+        store.add(title: parsed.title.isEmpty ? newTitle : parsed.title,
+                  category: newCategory, tags: tags,
+                  dueDate: hasDue ? newDue : parsed.dueDate,
+                  estimatedPomodoros: newEstimate > 0 ? newEstimate : parsed.estimatedPomodoros,
+                  recurrence: newRecurrence != .none ? newRecurrence : parsed.recurrence,
+                  project: newProject.isEmpty ? parsed.project : newProject,
                   notes: newNotes,
-                  priority: newPriority)
+                  priority: newPriority != .none ? newPriority : parsed.priority)
         newTitle = ""
         newTagList = []
         tagDraft = ""

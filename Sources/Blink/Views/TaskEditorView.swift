@@ -218,14 +218,32 @@ struct TaskEditorView: View {
             }
             VStack(alignment: .leading, spacing: 8) {
                 Text("Repeat").dsSectionLabel()
-                Menu {
-                    ForEach(Recurrence.allCases) { r in
-                        Button(r.label) { draft.recurrence = r }
+                HStack(spacing: 8) {
+                    Menu {
+                        ForEach(Recurrence.allCases) { r in
+                            Button(r.label) { draft.recurrence = r }
+                        }
+                    } label: {
+                        chip(draft.recurrence.label, icon: "repeat")
                     }
-                } label: {
-                    chip(draft.recurrence.label, icon: "repeat")
+                    .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                    // Presets pick the shape; the stepper refines N / the day.
+                    if case .everyNDays(let n) = draft.recurrence {
+                        DSStepper(value: Binding(
+                            get: { n },
+                            set: { draft.recurrence = .everyNDays($0) }),
+                                  range: 2...30)
+                            .scaleEffect(0.8)
+                            .help("Repeat interval in days")
+                    } else if case .monthly(let day) = draft.recurrence {
+                        DSStepper(value: Binding(
+                            get: { day },
+                            set: { draft.recurrence = .monthly($0) }),
+                                  range: 1...31)
+                            .scaleEffect(0.8)
+                            .help("Day of the month")
+                    }
                 }
-                .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
             }
             Spacer(minLength: 0)
         }
@@ -306,6 +324,23 @@ struct TaskEditorView: View {
                         Image(systemName: "xmark").font(.system(size: 10)).foregroundStyle(Color.dsTertiary)
                     }
                     .buttonStyle(.plain)
+                }
+                .contentShape(Rectangle())
+                // Same drag idiom as the task rows (this stack isn't a List,
+                // so `.onMove` has nothing to hook into).
+                .draggable(sub.id.uuidString)
+                .dropDestination(for: String.self) { dropped, _ in
+                    guard let s = dropped.first, let id = UUID(uuidString: s) else { return false }
+                    return moveSubtask(id, before: sub.id)
+                }
+                .contextMenu {
+                    Button {
+                        if store.promoteSubtask(draft.id, sub.id) != nil {
+                            draft.subtasks.removeAll { $0.id == sub.id }
+                        }
+                    } label: {
+                        Label("Make a task", systemImage: "arrow.up.right.square")
+                    }
                 }
             }
             HStack(spacing: 6) {
@@ -400,6 +435,19 @@ struct TaskEditorView: View {
         }
         tagDraft = ""
     }
+    /// Applies a subtask drag: reorders the draft (what the sheet shows) and
+    /// mirrors it into the store so the new order sticks even without Save.
+    private func moveSubtask(_ id: UUID, before targetID: UUID) -> Bool {
+        guard id != targetID,
+              let from = draft.subtasks.firstIndex(where: { $0.id == id }),
+              let to = draft.subtasks.firstIndex(where: { $0.id == targetID }) else { return false }
+        let source = IndexSet(integer: from)
+        let destination = to > from ? to + 1 : to
+        draft.subtasks.move(fromOffsets: source, toOffset: destination)
+        store.reorderSubtasks(draft.id, from: source, to: destination)
+        return true
+    }
+
     private func commitSubtask() {
         let t = subtaskDraft.trimmingCharacters(in: .whitespaces)
         guard !t.isEmpty else { return }

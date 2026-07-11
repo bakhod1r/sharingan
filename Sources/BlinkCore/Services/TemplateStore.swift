@@ -26,6 +26,9 @@ public struct TaskTemplate: Identifiable, Codable, Equatable, Sendable {
 /// the list.
 @MainActor
 public final class TemplateStore: ObservableObject {
+    /// App-wide instance (mirrors `TaskStore.shared`); tests build their own.
+    public static let shared = TemplateStore()
+
     @Published public private(set) var templates: [TaskTemplate] = []
 
     private let database: TaskDatabase?

@@ -10,6 +10,9 @@ struct SettingsView: View {
     @State private var editingInstructionDirection: String?
     @State private var openCategory: SettingsCategory?
     @State private var searchText = ""
+    /// "Due soon" pre-reminder offset in minutes (0 = off); read by TaskStore
+    /// when it schedules deadline notifications.
+    @AppStorage(TaskStore.preReminderDefaultsKey) private var preReminderMinutes = 10
 
     var body: some View {
         ZStack {
@@ -304,6 +307,20 @@ struct SettingsView: View {
                                unit: "🍅",
                                range: 0...20)
                     Text("Shows a progress bar in the menu bar. Set to 0 to hide.")
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+
+                Section("Due reminders") {
+                    Picker("Due pre-reminder", selection: $preReminderMinutes) {
+                        Text("Off").tag(0)
+                        Text("5 min before").tag(5)
+                        Text("10 min before").tag(10)
+                        Text("30 min before").tag(30)
+                        Text("60 min before").tag(60)
+                    }
+                    .pickerStyle(.menu)
+                    Text("A “Due soon” notification ahead of each task's due time, on top of the one at the deadline itself.")
                         .font(.system(.caption2, design: .rounded))
                         .foregroundStyle(.white.opacity(0.6))
                 }
