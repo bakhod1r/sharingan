@@ -18,6 +18,13 @@ public protocol QuickAddController: AnyObject {
 }
 
 @MainActor
+public protocol TodayPanelController: AnyObject {
+    /// Show the always-on-desktop "today" panel (tasks + timer state).
+    func showTodayPanel(timer: PomodoroTimer)
+    func hideTodayPanel()
+}
+
+@MainActor
 public final class BlinkCoordinator: ObservableObject {
     public let timer: PomodoroTimer
     /// Ordered task ids the user works through, one focus session each.
@@ -29,6 +36,7 @@ public final class BlinkCoordinator: ObservableObject {
     @Published public private(set) var needsTaskPick = false
     public var breakPresenter: BreakPresenter?
     public var floatingController: FloatingTimerController?
+    public var todayPanelController: TodayPanelController?
     public var quickAddController: QuickAddController?
     public var shortcuts: KeyboardShortcutsService = .shared
     private var cancellables: Set<AnyCancellable> = []
@@ -107,6 +115,16 @@ public final class BlinkCoordinator: ObservableObject {
         }
         if timer.isRunning { floatingController?.showFloating(timer: timer) }
         floatingController?.refreshFloating(timer: timer)
+    }
+
+    /// Unlike the floating timer, the today panel is not tied to a running
+    /// session — it follows its settings flag alone.
+    public func syncTodayPanel() {
+        if timer.settings.showTodayPanel {
+            todayPanelController?.showTodayPanel(timer: timer)
+        } else {
+            todayPanelController?.hideTodayPanel()
+        }
     }
 
     public func installCLIBridge() {
@@ -365,6 +383,7 @@ public final class BlinkCoordinator: ObservableObject {
             || old.floatingOpacity != new.floatingOpacity
             || old.floatingCompact != new.floatingCompact
             || old.floatingAlwaysOnTop != new.floatingAlwaysOnTop { syncFloating() }
+        if old.showTodayPanel != new.showTodayPanel { syncTodayPanel() }
         if old.appBlockerSettings != new.appBlockerSettings
             || old.blockScreenDuringBreak != new.blockScreenDuringBreak
             || old.blockAppsDuringFocus != new.blockAppsDuringFocus { refreshAppBlocker() }
@@ -390,6 +409,7 @@ public final class BlinkCoordinator: ObservableObject {
         installShortcuts()
         syncCamera()
         syncFloating()
+        syncTodayPanel()
         refreshAppBlocker()
         syncTTS()
         syncAmbience()

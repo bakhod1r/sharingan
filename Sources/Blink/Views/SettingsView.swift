@@ -290,6 +290,14 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("Today panel") {
+                    ToggleRow(title: "Today panel on desktop",
+                              isOn: $settings.showTodayPanel)
+                    Text("Keeps today's tasks and the timer visible on your desktop.")
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+
                 Section("Menu bar") {
                     ToggleRow(title: "Show countdown in menu bar",
                               isOn: $settings.showMenuBarCountdown)
@@ -919,7 +927,8 @@ struct SettingsView: View {
             case .timer:
                 return ["duration", "minutes", "pomodoro", "focus length", "mode",
                         "countdown", "count up", "repeat", "endless", "floating",
-                        "float", "opacity", "always on top", "compact"]
+                        "float", "opacity", "always on top", "compact",
+                        "today panel", "panel", "desktop", "widget"]
             case .tasks:
                 return ["task", "subtask", "estimate", "goal", "week", "weekly",
                         "monday", "sunday", "badge", "plan", "planner", "🍅"]

@@ -57,6 +57,9 @@ final class MenuBarController: NSObject {
         coordinator.syncAlarm()
         coordinator.installShortcuts()
         coordinator.syncCamera()
+        // Restore the desktop today-panel if the user left it enabled (the
+        // coordinator's initial syncAll ran before its controller was wired).
+        coordinator.syncTodayPanel()
         coordinator.installCLIBridge()
 
         // Refresh title every second.
@@ -229,6 +232,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let coord = BlinkCoordinator(timer: timer)
         coord.breakPresenter = BreakWindowManager.shared
         coord.floatingController = FloatingWindowManager.shared
+        coord.todayPanelController = TodayPanelWindowManager.shared
         coord.quickAddController = QuickAddWindowManager.shared
         self.timer = timer
         self.coordinator = coord

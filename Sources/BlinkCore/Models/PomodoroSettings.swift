@@ -68,6 +68,9 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var floatingOpacity: Double = 1.0        // 0.3…1.0
     public var floatingCompact: Bool = false        // smaller pill
     public var floatingAlwaysOnTop: Bool = true      // above other apps
+    /// Always-on-desktop glass panel with today's tasks + timer state
+    /// (the WidgetKit substitute for the SwiftPM build).
+    public var showTodayPanel: Bool = false
     public var globalShortcutsEnabled: Bool = true
     /// Custom hotkey bindings keyed by `GlobalShortcut.rawValue`. Missing entries
     /// fall back to each shortcut's default combo.
@@ -160,6 +163,7 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
         floatingOpacity = try c.decodeIfPresent(Double.self, forKey: .floatingOpacity) ?? d.floatingOpacity
         floatingCompact = try c.decodeIfPresent(Bool.self, forKey: .floatingCompact) ?? d.floatingCompact
         floatingAlwaysOnTop = try c.decodeIfPresent(Bool.self, forKey: .floatingAlwaysOnTop) ?? d.floatingAlwaysOnTop
+        showTodayPanel = try c.decodeIfPresent(Bool.self, forKey: .showTodayPanel) ?? d.showTodayPanel
         globalShortcutsEnabled = try c.decodeIfPresent(Bool.self, forKey: .globalShortcutsEnabled) ?? d.globalShortcutsEnabled
         shortcutBindings = try c.decodeIfPresent([String: ShortcutBinding].self, forKey: .shortcutBindings) ?? d.shortcutBindings
         cameraEyeTrackingEnabled = try c.decodeIfPresent(Bool.self, forKey: .cameraEyeTrackingEnabled) ?? d.cameraEyeTrackingEnabled
