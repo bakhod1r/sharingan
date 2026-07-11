@@ -7,6 +7,7 @@ public enum BlinkTheme: String, Codable, CaseIterable, Sendable {
     case midnight
     case cream
     case neon
+    case mono
 
     public var label: String {
         switch self {
@@ -15,6 +16,7 @@ public enum BlinkTheme: String, Codable, CaseIterable, Sendable {
         case .midnight:    return "Midnight"
         case .cream:       return "Cream"
         case .neon:        return "Neon"
+        case .mono:        return "Mono"
         }
     }
 
@@ -27,6 +29,7 @@ public enum BlinkTheme: String, Codable, CaseIterable, Sendable {
                                    Color(red: 0.92, green: 0.84, blue: 0.68)]
         case .neon:        return [Color(red: 0.95, green: 0.20, blue: 0.80),
                                    Color(red: 0.10, green: 0.95, blue: 0.65)]
+        case .mono:        return [.black, Color(white: 0.22)]
         }
     }
 
@@ -44,6 +47,7 @@ public enum BlinkTheme: String, Codable, CaseIterable, Sendable {
         case .midnight:    return Color(red: 0.45, green: 0.68, blue: 1.00)  // bright blue on black
         case .cream:       return Color(red: 1.00, green: 0.70, blue: 0.34)  // warm amber
         case .neon:        return Color(red: 0.95, green: 0.20, blue: 0.80)  // magenta
+        case .mono:        return Color(white: 0.92)                         // near-white on black
         }
     }
 }
