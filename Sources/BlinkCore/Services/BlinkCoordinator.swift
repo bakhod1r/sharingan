@@ -20,6 +20,13 @@ public protocol QuickAddController: AnyObject {
 @MainActor
 public final class BlinkCoordinator: ObservableObject {
     public let timer: PomodoroTimer
+    /// Ordered task ids the user works through, one focus session each.
+    public let focusQueue: FocusQueue
+    /// True when a break just ended with nothing to work on — no valid queued
+    /// task and no open active task — so the UI should ask which task is next.
+    /// Cleared when a task becomes active, a focus session starts, or the UI
+    /// answers via `resolveTaskPick(with:)`.
+    @Published public private(set) var needsTaskPick = false
     public var breakPresenter: BreakPresenter?
     public var floatingController: FloatingTimerController?
     public var quickAddController: QuickAddController?
@@ -28,8 +35,11 @@ public final class BlinkCoordinator: ObservableObject {
     private var cliObservers: [String: Any] = [:]
     private var snapshotCancellable: AnyCancellable?
 
-    public init(timer: PomodoroTimer) {
+    /// `focusQueue`, when given (tests), backs the queue with an isolated
+    /// UserDefaults suite; the app default persists to `.standard`.
+    public init(timer: PomodoroTimer, focusQueue: FocusQueue? = nil) {
         self.timer = timer
+        self.focusQueue = focusQueue ?? FocusQueue()
         // Prime the reward baseline from the already-earned streak so restarting
         // the app doesn't re-announce milestones the user passed days ago.
         StreakRewardCenter.shared.prime(streak: timer.stats.streak.currentStreak)
@@ -209,6 +219,9 @@ public final class BlinkCoordinator: ObservableObject {
                 } else {
                     self.floatingController?.hideFloating()
                 }
+                // Starting a focus session settles the "which task next?"
+                // question, whichever way the user answered it.
+                if running && self.timer.phase == .focus { self.needsTaskPick = false }
                 // Blocking distracting apps follows the running state so pausing
                 // a focus session releases them, resuming re-blocks.
                 self.refreshAppBlocker()
@@ -223,6 +236,15 @@ public final class BlinkCoordinator: ObservableObject {
             .sink { [weak self] s in
                 self?.syncChanged(s)
                 self?.syncDND()
+            }
+            .store(in: &cancellables)
+
+        // Picking any task — from the queue, the task list, or quick-add —
+        // answers the "which task next?" question.
+        TaskStore.shared.$activeTaskID
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] id in
+                if id != nil { self?.needsTaskPick = false }
             }
             .store(in: &cancellables)
 
@@ -403,6 +425,8 @@ public final class BlinkCoordinator: ObservableObject {
             if let taskID = TaskStore.shared.activeTaskID {
                 TaskStore.shared.incrementPomodoro(taskID)
             }
+            // The finished session hands the active slot to the next queued task.
+            advanceQueueAfterFocus(store: TaskStore.shared)
             AlarmSoundService.shared.playSelected()
 
             // Repetition: no break happens, so skip the entire break sequence
@@ -447,9 +471,57 @@ public final class BlinkCoordinator: ObservableObject {
             CameraService.shared.stop()
             speakFocusStart()
             ReminderService.shared.resumeForFocus()
+            // Queue drained and nothing active → ask the UI for the next task.
+            evaluateTaskPickAfterBreak(store: TaskStore.shared)
         case .paused:
             break
         }
+    }
+
+    // MARK: - Focus queue
+
+    /// After a focus session completes (and the pomodoro is credited), moves
+    /// the queue along:
+    /// - A finished task that is now *done* falls out of the queue wherever it
+    ///   sits, and the next valid queued task becomes active.
+    /// - A finished task at the queue *head* (done or not) yields the head to
+    ///   the next valid queued task — each session advances the queue.
+    /// When the queue yields nothing (or the active task was never queued),
+    /// the active task is left untouched.
+    func advanceQueueAfterFocus(store: TaskStore) {
+        guard let finishedID = store.activeTaskID else { return }
+        let finishedIsDone = store.tasks.first { $0.id == finishedID }?.isDone ?? true
+        if focusQueue.taskIDs.contains(finishedID), finishedIsDone {
+            focusQueue.remove(finishedID)
+            if let next = focusQueue.current(validatedAgainst: store) {
+                store.setActive(next)
+            }
+        } else if focusQueue.current(validatedAgainst: store) == finishedID {
+            if let next = focusQueue.advance(validatedAgainst: store) {
+                store.setActive(next)
+            }
+        }
+    }
+
+    /// After a break ends: flag the UI to ask "which task next?" when the
+    /// queue has no valid entry AND there's no open active task. Also clears
+    /// a stale flag when there *is* something to work on.
+    func evaluateTaskPickAfterBreak(store: TaskStore) {
+        let hasOpenActiveTask = store.activeTask.map { !$0.isDone } ?? false
+        needsTaskPick = focusQueue.current(validatedAgainst: store) == nil
+            && !hasOpenActiveTask
+    }
+
+    /// The UI's answer to `needsTaskPick`: activates the chosen task (nil
+    /// means "no task, thanks") and clears the flag.
+    public func resolveTaskPick(with id: UUID?) {
+        resolveTaskPick(with: id, store: TaskStore.shared)
+    }
+
+    /// Store-injectable core of `resolveTaskPick(with:)` (tests).
+    func resolveTaskPick(with id: UUID?, store: TaskStore) {
+        if let id { store.setActive(id) }
+        needsTaskPick = false
     }
 
     private func speakBreakStart() {
