@@ -227,7 +227,7 @@ public final class TaskStore: ObservableObject {
     /// Deletes every completed task (the Done view's "Clear" action).
     public func clearCompleted() {
         for id in tasks.filter(\.isDone).map(\.id) {
-            NotificationService.shared.cancel(identifier: dueNoteID(id))
+            cancelDueNotifications(for: id)
             if activeTaskID == id { activeTaskID = nil; activeSubtaskID = nil }
         }
         tasks.removeAll(where: \.isDone)
@@ -256,7 +256,7 @@ public final class TaskStore: ObservableObject {
                             project: (cleanProject?.isEmpty ?? true) ? nil : cleanProject,
                             priority: priority)
         tasks.append(task)
-        scheduleDueNotification(task)
+        syncDueNotifications(for: task)
         persist()
     }
 
@@ -358,15 +358,15 @@ public final class TaskStore: ObservableObject {
         tasks[i].isDone.toggle()
         if tasks[i].isDone {
             tasks[i].completedAt = Date()
-            NotificationService.shared.cancel(identifier: dueNoteID(id))
+            cancelDueNotifications(for: id)
             // A recurring task spawns its next occurrence when completed.
             if tasks[i].recurrence != .none {
                 spawnNextOccurrence(of: tasks[i])
             }
         } else {
             tasks[i].completedAt = nil
-            // Un-completing restores the deadline reminder that toggling done cancelled.
-            scheduleDueNotification(tasks[i])
+            // Un-completing restores the deadline reminders that toggling done cancelled.
+            syncDueNotifications(for: tasks[i])
         }
         persist()
     }
@@ -396,7 +396,48 @@ public final class TaskStore: ObservableObject {
             next.dueDate = nil
         }
         tasks.append(next)
-        scheduleDueNotification(next)
+        syncDueNotifications(for: next)
+    }
+
+    // MARK: - Snooze / overdue
+
+    /// Moves a task's due date to `newDay`'s day while keeping the original due
+    /// time-of-day (09:00 when the task had no due date). A set `plannedDate`
+    /// follows to the same day; a nil one stays nil. No-op on done tasks — they
+    /// have nothing left to remind about. Reschedules notifications and persists.
+    public func snooze(_ id: UUID, to newDay: Date) {
+        guard let i = tasks.firstIndex(where: { $0.id == id }), !tasks[i].isDone else { return }
+        let cal = Calendar.current
+        let day = cal.startOfDay(for: newDay)
+        var hour = 9, minute = 0
+        if let due = tasks[i].dueDate {
+            let time = cal.dateComponents([.hour, .minute], from: due)
+            hour = time.hour ?? 9
+            minute = time.minute ?? 0
+        }
+        tasks[i].dueDate = cal.date(bySettingHour: hour, minute: minute, second: 0, of: day) ?? day
+        if tasks[i].plannedDate != nil {
+            tasks[i].plannedDate = day
+        }
+        syncDueNotifications(for: tasks[i])
+        persist()
+    }
+
+    /// Snoozes to the day after `now`.
+    public func snoozeTomorrow(_ id: UUID, now: Date = Date()) {
+        guard let day = Calendar.current.date(byAdding: .day, value: 1, to: now) else { return }
+        snooze(id, to: day)
+    }
+
+    /// Snoozes to one week after `now`.
+    public func snoozeNextWeek(_ id: UUID, now: Date = Date()) {
+        guard let day = Calendar.current.date(byAdding: .day, value: 7, to: now) else { return }
+        snooze(id, to: day)
+    }
+
+    /// Count of open tasks whose due date has passed — powers the overdue digest.
+    public func overdueCount(now: Date = Date()) -> Int {
+        tasks.filter { !$0.isDone && ($0.dueDate.map { $0 < now } ?? false) }.count
     }
 
     // MARK: - Subtasks / notes / recurrence / project
@@ -477,7 +518,7 @@ public final class TaskStore: ObservableObject {
     }
 
     public func delete(_ id: UUID) {
-        NotificationService.shared.cancel(identifier: dueNoteID(id))
+        cancelDueNotifications(for: id)
         tasks.removeAll { $0.id == id }
         if activeTaskID == id { activeTaskID = nil; activeSubtaskID = nil }
         persist()
@@ -491,10 +532,9 @@ public final class TaskStore: ObservableObject {
            !item.subtasks.contains(where: { $0.id == sid && !$0.isDone }) {
             activeSubtaskID = nil
         }
-        // Re-sync the deadline reminder: a due date added/changed via edit would
-        // otherwise never fire (it was only scheduled at creation time).
-        NotificationService.shared.cancel(identifier: dueNoteID(item.id))
-        scheduleDueNotification(item)
+        // Re-sync the deadline reminders: a due date added/changed via edit would
+        // otherwise never fire (they were only scheduled at creation time).
+        syncDueNotifications(for: item)
         persist()
     }
 
@@ -571,15 +611,45 @@ public final class TaskStore: ObservableObject {
 
     // MARK: - Deadlines
 
-    private func dueNoteID(_ id: UUID) -> String { "blink.task.due.\(id.uuidString)" }
+    /// UserDefaults key for the "Due soon" pre-reminder offset in minutes.
+    /// Absent key means the default of 10; 0 disables the pre-reminder.
+    public static let preReminderDefaultsKey = "blink.task.preReminderMinutes"
 
-    private func scheduleDueNotification(_ task: TaskItem) {
-        guard let due = task.dueDate, !task.isDone else { return }
+    private func dueNoteID(_ id: UUID) -> String { "blink.task.due.\(id.uuidString)" }
+    private func preNoteID(_ id: UUID) -> String { "blink.task.pre.\(id.uuidString)" }
+
+    private var preReminderMinutes: Int {
+        let defaults = UserDefaults.standard
+        guard defaults.object(forKey: Self.preReminderDefaultsKey) != nil else { return 10 }
+        return defaults.integer(forKey: Self.preReminderDefaultsKey)
+    }
+
+    private func cancelDueNotifications(for id: UUID) {
+        NotificationService.shared.cancel(identifier: dueNoteID(id))
+        NotificationService.shared.cancel(identifier: preNoteID(id))
+    }
+
+    /// Single source of truth for a task's deadline reminders: cancels both the
+    /// due-time and pre-reminder notifications, then reschedules them when the
+    /// task is open with a future due date. Every mutation that touches
+    /// `dueDate` or completion state must route through here (deletes cancel).
+    private func syncDueNotifications(for task: TaskItem) {
+        cancelDueNotifications(for: task.id)
+        guard let due = task.dueDate, !task.isDone, due > Date() else { return }
         NotificationService.shared.schedule(
             title: "Task due",
             body: task.title,
             identifier: dueNoteID(task.id),
             at: due)
+        let offset = preReminderMinutes
+        let preFire = due.addingTimeInterval(TimeInterval(-offset * 60))
+        if offset > 0, preFire > Date() {
+            NotificationService.shared.schedule(
+                title: "Due soon",
+                body: "\(task.title) — in \(offset) min",
+                identifier: preNoteID(task.id),
+                at: preFire)
+        }
     }
 
     // MARK: - Export
