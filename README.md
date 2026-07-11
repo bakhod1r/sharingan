@@ -48,6 +48,21 @@ Pure SwiftPM — no Xcode project required. (SwiftPM module names still say
 - ⌃⌥+ — +5 minutes
 - ⌃⌥L — toggle floating timer
 
+### Tasks & focus queue
+- Full task system — priorities (P1–P4), tags, projects, categories, due dates,
+  notes, subtasks (reorder + promote-to-task), recurrence (daily / weekdays /
+  weekly / every N days / monthly)
+- **Natural-language quick add** — `ertaga 15:00 p1 #ish @blink ~2 hisobot yozish`
+  (English + Uzbek tokens), live parse chips in the composer and quick-add panel
+- **Focus queue** — queue several tasks, each finished pomodoro advances to the
+  next; break screen shows "Next: …"; post-break picker asks what's next
+- Snooze (tomorrow / next week / pick date), overdue badges, due pre-reminders
+- Templates + duplicate, completed history grouped by day with restore
+- Eisenhower matrix view, stats by project / tag
+- Floating **Today panel** — desktop glass card with today's tasks + timer
+- `sharingan://` URL scheme for Shortcuts / Raycast
+  (start / pause / resume / skip / reset / add-task / show)
+
 ### Streaks & rewards
 - Consecutive-day streak tracking with gap reset
 - Milestone badges: 1, 7, 14, 30, 90, 365 days
@@ -69,7 +84,10 @@ Pure SwiftPM — no Xcode project required. (SwiftPM module names still say
 - `tired` command-line tool — control Blink from Terminal
 
 ### Themes
-- Liquid Glass, Frosted, Midnight, Cream, Neon
+- Liquid Glass, Frosted, Midnight, Cream, Neon, Mono (black & white)
+
+### Break comfort extras
+- Night Shift warmth during breaks (optional, fail-soft private API)
 
 ### Sharingan eye style
 - Premium anime-style eye animation during breaks — red iris, rotating tomoe, glossy highlight, red glow, breathing, blink
@@ -110,6 +128,11 @@ tired add 5m              # +5 minutes
 tired remove 10m          # -10 minutes
 tired set 45m             # set custom duration
 tired status              # show current state
+tired task add <text>     # NL quick add ("ertaga p1 #ish hisobot")
+tired task list           # numbered list of open tasks
+tired task done 3         # complete task #3
+tired task start 3        # make task #3 active
+tired task queue 3        # add task #3 to the focus queue
 tired help                # usage
 ```
 
