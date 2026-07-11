@@ -119,7 +119,52 @@ public final class BlinkCoordinator: ObservableObject {
         cliObservers["add"]      = CLIBridge.observe(CLIBridge.darwinCommandAdd)     { [weak self] p in self?.cliAdjust(payload: p, negative: false) }
         cliObservers["remove"]   = CLIBridge.observe(CLIBridge.darwinCommandRemove)  { [weak self] p in self?.cliAdjust(payload: p, negative: true) }
         cliObservers["setDur"]   = CLIBridge.observe(CLIBridge.darwinCommandSetDuration) { [weak self] p in self?.cliSetDuration(p) }
+        cliObservers["taskAdd"]   = CLIBridge.observe(CLIBridge.darwinCommandTaskAdd)   { [weak self] p in self?.cliTaskAdd(p) }
+        cliObservers["taskDone"]  = CLIBridge.observe(CLIBridge.darwinCommandTaskDone)  { [weak self] p in self?.cliTaskDone(p) }
+        cliObservers["taskStart"] = CLIBridge.observe(CLIBridge.darwinCommandTaskStart) { [weak self] p in self?.cliTaskStart(p) }
+        cliObservers["taskQueue"] = CLIBridge.observe(CLIBridge.darwinCommandTaskQueue) { [weak self] p in self?.cliTaskQueue(p) }
         publishSnapshot()
+        // Task counterpart of publishSnapshot(): every task change rewrites the
+        // CLI-readable task list (and the sink fires once on install, priming it).
+        snapshotCancellable = TaskStore.shared.$tasks
+            .receive(on: DispatchQueue.main)
+            .sink { tasks in
+                CLIBridge.writeTaskSnapshot(CLIBridge.taskSnapshotEntries(from: tasks))
+            }
+    }
+
+    private func cliTaskAdd(_ payload: String?) {
+        guard let p = payload?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !p.isEmpty else { return }
+        let parsed = TaskInputParser.parse(p)
+        // A line of pure tokens ("ertaga 15:00") parses to an empty title —
+        // fall back to the raw text so the add never silently vanishes.
+        TaskStore.shared.add(title: parsed.title.isEmpty ? p : parsed.title,
+                             tags: parsed.tags,
+                             dueDate: parsed.dueDate,
+                             estimatedPomodoros: parsed.estimatedPomodoros,
+                             recurrence: parsed.recurrence,
+                             project: parsed.project,
+                             priority: parsed.priority)
+    }
+
+    private func cliTaskDone(_ payload: String?) {
+        guard let id = payload.flatMap(UUID.init(uuidString:)) else { return }
+        TaskStore.shared.toggleDone(id)
+    }
+
+    private func cliTaskStart(_ payload: String?) {
+        // setActive doesn't validate the id, so an id the store has never seen
+        // (a stale CLI snapshot) must not become the "active task".
+        guard let id = payload.flatMap(UUID.init(uuidString:)),
+              TaskStore.shared.tasks.contains(where: { $0.id == id }) else { return }
+        TaskStore.shared.setActive(id)
+    }
+
+    private func cliTaskQueue(_ payload: String?) {
+        guard let id = payload.flatMap(UUID.init(uuidString:)),
+              TaskStore.shared.tasks.contains(where: { $0.id == id }) else { return }
+        focusQueue.enqueue(id)
     }
 
     private func cliStart(payload: String?) {

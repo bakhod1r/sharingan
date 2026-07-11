@@ -15,6 +15,10 @@ public enum CLIBridge {
     public static let darwinCommandAdd       = "com.blink.cli.add"
     public static let darwinCommandRemove    = "com.blink.cli.remove"
     public static let darwinCommandSetDuration = "com.blink.cli.setDuration"
+    public static let darwinCommandTaskAdd   = "com.blink.cli.task.add"
+    public static let darwinCommandTaskDone  = "com.blink.cli.task.done"
+    public static let darwinCommandTaskStart = "com.blink.cli.task.start"
+    public static let darwinCommandTaskQueue = "com.blink.cli.task.queue"
 
     /// CLI'dan yuboriladigan snapshot.
     public struct StateSnapshot: Codable, Equatable, Sendable {
@@ -45,6 +49,28 @@ public enum CLIBridge {
         }
     }
 
+    /// One open task in the CLI-readable snapshot — just enough for
+    /// `tired task list` to print it and address it by number.
+    public struct TaskSnapshotEntry: Codable, Equatable, Sendable {
+        public var id: UUID
+        public var title: String
+        /// "P1"…"P3"; empty when the task has no priority flag.
+        public var priorityLabel: String
+        public var due: Date?
+        public var tags: [String]
+        public var project: String?
+
+        public init(id: UUID, title: String, priorityLabel: String = "",
+                    due: Date? = nil, tags: [String] = [], project: String? = nil) {
+            self.id = id
+            self.title = title
+            self.priorityLabel = priorityLabel
+            self.due = due
+            self.tags = tags
+            self.project = project
+        }
+    }
+
     // MARK: - Shared storage
     //
     // The app and the `tired` CLI are separate processes with separate
@@ -62,6 +88,7 @@ public enum CLIBridge {
     }
 
     private static var snapshotURL: URL { sharedDir.appendingPathComponent("snapshot.json") }
+    private static var taskSnapshotURL: URL { sharedDir.appendingPathComponent("tasks.json") }
     private static func payloadURL(_ name: String) -> URL {
         sharedDir.appendingPathComponent(name + ".payload")
     }
@@ -77,6 +104,43 @@ public enum CLIBridge {
     public static func readSnapshot() -> StateSnapshot? {
         guard let d = try? Data(contentsOf: snapshotURL) else { return nil }
         return try? JSONDecoder().decode(StateSnapshot.self, from: d)
+    }
+
+    // MARK: - Task snapshot I/O
+
+    public static func writeTaskSnapshot(_ entries: [TaskSnapshotEntry]) {
+        if let d = try? JSONEncoder().encode(entries) {
+            try? d.write(to: taskSnapshotURL, options: .atomic)
+        }
+    }
+
+    public static func readTaskSnapshot() -> [TaskSnapshotEntry]? {
+        guard let d = try? Data(contentsOf: taskSnapshotURL) else { return nil }
+        return try? JSONDecoder().decode([TaskSnapshotEntry].self, from: d)
+    }
+
+    /// The store's open tasks as snapshot entries, in list order (manual
+    /// `sortOrder`, creation time as the stable tiebreak — the open-task half
+    /// of `TaskStore.inListOrder`). The entry index +1 is the number the CLI
+    /// prints and accepts.
+    public static func taskSnapshotEntries(from tasks: [TaskItem]) -> [TaskSnapshotEntry] {
+        tasks.filter { !$0.isDone }
+            .sorted {
+                $0.sortOrder != $1.sortOrder
+                    ? $0.sortOrder < $1.sortOrder
+                    : $0.createdAt < $1.createdAt
+            }
+            .map {
+                TaskSnapshotEntry(id: $0.id, title: $0.title,
+                                  priorityLabel: $0.priority == .none ? "" : $0.priority.label,
+                                  due: $0.dueDate, tags: $0.tags, project: $0.project)
+            }
+    }
+
+    /// Resolves a 1-based `tired task list` number to the task's UUID.
+    public static func resolveTaskIndex(_ n: Int, in entries: [TaskSnapshotEntry]) -> UUID? {
+        guard n >= 1, n <= entries.count else { return nil }
+        return entries[n - 1].id
     }
 
     // MARK: - Post commands (CLI side)

@@ -14,6 +14,9 @@ import BlinkCore
 ///   tired remove 10m
 ///   tired set 2h 30m
 ///   tired status           # joriy holatni chiqaradi
+///   tired task add ertaga 15:00 p1 #ish hisobot yozish
+///   tired task list        # ochiq tasklar (raqamlangan)
+///   tired task done 2
 @main
 struct TiredCLI {
     static func main() {
@@ -55,6 +58,8 @@ struct TiredCLI {
             let p = args.count >= 2 ? args[1...].joined(separator: " ") : ""
             CLIBridge.postCommand(CLIBridge.darwinCommandSetDuration, payload: p)
             print("→ set \(p)")
+        case "task":
+            handleTask(Array(args.dropFirst()))
         case "help", "--help", "-h":
             printUsage()
         case "version", "--version":
@@ -63,6 +68,79 @@ struct TiredCLI {
             print("Unknown command: \(cmd)\n")
             printUsage()
             exit(2)
+        }
+    }
+
+    static func handleTask(_ args: [String]) {
+        guard let sub = args.first?.lowercased() else {
+            printUsage()
+            exit(2)
+        }
+        switch sub {
+        case "add":
+            let text = args.dropFirst().joined(separator: " ")
+            guard !text.isEmpty else {
+                print("Usage: tired task add <text>")
+                exit(2)
+            }
+            CLIBridge.postCommand(CLIBridge.darwinCommandTaskAdd, payload: text)
+            print("Added: \(text)")
+        case "list":
+            printTaskList()
+        case "done", "start", "queue":
+            guard args.count >= 2, let n = Int(args[1]) else {
+                print("Usage: tired task \(sub) <n>   (n from 'tired task list')")
+                exit(2)
+            }
+            guard let entries = CLIBridge.readTaskSnapshot() else {
+                print("Sharingan is not running (no task snapshot).")
+                return
+            }
+            guard let id = CLIBridge.resolveTaskIndex(n, in: entries) else {
+                print("No task #\(n) — the list has \(entries.count) open task(s).")
+                exit(2)
+            }
+            let title = entries[n - 1].title
+            switch sub {
+            case "done":
+                CLIBridge.postCommand(CLIBridge.darwinCommandTaskDone, payload: id.uuidString)
+                print("→ done: \(title)")
+            case "start":
+                CLIBridge.postCommand(CLIBridge.darwinCommandTaskStart, payload: id.uuidString)
+                print("→ start: \(title)")
+            default:
+                CLIBridge.postCommand(CLIBridge.darwinCommandTaskQueue, payload: id.uuidString)
+                print("→ queued: \(title)")
+            }
+        default:
+            print("Unknown task command: \(sub)\n")
+            printUsage()
+            exit(2)
+        }
+    }
+
+    static func printTaskList() {
+        // The app rewrites the task snapshot on every task change; no snapshot
+        // means it never ran (or the shared dir was wiped).
+        guard let entries = CLIBridge.readTaskSnapshot() else {
+            print("Sharingan is not running (no task snapshot).")
+            return
+        }
+        guard !entries.isEmpty else {
+            print("No open tasks.")
+            return
+        }
+        let df = DateFormatter()
+        df.dateFormat = "MMM d HH:mm"
+        let width = String(entries.count).count
+        for (i, e) in entries.enumerated() {
+            var line = String(format: "%\(width)d. ", i + 1)
+            if !e.priorityLabel.isEmpty { line += "[\(e.priorityLabel)] " }
+            line += e.title
+            if let due = e.due { line += "  (due \(df.string(from: due)))" }
+            for tag in e.tags { line += " #\(tag)" }
+            if let project = e.project { line += " @\(project)" }
+            print(line)
         }
     }
 
@@ -81,6 +159,11 @@ struct TiredCLI {
           tired remove [duration]   Remove time (default 5m); alias: rm
           tired set [duration]      Set custom duration; e.g. 'tired set 2h'
           tired status              Show current timer state
+          tired task add <text>     Add a task; natural language: 'ertaga 15:00 p1 #ish hisobot'
+          tired task list           List open tasks (numbered)
+          tired task done <n>       Mark task n done
+          tired task start <n>      Make task n the active task
+          tired task queue <n>      Add task n to the focus queue
           tired version             Print version
           tired help                This message
 
@@ -89,6 +172,8 @@ struct TiredCLI {
           tired start 5pm          # until 5:00 PM
           tired add 5m             # +5 minutes
           tired status             # → Focus 12:34 ● 3 today, streak 7
+          tired task add juma 9:00 p2 @blink release notes
+          tired task done 2        # complete task #2 from 'task list'
         """)
     }
 
