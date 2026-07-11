@@ -357,12 +357,14 @@ public final class TaskStore: ObservableObject {
         guard let i = tasks.firstIndex(where: { $0.id == id }) else { return }
         tasks[i].isDone.toggle()
         if tasks[i].isDone {
+            tasks[i].completedAt = Date()
             NotificationService.shared.cancel(identifier: dueNoteID(id))
             // A recurring task spawns its next occurrence when completed.
             if tasks[i].recurrence != .none {
                 spawnNextOccurrence(of: tasks[i])
             }
         } else {
+            tasks[i].completedAt = nil
             // Un-completing restores the deadline reminder that toggling done cancelled.
             scheduleDueNotification(tasks[i])
         }
@@ -375,6 +377,7 @@ public final class TaskStore: ObservableObject {
         var next = task
         next.id = UUID()
         next.isDone = false
+        next.completedAt = nil
         next.pomodorosDone = 0
         next.createdAt = Date()
         next.plannedDate = nil
@@ -581,13 +584,14 @@ public final class TaskStore: ObservableObject {
 
     // MARK: - Export
 
-    /// The full task list as CSV (title, category, tags, status, pomodoros, due, created).
+    /// The full task list as CSV (title, category, tags, status, pomodoros, due,
+    /// created, completed).
     public func csv() -> String {
         func esc(_ s: String) -> String {
             "\"" + s.replacingOccurrences(of: "\"", with: "\"\"") + "\""
         }
         let iso = ISO8601DateFormatter()
-        var rows = ["title,category,tags,done,pomodoros,due,created"]
+        var rows = ["title,category,tags,done,pomodoros,due,created,completed"]
         for t in tasks {
             rows.append([
                 esc(t.title),
@@ -597,6 +601,7 @@ public final class TaskStore: ObservableObject {
                 String(t.pomodorosDone),
                 t.dueDate.map { iso.string(from: $0) } ?? "",
                 iso.string(from: t.createdAt),
+                t.completedAt.map { iso.string(from: $0) } ?? "",
             ].joined(separator: ","))
         }
         return rows.joined(separator: "\n")

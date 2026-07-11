@@ -199,6 +199,8 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
     public var project: String?
     /// Todoist-style priority flag.
     public var priority: TaskPriority
+    /// When the task was completed (nil while open; cleared on un-complete).
+    public var completedAt: Date?
 
     public init(id: UUID = UUID(),
                 title: String,
@@ -215,7 +217,8 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
                 subtasks: [Subtask] = [],
                 recurrence: Recurrence = .none,
                 project: String? = nil,
-                priority: TaskPriority = .none) {
+                priority: TaskPriority = .none,
+                completedAt: Date? = nil) {
         self.id = id
         self.title = title
         self.category = category
@@ -232,6 +235,7 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         self.recurrence = recurrence
         self.project = project
         self.priority = priority
+        self.completedAt = completedAt
     }
 
     // Defensive decoding: several fields (category, tags, pomodorosDone) were
@@ -257,6 +261,7 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         recurrence = try c.decodeIfPresent(Recurrence.self, forKey: .recurrence) ?? .none
         project = try c.decodeIfPresent(String.self, forKey: .project)
         priority = try c.decodeIfPresent(TaskPriority.self, forKey: .priority) ?? .none
+        completedAt = try c.decodeIfPresent(Date.self, forKey: .completedAt)
     }
 
     /// True when the task has a past deadline and isn't finished.

@@ -47,7 +47,8 @@ final class TaskDatabase {
             subtasks TEXT NOT NULL DEFAULT '[]',
             recurrence TEXT NOT NULL DEFAULT 'none',
             project TEXT,
-            priority INTEGER NOT NULL DEFAULT 0
+            priority INTEGER NOT NULL DEFAULT 0,
+            completedAt REAL
         );
         """)
         exec("""
@@ -57,6 +58,24 @@ final class TaskDatabase {
             icon TEXT NOT NULL
         );
         """)
+        // Databases created before the column shipped need it added in place
+        // (CREATE IF NOT EXISTS won't touch an existing table).
+        if !tableHasColumn("tasks", "completedAt") {
+            exec("ALTER TABLE tasks ADD COLUMN completedAt REAL;")
+        }
+    }
+
+    /// True when `PRAGMA table_info` lists the column — guards ALTER TABLE,
+    /// which SQLite errors on (rather than ignores) for an existing column.
+    private func tableHasColumn(_ table: String, _ column: String) -> Bool {
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, "PRAGMA table_info(\(table));", -1, &stmt, nil) == SQLITE_OK
+        else { return false }
+        defer { sqlite3_finalize(stmt) }
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            if text(stmt, 1) == column { return true }
+        }
+        return false
     }
 
     // MARK: - Tasks
@@ -65,7 +84,8 @@ final class TaskDatabase {
         var out: [TaskItem] = []
         let sql = """
         SELECT id,title,category,tags,isDone,pomodorosDone,createdAt,dueDate,\
-        sortOrder,estimatedPomodoros,plannedDate,notes,subtasks,recurrence,project,priority \
+        sortOrder,estimatedPomodoros,plannedDate,notes,subtasks,recurrence,project,priority,\
+        completedAt \
         FROM tasks;
         """
         var stmt: OpaquePointer?
@@ -88,6 +108,7 @@ final class TaskDatabase {
             t.recurrence = Recurrence(string: text(stmt, 13) ?? "none")
             t.project = isNull(stmt, 14) ? nil : text(stmt, 14)
             t.priority = TaskPriority(rawValue: Int(int(stmt, 15))) ?? .none
+            t.completedAt = date(stmt, 16)
             out.append(t)
         }
         return out
@@ -98,8 +119,9 @@ final class TaskDatabase {
             guard exec("DELETE FROM tasks;") else { return false }
             let sql = """
             INSERT INTO tasks (id,title,category,tags,isDone,pomodorosDone,createdAt,dueDate,\
-            sortOrder,estimatedPomodoros,plannedDate,notes,subtasks,recurrence,project,priority) \
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);
+            sortOrder,estimatedPomodoros,plannedDate,notes,subtasks,recurrence,project,priority,\
+            completedAt) \
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);
             """
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
@@ -123,6 +145,7 @@ final class TaskDatabase {
                 bindText(stmt, 14, t.recurrence.stringValue)
                 if let p = t.project { bindText(stmt, 15, p) } else { sqlite3_bind_null(stmt, 15) }
                 sqlite3_bind_int(stmt, 16, Int32(t.priority.rawValue))
+                bindDate(stmt, 17, t.completedAt)
                 guard sqlite3_step(stmt) == SQLITE_DONE else { return false }
             }
             return true
