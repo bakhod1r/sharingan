@@ -399,6 +399,16 @@ struct SettingsView: View {
                     }
                     ToggleRow(title: "Smooth transition",
                               isOn: $settings.brightnessSmooth)
+                    ToggleRow(title: "Warm colors on break",
+                              isOn: $settings.nightShiftBreakEnabled)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Warmth: \(Int(settings.nightShiftBreakStrength * 100))%")
+                            .font(.system(.caption, design: .rounded).weight(.medium))
+                        Slider(value: $settings.nightShiftBreakStrength, in: 0.1...1.0)
+                    }
+                    Text("Warms screen colors during breaks (uses Night Shift).")
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.6))
                 }
 
         case .focus:
@@ -915,7 +925,8 @@ struct SettingsView: View {
                         "monday", "sunday", "badge", "plan", "planner", "🍅"]
             case .breaks:
                 return ["break", "message", "ambience", "rain", "forest", "white noise",
-                        "brightness", "dim", "screen", "exit"]
+                        "brightness", "dim", "screen", "exit",
+                        "night shift", "warm", "warmth"]
             case .focus:
                 return ["app", "block", "blocker", "distraction", "reminder",
                         "posture", "water", "stand"]

@@ -83,6 +83,11 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var brightnessDimEnabled: Bool = false
     public var brightnessDimPercent: Int = 35
     public var brightnessSmooth: Bool = true
+    /// Break vaqtida Night Shift bilan ekranni "isitib" (iliq ranglar)
+    /// ko'zni dam oldirish; break tugagach asl holat qaytariladi.
+    public var nightShiftBreakEnabled: Bool = false
+    /// Night Shift kuchi break vaqtida (0…1).
+    public var nightShiftBreakStrength: Double = 0.7
     public var launchAtLogin: Bool = false
     public var appBlockerSettings: AppBlockerSettings = .init()
     /// When on, a focus pomodoro cannot start unless a task is selected.
@@ -168,6 +173,8 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
         brightnessDimEnabled = try c.decodeIfPresent(Bool.self, forKey: .brightnessDimEnabled) ?? d.brightnessDimEnabled
         brightnessDimPercent = try c.decodeIfPresent(Int.self, forKey: .brightnessDimPercent) ?? d.brightnessDimPercent
         brightnessSmooth = try c.decodeIfPresent(Bool.self, forKey: .brightnessSmooth) ?? d.brightnessSmooth
+        nightShiftBreakEnabled = try c.decodeIfPresent(Bool.self, forKey: .nightShiftBreakEnabled) ?? d.nightShiftBreakEnabled
+        nightShiftBreakStrength = try c.decodeIfPresent(Double.self, forKey: .nightShiftBreakStrength) ?? d.nightShiftBreakStrength
         launchAtLogin = try c.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? d.launchAtLogin
         appBlockerSettings = try c.decodeIfPresent(AppBlockerSettings.self, forKey: .appBlockerSettings) ?? d.appBlockerSettings
         requireTaskForFocus = try c.decodeIfPresent(Bool.self, forKey: .requireTaskForFocus) ?? d.requireTaskForFocus

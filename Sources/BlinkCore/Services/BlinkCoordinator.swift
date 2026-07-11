@@ -415,10 +415,18 @@ public final class BlinkCoordinator: ObservableObject {
         BrightnessService.shared.levelPercent = Float(timer.settings.brightnessDimPercent)
         BrightnessService.shared.smooth = timer.settings.brightnessSmooth
         BrightnessService.shared.dimToBreak()
+        // Night Shift warmth shares the dim lifecycle: on at break start,
+        // restored at break end. Off by default; no-ops when unavailable.
+        if timer.settings.nightShiftBreakEnabled {
+            NightShiftService.shared.beginBreakWarmth(
+                strength: Float(timer.settings.nightShiftBreakStrength))
+        }
     }
 
     private func restoreBrightness() {
         BrightnessService.shared.restore()
+        // Idempotent: a no-op when the warmth was never begun (setting off).
+        NightShiftService.shared.endBreakWarmth()
     }
 
     /// Drive the app blocker from the current phase + settings: block during a

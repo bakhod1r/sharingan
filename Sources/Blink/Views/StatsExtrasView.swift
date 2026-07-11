@@ -17,6 +17,12 @@ struct StatsExtrasView: View {
                 weekdayCard
                 categoryCard
             }
+            if !projectTotals.isEmpty || !tagTotals.isEmpty {
+                HStack(alignment: .top, spacing: 16) {
+                    if !projectTotals.isEmpty { projectCard }
+                    if !tagTotals.isEmpty { tagCard }
+                }
+            }
             HStack(alignment: .top, spacing: 16) {
                 timeOfDayCard
                 recordsCard
@@ -182,6 +188,67 @@ struct StatsExtrasView: View {
                                 .contentTransition(.numericText())
                                 .animation(DS.Motion.snappy, value: row.count)
                         }
+                    }
+                }
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity)
+        .glassRounded(DS.Radius.xl, material: .regular)
+        .liquidShadow(radius: 12, y: 6)
+    }
+
+    // MARK: - Project / tags
+
+    /// Focus pomodoros per project (all-time, from tasks — same attribution as
+    /// the category card), most first, top 5.
+    private var projectTotals: [(name: String, count: Int)] {
+        Array(TaskBreakdown.pomodoros(byProject: store.tasks).prefix(5))
+    }
+
+    /// Focus pomodoros per tag (counted once per task per tag), most first, top 5.
+    private var tagTotals: [(name: String, count: Int)] {
+        Array(TaskBreakdown.pomodoros(byTag: store.tasks).prefix(5))
+    }
+
+    private var projectCard: some View {
+        breakdownCard(title: "By project", icon: "folder.fill", rows: projectTotals)
+    }
+
+    private var tagCard: some View {
+        breakdownCard(title: "By tags", icon: "number", rows: tagTotals)
+    }
+
+    /// Category-card idiom (label + proportional bar + count) for a generic
+    /// name/count breakdown. Callers hide the card when `rows` is empty.
+    private func breakdownCard(title: String, icon: String,
+                               rows: [(name: String, count: Int)]) -> some View {
+        let peak = max(1, rows.map(\.count).max() ?? 1)
+        return VStack(alignment: .leading, spacing: 10) {
+            Text(title).dsSectionLabel()
+            VStack(spacing: 9) {
+                ForEach(rows, id: \.name) { row in
+                    HStack(spacing: 8) {
+                        Image(systemName: icon)
+                            .font(.system(size: 10))
+                            .foregroundStyle(accent)
+                            .frame(width: 14)
+                        Text(row.name)
+                            .font(.system(.caption, design: .rounded).weight(.medium))
+                            .foregroundStyle(Color.dsPrimary)
+                            .lineLimit(1)
+                            .frame(width: 66, alignment: .leading)
+                        GeometryReader { geo in
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(accent.opacity(0.8))
+                                .frame(width: max(6, geo.size.width * CGFloat(row.count) / CGFloat(peak)))
+                        }
+                        .frame(height: 10)
+                        Text("\(row.count)")
+                            .font(.system(.caption2, design: .rounded).weight(.bold).monospacedDigit())
+                            .foregroundStyle(Color.dsSecondary)
+                            .contentTransition(.numericText())
+                            .animation(DS.Motion.snappy, value: row.count)
                     }
                 }
             }
