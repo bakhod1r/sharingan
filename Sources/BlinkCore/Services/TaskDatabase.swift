@@ -85,7 +85,7 @@ final class TaskDatabase {
             t.plannedDate = date(stmt, 10)
             t.notes = text(stmt, 11) ?? ""
             t.subtasks = decodeJSON([Subtask].self, text(stmt, 12)) ?? []
-            t.recurrence = Recurrence(rawValue: text(stmt, 13) ?? "none") ?? .none
+            t.recurrence = Recurrence(string: text(stmt, 13) ?? "none")
             t.project = isNull(stmt, 14) ? nil : text(stmt, 14)
             t.priority = TaskPriority(rawValue: Int(int(stmt, 15))) ?? .none
             out.append(t)
@@ -120,7 +120,7 @@ final class TaskDatabase {
                 bindDate(stmt, 11, t.plannedDate)
                 bindText(stmt, 12, t.notes)
                 bindText(stmt, 13, encodeJSON(t.subtasks) ?? "[]")
-                bindText(stmt, 14, t.recurrence.rawValue)
+                bindText(stmt, 14, t.recurrence.stringValue)
                 if let p = t.project { bindText(stmt, 15, p) } else { sqlite3_bind_null(stmt, 15) }
                 sqlite3_bind_int(stmt, 16, Int32(t.priority.rawValue))
                 guard sqlite3_step(stmt) == SQLITE_DONE else { return false }

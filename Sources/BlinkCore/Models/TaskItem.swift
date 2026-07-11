@@ -32,18 +32,77 @@ public struct Subtask: Identifiable, Codable, Equatable, Sendable {
 }
 
 /// How a task repeats after completion.
-public enum Recurrence: String, Codable, Sendable, CaseIterable, Identifiable {
+/// Persisted as a single string ("daily", "everyNDays:3", "monthly:15") so
+/// rows written by the old `String`-raw-value version decode unchanged, and
+/// unknown strings degrade to `.none` instead of dropping the task.
+public enum Recurrence: Codable, Equatable, Hashable, Sendable, CaseIterable, Identifiable {
     case none, daily, weekdays, weekly
-    public var id: String { rawValue }
+    /// Every N days (N ≥ 1).
+    case everyNDays(Int)
+    /// A given day of every month (1…31, clamped to the month's length).
+    case monthly(Int)
+
+    /// Menu presets — pickers offer these; the editor refines N / day.
+    public static var allCases: [Recurrence] {
+        [.none, .daily, .weekdays, .weekly, .everyNDays(2), .everyNDays(3), .monthly(1)]
+    }
+
+    public var id: String { stringValue }
+
+    /// The persisted representation.
+    public var stringValue: String {
+        switch self {
+        case .none:     return "none"
+        case .daily:    return "daily"
+        case .weekdays: return "weekdays"
+        case .weekly:   return "weekly"
+        case .everyNDays(let n): return "everyNDays:\(n)"
+        case .monthly(let d):    return "monthly:\(d)"
+        }
+    }
+
+    /// Parses a persisted string; anything unrecognized becomes `.none`.
+    public init(string: String) {
+        switch string {
+        case "none":     self = .none
+        case "daily":    self = .daily
+        case "weekdays": self = .weekdays
+        case "weekly":   self = .weekly
+        default:
+            let parts = string.split(separator: ":")
+            if parts.count == 2, let n = Int(parts[1]), n >= 1 {
+                switch parts[0] {
+                case "everyNDays": self = .everyNDays(n); return
+                case "monthly":    self = .monthly(min(n, 31)); return
+                default: break
+                }
+            }
+            self = .none
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let s = try decoder.singleValueContainer().decode(String.self)
+        self = Recurrence(string: s)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        try c.encode(stringValue)
+    }
+
     public var label: String {
         switch self {
         case .none:     return "Does not repeat"
         case .daily:    return "Every day"
         case .weekdays: return "Weekdays"
         case .weekly:   return "Every week"
+        case .everyNDays(let n): return "Every \(n) days"
+        case .monthly(let d):    return "Monthly (day \(d))"
         }
     }
-    /// The next occurrence date after `date`.
+
+    /// The next occurrence date after `date` (time of day preserved).
     public func nextDate(after date: Date, calendar: Calendar = .current) -> Date {
         switch self {
         case .none:  return date
@@ -55,6 +114,27 @@ public enum Recurrence: String, Codable, Sendable, CaseIterable, Identifiable {
                 d = calendar.date(byAdding: .day, value: 1, to: d) ?? d
             }
             return d
+        case .everyNDays(let n):
+            return calendar.date(byAdding: .day, value: max(1, n), to: date) ?? date
+        case .monthly(let dayOfMonth):
+            let day = max(1, min(dayOfMonth, 31))
+            let time = calendar.dateComponents([.hour, .minute, .second], from: date)
+            var ym = calendar.dateComponents([.year, .month], from: date)
+            // Walk month by month (clamping to each month's length) until we
+            // pass `date`; 25 iterations bounds the search safely.
+            for _ in 0..<25 {
+                guard let monthStart = calendar.date(from: ym),
+                      let dayRange = calendar.range(of: .day, in: .month, for: monthStart)
+                else { break }
+                var c = ym
+                c.day = min(day, dayRange.count)
+                c.hour = time.hour; c.minute = time.minute; c.second = time.second
+                if let candidate = calendar.date(from: c), candidate > date {
+                    return candidate
+                }
+                ym.month! += 1
+            }
+            return date
         }
     }
 }
