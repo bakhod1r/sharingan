@@ -231,6 +231,18 @@ section {
 .hero > * { position: relative; }
 .hero h1 { text-shadow: 0 2px 28px rgba(10, 11, 13, 0.9); }
 
+/* hero entrance is pure CSS so the headline paints without waiting for JS
+   (data-reveal would hold it at opacity 0 until the module loads) */
+.hero .eyebrow, .hero h1, .hero .sub, .hero .cta-row {
+  animation: hero-in 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.hero h1 { animation-delay: 0.07s; }
+.hero .sub { animation-delay: 0.14s; }
+.hero .cta-row { animation-delay: 0.22s; }
+@keyframes hero-in {
+  from { opacity: 0; transform: translateY(22px); }
+}
+
 .hero .sub {
   max-width: 560px;
   color: var(--muted);
@@ -442,5 +454,6 @@ footer a:hover { color: var(--ink); }
   html { scroll-behavior: auto; }
   [data-reveal] { opacity: 1; transform: none; transition: none; }
   .scroll-hint span, #terminal-body .caret { animation: none; }
+  .hero .eyebrow, .hero h1, .hero .sub, .hero .cta-row { animation: none; }
   .btn, .card { transition: none; }
 }

@@ -1,5 +1,4 @@
 import { CONFIG } from "./config.js";
-import { initEyes } from "./eyes.js";
 
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -11,30 +10,42 @@ document.querySelectorAll(".cta-meta").forEach((el) => {
 });
 document.getElementById("year").textContent = new Date().getFullYear();
 
-// ---- background eyes (WebGL) — CSS .bg-fallback stays underneath ------------
-const bgCanvas = document.getElementById("bg-eyes");
-const bg = initEyes(bgCanvas, { eyes: 2, patternIndex: 2 });
-if (!bg) bgCanvas.remove();
-
-// dim the eyes once the hero scrolls away so content reads
-const hero = document.querySelector(".hero");
-if (bg) {
-  new IntersectionObserver(
-    ([e]) => bgCanvas.classList.toggle("dimmed", !e.isIntersecting),
-    { threshold: 0.15 }
-  ).observe(hero);
-}
-
-// ---- showcase demo eye + pattern picker --------------------------------------
-const demoCanvas = document.getElementById("demo-eye");
-const demo = initEyes(demoCanvas, { eyes: 1, patternIndex: 2 });
-if (!demo) demoCanvas.style.display = "none";
+// ---- eyes (WebGL) — loaded AFTER first paint so three.js never blocks FCP;
+// the CSS .bg-fallback backdrop stays underneath either way -------------------
+let demo = null;
 document.querySelectorAll(".pattern-picker button").forEach((btn) =>
   btn.addEventListener("click", () => {
     demo?.setPattern(+btn.dataset.pattern);
     document.querySelector(".pattern-picker .active")?.classList.remove("active");
     btn.classList.add("active");
   })
+);
+
+requestAnimationFrame(() =>
+  setTimeout(async () => {
+    let initEyes;
+    try {
+      ({ initEyes } = await import("./eyes.js"));
+    } catch {
+      return; // no module/WebGL support — static fallback backdrop remains
+    }
+
+    const bgCanvas = document.getElementById("bg-eyes");
+    const bg = initEyes(bgCanvas, { eyes: 2, patternIndex: 2 });
+    if (!bg) bgCanvas.remove();
+
+    // dim the eyes once the hero scrolls away so content reads
+    if (bg) {
+      new IntersectionObserver(
+        ([e]) => bgCanvas.classList.toggle("dimmed", !e.isIntersecting),
+        { threshold: 0.15 }
+      ).observe(document.querySelector(".hero"));
+    }
+
+    const demoCanvas = document.getElementById("demo-eye");
+    demo = initEyes(demoCanvas, { eyes: 1, patternIndex: 2 });
+    if (!demo) demoCanvas.style.display = "none";
+  }, 0)
 );
 
 // ---- scroll reveal -----------------------------------------------------------
