@@ -10,6 +10,17 @@ document.querySelectorAll(".cta-meta").forEach((el) => {
 });
 document.getElementById("year").textContent = new Date().getFullYear();
 
+// ---- theme toggle (dark is the default; choice persists) --------------------
+const themeMeta = document.querySelector('meta[name="theme-color"]');
+document.querySelector(".theme-toggle")?.addEventListener("click", () => {
+  const light = document.documentElement.dataset.theme !== "light";
+  document.documentElement.dataset.theme = light ? "light" : "";
+  themeMeta?.setAttribute("content", light ? "#f6f4f0" : "#0a0b0d");
+  try {
+    localStorage.setItem("theme", light ? "light" : "");
+  } catch {}
+});
+
 // ---- eyes (WebGL) — loaded AFTER first paint so three.js never blocks FCP;
 // the CSS .bg-fallback backdrop stays underneath either way -------------------
 let demo = null;
@@ -42,9 +53,17 @@ requestAnimationFrame(() =>
       ).observe(document.querySelector(".hero"));
     }
 
+    // the demo eye compiles its own GL program — wait until its section nears
     const demoCanvas = document.getElementById("demo-eye");
-    demo = initEyes(demoCanvas, { eyes: 1, patternIndex: 2 });
-    if (!demo) demoCanvas.style.display = "none";
+    new IntersectionObserver(
+      ([e], obs) => {
+        if (!e.isIntersecting) return;
+        obs.disconnect();
+        demo = initEyes(demoCanvas, { eyes: 1, patternIndex: 2 });
+        if (!demo) demoCanvas.style.display = "none";
+      },
+      { rootMargin: "600px" }
+    ).observe(demoCanvas);
   }, 0)
 );
 

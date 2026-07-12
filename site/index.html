@@ -20,6 +20,7 @@
   <link rel="icon" href="assets/favicon-32.png" type="image/png" sizes="32x32">
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <script>try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
   <link rel="stylesheet" href="css/style.css">
   <script type="application/ld+json">
   {
@@ -31,8 +32,47 @@
     "description": "Pomodoro and eye-health app for macOS with enforced breaks, camera-verified eye exercises, task management, streaks, and a live wallpaper.",
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
     "downloadUrl": "https://github.com/bakhod1r/Blink/releases/latest/download/Sharingan.dmg",
+    "screenshot": "https://bakhod1r.github.io/Blink/assets/screen-break.png",
     "author": { "@type": "Person", "name": "mrb" },
     "url": "https://bakhod1r.github.io/Blink/"
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "Is Sharingan free?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Yes. Sharingan is free and open source. There is no account, no subscription and no tracking." }
+      },
+      {
+        "@type": "Question",
+        "name": "Does camera data leave my Mac?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Never. Blink and gaze detection run entirely on-device with Apple's Vision framework. The camera is optional, and a pulsing badge is always shown while it is on." }
+      },
+      {
+        "@type": "Question",
+        "name": "Which Macs does it support?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Sharingan requires macOS 14 (Sonoma) or later on Apple Silicon." }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I skip a break?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Yes — every break screen has a skip button. If you want stricter rest, enable app blocking so distracting apps hide or quit when a break starts." }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I install it?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Download Sharingan.dmg, open it and drag Sharingan to Applications. On first launch, right-click the app and choose Open, since this build is not notarized." }
+      },
+      {
+        "@type": "Question",
+        "name": "Does it sync between Macs?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Yes — settings and streaks sync through your private iCloud (CloudKit) database. Nothing is stored on third-party servers." }
+      }
+    ]
   }
   </script>
 </head>
@@ -46,25 +86,51 @@
       <a href="#features">Features</a>
       <a href="#wallpaper">Wallpaper</a>
       <a href="#cli">CLI</a>
-      <a class="btn btn-ghost js-github" href="https://github.com/bakhod1r/Blink">GitHub</a>
+      <a href="#faq">FAQ</a>
+      <button type="button" class="theme-toggle" aria-label="Toggle light and dark theme">
+        <svg class="icon-moon" width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M13.7 10.2A6.5 6.5 0 0 1 5.8 2.3 6.5 6.5 0 1 0 13.7 10.2z"/></svg>
+        <svg class="icon-sun" width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 4.5A3.5 3.5 0 1 0 8 11.5 3.5 3.5 0 0 0 8 4.5zM8 0h.01L8.7 2.2H7.3L8 0zM8 16l-.7-2.2h1.4L8 16zM0 8l2.2-.7v1.4L0 8zm16 0-2.2.7V7.3L16 8zM2.3 2.3l2 1-1 1-1-2zm11.4 11.4-2-1 1-1 1 2zm0-11.4-1 2-1-1 2-1zM2.3 13.7l1-2 1 1-2 1z"/></svg>
+      </button>
+      <a class="btn btn-red btn-nav js-download" href="https://github.com/bakhod1r/Blink/releases/latest/download/Sharingan.dmg">Download</a>
     </nav>
   </header>
 
   <main>
     <section class="hero">
-      <p class="eyebrow">For macOS — free &amp; open</p>
+      <p class="eyebrow">For macOS — free &amp; open source</p>
       <h1>Your eyes deserve<br><span class="red">a guardian</span>.</h1>
       <p class="sub">Sharingan is a menu-bar Pomodoro &amp; eye-health companion —
         enforced screen breaks, camera-verified eye exercises, tasks, streaks,
         and a desktop that watches back.</p>
       <div class="cta-row">
-        <a class="btn btn-red js-download" href="https://github.com/bakhod1r/Blink/releases/latest/download/Sharingan.dmg">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1v9.3L4.7 7 3.5 8.2 8 12.7l4.5-4.5L11.3 7 8 10.3V1H8zM2 13.5h12V15H2v-1.5z"/></svg>
-          Download for Mac
-        </a>
+        <div class="cta-buttons">
+          <a class="btn btn-red js-download" href="https://github.com/bakhod1r/Blink/releases/latest/download/Sharingan.dmg">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1v9.3L4.7 7 3.5 8.2 8 12.7l4.5-4.5L11.3 7 8 10.3V1H8zM2 13.5h12V15H2v-1.5z"/></svg>
+            Download for Mac
+          </a>
+          <a class="btn btn-ghost js-github" href="https://github.com/bakhod1r/Blink">View source</a>
+        </div>
         <span class="cta-meta">v1.0.0 · macOS 14+ · Apple Silicon · free</span>
       </div>
+      <ul class="stats" aria-label="At a glance">
+        <li><strong>18</strong> eye styles</li>
+        <li><strong>6</strong> themes</li>
+        <li><strong>100%</strong> on-device</li>
+        <li><strong>0</strong> accounts, ads, trackers</li>
+      </ul>
       <div class="scroll-hint" aria-hidden="true"><span></span></div>
+    </section>
+
+    <section id="breaks" aria-labelledby="breaks-h">
+      <p class="eyebrow" data-reveal>Break enforcement</p>
+      <h2 id="breaks-h" data-reveal>Breaks that actually happen</h2>
+      <p class="section-sub" data-reveal>When it's time to rest, Sharingan takes the whole screen — on every
+        monitor. ⌘Q, ⌘W and app switching stay blocked, a guided exercise runs,
+        and the screen dims while rain or lo-fi plays. Work can wait 20 seconds.</p>
+      <figure class="shot" data-reveal>
+        <img src="assets/screen-break.png" alt="Sharingan break screen: closed anime eyes resting during the 20-20-20 exercise, with a timer and an exit button" width="1440" height="900" loading="lazy">
+        <figcaption>The real break screen — rendered by the app itself.</figcaption>
+      </figure>
     </section>
 
     <section id="features" aria-labelledby="features-h">
@@ -74,10 +140,6 @@
         <li class="card" data-reveal>
           <h3>Pomodoro, your rules</h3>
           <p>Countdown or count-up, custom focus and break lengths, long breaks every N rounds, auto-start and repeat.</p>
-        </li>
-        <li class="card" data-reveal>
-          <h3>Breaks you can't skip past</h3>
-          <p>A full-screen liquid-glass overlay on every monitor. ⌘Q, ⌘W and app switching stay blocked until your eyes rest.</p>
         </li>
         <li class="card" data-reveal>
           <h3>Camera-verified exercises</h3>
@@ -116,8 +178,12 @@
           <p>Settings and streaks follow you to every Mac through your private CloudKit database.</p>
         </li>
         <li class="card" data-reveal>
-          <h3>Six themes + CLI</h3>
-          <p>Liquid Glass, Frosted, Midnight, Cream, Neon, Mono — and the <code>tired</code> CLI for everything.</p>
+          <h3>Eisenhower matrix</h3>
+          <p>See urgent vs. important at a glance, snooze the rest, and keep a desktop Today panel with your tasks.</p>
+        </li>
+        <li class="card" data-reveal>
+          <h3>Six themes</h3>
+          <p>Liquid Glass, Frosted, Midnight, Cream, Neon and Mono — the whole app, not just an accent color.</p>
         </li>
       </ul>
     </section>
@@ -139,6 +205,10 @@
           <button type="button" data-pattern="4">Rinnegan</button>
         </div>
       </div>
+      <figure class="shot" data-reveal>
+        <img src="assets/screen-styles.png" alt="All 18 Sharingan eye styles rendered by the app: classic tomoe, Mangekyō variants, Itachi, Madara, Rinnegan and more" width="1200" height="911" loading="lazy">
+        <figcaption>All 18 styles, straight from the app — pick one per eye.</figcaption>
+      </figure>
     </section>
 
     <section id="cli" aria-labelledby="cli-h">
@@ -149,6 +219,37 @@
       <div class="terminal" role="img" aria-label="Terminal showing tired CLI commands" data-reveal>
         <div class="terminal-bar" aria-hidden="true"><span></span><span></span><span></span><em>tired — zsh</em></div>
         <pre id="terminal-body"></pre>
+      </div>
+    </section>
+
+    <section id="faq" aria-labelledby="faq-h">
+      <p class="eyebrow" data-reveal>FAQ</p>
+      <h2 id="faq-h" data-reveal>Questions, answered</h2>
+      <div class="faq-list" data-reveal>
+        <details>
+          <summary>Is Sharingan free?</summary>
+          <p>Yes. Sharingan is free and open source. There is no account, no subscription and no tracking.</p>
+        </details>
+        <details>
+          <summary>Does camera data leave my Mac?</summary>
+          <p>Never. Blink and gaze detection run entirely on-device with Apple's Vision framework. The camera is optional, and a pulsing badge is always shown while it is on.</p>
+        </details>
+        <details>
+          <summary>Which Macs does it support?</summary>
+          <p>macOS 14 (Sonoma) or later, on Apple Silicon.</p>
+        </details>
+        <details>
+          <summary>Can I skip a break?</summary>
+          <p>Yes — every break screen has a skip button. Want stricter rest? Enable app blocking so distracting apps hide or quit when a break starts.</p>
+        </details>
+        <details>
+          <summary>How do I install it?</summary>
+          <p>Download <code>Sharingan.dmg</code>, open it and drag Sharingan to Applications. On first launch, right-click the app and choose <em>Open</em> — this build is not notarized.</p>
+        </details>
+        <details>
+          <summary>Does it sync between Macs?</summary>
+          <p>Yes — settings and streaks sync through your private iCloud (CloudKit) database. Nothing touches third-party servers.</p>
+        </details>
       </div>
     </section>
 
@@ -163,7 +264,26 @@
   </main>
 
   <footer>
-    <p>© <span id="year">2026</span> mrb · <a class="js-github" href="https://github.com/bakhod1r/Blink">Source on GitHub</a> · <a href="https://github.com/bakhod1r/Blink/releases">Changelog</a></p>
+    <div class="footer-cols">
+      <div>
+        <p class="footer-brand">Sharingan<span class="brand-dot">.</span></p>
+        <p class="footer-tag">A Pomodoro that guards your eyes.</p>
+      </div>
+      <nav aria-label="Product">
+        <h3>Product</h3>
+        <a href="#features">Features</a>
+        <a href="#wallpaper">Live wallpaper</a>
+        <a href="#cli">CLI</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+      <nav aria-label="Resources">
+        <h3>Resources</h3>
+        <a class="js-github" href="https://github.com/bakhod1r/Blink">Source on GitHub</a>
+        <a href="https://github.com/bakhod1r/Blink/releases">Changelog</a>
+        <a href="https://github.com/bakhod1r/Blink/issues">Report an issue</a>
+      </nav>
+    </div>
+    <p class="footer-legal">© <span id="year">2026</span> mrb · Built with SwiftUI, no Xcode project required.</p>
   </footer>
   <script type="module" src="js/main.js"></script>
 </body>
