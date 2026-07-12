@@ -289,6 +289,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return false
     }
 
+    // Quitting mid-pomodoro is usually an accident — confirm before losing
+    // the running session. Breaks and idle states quit silently.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let timer, timer.isRunning, timer.phase == .focus else { return .terminateNow }
+
+        let alert = NSAlert()
+        alert.messageText = "Pomodoro isn't finished"
+        alert.informativeText = "A focus session is still running. Quit anyway?"
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Keep Going")
+        alert.addButton(withTitle: "Quit Anyway")
+        NSApp.activate(ignoringOtherApps: true)
+        return alert.runModal() == .alertFirstButtonReturn ? .terminateCancel : .terminateNow
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         // Best-effort: never leave the user's Focus stuck on after quit.
         if let timer {

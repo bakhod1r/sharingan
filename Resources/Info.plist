@@ -2,44 +2,46 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleName</key>
-    <string>Sharingan</string>
-    <key>CFBundleDisplayName</key>
-    <string>Sharingan</string>
-    <key>CFBundleIdentifier</key>
-    <string>com.blink.app</string>
-    <key>CFBundleVersion</key>
-    <string>1</string>
-    <key>CFBundleShortVersionString</key>
-    <string>1.0.0</string>
-    <key>CFBundleExecutable</key>
-    <string>Sharingan</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleIconFile</key>
-    <string>AppIcon</string>
-    <key>CFBundleIconName</key>
-    <string>AppIcon</string>
-    <key>LSMinimumSystemVersion</key>
-    <string>14.0</string>
-    <key>LSUIElement</key>
-    <true/>
-    <key>NSHighResolutionCapable</key>
-    <true/>
-    <key>CFBundleURLTypes</key>
-    <array>
-        <dict>
-            <key>CFBundleURLName</key>
-            <string>com.blink.sharingan.url</string>
-            <key>CFBundleURLSchemes</key>
-            <array>
-                <string>sharingan</string>
-            </array>
-        </dict>
-    </array>
-    <key>NSCameraUsageDescription</key>
-    <string>Sharingan uses the camera to check your eye exercises during breaks (break time only, private).</string>
-    <key>NSUserNotificationsUsageDescription</key>
-    <string>Sharingan sends notifications to remind you when pomodoros and breaks start.</string>
+	<key>CFBundleDisplayName</key>
+	<string>Sharingan</string>
+	<key>CFBundleExecutable</key>
+	<string>Sharingan</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.blink.app</string>
+	<key>CFBundleName</key>
+	<string>Sharingan</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0.0</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.blink.sharingan.url</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>sharingan</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Sharingan uses the camera to check your eye exercises during breaks (break time only, private).</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string>© 2026 mrb. All rights reserved.</string>
+	<key>NSUserNotificationsUsageDescription</key>
+	<string>Sharingan sends notifications to remind you when pomodoros and breaks start.</string>
 </dict>
 </plist>

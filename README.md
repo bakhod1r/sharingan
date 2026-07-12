@@ -215,4 +215,4 @@ SelfTest assertions cover:
 
 ## License
 
-Private.
+Private. © 2026 mrb.
