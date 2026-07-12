@@ -186,12 +186,8 @@ public final class PomodoroTimer: ObservableObject {
                 try? await Task.sleep(for: .milliseconds(200))
                 guard !Task.isCancelled else { return }
                 let now = Date.now
-                var dt = now.timeIntervalSince(s.lastTickDate ?? now)
-                // Ticks land every ~200 ms; a gap of 30+ s means the machine
-                // was asleep (the process suspended). Counting that gap as
-                // focus time credited entire lid-closed hours as completed
-                // pomodoros — treat it as a single ordinary tick instead.
-                if dt > 30 { dt = 0.2 }
+                let dt = Self.effectiveTickDelta(
+                    now.timeIntervalSince(s.lastTickDate ?? now), phase: s.phase)
                 s.lastTickDate = now
                 switch s.mode {
                 case .countdown:
@@ -231,6 +227,19 @@ public final class PomodoroTimer: ObservableObject {
     /// celebration fires once per day without any extra persisted state.
     nonisolated public static func goalJustReached(count: Int, goal: Int) -> Bool {
         goal > 0 && count == goal
+    }
+
+    /// Ticks land every ~200 ms; a gap of 30+ s means the machine was asleep
+    /// (the process suspended). During focus that gap must NOT count — it
+    /// credited entire lid-closed hours as completed pomodoros — so it
+    /// collapses to a single ordinary tick. During a break the opposite holds:
+    /// sleep rests the eyes just as well, and freezing the countdown left the
+    /// break overlay up long after the break should have ended, so the full
+    /// gap counts and the break completes on wake.
+    nonisolated public static func effectiveTickDelta(_ dt: TimeInterval,
+                                                      phase: PomodoroPhase) -> TimeInterval {
+        guard dt > 30 else { return dt }
+        return phase.isBreak ? dt : 0.2
     }
 
     private func phaseComplete() {

@@ -277,6 +277,28 @@ public final class SharinganCoordinator: ObservableObject {
             .sink { [weak self] note in self?.handlePhaseComplete(note) }
             .store(in: &cancellables)
 
+        // Safety net for the break overlay: `.phaseDidComplete` only fires when
+        // a countdown runs to zero, but a break can also end via skip/stop —
+        // global shortcut, CLI, `startFocusSession` — paths that jump straight
+        // to focus without the notification and used to strand the overlay
+        // (plus ambience/dim) on screen. Tear everything down on ANY arrival
+        // at focus; every call is idempotent, so the natural-completion path
+        // running them a second time is harmless. `.paused` is deliberately
+        // not a teardown: a paused break is still a break.
+        timer.$phase
+            .removeDuplicates()
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] phase in
+                guard let self, phase == .focus else { return }
+                self.breakPresenter?.dismissAll()
+                BreakAmbienceService.shared.stop()
+                self.restoreBrightness()
+                EyeTracker.shared.stop()
+                CameraService.shared.stop()
+            }
+            .store(in: &cancellables)
+
         NotificationCenter.default.publisher(for: .focusFiveMinLeft)
             .receive(on: DispatchQueue.main)
             .sink { _ in NotificationService.shared.focusFiveMinLeft() }
