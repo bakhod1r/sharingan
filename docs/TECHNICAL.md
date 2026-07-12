@@ -47,6 +47,7 @@
 
 - Full-screen break overlay on **every monitor**, above other windows; ⌘Q / ⌘W / ⌘Tab are blocked until the break ends. Includes a skip button.
 - Eye exercises: the 20-20-20 rule, 8-direction gaze (plus circles and figure-8), and blink drills.
+- Exercise picker chips at the top of the break screen — tap any exercise to run it on demand; the eyes perform it and the sequence continues from there.
 - Configurable exercise sequence: turn individual exercises on/off, scale hold times, set rounds.
 - **Camera blink & gaze validation** using on-device face tracking — the camera runs only during breaks, never during focus. Optional strict mode waits for real gaze/blink confirmation before advancing a step; otherwise a fail-safe auto-advances.
 - Pulsing camera privacy badge whenever the camera is active.

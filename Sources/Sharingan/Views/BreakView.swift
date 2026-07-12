@@ -27,6 +27,11 @@ struct BreakView: View {
                         .padding(.horizontal, max(40, geo.size.width * 0.05))
                         .padding(.top, max(34, geo.size.height * 0.05))
 
+                    exercisePicker
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, max(40, geo.size.width * 0.05))
+                        .padding(.top, 14)
+
                     Spacer()
 
                     MoveEyePair(direction: validator.currentStep?.direction ?? "center",
@@ -110,6 +115,41 @@ struct BreakView: View {
             .padding(.horizontal, 16).padding(.vertical, 8)
             .background(Capsule().fill(.white.opacity(0.08)))
         }
+    }
+
+    // MARK: - Exercise picker (top chips)
+
+    /// One chip per distinct exercise in the break sequence. The active one is
+    /// highlighted; tapping another jumps the validator (and so the eyes) to it.
+    private var exercisePicker: some View {
+        HStack(spacing: 8) {
+            ForEach(pickerNames, id: \.self) { name in
+                let active = validator.currentExercise?.name == name
+                Button {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        validator.select(named: name)
+                    }
+                } label: {
+                    Text(name)
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .foregroundStyle(active ? .black.opacity(0.85) : .white.opacity(0.7))
+                        .lineLimit(1)
+                        .padding(.horizontal, 14).padding(.vertical, 7)
+                        .background(Capsule().fill(active ? .white.opacity(0.9)
+                                                          : .white.opacity(0.08)))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Start \(name)")
+                .accessibilityAddTraits(active ? .isSelected : [])
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: validator.currentExerciseIndex)
+    }
+
+    /// Distinct exercise names in sequence order (rounds repeat the same three).
+    private var pickerNames: [String] {
+        var seen = Set<String>()
+        return validator.exercises.compactMap { seen.insert($0.name).inserted ? $0.name : nil }
     }
 
     // MARK: - Caption (instruction + step dots)

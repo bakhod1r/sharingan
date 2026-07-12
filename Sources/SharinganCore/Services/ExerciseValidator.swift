@@ -157,6 +157,18 @@ public final class ExerciseValidator: ObservableObject {
         }
     }
 
+    /// Jump to the first exercise with the given name — the break-screen picker
+    /// lets the user run any exercise on demand instead of waiting for the
+    /// sequence to reach it. From there the normal sequence continues.
+    public func select(named name: String) {
+        guard let idx = exercises.firstIndex(where: { $0.name == name }),
+              idx != currentExerciseIndex || currentStepIndex > 0 else { return }
+        currentExerciseIndex = idx
+        currentStepIndex = 0
+        stepsCompletedInExercise = 0
+        beginStep()
+    }
+
     private func beginStep() {
         stepHoldStart = .now
         heldSeconds = 0
