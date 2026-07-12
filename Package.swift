@@ -2,38 +2,38 @@
 import PackageDescription
 
 let package = Package(
-    name: "Blink",
+    name: "Sharingan",
     platforms: [.macOS(.v14)],
     targets: [
         .target(
-            name: "BlinkCore",
-            path: "Sources/BlinkCore",
+            name: "SharinganCore",
+            path: "Sources/SharinganCore",
             resources: [
                 .process("Resources")
             ]
         ),
         .executableTarget(
-            name: "Blink",
-            dependencies: ["BlinkCore"],
-            path: "Sources/Blink",
+            name: "Sharingan",
+            dependencies: ["SharinganCore"],
+            path: "Sources/Sharingan",
             resources: [
                 .process("Resources")
             ]
         ),
         .executableTarget(
             name: "SelfTest",
-            dependencies: ["BlinkCore"],
+            dependencies: ["SharinganCore"],
             path: "Sources/SelfTest"
         ),
         .executableTarget(
             name: "tired",
-            dependencies: ["BlinkCore"],
+            dependencies: ["SharinganCore"],
             path: "Sources/tired"
         ),
         .testTarget(
-            name: "BlinkTests",
-            dependencies: ["BlinkCore"],
-            path: "Tests/BlinkTests"
+            name: "SharinganTests",
+            dependencies: ["SharinganCore"],
+            path: "Tests/SharinganTests"
         )
     ]
 )

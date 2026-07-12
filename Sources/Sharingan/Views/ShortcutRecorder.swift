@@ -1,0 +1,125 @@
+import SwiftUI
+import Carbon.HIToolbox
+import SharinganCore
+
+/// A row that shows a shortcut's current combo and lets the user re-record it.
+struct ShortcutRecorderRow: View {
+    let title: String
+    let binding: ShortcutBinding
+    let isCustom: Bool
+    let onCapture: (ShortcutBinding) -> Void
+    let onReset: () -> Void
+
+    @State private var recording = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .font(.system(.body, design: .rounded))
+                .foregroundStyle(.white.opacity(0.9))
+            Spacer()
+            Button {
+                recording.toggle()
+            } label: {
+                Text(recording ? "Press keys…" : binding.displayString)
+                    .font(.system(.callout, design: .rounded).weight(.semibold))
+                    .foregroundStyle(recording ? .white : .white.opacity(0.92))
+                    .frame(minWidth: 96)
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .background(
+                        Capsule().fill(recording ? Color.accentColor.opacity(0.55)
+                                                  : Color.white.opacity(0.12))
+                    )
+                    .overlay(
+                        Capsule().stroke(recording ? Color.accentColor
+                                                   : Color.white.opacity(0.15), lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                recording = false
+                onReset()
+            } label: {
+                Image(systemName: "arrow.uturn.backward")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white.opacity(isCustom ? 0.75 : 0.25))
+                    .frame(width: 26, height: 26)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Reset to default")
+            .disabled(!isCustom)
+        }
+        .padding(.vertical, 2)
+        .background(
+            KeyCaptureView(recording: $recording,
+                           onCombo: { combo in
+                               recording = false
+                               onCapture(combo)
+                           },
+                           onCancel: { recording = false })
+        )
+    }
+}
+
+/// Invisible AppKit bridge that installs a local key-down monitor while recording.
+private struct KeyCaptureView: NSViewRepresentable {
+    @Binding var recording: Bool
+    let onCombo: (ShortcutBinding) -> Void
+    let onCancel: () -> Void
+
+    func makeNSView(context: Context) -> NSView { context.coordinator.view }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.onCombo = onCombo
+        context.coordinator.onCancel = onCancel
+        context.coordinator.setRecording(recording)
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    final class Coordinator {
+        let view = NSView()
+        var onCombo: ((ShortcutBinding) -> Void)?
+        var onCancel: (() -> Void)?
+        private var monitor: Any?
+
+        func setRecording(_ on: Bool) {
+            if on, monitor == nil {
+                monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                    self?.handle(event)
+                    return nil // swallow the key while recording
+                }
+            } else if !on, let m = monitor {
+                NSEvent.removeMonitor(m)
+                monitor = nil
+            }
+        }
+
+        private func handle(_ event: NSEvent) {
+            // Escape cancels recording without changing the binding.
+            if event.keyCode == UInt16(kVK_Escape) {
+                onCancel?()
+                return
+            }
+            let mods = Self.carbonModifiers(event.modifierFlags)
+            // Require at least one modifier so we don't hijack plain typing globally.
+            guard mods != 0 else { return }
+            onCombo?(ShortcutBinding(keyCode: UInt32(event.keyCode), modifiers: mods))
+        }
+
+        static func carbonModifiers(_ flags: NSEvent.ModifierFlags) -> UInt32 {
+            var m: UInt32 = 0
+            if flags.contains(.control) { m |= UInt32(controlKey) }
+            if flags.contains(.option)  { m |= UInt32(optionKey) }
+            if flags.contains(.shift)   { m |= UInt32(shiftKey) }
+            if flags.contains(.command) { m |= UInt32(cmdKey) }
+            return m
+        }
+
+        deinit {
+            if let m = monitor { NSEvent.removeMonitor(m) }
+        }
+    }
+}

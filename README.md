@@ -5,8 +5,8 @@
 > global hotkeys, streak system, CloudKit sync, app blocking, screen
 > dim, ambience sounds, and a `tired` CLI.
 
-Pure SwiftPM — no Xcode project required. (SwiftPM module names still say
-`Blink`; the shipped bundle is branded **Sharingan** — see `Makefile`.)
+Pure SwiftPM — no Xcode project required. (SwiftPM module names say
+`Sharingan` — matching the shipped bundle; see `Makefile`.)
 
 ---
 
@@ -81,7 +81,7 @@ Pure SwiftPM — no Xcode project required. (SwiftPM module names still say
 - **App blocking** — hide or force-quit distracting apps during break (Chrome, Safari, VS Code, Slack, Telegram, Messages presets)
 
 ### CLI
-- `tired` command-line tool — control Blink from Terminal
+- `tired` command-line tool — control Sharingan from Terminal
 
 ### Themes
 - Liquid Glass, Frosted, Midnight, Cream, Neon, Mono (black & white)
@@ -98,7 +98,7 @@ Pure SwiftPM — no Xcode project required. (SwiftPM module names still say
 
 ```bash
 swift build                 # build all targets
-swift run Blink             # launch the menu bar app
+swift run Sharingan         # launch the menu bar app
 swift test                  # swift-testing suites
 swift run SelfTest          # extended assertion harness
 swift run tired status      # CLI: show current timer state
@@ -146,10 +146,10 @@ The CLI communicates with the running app via Darwin notifications +
 ```
 Package.swift
 Sources/
-  BlinkCore/              # testable logic + services
+  SharinganCore/          # testable logic + services
     Models/               # PomodoroSettings, StreakStore, BreakExercise, …
     Services/             # PomodoroTimer, EyeTracker, CameraService, SyncService, …
-  Blink/                  # SwiftUI/AppKit executable (the .app)
+  Sharingan/              # SwiftUI/AppKit executable (the .app)
     Views/                # SettingsView, BreakView, FloatingTimerView, SharinganEyeView, …
     Services/             # window managers (break / floating)
     Resources/            # Animations, Sharingan PNGs → Bundle.module
@@ -188,7 +188,7 @@ Everything is configurable from a single Settings screen:
 ## Tests
 
 ```bash
-swift test          # swift-testing suites (Tests/BlinkTests)
+swift test          # swift-testing suites (Tests/SharinganTests)
 swift run SelfTest  # standalone assertion harness
 ```
 

@@ -1,7 +1,7 @@
 import Foundation
-import BlinkCore
+import SharinganCore
 
-/// `tired` — Blink CLI.
+/// `tired` — Sharingan CLI.
 ///
 /// Foydalanish:
 ///   tired start 25         # 25-daq focus boshlash
@@ -146,7 +146,7 @@ struct TiredCLI {
 
     static func printUsage() {
         print("""
-        tired — Blink CLI
+        tired — Sharingan CLI
 
         Usage:
           tired start [duration]    Start focus timer (default 25); accepts natural

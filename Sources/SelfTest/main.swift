@@ -1,5 +1,5 @@
 import Foundation
-import BlinkCore
+import SharinganCore
 
 @MainActor
 struct SelfTest {
@@ -18,7 +18,7 @@ struct SelfTest {
     }
 
     static func main() {
-        print("Blink self-tests")
+        print("Sharingan self-tests")
         testModels()
         testTimerInitialState()
         testTimerSkipTransition()
@@ -413,7 +413,7 @@ testBrightnessSettings()
         check(zero.duration(for: .paused) == 0, "paused stays 0 even when floored")
         check(PomodoroPhase.allCases.count == 4, "phase count == 4")
         check(TimerMode.allCases.count == 2, "mode count == 2")
-        check(BlinkTheme.allCases.count == 6, "theme count == 6")
+        check(SharinganTheme.allCases.count == 6, "theme count == 6")
         check(PomodoroPhase.focus.gradient.count == 2, "focus gradient stack")
     }
 

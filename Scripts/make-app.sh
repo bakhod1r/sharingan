@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 #
-# make-app.sh — build Blink and assemble a distributable Blink.app bundle.
+# make-app.sh — build Sharingan and assemble a distributable Sharingan.app bundle.
 #
 # The bundle is what makes LSUIElement (no Dock icon) and launch-at-login
 # (SMAppService) work. Run from anywhere:
 #
-#   Scripts/make-app.sh          # release build → ./dist/Blink.app
+#   Scripts/make-app.sh          # release build → ./dist/Sharingan.app
 #   Scripts/make-app.sh --debug  # debug build instead
 #
 set -euo pipefail
@@ -22,9 +22,8 @@ ARCH_FLAGS=()
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-# The SwiftPM product is still `Blink` (module rename would churn the whole
-# tree); the shipped bundle and executable are branded `Sharingan`.
-PRODUCT_NAME="Blink"
+# SwiftPM product and shipped bundle are both branded `Sharingan`.
+PRODUCT_NAME="Sharingan"
 APP_NAME="Sharingan"
 DIST="$ROOT/dist"
 APP="$DIST/$APP_NAME.app"
@@ -83,7 +82,7 @@ fi
 
 # Strip any quarantine flag (e.g. if a resource came in via download/AirDrop)
 # so macOS 15/26 Gatekeeper doesn't block the ad-hoc bundle with a
-# "Blink can't be opened" dialog.
+# "Sharingan can't be opened" dialog.
 xattr -cr "$APP" 2>/dev/null || true
 
 # Ad-hoc codesign so SMAppService / LaunchServices accept the bundle. Nothing
