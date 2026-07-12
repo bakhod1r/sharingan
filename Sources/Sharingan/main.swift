@@ -14,6 +14,28 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-icon"),
     exit(0)
 }
 
+// Headless preview of the 18pt menu-bar icon, upscaled for inspection:
+// `Sharingan --render-menubar-icon <path>` (debug utility).
+if let i = CommandLine.arguments.firstIndex(of: "--render-menubar-icon"),
+   i + 1 < CommandLine.arguments.count {
+    let out = CommandLine.arguments[i + 1]
+    MainActor.assumeIsolated {
+        if let img = MenuBarController.menuBarIcon(progress: 0.4, phase: .focus),
+           let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 144, pixelsHigh: 144,
+                                      bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                                      isPlanar: false, colorSpaceName: .deviceRGB,
+                                      bytesPerRow: 0, bitsPerPixel: 0) {
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+            img.draw(in: NSRect(x: 0, y: 0, width: 144, height: 144))
+            NSGraphicsContext.restoreGraphicsState()
+            try? rep.representation(using: .png, properties: [:])?
+                .write(to: URL(fileURLWithPath: out))
+        }
+    }
+    exit(0)
+}
+
 // Headless preview of all vector Sharingan iris styles (debug utility):
 // `Sharingan --render-iris-grid <path>`.
 if let i = CommandLine.arguments.firstIndex(of: "--render-iris-grid"),

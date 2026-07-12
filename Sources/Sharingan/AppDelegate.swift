@@ -102,8 +102,8 @@ final class MenuBarController: NSObject {
     /// sweeping clockwise from 12 o'clock — red-orange in focus, green on
     /// breaks, dimmed while paused.
     @MainActor
-    private static func menuBarIcon(progress: Double? = nil,
-                                    phase: PomodoroPhase = .focus) -> NSImage? {
+    static func menuBarIcon(progress: Double? = nil,
+                            phase: PomodoroPhase = .focus) -> NSImage? {
         let side: CGFloat = 18
         let img = NSImage(size: NSSize(width: side, height: side), flipped: false) { fullRect in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
@@ -175,16 +175,38 @@ final class MenuBarController: NSObject {
             ctx.setLineWidth(0.8)
             ctx.strokeEllipse(in: rect.insetBy(dx: 0.4, dy: 0.4))
 
-            // Pupil + three tomoe dots on the classic ring.
+            // Pupil + three comma tomoe on the classic ring — head circle plus
+            // a tail that tapers as it hooks along the ring, matching the
+            // full-size vector art so the menu bar mark reads as a Sharingan.
             ctx.setFillColor(CGColor(gray: 0, alpha: 1))
             let pupilR = 0.16 * r
             ctx.fillEllipse(in: CGRect(x: c.x - pupilR, y: c.y - pupilR, width: pupilR * 2, height: pupilR * 2))
             let ringR = 0.52 * r
-            let tomoeR = 0.17 * r
+            let tomoeR = 0.19 * r
+            let sweep = 100.0 * .pi / 180.0
+            let steps = 14
             for i in 0..<3 {
-                let a = (-80.0 + Double(i) * 120.0) * .pi / 180.0
-                let p = CGPoint(x: c.x + ringR * cos(a), y: c.y + ringR * sin(a))
-                ctx.fillEllipse(in: CGRect(x: p.x - tomoeR, y: p.y - tomoeR, width: tomoeR * 2, height: tomoeR * 2))
+                let head = (-80.0 + Double(i) * 120.0) * .pi / 180.0
+                let p = CGPoint(x: c.x + ringR * cos(head), y: c.y + ringR * sin(head))
+                ctx.fillEllipse(in: CGRect(x: p.x - tomoeR, y: p.y - tomoeR,
+                                           width: tomoeR * 2, height: tomoeR * 2))
+
+                let path = CGMutablePath()
+                var edge: [CGPoint] = []
+                var back: [CGPoint] = []
+                for s in 0...steps {
+                    let t = Double(s) / Double(steps)
+                    let a = head + sweep * t
+                    let w = Double(tomoeR) * (1 - t)
+                    edge.append(CGPoint(x: c.x + (ringR + w) * cos(a),
+                                        y: c.y + (ringR + w) * sin(a)))
+                    back.append(CGPoint(x: c.x + (ringR - w) * cos(a),
+                                        y: c.y + (ringR - w) * sin(a)))
+                }
+                path.addLines(between: edge + back.reversed())
+                path.closeSubpath()
+                ctx.addPath(path)
+                ctx.fillPath()
             }
             return true
         }
