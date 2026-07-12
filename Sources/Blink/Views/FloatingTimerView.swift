@@ -140,6 +140,7 @@ struct FloatingTimerView: View {
     @ObservedObject private var motion = FloatingMotion.shared
     @ObservedObject private var tasks = TaskStore.shared
     @State private var animate = false
+    @State private var animateDot = false
     @State private var phasePulse = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -170,29 +171,35 @@ struct FloatingTimerView: View {
 
     @ViewBuilder
     private func card(width: CGFloat, height: CGFloat) -> some View {
-        let remaining = max(0, timer.remainingSeconds)
-        let showTodo = height >= 104
-        let timeSize = min(max(height * 0.34, 20), 54)
+        // Everything scales off the panel, not fixed points: the clock tracks
+        // both axes (so a wide-but-short pill doesn't strand a tiny clock in
+        // empty glass), and a wide aspect flips to a side-by-side layout.
+        let wide = width > height * 2.3
+        let timeSize = wide
+            ? min(max(height * 0.52, 20), 110)
+            : min(max(min(height * 0.38, width * 0.24), 20), 110)
+        let showTodo = wide ? height >= 64 : height >= 104
         let corner = min(DS.Radius.xl, height * 0.22)
 
-        VStack(spacing: 3) {
-            Text(timer.settings.timeFormat.string(remaining))
-                .font(.dsTimer(timeSize))
-                .foregroundStyle(.white)
-                .shadow(color: .black.opacity(0.35), radius: 4, y: 1)
-                .lineLimit(1)
-                .minimumScaleFactor(0.5)
-                .contentTransition(.numericText())
-                .animation(.snappy(duration: 0.3), value: remaining)
-            Text(timer.phase.label.uppercased())
-                .font(.system(size: max(9, timeSize * 0.3), weight: .heavy, design: .rounded))
-                .tracking(1.2)
-                .foregroundStyle(.white.opacity(0.9))
-                .lineLimit(1)
-
-            if showTodo { activeTaskRow.padding(.top, 3) }
+        Group {
+            if wide {
+                HStack(spacing: max(14, width * 0.05)) {
+                    clock(timeSize)
+                    VStack(alignment: .leading, spacing: max(6, height * 0.08)) {
+                        cycleDots(size: max(5, timeSize * 0.16))
+                        if showTodo { activeTaskRow(scale: timeSize / 54) }
+                    }
+                }
+            } else {
+                VStack(spacing: max(3, height * 0.03)) {
+                    clock(timeSize)
+                    cycleDots(size: max(5, timeSize * 0.14))
+                    if showTodo { activeTaskRow(scale: timeSize / 54).padding(.top, 3) }
+                }
+            }
         }
-        .padding(.horizontal, 16).padding(.vertical, 10)
+        .padding(.horizontal, max(16, width * 0.05))
+        .padding(.vertical, max(10, height * 0.06))
         .frame(width: width, height: height)
         .background {
             ZStack {
@@ -223,29 +230,80 @@ struct FloatingTimerView: View {
         .scaleEffect(phasePulse ? 1.05 : 1.0)
     }
 
-    /// The active task (or a hint), shown only when the panel is enlarged.
+    private func clock(_ size: CGFloat) -> some View {
+        Text(timer.settings.timeFormat.string(max(0, timer.remainingSeconds)))
+            .font(.dsTimer(size))
+            .foregroundStyle(.white)
+            .shadow(color: .black.opacity(0.35), radius: 4, y: 1)
+            .lineLimit(1)
+            .minimumScaleFactor(0.5)
+            .contentTransition(.numericText())
+            .animation(.snappy(duration: 0.3), value: timer.remainingSeconds)
+    }
+
+    /// Wordless phase strip: one dot per pomodoro in the long-break round.
+    /// Filled = done, breathing ring = the one in progress, hollow = ahead.
+    /// During breaks the current dot rests as a half-filled pause chip, so the
+    /// liquid color plus the dots tell the whole story without a label.
     @ViewBuilder
-    private var activeTaskRow: some View {
+    private func cycleDots(size: CGFloat) -> some View {
+        let every = max(1, timer.settings.longBreakEvery)
+        let done = timer.cyclesCompletedInRound % every
+        // While focusing, the active dot is the one after the finished count;
+        // on a break the same dot stays highlighted (its focus just ended or
+        // is about to start).
+        let activeIndex = timer.phase == .focus ? done : done - 1
+        let accent = phaseColors.first ?? .white
+
+        HStack(spacing: size * 0.9) {
+            ForEach(0..<every, id: \.self) { i in
+                ZStack {
+                    Circle().stroke(.white.opacity(i <= activeIndex || i < done ? 0.9 : 0.45),
+                                    lineWidth: 1)
+                    if i < done {
+                        Circle().fill(.white.opacity(0.95))
+                    } else if i == activeIndex {
+                        Circle()
+                            .fill(accent.opacity(0.95))
+                            .padding(size * 0.18)
+                            .opacity(animateDot && timer.isRunning && !reduceMotion ? 0.35 : 1)
+                            .animation(timer.isRunning && !reduceMotion
+                                       ? .easeInOut(duration: 1.4).repeatForever(autoreverses: true)
+                                       : .default, value: animateDot)
+                    }
+                }
+                .frame(width: size, height: size)
+            }
+        }
+        .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+        .onAppear { animateDot = true }
+    }
+
+    /// The active task (or a hint), shown only when the panel is enlarged.
+    /// `scale` tracks the clock size so the pill grows with the panel.
+    @ViewBuilder
+    private func activeTaskRow(scale: CGFloat) -> some View {
+        let s = max(0.8, min(scale, 1.8))
         if let task = tasks.activeTask {
-            HStack(spacing: 6) {
+            HStack(spacing: 6 * s) {
                 Circle().fill(Color(hex: tasks.color(for: task.category)))
-                    .frame(width: 7, height: 7)
+                    .frame(width: 7 * s, height: 7 * s)
                 Text(task.title)
-                    .font(.system(.callout, design: .rounded).weight(.semibold))
+                    .font(.system(size: 13 * s, design: .rounded).weight(.semibold))
                     .foregroundStyle(.white.opacity(0.92))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 if timer.settings.showPomodoroBadges, task.pomodorosDone > 0 {
                     Text("🍅\(task.pomodorosDone)")
-                        .font(.system(.caption2, design: .rounded))
+                        .font(.system(size: 10 * s, design: .rounded))
                         .foregroundStyle(.white.opacity(0.75))
                 }
             }
-            .padding(.horizontal, 10).padding(.vertical, 4)
+            .padding(.horizontal, 10 * s).padding(.vertical, 4 * s)
             .background(Capsule().fill(.white.opacity(0.14)))
         } else {
             Text("No task selected")
-                .font(.system(.caption, design: .rounded))
+                .font(.system(size: 11 * s, design: .rounded))
                 .foregroundStyle(.white.opacity(0.55))
         }
     }
