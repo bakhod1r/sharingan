@@ -28,7 +28,7 @@
 - Full task system: title, priority (P1–P4), tags, projects, categories, due dates, notes, and estimates.
 - Subtasks with their own estimates — reorder them, or promote a subtask into a full task.
 - Recurrence: none, daily, weekdays, weekly, every N days, or monthly (on a chosen day). Completing a recurring task spawns the next occurrence.
-- Natural-language quick add in **English and Uzbek**, e.g. `ertaga 15:00 p1 #ish @blink ~2 hisobot yozish` — with live parse chips while you type.
+- Natural-language quick add in the **world's 25 most-spoken languages** at once, e.g. `ertaga 15:00 p1 #ish @blink ~2 hisobot yozish` — with live parse chips while you type. Recognizes dates (today / tomorrow / day-after-tomorrow / yesterday / next week / weekday names), recurrence (daily / weekly / monthly / weekdays / every N days), relative offsets (`in 2 hours`, `in 3 days`), and natural priority words (`urgent`, `muhim`), across Latin, Cyrillic, Arabic, Indic, and space-less CJK scripts (Chinese/Japanese matched by substring). All languages are live simultaneously, so a line may mix them.
 - Smart views: Today, Upcoming, All, Completed — each with counts. Free-text search over title, tags, project, and notes.
 - Snooze a task to tomorrow, next week, or a picked date; overdue badges.
 - Due reminders with a configurable pre-reminder (default 10 minutes before, or off).

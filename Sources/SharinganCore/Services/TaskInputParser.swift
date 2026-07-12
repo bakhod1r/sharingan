@@ -28,7 +28,18 @@ public struct ParsedTaskInput: Equatable, Sendable {
 }
 
 /// Turns a quick-add line like `ertaga 15:00 p1 #ish @blink ~2 hisobot yozish`
-/// into structured task fields. Pure — pass `now` for deterministic tests.
+/// into structured task fields, in the world's 25 most-spoken languages at once
+/// (see `LocalizedKeywords`). Pure — pass `now` for deterministic tests.
+///
+/// Matching runs in two passes because scripts differ:
+/// 1. **CJK substring scan.** Chinese/Japanese don't put spaces between words, so
+///    `明天开会` ("tomorrow meeting") is scanned character-by-character for the
+///    longest keyword; matched spans are lifted out and the rest is the title.
+/// 2. **Token scan.** The remaining (space-delimited) text is walked token by
+///    token: multi-word phrases first, then symbol tokens (`#tag @proj ~2 p1`,
+///    `15:00`, `12.08`), then compositional `every N days` / `in N hours`, then
+///    single-word keywords. Anything unmatched is kept as the title.
+///
 /// A leading `\` escapes parsing: the rest of the line is the literal title.
 public enum TaskInputParser {
 
@@ -40,25 +51,36 @@ public enum TaskInputParser {
         }
 
         var result = ParsedTaskInput()
-        let words = trimmed.split(separator: " ", omittingEmptySubsequences: true)
+        var datePart: DateComponents?          // day-level phrase (bugun, friday, 12.08)
+        var timePart: (hour: Int, minute: Int)?
+        var offsetDue: Date?                    // absolute due from "in N hours/days"
+
+        // Normalize the apostrophe forms so "aujourd'hui" etc. match, and the
+        // smart quotes the timer parser also handles.
+        let working0 = trimmed
+            .replacingOccurrences(of: "\u{2018}", with: "'")
+            .replacingOccurrences(of: "\u{2019}", with: "'")
+
+        // Pass 1 — pull CJK keywords out of the (space-less) text.
+        var working = working0
+        for concept in scanCJK(&working) {
+            apply(concept, &result, &datePart, now: now)
+        }
+
+        // Pass 2 — walk the space-delimited remainder.
+        let words = working.split(separator: " ", omittingEmptySubsequences: true)
             .map(String.init)
         var kept: [String] = []
-
-        var datePart: DateComponents?   // day-level phrase (today, friday, 12.08)
-        var timePart: (hour: Int, minute: Int)?
-
         var i = 0
         while i < words.count {
             let word = words[i]
             let lower = word.lowercased()
 
-            // Multi-word recurrence phrases first (they'd otherwise be eaten
-            // word-by-word): "every N days", "har N kunda", "har kuni",
-            // "ish kunlari", "har hafta", "har oy", "every day/week/month".
-            if let (rec, consumed) = matchRecurrence(words, at: i) {
-                result.recurrence = rec
-                i += consumed
-                continue
+            // Multi-word keyword phrases (e.g. "next week", "har kuni",
+            // "ish kunlari", "ngày mai") — longest match first.
+            if let (concept, consumed) = matchPhrase(words, at: i) {
+                apply(concept, &result, &datePart, now: now)
+                i += consumed; continue
             }
 
             if lower.hasPrefix("#"), word.count > 1 {
@@ -66,11 +88,7 @@ public enum TaskInputParser {
                 i += 1; continue
             }
             if lower.hasPrefix("@"), word.count > 1 {
-                // First @project wins; later ones are treated as consumed
-                // tokens (never leak into the title).
-                if result.project == nil {
-                    result.project = String(word.dropFirst())
-                }
+                if result.project == nil { result.project = String(word.dropFirst()) }
                 i += 1; continue
             }
             if lower.hasPrefix("~"), let n = Int(word.dropFirst()), n > 0 {
@@ -81,7 +99,7 @@ public enum TaskInputParser {
                 result.priority = p
                 i += 1; continue
             }
-            if let dc = dayPhrase(lower, now: now) {
+            if let dc = numericDayMonth(lower, now: now) {
                 datePart = dc
                 i += 1; continue
             }
@@ -89,16 +107,72 @@ public enum TaskInputParser {
                 timePart = t
                 i += 1; continue
             }
+
+            // Compositional: "every N days" (recurrence) and "in N hours"
+            // (a due offset). Markers only fire with a valid number + unit
+            // after them, so a bare "in"/"every" stays in the title.
+            if lookups.every.contains(lower),
+               let (rec, consumed) = matchEvery(words, at: i) {
+                result.recurrence = rec
+                i += consumed; continue
+            }
+            if lookups.within.contains(lower),
+               let (date, consumed) = matchWithin(words, at: i, now: now) {
+                offsetDue = date
+                i += consumed; continue
+            }
+
+            // Single-word keywords.
+            if let w = lookups.singleDay[lower] {
+                datePart = components(for: w, now: now)
+                i += 1; continue
+            }
+            if let r = lookups.singleRecur[lower] {
+                result.recurrence = r
+                i += 1; continue
+            }
+            if let p = lookups.singlePriority[lower] {
+                result.priority = p
+                i += 1; continue
+            }
+
             kept.append(word)
             i += 1
         }
+
         result.title = kept.joined(separator: " ")
             .trimmingCharacters(in: .whitespaces)
-        result.dueDate = combine(datePart, timePart, now: now)
+        result.dueDate = combine(datePart, timePart, now: now) ?? offsetDue
         return result
     }
 
-    // MARK: - Tokens
+    // MARK: - Concepts
+
+    /// A day-level phrase the parser can recognize across languages.
+    enum DayWord: Equatable {
+        case today, tomorrow, dayAfterTomorrow, yesterday, nextWeek
+        case weekday(Int)   // Calendar weekday number, 1 = Sunday … 7 = Saturday
+    }
+
+    /// What a matched keyword means. `recur`/`priority` never touch the date.
+    enum Concept {
+        case day(DayWord)
+        case recur(Recurrence)
+        case priority(TaskPriority)
+    }
+
+    private static func apply(_ concept: Concept,
+                              _ result: inout ParsedTaskInput,
+                              _ datePart: inout DateComponents?,
+                              now: Date) {
+        switch concept {
+        case .day(let w):      datePart = components(for: w, now: now)
+        case .recur(let r):    result.recurrence = r
+        case .priority(let p): result.priority = p
+        }
+    }
+
+    // MARK: - Token helpers
 
     private static func priorityToken(_ w: String) -> TaskPriority? {
         switch w {
@@ -110,48 +184,20 @@ public enum TaskInputParser {
         }
     }
 
-    private static let weekdayNames: [String: Int] = [
-        // Calendar weekday numbers: 1 = Sunday … 7 = Saturday.
-        "sunday": 1, "monday": 2, "tuesday": 3, "wednesday": 4,
-        "thursday": 5, "friday": 6, "saturday": 7,
-        "yakshanba": 1, "dushanba": 2, "seshanba": 3, "chorshanba": 4,
-        "payshanba": 5, "juma": 6, "shanba": 7,
-    ]
-
-    /// Day-level phrases: today/bugun, tomorrow/ertaga, weekday names,
-    /// `12.08` / `12/08` (day.month).
-    private static func dayPhrase(_ w: String, now: Date) -> DateComponents? {
+    /// `12.08` / `12/08` — day.month, next occurrence (this year or next).
+    private static func numericDayMonth(_ w: String, now: Date) -> DateComponents? {
         let cal = Calendar.current
-        switch w {
-        case "today", "bugun":
-            return cal.dateComponents([.year, .month, .day], from: now)
-        case "tomorrow", "ertaga":
-            let d = cal.date(byAdding: .day, value: 1, to: now)!
-            return cal.dateComponents([.year, .month, .day], from: d)
-        default:
-            break
-        }
-        if let target = weekdayNames[w] {
-            var d = cal.date(byAdding: .day, value: 1, to: now)!
-            while cal.component(.weekday, from: d) != target {
-                d = cal.date(byAdding: .day, value: 1, to: d)!
-            }
-            return cal.dateComponents([.year, .month, .day], from: d)
-        }
-        // 12.08 or 12/08 — day.month, next occurrence (this year or next).
         let parts = w.split(whereSeparator: { $0 == "." || $0 == "/" })
-        if parts.count == 2,
-           let day = Int(parts[0]), let month = Int(parts[1]),
-           (1...31).contains(day), (1...12).contains(month) {
-            var c = cal.dateComponents([.year], from: now)
-            c.day = day; c.month = month
-            if let candidate = cal.date(from: c), candidate < cal.startOfDay(for: now) {
-                c.year! += 1
-            }
-            guard cal.date(from: c) != nil else { return nil }
-            return c
+        guard parts.count == 2,
+              let day = Int(parts[0]), let month = Int(parts[1]),
+              (1...31).contains(day), (1...12).contains(month) else { return nil }
+        var c = cal.dateComponents([.year], from: now)
+        c.day = day; c.month = month
+        if let candidate = cal.date(from: c), candidate < cal.startOfDay(for: now) {
+            c.year! += 1
         }
-        return nil
+        guard cal.date(from: c) != nil else { return nil }
+        return c
     }
 
     /// `15:00`, `9:30`, `5pm`, `11am`.
@@ -174,56 +220,129 @@ public enum TaskInputParser {
         guard (0...23).contains(hour), (0...59).contains(minute) else { return nil }
         if isTwelveHour {
             guard (1...12).contains(hour) else { return nil }
-            let h24 = (hour % 12) + pmShift
-            return (h24, minute)
+            return ((hour % 12) + pmShift, minute)
         }
         return (hour, minute)
     }
 
-    private static func matchRecurrence(_ words: [String], at i: Int) -> (Recurrence, Int)? {
-        let lower = words[i].lowercased()
-        let next = i + 1 < words.count ? words[i + 1].lowercased() : nil
-        let third = i + 2 < words.count ? words[i + 2].lowercased() : nil
+    /// Longest multi-word phrase starting at `i` (lower-cased comparison).
+    private static func matchPhrase(_ words: [String], at i: Int) -> (Concept, Int)? {
+        for entry in lookups.phrases {   // pre-sorted: most tokens first
+            let n = entry.tokens.count
+            guard i + n <= words.count else { continue }
+            var ok = true
+            for k in 0..<n where words[i + k].lowercased() != entry.tokens[k] {
+                ok = false; break
+            }
+            if ok { return (entry.concept, n) }
+        }
+        return nil
+    }
 
-        switch lower {
-        case "daily":    return (.daily, 1)
-        case "weekdays": return (.weekdays, 1)
-        case "weekly":   return (.weekly, 1)
-        case "monthly":  return (.monthly(1), 1)
-        case "every":
-            guard let next else { return nil }
-            switch next {
-            case "day":   return (.daily, 2)
-            case "week":  return (.weekly, 2)
-            case "month": return (.monthly(1), 2)
-            default:
-                if let n = Int(next), n > 0,
-                   let third, third == "days" || third == "day" {
-                    return (.everyNDays(n), 3)
-                }
-                return nil
-            }
-        case "har":
-            guard let next else { return nil }
-            switch next {
-            case "kuni":  return (.daily, 2)
-            case "hafta": return (.weekly, 2)
-            case "oy":    return (.monthly(1), 2)
-            default:
-                if let n = Int(next), n > 0, third == "kunda" {
-                    return (.everyNDays(n), 3)
-                }
-                return nil
-            }
-        case "ish":
-            if next == "kunlari" { return (.weekdays, 2) }
-            return nil
+    /// `every [N] <unit>` → recurrence. `every day/week` and `every N days`.
+    private static func matchEvery(_ words: [String], at i: Int) -> (Recurrence, Int)? {
+        guard i + 1 < words.count else { return nil }
+        let next = words[i + 1].lowercased()
+        if lookups.dayUnit.contains(next)  { return (.daily, 2) }
+        if lookups.weekUnit.contains(next) { return (.weekly, 2) }
+        // "every 3 days" — number then a day unit.
+        if let n = Int(next), n > 0, i + 2 < words.count,
+           lookups.dayUnit.contains(words[i + 2].lowercased()) {
+            return (.everyNDays(n), 3)
+        }
+        return nil
+    }
+
+    /// `in N <unit>` → an absolute due date `N` units from `now`.
+    private static func matchWithin(_ words: [String], at i: Int, now: Date) -> (Date, Int)? {
+        guard i + 2 < words.count, let n = Int(words[i + 1]), n > 0 else { return nil }
+        let unit = words[i + 2].lowercased()
+        let cal = Calendar.current
+        let date: Date?
+        if lookups.dayUnit.contains(unit)         { date = cal.date(byAdding: .day, value: n, to: now) }
+        else if lookups.weekUnit.contains(unit)   { date = cal.date(byAdding: .day, value: n * 7, to: now) }
+        else if lookups.hourUnit.contains(unit)   { date = cal.date(byAdding: .hour, value: n, to: now) }
+        else if lookups.minuteUnit.contains(unit) { date = cal.date(byAdding: .minute, value: n, to: now) }
+        else { return nil }
+        return date.map { ($0, 3) }
+    }
+
+    // MARK: - CJK substring scan
+
+    /// Whether a scalar belongs to a script that is written without spaces
+    /// between words (so it must be matched by substring, not by token).
+    /// Hiragana, Katakana, and CJK ideographs — deliberately NOT Hangul, which
+    /// spaces its words and so goes through the normal token path.
+    static func isSpacelessScript(_ scalar: Unicode.Scalar) -> Bool {
+        switch scalar.value {
+        case 0x3040...0x30FF,   // Hiragana + Katakana
+             0x3400...0x4DBF,   // CJK Extension A
+             0x4E00...0x9FFF,   // CJK Unified Ideographs
+             0xF900...0xFAFF:   // CJK Compatibility Ideographs
+            return true
         default:
-            return nil
+            return false
         }
     }
 
+    private static func containsSpacelessScript(_ s: String) -> Bool {
+        s.unicodeScalars.contains(where: isSpacelessScript)
+    }
+
+    /// Lift every CJK keyword out of `text` (longest match wins), replacing each
+    /// with a space so neighbours don't fuse and the leftover becomes the title.
+    private static func scanCJK(_ text: inout String) -> [Concept] {
+        guard containsSpacelessScript(text) else { return [] }
+        let chars = Array(text)
+        var out: [Character] = []
+        var concepts: [Concept] = []
+        var idx = 0
+        while idx < chars.count {
+            var matched = false
+            if let bucket = lookups.cjkByFirst[chars[idx]] {
+                for entry in bucket {   // pre-sorted: longest surface first
+                    let n = entry.surface.count
+                    if idx + n <= chars.count,
+                       Array(chars[idx..<idx + n]) == entry.surface {
+                        concepts.append(entry.concept)
+                        out.append(" ")
+                        idx += n
+                        matched = true
+                        break
+                    }
+                }
+            }
+            if !matched {
+                out.append(chars[idx])
+                idx += 1
+            }
+        }
+        text = String(out)
+        return concepts
+    }
+
     // MARK: - Date assembly
+
+    private static func components(for w: DayWord, now: Date) -> DateComponents {
+        let cal = Calendar.current
+        func day(_ offset: Int) -> DateComponents {
+            let d = cal.date(byAdding: .day, value: offset, to: now)!
+            return cal.dateComponents([.year, .month, .day], from: d)
+        }
+        switch w {
+        case .today:             return day(0)
+        case .tomorrow:          return day(1)
+        case .dayAfterTomorrow:  return day(2)
+        case .yesterday:         return day(-1)
+        case .nextWeek:          return day(7)
+        case .weekday(let target):
+            var d = cal.date(byAdding: .day, value: 1, to: now)!
+            while cal.component(.weekday, from: d) != target {
+                d = cal.date(byAdding: .day, value: 1, to: d)!
+            }
+            return cal.dateComponents([.year, .month, .day], from: d)
+        }
+    }
 
     private static func combine(_ day: DateComponents?,
                                 _ time: (hour: Int, minute: Int)?,
@@ -240,12 +359,81 @@ public enum TaskInputParser {
             d.hour = t.hour; d.minute = t.minute
             return cal.date(from: d)
         case (nil, let t?):
-            // Bare time: today if still ahead, otherwise tomorrow.
             var c = cal.dateComponents([.year, .month, .day], from: now)
             c.hour = t.hour; c.minute = t.minute
             guard let candidate = cal.date(from: c) else { return nil }
             return candidate > now ? candidate
                 : cal.date(byAdding: .day, value: 1, to: candidate)
         }
+    }
+
+    // MARK: - Lookups (built once from LocalizedKeywords)
+
+    struct Lookups {
+        var singleDay: [String: DayWord] = [:]
+        var singleRecur: [String: Recurrence] = [:]
+        var singlePriority: [String: TaskPriority] = [:]
+        /// Multi-token phrases, sorted with the most tokens first (greedy match).
+        var phrases: [(tokens: [String], concept: Concept)] = []
+        /// CJK surfaces bucketed by first character, each bucket longest-first.
+        var cjkByFirst: [Character: [(surface: [Character], concept: Concept)]] = [:]
+        var every: Set<String> = []
+        var within: Set<String> = []
+        var dayUnit: Set<String> = []
+        var weekUnit: Set<String> = []
+        var hourUnit: Set<String> = []
+        var minuteUnit: Set<String> = []
+    }
+
+    static let lookups: Lookups = buildLookups()
+
+    private static func buildLookups() -> Lookups {
+        var L = Lookups()
+
+        func route(_ surface: String, _ concept: Concept) {
+            let s = surface.lowercased()
+            guard !s.isEmpty else { return }
+            if containsSpacelessScript(s) {
+                let chars = Array(s)
+                L.cjkByFirst[chars[0], default: []].append((chars, concept))
+            } else if s.contains(" ") {
+                L.phrases.append((s.split(separator: " ").map(String.init), concept))
+            } else {
+                switch concept {
+                case .day(let w):      L.singleDay[s] = w
+                case .recur(let r):    L.singleRecur[s] = r
+                case .priority(let p): L.singlePriority[s] = p
+                }
+            }
+        }
+
+        for lang in LocalizedKeywords.all {
+            lang.today.forEach            { route($0, .day(.today)) }
+            lang.tomorrow.forEach         { route($0, .day(.tomorrow)) }
+            lang.dayAfterTomorrow.forEach { route($0, .day(.dayAfterTomorrow)) }
+            lang.yesterday.forEach        { route($0, .day(.yesterday)) }
+            lang.nextWeek.forEach         { route($0, .day(.nextWeek)) }
+            for (idx, synonyms) in lang.weekdays.enumerated() {
+                synonyms.forEach { route($0, .day(.weekday(idx + 1))) }
+            }
+            lang.daily.forEach          { route($0, .recur(.daily)) }
+            lang.weekly.forEach         { route($0, .recur(.weekly)) }
+            lang.monthly.forEach        { route($0, .recur(.monthly(1))) }
+            lang.weekdaysRecur.forEach  { route($0, .recur(.weekdays)) }
+            lang.priorityHigh.forEach   { route($0, .priority(.high)) }
+
+            lang.every.forEach      { L.every.insert($0.lowercased()) }
+            lang.within.forEach     { L.within.insert($0.lowercased()) }
+            lang.dayUnit.forEach    { L.dayUnit.insert($0.lowercased()) }
+            lang.weekUnit.forEach   { L.weekUnit.insert($0.lowercased()) }
+            lang.hourUnit.forEach   { L.hourUnit.insert($0.lowercased()) }
+            lang.minuteUnit.forEach { L.minuteUnit.insert($0.lowercased()) }
+        }
+
+        L.phrases.sort { $0.tokens.count > $1.tokens.count }
+        for key in L.cjkByFirst.keys {
+            L.cjkByFirst[key]?.sort { $0.surface.count > $1.surface.count }
+        }
+        return L
     }
 }
