@@ -17,7 +17,7 @@ struct WeeklyBoardView: View {
     @State private var targetedColumn: String?
     /// Draft for the quick-add field in the Unscheduled column.
     @State private var backlogDraft = ""
-    /// Task being edited in the full editor sheet (context menu → Edit…).
+    /// Task being edited in the full editor sheet (click a card, or context menu → Edit…).
     @State private var editorTask: TaskItem?
 
     private let columnWidth: CGFloat = 204
@@ -398,6 +398,8 @@ struct WeeklyBoardView: View {
         .scaleEffect(hovered ? 1.035 : 1)
         .shadow(color: .black.opacity(hovered ? 0.3 : 0.12), radius: hovered ? 9 : 4, y: hovered ? 5 : 2)
         .animation(DS.Motion.standard, value: hovered)
+        .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        .onTapGesture { editorTask = task }
         .onHover { inside in
             hoveredCard = inside ? task.id : (hoveredCard == task.id ? nil : hoveredCard)
         }
