@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sharingan — Pomodoro & Eye-Health App for macOS</title>
+  <meta name="description" content="Sharingan is a free macOS menu-bar Pomodoro and eye-health app: enforced screen breaks, camera-verified eye exercises, tasks with natural-language input, streaks, and a live Sharingan wallpaper.">
+  <link rel="canonical" href="https://bakhod1r.github.io/Blink/">
+  <meta name="theme-color" content="#0a0b0d">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Sharingan — Pomodoro & Eye-Health App for macOS">
+  <meta property="og:description" content="Enforced breaks, camera-verified eye exercises, tasks, streaks — and a desktop that watches back.">
+  <meta property="og:url" content="https://bakhod1r.github.io/Blink/">
+  <meta property="og:image" content="https://bakhod1r.github.io/Blink/assets/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Sharingan — Pomodoro & Eye-Health App for macOS">
+  <meta name="twitter:description" content="Enforced breaks, camera-verified eye exercises, tasks, streaks — and a desktop that watches back.">
+  <meta name="twitter:image" content="https://bakhod1r.github.io/Blink/assets/og-image.png">
+  <link rel="icon" href="assets/favicon.ico" sizes="32x32">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Sharingan",
+    "operatingSystem": "macOS 14.0 or later",
+    "applicationCategory": "UtilitiesApplication",
+    "description": "Pomodoro and eye-health app for macOS with enforced breaks, camera-verified eye exercises, task management, streaks, and a live wallpaper.",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "downloadUrl": "https://github.com/bakhod1r/Blink/releases/latest/download/Sharingan.dmg",
+    "author": { "@type": "Person", "name": "mrb" },
+    "url": "https://bakhod1r.github.io/Blink/"
+  }
+  </script>
+</head>
+<body>
+  <canvas id="bg-eyes" aria-hidden="true"></canvas>
+  <div class="bg-fallback" aria-hidden="true"></div>
+
+  <header class="nav">
+    <a class="brand" href="#">Sharingan<span class="brand-dot">.</span></a>
+    <nav aria-label="Primary">
+      <a href="#features">Features</a>
+      <a href="#wallpaper">Wallpaper</a>
+      <a href="#cli">CLI</a>
+      <a class="btn btn-ghost js-github" href="https://github.com/bakhod1r/Blink">GitHub</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <p class="eyebrow" data-reveal>For macOS — free &amp; open</p>
+      <h1 data-reveal>Your eyes deserve<br><span class="red">a guardian</span>.</h1>
+      <p class="sub" data-reveal>Sharingan is a menu-bar Pomodoro &amp; eye-health companion —
+        enforced screen breaks, camera-verified eye exercises, tasks, streaks,
+        and a desktop that watches back.</p>
+      <div class="cta-row" data-reveal>
+        <a class="btn btn-red js-download" href="https://github.com/bakhod1r/Blink/releases/latest/download/Sharingan.dmg">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1v9.3L4.7 7 3.5 8.2 8 12.7l4.5-4.5L11.3 7 8 10.3V1H8zM2 13.5h12V15H2v-1.5z"/></svg>
+          Download for Mac
+        </a>
+        <span class="cta-meta">v1.0.0 · macOS 14+ · Apple Silicon · free</span>
+      </div>
+      <div class="scroll-hint" aria-hidden="true"><span></span></div>
+    </section>
+
+    <section id="features" aria-labelledby="features-h">
+      <p class="eyebrow" data-reveal>Features</p>
+      <h2 id="features-h" data-reveal>Everything a tired pair of eyes needs</h2>
+      <ul class="grid">
+        <li class="card" data-reveal>
+          <h3>Pomodoro, your rules</h3>
+          <p>Countdown or count-up, custom focus and break lengths, long breaks every N rounds, auto-start and repeat.</p>
+        </li>
+        <li class="card" data-reveal>
+          <h3>Breaks you can't skip past</h3>
+          <p>A full-screen liquid-glass overlay on every monitor. ⌘Q, ⌘W and app switching stay blocked until your eyes rest.</p>
+        </li>
+        <li class="card" data-reveal>
+          <h3>Camera-verified exercises</h3>
+          <p>20-20-20, 8-direction gaze and blink drills — validated live on-device with Vision face landmarks.</p>
+        </li>
+        <li class="card" data-reveal>
+          <h3>Private by design</h3>
+          <p>Blink and gaze detection run entirely on your Mac, with a pulsing indicator whenever the camera is on.</p>
+        </li>
+        <li class="card" data-reveal>
+          <h3>Floating timer</h3>
+          <p>An always-on-top glass chip that joins every Space. Drag it anywhere; it steps aside during breaks.</p>
+        </li>
+        <li class="card" data-reveal>
+          <h3>Tasks &amp; focus queue</h3>
+          <p>Priorities P1–P4, tags, projects, subtasks, recurrence. Queue tasks — each pomodoro advances to the next.</p>
+        </li>
+        <li class="card" data-reveal>
+          <h3>Natural-language input</h3>
+          <p>“tomorrow 15:00 p1 #work report”, “5pm”, “+15m” — English and Uzbek shorthand, parsed live.</p>
+        </li>
+        <li class="card" data-reveal>
+          <h3>Streaks &amp; milestones</h3>
+          <p>Daily streaks with badges at 1, 7, 14, 30, 90 and 365 days, plus 7/30-day focus charts.</p>
+        </li>
+        <li class="card" data-reveal>
+          <h3>Break comfort</h3>
+          <p>Rain, forest, white-noise or lo-fi ambience, smooth screen dimming, posture and water reminders.</p>
+        </li>
+        <li class="card" data-reveal>
+          <h3>App blocking</h3>
+          <p>Hide or force-quit Chrome, Slack, Telegram and friends the moment a break starts.</p>
+        </li>
+        <li class="card" data-reveal>
+          <h3>iCloud sync</h3>
+          <p>Settings and streaks follow you to every Mac through your private CloudKit database.</p>
+        </li>
+        <li class="card" data-reveal>
+          <h3>Six themes + CLI</h3>
+          <p>Liquid Glass, Frosted, Midnight, Cream, Neon, Mono — and the <code>tired</code> CLI for everything.</p>
+        </li>
+      </ul>
+    </section>
+
+    <section id="wallpaper" aria-labelledby="wallpaper-h">
+      <p class="eyebrow" data-reveal>Live wallpaper</p>
+      <h2 id="wallpaper-h" data-reveal>A desktop that watches back</h2>
+      <p class="section-sub" data-reveal>Sharingan ships a live wallpaper: two eyes on your desktop that follow
+         your cursor, blink, wink when you're idle, doze off when you're away —
+         and wake with the next pattern in the evolution chain.
+         <strong>This page's background is that same engine, rebuilt in WebGL.</strong></p>
+      <div class="demo-card" data-reveal>
+        <canvas id="demo-eye" aria-label="Interactive Sharingan eye demo"></canvas>
+        <div class="pattern-picker" role="group" aria-label="Eye pattern">
+          <button type="button" data-pattern="0">1 tomoe</button>
+          <button type="button" data-pattern="1">2 tomoe</button>
+          <button type="button" data-pattern="2" class="active">3 tomoe</button>
+          <button type="button" data-pattern="3">Mangekyō</button>
+          <button type="button" data-pattern="4">Rinnegan</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="cli" aria-labelledby="cli-h">
+      <p class="eyebrow" data-reveal>Automation</p>
+      <h2 id="cli-h" data-reveal>Terminal-grade control</h2>
+      <p class="section-sub" data-reveal>The <code>tired</code> CLI and a <code>sharingan://</code> URL scheme
+         drive the timer from Terminal, Shortcuts or Raycast.</p>
+      <div class="terminal" role="img" aria-label="Terminal showing tired CLI commands" data-reveal>
+        <div class="terminal-bar" aria-hidden="true"><span></span><span></span><span></span><em>tired — zsh</em></div>
+        <pre id="terminal-body"></pre>
+      </div>
+    </section>
+
+    <section id="download" aria-labelledby="download-h">
+      <h2 id="download-h" data-reveal>Rest your eyes.<br>Keep your streak.</h2>
+      <p class="section-sub" data-reveal>Free download. No account, no tracking — camera frames never leave your Mac.</p>
+      <div data-reveal>
+        <a class="btn btn-red btn-lg js-download" href="https://github.com/bakhod1r/Blink/releases/latest/download/Sharingan.dmg">Download Sharingan.dmg</a>
+        <p class="cta-meta">macOS 14+ · Apple Silicon</p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>© <span id="year">2026</span> mrb · <a class="js-github" href="https://github.com/bakhod1r/Blink">Source on GitHub</a></p>
+  </footer>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
