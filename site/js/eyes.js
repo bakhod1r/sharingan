@@ -11,42 +11,54 @@ const IDLE_SPIN_DELAY = 1.2; // s of stillness before tomoe start spinning
 const WINK_IDLE_DELAY = 6; // s of stillness before playful winks
 const DOZE_DELAY = 45; // s of stillness before the eyes drift shut
 
-const IRIS_VERT = /* glsl */ `
-  varying vec2 vUv;
+// The iris is painted directly onto the eyeball sphere (polar projection
+// around the +z pole) — a separate flat disc would sit inside the sphere
+// and be occluded by its front cap.
+const EYE_VERT = /* glsl */ `
+  varying vec3 vNorm;
   void main() {
-    vUv = uv;
+    vNorm = position; // unit sphere: position == normal (object space)
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }
 `;
 
-const IRIS_FRAG = /* glsl */ `
+const EYE_FRAG = /* glsl */ `
   precision highp float;
-  varying vec2 vUv;
+  varying vec3 vNorm;
   uniform float uSpin;
   uniform float uEmergence;
   uniform int uPattern;
 
   #define PI 3.14159265359
+  #define IRIS_SIN 0.57
 
-  // Signed coverage of one tomoe (comma) whose head sits on the orbit ring
-  // at angle "th": a round head plus an arc tail that tapers to nothing.
+  // Coverage of one tomoe (comma) whose head sits on the orbit ring at
+  // angle "th": a round head plus an arc tail that tapers to nothing.
   float tomoe(vec2 p, float r, float a, float th, float orbit) {
     vec2 head = orbit * vec2(cos(th), sin(th));
-    float cov = smoothstep(0.012, -0.012, length(p - head) - 0.105);
+    float cov = 1.0 - smoothstep(-0.012, 0.012, length(p - head) - 0.105);
     float da = mod(a - th, 2.0 * PI); // trailing angle behind the head
     float span = 1.35;
     if (da > 0.0 && da < span) {
       float t = da / span;
       float w = 0.095 * pow(1.0 - t, 1.6);
       float ring = abs(r - (orbit + 0.045 * sin(t * PI))) - w;
-      cov = max(cov, smoothstep(0.012, -0.012, ring));
+      cov = max(cov, 1.0 - smoothstep(-0.012, 0.012, ring));
     }
     return cov;
   }
 
   void main() {
-    vec2 p = (vUv - 0.5) * 2.0; // iris space, rim at |p| = 1
+    vec3 n = normalize(vNorm);
+    // anime sclera: near-black shell with a soft vertical gradient
+    vec3 sclera = mix(vec3(0.045, 0.048, 0.058), vec3(0.10, 0.105, 0.12),
+                      (n.y + 1.0) * 0.5);
+    if (n.z <= 0.0) { gl_FragColor = vec4(sclera, 1.0); return; }
+
+    vec2 p = n.xy / IRIS_SIN; // iris space, rim at |p| = 1
     float r = length(p);
+    if (r >= 1.12) { gl_FragColor = vec4(sclera, 1.0); return; }
+
     float a = atan(p.y, p.x);
     float e = max(uEmergence, 0.0001);
 
@@ -59,7 +71,7 @@ const IRIS_FRAG = /* glsl */ `
       col = mix(vec3(0.82, 0.10, 0.16), vec3(0.38, 0.015, 0.045),
                 smoothstep(0.12, 1.0, r));
       // faint radial fibres for depth
-      col *= 1.0 + 0.05 * sin(a * 60.0) * smoothstep(0.2, 0.7, r);
+      col *= 1.0 + 0.022 * sin(a * 60.0) * smoothstep(0.2, 0.7, r);
     }
 
     // -- pattern ink ----------------------------------------------------
@@ -69,12 +81,12 @@ const IRIS_FRAG = /* glsl */ `
     float ae = a - (1.0 - e) * 2.2; // slight counter-twist while emerging
 
     if (uPattern <= 2) {
-      float n = float(uPattern + 1);
+      float cnt = float(uPattern + 1);
       // thin ring through the tomoe orbit
-      ink = max(ink, smoothstep(0.010, 0.002, abs(re - 0.5) - 0.008));
+      ink = max(ink, 1.0 - smoothstep(0.002, 0.010, abs(re - 0.5) - 0.008));
       for (int i = 0; i < 3; i++) {
-        if (i >= int(n)) break;
-        float th = uSpin + float(i) * 2.0 * PI / n;
+        if (i >= int(cnt)) break;
+        float th = uSpin + float(i) * 2.0 * PI / cnt;
         ink = max(ink, tomoe(pe, re, ae, th, 0.5));
       }
     } else if (uPattern == 3) {
@@ -82,15 +94,16 @@ const IRIS_FRAG = /* glsl */ `
       float sector = 2.0 * PI / 3.0;
       float ang = mod(ae + uSpin + 2.2 * (re - 0.2), sector) - sector * 0.5;
       float w = mix(0.34, 0.05, smoothstep(0.16, 0.85, re));
-      float blade = smoothstep(0.03, -0.03, abs(ang) - w)
-                  * smoothstep(0.95, 0.85, re) * smoothstep(0.14, 0.2, re);
+      float blade = (1.0 - smoothstep(-0.03, 0.03, abs(ang) - w))
+                  * (1.0 - smoothstep(0.85, 0.95, re))
+                  * smoothstep(0.14, 0.2, re);
       ink = max(ink, blade);
-      ink = max(ink, smoothstep(0.010, 0.002, abs(re - 0.62) - 0.006));
+      ink = max(ink, 1.0 - smoothstep(0.002, 0.010, abs(re - 0.62) - 0.006));
     } else {
       // Rinnegan: concentric rings, no spin
       for (int i = 1; i <= 4; i++) {
         float rr = float(i) * 0.21;
-        ink = max(ink, smoothstep(0.011, 0.003, abs(re - rr) - 0.006));
+        ink = max(ink, 1.0 - smoothstep(0.003, 0.011, abs(re - rr) - 0.006));
       }
     }
     ink *= smoothstep(0.0, 0.15, uEmergence);
@@ -100,13 +113,14 @@ const IRIS_FRAG = /* glsl */ `
     float pupil = (uPattern == 4) ? 0.13 : 0.17;
     col = mix(vec3(0.0), col, smoothstep(pupil - 0.015, pupil + 0.015, r));
 
-    // -- rim + fake gloss -----------------------------------------------
+    // -- limbus rim + fake gloss ----------------------------------------
     col = mix(col, vec3(0.05, 0.005, 0.012), smoothstep(0.88, 0.99, r));
+    col = mix(col, sclera, smoothstep(1.0, 1.12, r)); // blend into sclera
     col *= 1.0 - 0.16 * smoothstep(0.0, 1.5, length(p - vec2(-0.5, 0.55)));
-    col += vec3(0.10, 0.02, 0.03) * smoothstep(0.5, 0.0, length(p - vec2(-0.32, 0.38)));
+    col += vec3(0.10, 0.02, 0.03)
+         * (1.0 - smoothstep(0.0, 0.5, length(p - vec2(-0.32, 0.38))));
 
-    float alpha = smoothstep(1.0, 0.985, r);
-    gl_FragColor = vec4(col, alpha);
+    gl_FragColor = vec4(col, 1.0);
   }
 `;
 
@@ -158,47 +172,41 @@ function buildEye(glowTexture) {
       blending: THREE.AdditiveBlending,
       depthTest: false,
       depthWrite: false,
-      opacity: 0.9,
+      opacity: 0.7,
     })
   );
-  glow.scale.setScalar(3.6);
+  glow.scale.setScalar(3.3);
   glow.renderOrder = -1;
   group.add(glow);
 
-  // The ball that actually rotates toward the cursor.
+  // The ball that actually rotates toward the cursor. Sclera + iris live in
+  // one shader on the sphere itself, so the iris hugs the surface.
   const ball = new THREE.Group();
 
-  const sclera = new THREE.Mesh(
-    new THREE.SphereGeometry(1, 48, 48),
-    new THREE.MeshStandardMaterial({ color: 0x17181c, roughness: 0.35 })
-  );
-  ball.add(sclera);
-
   const irisMat = new THREE.ShaderMaterial({
-    vertexShader: IRIS_VERT,
-    fragmentShader: IRIS_FRAG,
-    transparent: true,
+    vertexShader: EYE_VERT,
+    fragmentShader: EYE_FRAG,
     uniforms: {
       uSpin: { value: 0 },
       uEmergence: { value: 0 },
       uPattern: { value: 2 },
     },
   });
-  const iris = new THREE.Mesh(new THREE.CircleGeometry(0.57, 64), irisMat);
-  iris.position.z = 0.822;
-  ball.add(iris);
+  const eyeball = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 64), irisMat);
+  ball.add(eyeball);
 
+  // glossy anime highlights — float just off the surface so they read
   const hl = new THREE.Mesh(
     new THREE.CircleGeometry(0.085, 32),
     new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 })
   );
-  hl.position.set(-0.17, 0.2, 0.9);
+  hl.position.set(-0.17, 0.2, 1.012);
   ball.add(hl);
   const hl2 = new THREE.Mesh(
     new THREE.CircleGeometry(0.038, 24),
     new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 })
   );
-  hl2.position.set(0.14, -0.12, 0.93);
+  hl2.position.set(0.14, -0.12, 1.012);
   ball.add(hl2);
 
   group.add(ball);
@@ -234,11 +242,11 @@ export function initEyes(canvas, opts = {}) {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 50);
   camera.position.z = 10;
-
-  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-  const key = new THREE.DirectionalLight(0xffffff, 1.1);
-  key.position.set(-3, 4, 6);
-  scene.add(key);
+  // gazeTarget() projects through matrixWorldInverse on the very first frame,
+  // BEFORE the first render has updated camera matrices — with a stale
+  // identity view matrix the eyes sit at w=0 and project() yields NaN,
+  // which the rotation lerp then locks in forever.
+  camera.updateMatrixWorld();
 
   const rig = new THREE.Group(); // scroll parallax target
   scene.add(rig);
@@ -286,10 +294,16 @@ export function initEyes(canvas, opts = {}) {
     camera.updateProjectionMatrix();
     const worldPerPx = (2 * camera.position.z * Math.tan((camera.fov * Math.PI) / 360)) / h;
     if (eyeCount === 2) {
-      // wallpaper composition: eyes at 32% / 68% width, slightly above fold
-      const scale = (Math.min(w * 0.17, h * 0.21) * worldPerPx) / 1;
-      eyes[0].group.position.set(-0.18 * w * worldPerPx, 0.35, 0);
-      eyes[1].group.position.set(0.18 * w * worldPerPx, 0.35, 0);
+      // wallpaper composition: eyes at 32% / 68% width, hovering in the
+      // upper third so the hero headline sits beneath their gaze
+      const visH = 2 * camera.position.z * Math.tan((camera.fov * Math.PI) / 360);
+      const portrait = h > w;
+      const scale = portrait
+        ? Math.min(w * 0.13, h * 0.16) * worldPerPx
+        : Math.min(w * 0.16, h * 0.2) * worldPerPx;
+      const y = visH * (portrait ? 0.28 : 0.2);
+      eyes[0].group.position.set(-0.18 * w * worldPerPx, y, 0);
+      eyes[1].group.position.set(0.18 * w * worldPerPx, y, 0);
       eyes.forEach((e) => e.group.scale.setScalar(scale));
     } else {
       const scale = Math.min(w, h) * 0.31 * worldPerPx;
@@ -437,7 +451,7 @@ export function initEyes(canvas, opts = {}) {
       const g = gazeTarget(eye, t);
       eye.ball.rotation.y += (g.yaw - eye.ball.rotation.y) * Math.min(1, dt * 6);
       eye.ball.rotation.x += (g.pitch - eye.ball.rotation.x) * Math.min(1, dt * 6);
-      eye.glow.scale.setScalar(3.6 + glowPulse * 0.7);
+      eye.glow.scale.setScalar(3.3 + glowPulse * 0.7);
     }
 
     if (eyeCount === 2) {
@@ -468,6 +482,11 @@ export function initEyes(canvas, opts = {}) {
   }
   const onVisibility = () => (document.hidden ? stop() : start());
   document.addEventListener("visibilitychange", onVisibility);
+
+  if (location.hash === "#debug") {
+    window.__eyes = window.__eyes || [];
+    window.__eyes.push({ renderer, scene, camera, eyes, canvas });
+  }
 
   // awakening: the pattern whirls out of the pupil on first show
   if (reduceMotion) {

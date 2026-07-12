@@ -215,9 +215,21 @@ section {
   justify-content: center;
   align-items: center;
   text-align: center;
-  padding-top: 7rem;
+  padding-top: 9rem;
   position: relative;
 }
+
+/* legibility scrim: the headline floats over the eyes, so pool a little
+   darkness behind the text block without killing the glow */
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: 24% -12% 10%;
+  background: radial-gradient(52% 46% at 50% 48%, rgba(10, 11, 13, 0.78), transparent 72%);
+  pointer-events: none;
+}
+.hero > * { position: relative; }
+.hero h1 { text-shadow: 0 2px 28px rgba(10, 11, 13, 0.9); }
 
 .hero .sub {
   max-width: 560px;
