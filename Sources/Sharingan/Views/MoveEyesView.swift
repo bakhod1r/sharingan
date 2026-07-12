@@ -538,17 +538,20 @@ struct MoveIrisView: View {
             ForEach(0..<count, id: \.self) { i in
                 let head = Angle(degrees: -80 + Double(i) * 360 / Double(s))
                 let grow = i < grown ? CGFloat(1) : frac
+                // Pronounced comma: a long, wide tail hooking around the ring
+                // so the mark reads as tomoe (not plain dots) even at Dock and
+                // menu bar sizes.
                 MoveTomoeTail(
                     ringRadius: ringR,
                     headAngle: head,
-                    sweep: .degrees(-60 * Double(grow)),
-                    startWidth: 0.20 * r * grow
+                    sweep: .degrees(-100 * Double(grow)),
+                    startWidth: 0.27 * r * grow
                 )
                 .fill(Color.black)
                 Circle()
                     .fill(Color.black)
-                    .frame(width: max(0.28 * r * grow, 0.001),
-                           height: max(0.28 * r * grow, 0.001))
+                    .frame(width: max(0.32 * r * grow, 0.001),
+                           height: max(0.32 * r * grow, 0.001))
                     .offset(x: ringR * cos(head.radians), y: ringR * sin(head.radians))
             }
         }
