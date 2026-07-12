@@ -410,6 +410,57 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-site-assets"),
     exit(0)
 }
 
+// Headless dev previews: renders the menu-bar popover, the custom calendar and
+// the task editor to PNGs so UI changes can be eyeballed without launching the
+// app (same idea as --render-site-assets, but for development).
+if let i = CommandLine.arguments.firstIndex(of: "--render-dev-preview"),
+   i + 1 < CommandLine.arguments.count {
+    let outDir = CommandLine.arguments[i + 1]
+    MainActor.assumeIsolated {
+        try? FileManager.default.createDirectory(atPath: outDir,
+                                                 withIntermediateDirectories: true)
+        @MainActor func write(_ view: some View, to path: String, scale: CGFloat = 2) {
+            let renderer = ImageRenderer(content: view)
+            renderer.scale = scale
+            if let cg = renderer.cgImage {
+                let rep = NSBitmapImageRep(cgImage: cg)
+                try? rep.representation(using: .png, properties: [:])?
+                    .write(to: URL(fileURLWithPath: path))
+            }
+        }
+
+        let store = TaskStore.shared
+        store.add(title: "Ship landing page v1", category: "Work", tags: ["launch"],
+                  dueDate: Date(), estimatedPomodoros: 3, project: "Blink", priority: .high)
+        store.add(title: "Review pull request #42", category: "Work",
+                  dueDate: Calendar.current.date(byAdding: .day, value: 2, to: Date()),
+                  priority: .medium)
+        var big = store.tasks[0]
+        big.pomodoroKind = .big
+        big.subtasks = [Subtask(title: "Write the hero copy", pomodoroKind: .small),
+                        Subtask(title: "Verify Lighthouse 100")]
+        store.update(big)
+
+        let timer = PomodoroTimer()
+        write(MenuBarView(timer: timer)
+                .frame(width: 360, height: 700)
+                .background(Color.black.opacity(0.85))
+                .environment(\.colorScheme, .dark),
+              to: "\(outDir)/menubar.png")
+        write(BlinkCalendar(date: .constant(Date()))
+                .padding(16)
+                .background(Color.black.opacity(0.85))
+                .environment(\.colorScheme, .dark),
+              to: "\(outDir)/calendar.png")
+        write(TaskEditorView(task: store.tasks[0], settings: timer.settings)
+                .frame(width: 460, height: 640)
+                .environment(\.colorScheme, .dark),
+              to: "\(outDir)/editor.png")
+        print("dev previews rendered to \(outDir)")
+    }
+    exit(0)
+}
+
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate
