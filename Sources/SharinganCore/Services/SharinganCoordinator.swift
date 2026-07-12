@@ -382,6 +382,7 @@ public final class SharinganCoordinator: ObservableObject {
         if old.floatingTimerEnabled != new.floatingTimerEnabled
             || old.floatingOpacity != new.floatingOpacity
             || old.floatingCompact != new.floatingCompact
+            || old.floatingSize != new.floatingSize
             || old.floatingAlwaysOnTop != new.floatingAlwaysOnTop { syncFloating() }
         if old.showTodayPanel != new.showTodayPanel { syncTodayPanel() }
         if old.appBlockerSettings != new.appBlockerSettings

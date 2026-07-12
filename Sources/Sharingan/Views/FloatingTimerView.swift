@@ -178,22 +178,28 @@ struct FloatingTimerView: View {
         let timeSize = wide
             ? min(max(height * 0.52, 20), 110)
             : min(max(min(height * 0.38, width * 0.24), 20), 110)
-        let showTodo = wide ? height >= 64 : height >= 104
+        // Content is user-configurable: the time is always shown, dots and the
+        // task pill follow their Settings toggles (task also needs the room).
+        let showDots = timer.settings.floatingShowDots
+        let showTodo = timer.settings.floatingShowTask
+            && (wide ? height >= 64 : height >= 104)
         let corner = min(DS.Radius.xl, height * 0.22)
 
         Group {
             if wide {
                 HStack(spacing: max(14, width * 0.05)) {
                     clock(timeSize)
-                    VStack(alignment: .leading, spacing: max(6, height * 0.08)) {
-                        cycleDots(size: max(5, timeSize * 0.16))
-                        if showTodo { activeTaskRow(scale: timeSize / 54) }
+                    if showDots || showTodo {
+                        VStack(alignment: .leading, spacing: max(6, height * 0.08)) {
+                            if showDots { cycleDots(size: max(5, timeSize * 0.16)) }
+                            if showTodo { activeTaskRow(scale: timeSize / 54) }
+                        }
                     }
                 }
             } else {
                 VStack(spacing: max(3, height * 0.03)) {
                     clock(timeSize)
-                    cycleDots(size: max(5, timeSize * 0.14))
+                    if showDots { cycleDots(size: max(5, timeSize * 0.14)) }
                     if showTodo { activeTaskRow(scale: timeSize / 54).padding(.top, 3) }
                 }
             }
@@ -228,6 +234,21 @@ struct FloatingTimerView: View {
             }
         }
         .scaleEffect(phasePulse ? 1.05 : 1.0)
+        // Right-click: size presets + a way home. Presets both update the
+        // setting (so Settings stays in sync) and snap the panel immediately —
+        // re-picking the current preset still snaps back after a manual resize.
+        .contextMenu {
+            ForEach(FloatingTimerSize.allCases, id: \.self) { size in
+                Toggle(size.label, isOn: Binding(
+                    get: { timer.settings.floatingSize == size },
+                    set: { _ in
+                        timer.settings.floatingSize = size
+                        FloatingWindowManager.shared.apply(size: size)
+                    }))
+            }
+            Divider()
+            Button("Reset position") { FloatingWindowManager.shared.resetPosition() }
+        }
     }
 
     private func clock(_ size: CGFloat) -> some View {

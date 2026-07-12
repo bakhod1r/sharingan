@@ -12,16 +12,18 @@ final class FloatingWindowManager: FloatingTimerController {
     private let posKeyY = "blink.floating.y"
     private let sizeKeyW = "blink.floating.w"
     private let sizeKeyH = "blink.floating.h"
+    /// Last size preset applied to the panel, so a Settings change is
+    /// distinguishable from every other refresh (opacity drags etc. must not
+    /// clobber a manual resize).
+    private var appliedSize: FloatingTimerSize?
 
     func showFloating(timer: PomodoroTimer) {
         if panel != nil { applySettings(timer.settings); return }
         let defaults = UserDefaults.standard
-        // Restore the remembered size, else a default that depends on the compact
-        // setting. The user can freely resize from here.
-        let compact = timer.settings.floatingCompact
-        let defaultSize = compact ? NSSize(width: 150, height: 90)
-                                  : NSSize(width: 186, height: 108)
-        var size = defaultSize
+        // Restore the remembered size, else the preset from Settings. The user
+        // can freely resize from here.
+        let preset = timer.settings.floatingSize
+        var size = NSSize(width: preset.width, height: preset.height)
         if defaults.object(forKey: sizeKeyW) != nil {
             let w = defaults.double(forKey: sizeKeyW)
             let h = defaults.double(forKey: sizeKeyH)
@@ -117,8 +119,54 @@ final class FloatingWindowManager: FloatingTimerController {
         applySettings(timer.settings)
     }
 
-    /// Apply live appearance settings to the current panel (no-op if hidden).
+    /// Snap the panel to a size preset, animating in place (center-anchored),
+    /// and remember it so the next launch starts from the same frame. Works
+    /// with the panel hidden too — the preset just becomes the launch size.
+    func apply(size: FloatingTimerSize) {
+        appliedSize = size
+        let d = UserDefaults.standard
+        d.set(size.width, forKey: sizeKeyW)
+        d.set(size.height, forKey: sizeKeyH)
+        guard let panel else { return }
+        var frame = panel.frame
+        let new = NSSize(width: size.width, height: size.height)
+        frame.origin.x += (frame.width - new.width) / 2
+        frame.origin.y += (frame.height - new.height) / 2
+        frame.size = new
+        panel.setFrame(clamped(frame, to: panel.screen), display: true, animate: true)
+    }
+
+    /// Forget the remembered position and bring the panel back to the center
+    /// of its screen (rescues a card stranded by a display change).
+    func resetPosition() {
+        let d = UserDefaults.standard
+        d.removeObject(forKey: posKeyX)
+        d.removeObject(forKey: posKeyY)
+        guard let panel, let screen = panel.screen ?? NSScreen.main else { return }
+        let vis = screen.visibleFrame
+        let f = panel.frame
+        panel.setFrameOrigin(NSPoint(x: vis.midX - f.width / 2,
+                                     y: vis.midY - f.height / 2))
+    }
+
+    /// Keep an animated preset change on screen.
+    private func clamped(_ frame: NSRect, to screen: NSScreen?) -> NSRect {
+        guard let vis = (screen ?? NSScreen.main)?.visibleFrame else { return frame }
+        var f = frame
+        f.origin.x = min(max(f.origin.x, vis.minX), max(vis.minX, vis.maxX - f.width))
+        f.origin.y = min(max(f.origin.y, vis.minY), max(vis.minY, vis.maxY - f.height))
+        return f
+    }
+
+    /// Apply live appearance settings to the current panel.
     private func applySettings(_ settings: PomodoroSettings) {
+        // A preset picked in Settings resizes the panel; anything else (opacity,
+        // level) leaves the user's manual frame alone.
+        if let applied = appliedSize {
+            if applied != settings.floatingSize { apply(size: settings.floatingSize) }
+        } else {
+            appliedSize = settings.floatingSize
+        }
         guard let panel else { return }
         panel.alphaValue = CGFloat(min(max(settings.floatingOpacity, 0.3), 1.0))
         panel.level = settings.floatingAlwaysOnTop ? .floating : .normal

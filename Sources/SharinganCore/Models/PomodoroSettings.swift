@@ -19,6 +19,37 @@ public struct TagStyle: Codable, Equatable, Sendable {
     ]
 }
 
+/// Floating timer size presets. Pixel sizes are tuned to the card's vertical
+/// layout (clock over dots over task pill); the wide side-by-side layout stays
+/// reachable by manual resize.
+public enum FloatingTimerSize: String, Codable, CaseIterable, Sendable {
+    case small, medium, large
+
+    /// Panel size in points.
+    public var width: Double {
+        switch self {
+        case .small:  return 150
+        case .medium: return 190
+        case .large:  return 260
+        }
+    }
+    public var height: Double {
+        switch self {
+        case .small:  return 90
+        case .medium: return 110
+        case .large:  return 150
+        }
+    }
+
+    public var label: String {
+        switch self {
+        case .small:  return "Small"
+        case .medium: return "Medium"
+        case .large:  return "Large"
+        }
+    }
+}
+
 public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var focusMinutes: Int = 25
     public var shortBreakMinutes: Int = 5
@@ -66,8 +97,15 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     /// Floating timer appearance (position is remembered separately, in
     /// UserDefaults, to avoid churning settings on every drag).
     public var floatingOpacity: Double = 1.0        // 0.3…1.0
-    public var floatingCompact: Bool = false        // smaller pill
+    public var floatingCompact: Bool = false        // legacy; superseded by floatingSize
     public var floatingAlwaysOnTop: Bool = true      // above other apps
+    /// Preset panel size (Small/Medium/Large). Manual resize still works; a
+    /// preset just snaps the panel to a known-good frame.
+    public var floatingSize: FloatingTimerSize = .medium
+    /// Show the cycle dots strip on the floating card.
+    public var floatingShowDots: Bool = true
+    /// Show the active-task pill on the floating card (when tall enough).
+    public var floatingShowTask: Bool = true
     /// Always-on-desktop glass panel with today's tasks + timer state
     /// (the WidgetKit substitute for the SwiftPM build).
     public var showTodayPanel: Bool = false
@@ -167,6 +205,12 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
         floatingOpacity = try c.decodeIfPresent(Double.self, forKey: .floatingOpacity) ?? d.floatingOpacity
         floatingCompact = try c.decodeIfPresent(Bool.self, forKey: .floatingCompact) ?? d.floatingCompact
         floatingAlwaysOnTop = try c.decodeIfPresent(Bool.self, forKey: .floatingAlwaysOnTop) ?? d.floatingAlwaysOnTop
+        // Older blobs have no size preset: honor their legacy "compact" flag so
+        // the pill doesn't grow on update. Unknown raw values fall back too.
+        floatingSize = ((try? c.decodeIfPresent(FloatingTimerSize.self, forKey: .floatingSize)) ?? nil)
+            ?? (floatingCompact ? .small : d.floatingSize)
+        floatingShowDots = try c.decodeIfPresent(Bool.self, forKey: .floatingShowDots) ?? d.floatingShowDots
+        floatingShowTask = try c.decodeIfPresent(Bool.self, forKey: .floatingShowTask) ?? d.floatingShowTask
         showTodayPanel = try c.decodeIfPresent(Bool.self, forKey: .showTodayPanel) ?? d.showTodayPanel
         globalShortcutsEnabled = try c.decodeIfPresent(Bool.self, forKey: .globalShortcutsEnabled) ?? d.globalShortcutsEnabled
         shortcutBindings = try c.decodeIfPresent([String: ShortcutBinding].self, forKey: .shortcutBindings) ?? d.shortcutBindings

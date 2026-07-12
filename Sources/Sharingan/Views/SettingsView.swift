@@ -274,17 +274,26 @@ struct SettingsView: View {
                     ToggleRow(title: "Floating timer (while running)",
                               isOn: $settings.floatingTimerEnabled)
                     if settings.floatingTimerEnabled {
-                        ToggleRow(title: "Compact size",
-                                  isOn: $settings.floatingCompact)
+                        Picker("Size", selection: $settings.floatingSize) {
+                            ForEach(FloatingTimerSize.allCases, id: \.self) { size in
+                                Text(size.label).tag(size)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+
                         ToggleRow(title: "Always on top",
                                   isOn: $settings.floatingAlwaysOnTop)
+                        ToggleRow(title: "Cycle dots on floating timer",
+                                  isOn: $settings.floatingShowDots)
+                        ToggleRow(title: "Active task on floating timer",
+                                  isOn: $settings.floatingShowTask)
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Opacity: \(Int(settings.floatingOpacity * 100))%")
                                 .font(.system(.caption, design: .rounded).weight(.medium))
                             Slider(value: $settings.floatingOpacity, in: 0.3...1.0)
-                                
+
                         }
-                        Text("Drag the floating timer to reposition — its spot is remembered.")
+                        Text("Drag the floating timer to reposition — its spot is remembered. Right-click it for size presets.")
                             .font(.system(.caption2, design: .rounded))
                             .foregroundStyle(.white.opacity(0.6))
                     }
@@ -933,6 +942,8 @@ struct SettingsView: View {
                 return ["duration", "minutes", "pomodoro", "focus length", "mode",
                         "countdown", "count up", "repeat", "endless", "floating",
                         "float", "opacity", "always on top", "compact",
+                        "size", "small", "medium", "large", "preset",
+                        "dots", "cycle dots", "active task", "task pill",
                         "today panel", "panel", "desktop", "widget"]
             case .tasks:
                 return ["task", "subtask", "estimate", "goal", "week", "weekly",
