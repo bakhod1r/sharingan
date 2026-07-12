@@ -1,0 +1,26 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Sharingan.dmg
+        run: Scripts/make-dmg.sh
+      - name: Extract release notes from CHANGELOG
+        run: |
+          awk '/^## \[/{ if (found) exit; found=1; next } found' CHANGELOG.md > /tmp/notes.md
+          cat /tmp/notes.md
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/Sharingan.dmg
+          body_path: /tmp/notes.md
+          name: Sharingan ${{ github.ref_name }}
