@@ -850,21 +850,23 @@ struct MenuBarView: View {
         tasks.update(updated)
     }
 
+    /// Full natural-language quick add — the same parser (and 25-language
+    /// vocabulary) the main composer uses, so `ertaga 15:00 p1 #ish next week`
+    /// typed here yields dates, recurrence, priority, project and estimate, not
+    /// just a raw title. The preview chips above already reflect this parse.
     private func quickAdd() {
         let raw = quickTitle.trimmingCharacters(in: .whitespaces)
         guard !raw.isEmpty else { return }
-        var tagList: [String] = []
-        var titleWords: [String] = []
-        for word in raw.split(separator: " ") {
-            if word.hasPrefix("#"), word.count > 1 {
-                tagList.append(String(word.dropFirst()))
-            } else {
-                titleWords.append(String(word))
-            }
-        }
-        let title = titleWords.joined(separator: " ")
-        guard !title.isEmpty else { return }
-        tasks.add(title: title, tags: tagList)
+        let parsed = TaskInputParser.parse(raw, now: Date())
+        let title = parsed.title.isEmpty ? raw : parsed.title
+        guard !title.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        tasks.add(title: title,
+                  tags: parsed.tags,
+                  dueDate: parsed.dueDate,
+                  estimatedPomodoros: parsed.estimatedPomodoros,
+                  recurrence: parsed.recurrence,
+                  project: parsed.project,
+                  priority: parsed.priority)
         quickTitle = ""
     }
 

@@ -353,4 +353,112 @@ struct TaskInputParserTests {
     @Test func topTwentyFiveLanguages() {
         #expect(LocalizedKeywords.all.count == 25)
     }
+
+    // MARK: - Parts of day → clock time
+
+    @Test func partsOfDaySetTheClock() throws {
+        // "tomorrow evening" = tomorrow at 18:00 (day word + time word combine).
+        let p = try #require(parse("meeting tomorrow evening").dueDate)
+        let cal = Calendar.current
+        let expectedDay = cal.date(byAdding: .day, value: 1, to: Self.now)!
+        #expect(cal.isDate(p, inSameDayAs: expectedDay))
+        #expect(cal.component(.hour, from: p) == 18)
+    }
+
+    @Test func tonightIsTodayAtEight() throws {
+        let p = try #require(parse("call mom tonight").dueDate)  // now 10:00
+        let cal = Calendar.current
+        #expect(cal.isDate(p, inSameDayAs: Self.now))
+        #expect(cal.component(.hour, from: p) == 20)
+        #expect(parse("call mom tonight").title == "call mom")
+    }
+
+    @Test func partsOfDayAcrossLanguages() throws {
+        let cal = Calendar.current
+        // Uzbek "ertaga kechqurun" = tomorrow 18:00.
+        let uz = try #require(parse("uchrashuv ertaga kechqurun").dueDate)
+        #expect(cal.component(.hour, from: uz) == 18)
+        // German "morgens" and French "midi".
+        #expect(cal.component(.hour, from: try #require(parse("plan morgens").dueDate)) == 9)
+        #expect(cal.component(.hour, from: try #require(parse("déjeuner midi").dueDate)) == 12)
+    }
+
+    // MARK: - next month / year, weekend
+
+    @Test func nextMonthAndYear() throws {
+        let cal = Calendar.current
+        let m = try #require(parse("pay rent next month").dueDate)
+        let expM = cal.date(byAdding: .month, value: 1, to: Self.now)!
+        #expect(cal.isDate(m, inSameDayAs: expM))
+
+        let y = try #require(parse("renew next year").dueDate)
+        let expY = cal.date(byAdding: .year, value: 1, to: Self.now)!
+        #expect(cal.isDate(y, inSameDayAs: expY))
+        #expect(parse("pay rent next month").title == "pay rent")
+    }
+
+    @Test func weekendIsComingSaturday() throws {
+        // Reference date is Wednesday 2026-07-08 → Saturday is 2026-07-11.
+        let p = try #require(parse("relax weekend").dueDate)
+        let cal = Calendar.current
+        #expect(cal.component(.weekday, from: p) == 7)   // Saturday
+    }
+
+    @Test func nextMonthAcrossLanguages() throws {
+        let cal = Calendar.current
+        let expected = cal.date(byAdding: .month, value: 1, to: Self.now)!
+        // Uzbek, German, Russian, Korean, Chinese (CJK).
+        for phrase in ["keyingi oy", "nächsten monat", "следующий месяц",
+                       "다음 달", "下个月"] {
+            let due = try #require(parse("x \(phrase)").dueDate, "no due for \(phrase)")
+            #expect(cal.isDate(due, inSameDayAs: expected), "‘\(phrase)’ should be next month")
+        }
+    }
+
+    // MARK: - Month-name dates
+
+    @Test func monthNameWithDayEitherOrder() throws {
+        let cal = Calendar.current
+        for input in ["party december 25", "party 25 december"] {
+            let due = try #require(parse(input).dueDate, "no due for \(input)")
+            let c = cal.dateComponents([.day, .month], from: due)
+            #expect(c.day == 25)
+            #expect(c.month == 12)
+            #expect(parse(input).title == "party")
+        }
+    }
+
+    @Test func monthNameOrdinalAndOtherLanguages() throws {
+        let cal = Calendar.current
+        // English ordinal.
+        let en = try #require(parse("trip june 5th").dueDate)
+        #expect(cal.component(.month, from: en) == 6)
+        #expect(cal.component(.day, from: en) == 5)
+        // Uzbek "5 mart", Russian "5 марта", German "5 dezember".
+        #expect(cal.component(.month, from: try #require(parse("hisobot 5 mart").dueDate)) == 3)
+        #expect(cal.component(.month, from: try #require(parse("отчёт 5 марта").dueDate)) == 3)
+    }
+
+    @Test func bareMonthNameStaysInTitle() {
+        // "may" without an adjacent day number must not become a date.
+        let p = parse("may the build pass")
+        #expect(p.dueDate == nil)
+        #expect(p.title == "may the build pass")
+    }
+
+    // MARK: - Relative offsets: month/year + postpositional
+
+    @Test func offsetMonthsAndYears() throws {
+        let cal = Calendar.current
+        let m = try #require(parse("review in 2 months").dueDate)
+        #expect(cal.isDate(m, inSameDayAs: cal.date(byAdding: .month, value: 2, to: Self.now)!))
+    }
+
+    @Test func postpositionalOffsets() throws {
+        let cal = Calendar.current
+        // Uzbek "2 soatdan keyin" and Turkish "2 saat sonra" = +2 hours (12:00).
+        #expect(cal.component(.hour, from: try #require(parse("qo'ng'iroq 2 soatdan keyin").dueDate)) == 12)
+        #expect(cal.component(.hour, from: try #require(parse("ara 2 saat sonra").dueDate)) == 12)
+        #expect(parse("qo'ng'iroq 2 soatdan keyin").title == "qo'ng'iroq")
+    }
 }

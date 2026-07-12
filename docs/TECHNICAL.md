@@ -28,7 +28,13 @@
 - Full task system: title, priority (P1–P4), tags, projects, categories, due dates, notes, and estimates.
 - Subtasks with their own estimates — reorder them, or promote a subtask into a full task.
 - Recurrence: none, daily, weekdays, weekly, every N days, or monthly (on a chosen day). Completing a recurring task spawns the next occurrence.
-- Natural-language quick add in the **world's 25 most-spoken languages** at once, e.g. `ertaga 15:00 p1 #ish @blink ~2 hisobot yozish` — with live parse chips while you type. Recognizes dates (today / tomorrow / day-after-tomorrow / yesterday / next week / weekday names), recurrence (daily / weekly / monthly / weekdays / every N days), relative offsets (`in 2 hours`, `in 3 days`), and natural priority words (`urgent`, `muhim`), across Latin, Cyrillic, Arabic, Indic, and space-less CJK scripts (Chinese/Japanese matched by substring). All languages are live simultaneously, so a line may mix them.
+- Natural-language quick add in the **world's 25 most-spoken languages** at once, e.g. `ertaga 15:00 p1 #ish @blink ~2 hisobot yozish` — with live parse chips while you type, in both the main composer and the menu-bar quick-add. Recognizes:
+  - **Dates** — today / tomorrow / day-after-tomorrow / yesterday, weekday names, next week / next month / next year, this week, weekend, and month-name dates like `march 5` / `5 mart` (plus numeric `12.08`).
+  - **Times** — clock (`15:00`, `5pm`) and parts of day (`morning`, `noon`, `afternoon`, `evening`, `tonight`, `midnight`), which combine with a day — "tomorrow evening" = tomorrow 18:00.
+  - **Recurrence** — daily / weekly / monthly / weekdays / every N days.
+  - **Relative offsets** — `in 2 hours`, `in 3 days`, `in 2 months`, plus postpositional forms (`2 soatdan keyin`, `2 saat sonra`, `2 घंटे में`).
+  - **Priority words** — `urgent` / `muhim` → P1.
+  Works across Latin, Cyrillic, Arabic, Indic, and space-less CJK scripts (Chinese/Japanese matched by substring). All languages are live simultaneously, so a line may mix them. Compositional offsets and month-name dates are fullest in the Latin/Cyrillic set; every language still accepts numeric dates.
 - Smart views: Today, Upcoming, All, Completed — each with counts. Free-text search over title, tags, project, and notes.
 - Snooze a task to tomorrow, next week, or a picked date; overdue badges.
 - Due reminders with a configurable pre-reminder (default 10 minutes before, or off).
