@@ -4,17 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Sharingan — Pomodoro & Eye-Health App for macOS</title>
-  <meta name="description" content="Sharingan is a free macOS menu-bar Pomodoro and eye-health app: enforced screen breaks, camera-verified eye exercises, tasks with natural-language input, streaks, and a live Sharingan wallpaper.">
+  <meta name="description" content="Sharingan is a free macOS menu-bar app that combines a Pomodoro timer, a todo list and guided eye exercises: enforced screen breaks, camera-verified drills, natural-language tasks and streaks.">
   <link rel="canonical" href="https://bakhod1r.github.io/Blink/">
   <meta name="theme-color" content="#0a0b0d">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Sharingan — Pomodoro & Eye-Health App for macOS">
-  <meta property="og:description" content="Enforced breaks, camera-verified eye exercises, tasks, streaks — and a desktop that watches back.">
+  <meta property="og:description" content="Pomodoro timer, todo list and guided eye exercises in one macOS menu-bar app. Enforced breaks, camera-verified drills, streaks — free and open source.">
   <meta property="og:url" content="https://bakhod1r.github.io/Blink/">
   <meta property="og:image" content="https://bakhod1r.github.io/Blink/assets/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Sharingan — Pomodoro & Eye-Health App for macOS">
-  <meta name="twitter:description" content="Enforced breaks, camera-verified eye exercises, tasks, streaks — and a desktop that watches back.">
+  <meta name="twitter:description" content="Pomodoro timer, todo list and guided eye exercises in one macOS menu-bar app. Enforced breaks, camera-verified drills, streaks — free and open source.">
   <meta name="twitter:image" content="https://bakhod1r.github.io/Blink/assets/og-image.png">
   <link rel="icon" href="assets/favicon.ico" sizes="32x32">
   <link rel="icon" href="assets/favicon-32.png" type="image/png" sizes="32x32">
@@ -29,10 +29,10 @@
     "name": "Sharingan",
     "operatingSystem": "macOS 14.0 or later",
     "applicationCategory": "UtilitiesApplication",
-    "description": "Pomodoro and eye-health app for macOS with enforced breaks, camera-verified eye exercises, task management, streaks, and a live wallpaper.",
+    "description": "Free macOS menu-bar app combining a Pomodoro timer, a todo list and guided eye exercises — enforced breaks, camera-verified drills, natural-language tasks and streaks.",
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
     "downloadUrl": "https://github.com/bakhod1r/Blink/releases/latest/download/Sharingan.dmg",
-    "screenshot": "https://bakhod1r.github.io/Blink/assets/screen-break.png",
+    "screenshot": "https://bakhod1r.github.io/Blink/assets/og-image.png",
     "author": { "@type": "Person", "name": "mrb" },
     "url": "https://bakhod1r.github.io/Blink/"
   }
@@ -70,7 +70,7 @@
       {
         "@type": "Question",
         "name": "Does it sync between Macs?",
-        "acceptedAnswer": { "@type": "Answer", "text": "Yes — settings and streaks sync through your private iCloud (CloudKit) database. Nothing is stored on third-party servers." }
+        "acceptedAnswer": { "@type": "Answer", "text": "Not yet — iCloud sync is planned. Today everything lives in a local on-device database, and nothing is ever stored on a server." }
       }
     ]
   }
@@ -86,7 +86,7 @@
       <a href="#pomodoro">Pomodoro</a>
       <a href="#todo">Tasks</a>
       <a href="#eyes">Eye health</a>
-      <a href="#wallpaper">Wallpaper</a>
+      <a href="#features">Features</a>
       <a href="#faq">FAQ</a>
       <button type="button" class="theme-toggle" aria-label="Toggle light and dark theme">
         <svg class="icon-moon" width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M13.7 10.2A6.5 6.5 0 0 1 5.8 2.3 6.5 6.5 0 1 0 13.7 10.2z"/></svg>
@@ -100,9 +100,9 @@
     <section class="hero">
       <p class="eyebrow">For macOS — free &amp; open source</p>
       <h1>Your eyes deserve<br><span class="red">a guardian</span>.</h1>
-      <p class="sub">Sharingan is a menu-bar Pomodoro &amp; eye-health companion —
-        enforced screen breaks, camera-verified eye exercises, tasks, streaks,
-        and a desktop that watches back.</p>
+      <p class="sub">One menu-bar app, three tools: a Pomodoro that enforces real
+        breaks, a todo list that feeds the timer, and guided eye exercises the
+        camera can verify — private, offline, free.</p>
       <div class="cta-row">
         <div class="cta-buttons">
           <a class="btn btn-red js-download" href="https://github.com/bakhod1r/Blink/releases/latest/download/Sharingan.dmg">
@@ -114,8 +114,8 @@
         <span class="cta-meta">v1.0.0 · macOS 14+ · Apple Silicon · free</span>
       </div>
       <ul class="stats" aria-label="At a glance">
-        <li><strong>18</strong> eye styles</li>
-        <li><strong>6</strong> themes</li>
+        <li><strong>3</strong> tools in one</li>
+        <li><strong>12+</strong> top features</li>
         <li><strong>100%</strong> on-device</li>
         <li><strong>0</strong> accounts, ads, trackers</li>
       </ul>
@@ -128,8 +128,22 @@
       <p class="section-sub" data-reveal>Focus like any pomodoro app — then Sharingan does the part the
         others skip: it makes the rest actually happen.</p>
       <div class="pillar-grid" data-reveal>
-        <video class="pillar-video" src="assets/video/pomodoro.mp4" poster="assets/video/pomodoro-poster.png"
-               autoplay muted loop playsinline aria-label="The app's timer counting down a focus session"></video>
+        <div class="mock mock-timer" role="img" aria-label="The timer: a red ring counts down a focus session, then flips to a green break">
+          <div class="mock-bar" aria-hidden="true"><span></span><span></span><span></span><em>Sharingan</em></div>
+          <div class="mt-body" aria-hidden="true">
+            <div class="mt-ringwrap">
+              <svg class="mt-ring" viewBox="0 0 120 120">
+                <circle class="mt-track" cx="60" cy="60" r="54"/>
+                <circle class="mt-prog" cx="60" cy="60" r="54"/>
+              </svg>
+              <div class="mt-center">
+                <span class="mt-digits"><i>25:00</i><i>16:24</i><i>07:15</i><i>05:00</i></span>
+                <span class="mt-phase"><i>Focus</i><i>Break</i></span>
+              </div>
+            </div>
+            <div class="mt-dots"><span class="on"></span><span class="on"></span><span class="cur"></span><span></span></div>
+          </div>
+        </div>
         <ul class="pillar-points">
           <li><strong>Focus, your length.</strong> 25/5/15 defaults, long break every N rounds, countdown or count-up.</li>
           <li><strong>Auto-pilot.</strong> Auto-start the next round, repeat with a delay, five-minutes-left notification.</li>
@@ -139,28 +153,6 @@
           <li><strong>Focus enforcement.</strong> Hide or force-quit Chrome, Slack and Telegram the moment a break starts.</li>
         </ul>
       </div>
-      <div class="try-card" data-reveal>
-        <div class="try-head">
-          <span class="try-badge">Try it live</span>
-          <p>A tiny pomodoro, right here. Demo runs 60× faster — a “minute” ticks by every second.</p>
-        </div>
-        <div class="demo-timer" id="demo-timer">
-          <svg viewBox="0 0 120 120" class="dt-ring" aria-hidden="true">
-            <circle class="dt-track" cx="60" cy="60" r="54"/>
-            <circle class="dt-progress" cx="60" cy="60" r="54"/>
-          </svg>
-          <div class="dt-center"><strong id="dt-time">25:00</strong><span id="dt-phase">Focus</span></div>
-        </div>
-        <div class="dt-controls">
-          <button type="button" class="btn btn-ghost" id="dt-toggle">Start</button>
-          <button type="button" class="btn btn-ghost" id="dt-skip">Skip</button>
-          <button type="button" class="btn btn-ghost" id="dt-reset">Reset</button>
-        </div>
-      </div>
-      <figure class="shot" data-reveal>
-        <img src="assets/screen-break.png" alt="Sharingan break screen: closed anime eyes resting during the 20-20-20 exercise, with a timer and an exit button" width="1440" height="900" loading="lazy">
-        <figcaption>When the timer says rest, the whole screen rests — the real break overlay, rendered by the app.</figcaption>
-      </figure>
     </section>
 
     <section id="todo" class="pillar" aria-labelledby="todo-h">
@@ -169,11 +161,19 @@
       <p class="section-sub" data-reveal>Tasks aren't a separate app — they're what your pomodoros burn
         through. Queue them up and every finished session advances to the next.</p>
       <div class="pillar-grid pillar-grid--flip" data-reveal>
-        <video class="pillar-video pillar-video--panel" src="assets/video/tasks.mp4" poster="assets/video/tasks-poster.png"
-               autoplay muted loop playsinline aria-label="The Today panel: tasks being checked off and new ones arriving"></video>
+        <div class="mock mock--panel mock-tasks" role="img" aria-label="The Today panel: a task gets checked off and a new one arrives from quick add">
+          <div class="mock-bar" aria-hidden="true"><span></span><span></span><span></span><em>Today</em></div>
+          <ul class="tk-list" aria-hidden="true">
+            <li class="tk tk-done"><span class="tk-box"></span><span class="tk-flag" style="--pc:#ff1744"></span><span class="tk-title">Ship the landing page</span><span class="tk-meta">#work</span></li>
+            <li class="tk"><span class="tk-box"></span><span class="tk-flag" style="--pc:#ff9100"></span><span class="tk-title">Reply to design review</span><span class="tk-meta">15:00</span></li>
+            <li class="tk tk-new"><span class="tk-box"></span><span class="tk-flag" style="--pc:#ff1744"></span><span class="tk-title">Call the bank</span><span class="tk-meta">tomorrow</span></li>
+            <li class="tk"><span class="tk-box"></span><span class="tk-flag" style="--pc:#448aff"></span><span class="tk-title">Stretch, water, look far</span><span class="tk-meta">#health</span></li>
+          </ul>
+          <div class="tk-quick" aria-hidden="true"><b>+</b> tomorrow p1 call the bank<i class="tk-caret"></i></div>
+        </div>
         <ul class="pillar-points">
           <li><strong>Everything a task needs.</strong> P1–P4 priorities, tags, projects, due dates, notes, subtasks you can reorder or promote.</li>
-          <li><strong>Natural-language quick add.</strong> “tomorrow 15:00 p1 #work report” — or “ertaga 15:00 p1 #ish hisobot”. English and Uzbek, parsed live.</li>
+          <li><strong>Natural-language quick add.</strong> “tomorrow 15:00 p1 #work report” — or “ertaga 15:00 p1 #ish hisobot”, or “明天 15:00 p1 报告”. The world's 25 most-spoken languages, all live at once, parsed as you type.</li>
           <li><strong>Focus queue.</strong> Each finished pomodoro advances to the next task; the break screen shows what's coming.</li>
           <li><strong>Recurrence &amp; snooze.</strong> Daily, weekdays, weekly, every N days, monthly — snooze to tomorrow or next week.</li>
           <li><strong>Eisenhower matrix.</strong> Urgent × important at a glance, with stats by project and tag.</li>
@@ -198,89 +198,93 @@
       <p class="section-sub" data-reveal>Every break is a guided drill led by the animated eyes — and the
         camera (on-device, optional) checks you really did it.</p>
       <div class="pillar-grid" data-reveal>
-        <video class="pillar-video" src="assets/video/eyes.mp4" poster="assets/video/eyes-poster.png"
-               autoplay muted loop playsinline aria-label="The break-screen eyes evolving from one tomoe to Mangekyō"></video>
+        <div class="mock mock-break" role="img" aria-label="The break screen: two eyes lead a gaze drill while captions call each step">
+          <div class="bk-head" aria-hidden="true"><strong>20-20-20</strong><span class="bk-chip">Time left · 4:32</span></div>
+          <div class="bk-eyes" aria-hidden="true">
+            <span class="bk-eye"><span class="bk-iris"></span><span class="bk-lid"></span></span>
+            <span class="bk-eye bk-eye--r"><span class="bk-iris"></span><span class="bk-lid"></span></span>
+          </div>
+          <p class="bk-cap" aria-hidden="true"><i>Look at something far away</i><i>Now slowly to the left</i><i>And across to the right</i><i>Blink softly — done</i></p>
+          <div class="bk-dots" aria-hidden="true"><span class="on"></span><span class="cur"></span><span></span><span></span></div>
+        </div>
         <ul class="pillar-points">
           <li><strong>Guided drills.</strong> 20-20-20, 8-direction gaze and blink bursts — the eyes on screen lead every step.</li>
+          <li><strong>Pick your drill.</strong> Exercise chips at the top of every break — tap one and the eyes run it on demand.</li>
           <li><strong>Camera-verified.</strong> Vision face landmarks confirm your gaze and blinks happened; a retry signal if they didn't.</li>
           <li><strong>Voice guidance.</strong> Per-step TTS instructions with adjustable rate and pitch.</li>
           <li><strong>Private by design.</strong> Frames never leave your Mac; a pulsing badge whenever the camera is on.</li>
-          <li><strong>Pattern evolution.</strong> Finish steps and the tomoe multiply — 1 → 2 → 3 → Mangekyō.</li>
           <li><strong>Comfort extras.</strong> Screen dim, Night Shift warmth, rain/forest/lo-fi ambience, posture and water reminders.</li>
         </ul>
       </div>
-      <div class="try-card" data-reveal>
-        <div class="try-head">
-          <span class="try-badge">Try it live</span>
-          <p>Pick a drill — the eye performs it with the dot, then you follow along.</p>
-        </div>
-        <div class="ex-picker" role="group" aria-label="Choose a drill">
-          <button type="button" data-drill="eight" class="active">8 directions</button>
-          <button type="button" data-drill="circle">Circle</button>
-          <button type="button" data-drill="figure8">Figure-8</button>
-          <button type="button" data-drill="blink">Blink burst</button>
-        </div>
-        <div class="ex-stage">
-          <canvas id="exercise-eye" aria-label="Animated eye performing the selected exercise"></canvas>
-          <div class="ex-dot" id="ex-dot" hidden></div>
-        </div>
-        <p class="ex-msg" id="ex-msg" aria-live="polite">Pick a drill above — the eye leads, you follow.</p>
-      </div>
     </section>
 
-    <section id="more" aria-labelledby="more-h">
-      <p class="eyebrow" data-reveal>And more</p>
-      <h2 id="more-h" data-reveal>The rest of the toolbox</h2>
+    <section id="features" aria-labelledby="features-h">
+      <p class="eyebrow" data-reveal>Top features</p>
+      <h2 id="features-h" data-reveal>Twelve more, all included</h2>
+      <p class="section-sub" data-reveal>Beyond the big three — everything here ships in the free download,
+        works offline, and needs no account.</p>
       <ul class="grid">
-        <li class="card" data-reveal>
+        <li class="card feat" data-reveal>
+          <div class="fv fv-menubar" aria-hidden="true"><span class="mb-strip"><b class="mb-ring"></b><b class="mb-time">24:12</b></span></div>
+          <h3>Menu-bar timer</h3>
+          <p>The session lives in your menu bar — a filling ring and an optional countdown, always in view.</p>
+        </li>
+        <li class="card feat" data-reveal>
+          <div class="fv fv-float" aria-hidden="true"><span class="fl-win"></span><span class="fl-pill">▶ 25:00</span></div>
           <h3>Floating timer</h3>
-          <p>An always-on-top glass chip that joins every Space; drag it anywhere.</p>
+          <p>An always-on-top glass chip that joins every Space; drag it anywhere, resize it, hide it on breaks.</p>
         </li>
-        <li class="card" data-reveal>
+        <li class="card feat" data-reveal>
+          <div class="fv fv-queue" aria-hidden="true"><span class="qu-chip">Write spec</span><span class="qu-arrow">→</span><span class="qu-chip">Review PR</span><span class="qu-arrow">→</span><span class="qu-chip">Inbox</span></div>
+          <h3>Focus queue</h3>
+          <p>Line tasks up; every finished pomodoro advances to the next one automatically.</p>
+        </li>
+        <li class="card feat" data-reveal>
+          <div class="fv fv-stats" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
           <h3>Streaks &amp; milestones</h3>
-          <p>Badges at 1, 7, 14, 30, 90 and 365 days, plus 7/30-day focus charts.</p>
+          <p>Badges at 1, 7, 14, 30, 90 and 365 days, with 7/30-day focus charts and a best-hour breakdown.</p>
         </li>
-        <li class="card" data-reveal>
-          <h3>iCloud sync</h3>
-          <p>Settings and streaks on every Mac, through your private CloudKit database.</p>
+        <li class="card feat" data-reveal>
+          <div class="fv fv-block" aria-hidden="true"><i></i><i></i><i></i></div>
+          <h3>App blocking</h3>
+          <p>Hide or force-quit Chrome, Slack, Telegram and friends — during breaks, during focus, or always.</p>
         </li>
-        <li class="card" data-reveal>
-          <h3>Six themes</h3>
-          <p>Liquid Glass, Frosted, Midnight, Cream, Neon, Mono — the whole app.</p>
+        <li class="card feat" data-reveal>
+          <div class="fv fv-amb" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <h3>Ambience sounds</h3>
+          <p>White noise, rain, forest or lo-fi, looped softly through every break.</p>
         </li>
-        <li class="card" data-reveal>
-          <h3>Menu-bar iris</h3>
-          <p>A tiny Sharingan in the menu bar, its ring filling as the session runs.</p>
+        <li class="card feat" data-reveal>
+          <div class="fv fv-voice" aria-hidden="true"><span class="vc-box"></span><b class="vc-arc"></b><b class="vc-arc"></b><b class="vc-arc"></b></div>
+          <h3>Voice guidance</h3>
+          <p>Spoken step-by-step instructions with adjustable rate, pitch and editable phrases.</p>
         </li>
-        <li class="card" data-reveal>
+        <li class="card feat" data-reveal>
+          <div class="fv fv-dim" aria-hidden="true"><span class="dm-screen"><b></b></span><span class="dm-moon"></span></div>
+          <h3>Screen dim &amp; warmth</h3>
+          <p>Smoothly dims the display during breaks and adds Night Shift warmth, restored after.</p>
+        </li>
+        <li class="card feat" data-reveal>
+          <div class="fv fv-remind" aria-hidden="true"><span class="rm-chip"><i>Posture check</i><i>Drink some water</i></span><b class="rm-ping"></b></div>
           <h3>Reminders</h3>
-          <p>Posture, water and custom nudges on your interval — focus-time only.</p>
+          <p>Posture, water and custom nudges on your own interval — focus-time only, silent during breaks.</p>
         </li>
-        <li class="card" data-reveal>
-          <h3>URL scheme</h3>
-          <p><code>sharingan://start</code> and friends for Shortcuts and Raycast.</p>
+        <li class="card feat" data-reveal>
+          <div class="fv fv-week" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><b class="wk-chip"></b></div>
+          <h3>Weekly board</h3>
+          <p>Drag tasks between days to reschedule the week, with an Eisenhower matrix for priorities.</p>
         </li>
-        <li class="card" data-reveal>
-          <h3>Templates &amp; history</h3>
-          <p>Reusable task templates and a completed log grouped by day, with restore.</p>
+        <li class="card feat" data-reveal>
+          <div class="fv fv-themes" aria-hidden="true"><i style="--c:#e8e4dd"></i><i style="--c:#8ea2b8"></i><i style="--c:#191b22"></i><i style="--c:#e9dcc5"></i><i style="--c:#ff1744"></i><i style="--c:#7c8087"></i><b class="th-ring"></b></div>
+          <h3>Six themes</h3>
+          <p>Liquid Glass, Frosted, Midnight, Cream, Neon, Mono — the whole app follows.</p>
+        </li>
+        <li class="card feat" data-reveal>
+          <div class="fv fv-cli" aria-hidden="true"><code>$ tired start 25</code><i class="cl-caret"></i></div>
+          <h3>CLI &amp; URL scheme</h3>
+          <p>The <code>tired</code> CLI and <code>sharingan://start</code> drive the timer from Terminal, Shortcuts or Raycast.</p>
         </li>
       </ul>
-    </section>
-
-    <section id="wallpaper" aria-labelledby="wallpaper-h">
-      <p class="eyebrow" data-reveal>Live wallpaper</p>
-      <h2 id="wallpaper-h" data-reveal>A desktop that watches back</h2>
-      <p class="section-sub" data-reveal>Sharingan ships a live wallpaper: two eyes on your desktop that follow
-         your cursor, blink, wink when you're idle, doze off when you're away —
-         and wake with the next pattern in the evolution chain.
-         <strong>This page's background is that same engine, rebuilt in WebGL.</strong></p>
-      <div class="demo-card" data-reveal>
-        <canvas id="demo-eye" aria-label="Interactive Sharingan eye demo"></canvas>
-<div class="carousel-hint">All 18 styles below — click one to load it into the live eye.</div>
-      </div>
-      <div class="style-carousel" data-reveal>
-        <div class="carousel-track" id="style-track"></div>
-      </div>
     </section>
 
     <section id="cli" aria-labelledby="cli-h">
@@ -320,7 +324,7 @@
         </details>
         <details>
           <summary>Does it sync between Macs?</summary>
-          <p>Yes — settings and streaks sync through your private iCloud (CloudKit) database. Nothing touches third-party servers.</p>
+          <p>Not yet — iCloud sync is planned. Today everything lives in a local on-device database, and nothing is ever stored on a server.</p>
         </details>
       </div>
     </section>
@@ -346,7 +350,7 @@
         <a href="#pomodoro">Pomodoro</a>
         <a href="#todo">Tasks</a>
         <a href="#eyes">Eye health</a>
-        <a href="#wallpaper">Live wallpaper</a>
+        <a href="#features">Features</a>
         <a href="#cli">CLI</a>
         <a href="#faq">FAQ</a>
       </nav>
