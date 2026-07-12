@@ -247,7 +247,7 @@ struct TaskPickerSheet: View {
         if let onPick {
             onPick(id)
         } else {
-            timer.startFocusSession()
+            timer.startFocusSession(kind: store.resolvedActiveKind)
             dismiss()
         }
     }

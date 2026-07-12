@@ -51,6 +51,11 @@ public final class TaskStore: ObservableObject {
         let dbURL: URL
         if let fileURL {
             dbURL = fileURL
+        } else if let override = ProcessInfo.processInfo.environment["BLINK_DB_PATH"] {
+            // Headless renders / tests: point the shared store at a throwaway
+            // database instead of the user's real one ($HOME overrides do NOT
+            // redirect FileManager.urls, learned the hard way).
+            dbURL = URL(fileURLWithPath: override)
         } else {
             let base = FileManager.default.urls(for: .applicationSupportDirectory,
                                                 in: .userDomainMask).first
@@ -640,6 +645,18 @@ public final class TaskStore: ObservableObject {
     public func setActive(_ id: UUID?) {
         if activeTaskID != id { activeSubtaskID = nil }
         activeTaskID = id
+    }
+
+    /// Pomodoro size the active target asks for: the focused subtask's kind
+    /// wins, then the task's; nil = no preference (keep the timer's current).
+    public var resolvedActiveKind: PomodoroKind? {
+        guard let task = activeTask else { return nil }
+        if let sid = activeSubtaskID,
+           let sub = task.subtasks.first(where: { $0.id == sid }),
+           let kind = sub.pomodoroKind {
+            return kind
+        }
+        return task.pomodoroKind
     }
 
     /// Marks one subtask as the focus target (also activates its parent task).

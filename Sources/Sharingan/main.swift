@@ -295,6 +295,121 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-gaze-grid"),
     exit(0)
 }
 
+// Headless renders for the marketing site (debug utility):
+// `HOME=<throwaway> Sharingan --render-site-assets <outdir>` writes per-style
+// iris PNGs (transparent, for the animated carousel) and real UI views seeded
+// with sample tasks. Run with an overridden HOME so TaskStore.shared writes
+// its SQLite into the throwaway, never the real user database.
+if let i = CommandLine.arguments.firstIndex(of: "--render-site-assets"),
+   i + 1 < CommandLine.arguments.count {
+    let outDir = CommandLine.arguments[i + 1]
+    MainActor.assumeIsolated {
+        let fm = FileManager.default
+        for sub in ["iris", "anim-timer", "anim-tasks"] {
+            try? fm.createDirectory(atPath: "\(outDir)/\(sub)", withIntermediateDirectories: true)
+        }
+
+        @MainActor func write(_ view: some View, to path: String, scale: CGFloat = 2) {
+            let renderer = ImageRenderer(content: view)
+            renderer.scale = scale
+            if let cg = renderer.cgImage {
+                let rep = NSBitmapImageRep(cgImage: cg)
+                try? rep.representation(using: .png, properties: [:])?
+                    .write(to: URL(fileURLWithPath: path))
+            }
+        }
+
+        // 1) Transparent iris per style — the site spins these with CSS.
+        for style in SharinganStyle.allCases {
+            write(MoveIrisView(diameter: 220, style: style),
+                  to: "\(outDir)/iris/\(style.rawValue).png")
+        }
+
+        // 2) Seed sample tasks (isolated store — see HOME note above).
+        let store = TaskStore.shared
+        store.add(title: "Ship landing page v1", category: "Work", tags: ["launch"],
+                  dueDate: Date(), estimatedPomodoros: 3, project: "Blink", priority: .high)
+        store.add(title: "Review pull request #42", category: "Work", tags: ["code"],
+                  dueDate: Date(), estimatedPomodoros: 1, priority: .medium)
+        store.add(title: "Outline the weekly report", category: "Study", tags: ["writing"],
+                  dueDate: Calendar.current.date(byAdding: .day, value: 1, to: Date()),
+                  priority: .low)
+        store.add(title: "30-minute run", category: "Health", tags: ["habit"],
+                  recurrence: .daily, priority: .medium)
+        store.add(title: "Read 20 pages", category: "Personal", priority: .none)
+        if let first = store.tasks.first {
+            store.addSubtask(first.id, title: "Write the hero copy")
+            store.addSubtask(first.id, title: "Verify Lighthouse 100")
+            store.activeTaskID = first.id
+        }
+        // cfprefsd leaks the REAL user's defaults through the HOME override —
+        // clear the bits that show up in renders (focus queue, stale actives).
+        AppServices.focusQueue.clear()
+        print("store:", store.tasks.map(\.title))
+        print("active:", store.activeTask?.title ?? "nil")
+
+        let timer = PomodoroTimer()
+
+        // 3) Real UI views.
+        AppRouter.shared.section = .timer
+        write(MainWindowView(timer: timer)
+                .frame(width: 1040, height: 720)
+                .environment(\.colorScheme, .dark),
+              to: "\(outDir)/main-timer.png")
+
+        AppRouter.shared.section = .tasks
+        write(MainWindowView(timer: timer)
+                .frame(width: 1040, height: 720)
+                .environment(\.colorScheme, .dark),
+              to: "\(outDir)/main-tasks.png")
+
+        write(FloatingTimerView(timer: timer)
+                .frame(width: 232, height: 88)
+                .environment(\.colorScheme, .dark),
+              to: "\(outDir)/floating.png")
+
+        write(TodayPanelView(timer: timer)
+                .frame(width: 280)
+                .fixedSize(horizontal: false, vertical: true)
+                .environment(\.colorScheme, .dark),
+              to: "\(outDir)/today.png")
+
+        // 4) Frame sequences for the feature videos (assembled with ffmpeg).
+        // Timer: a running focus session counting down.
+        AppRouter.shared.section = .timer
+        timer.startFocusSession()
+        for f in 0..<32 {
+            write(MainWindowView(timer: timer)
+                    .frame(width: 1040, height: 720)
+                    .environment(\.colorScheme, .dark),
+                  to: String(format: "%@/anim-timer/f%03d.png", outDir, f), scale: 1)
+            timer.removeTime(38)
+        }
+        timer.stop()
+
+        // Tasks: the Today panel living — tasks get checked off, a new one
+        // arrives through quick add. (MainWindowView's list is List-backed,
+        // which ImageRenderer leaves empty — the Today panel is plain stacks.)
+        for f in 0..<36 {
+            if f == 10, store.tasks.count > 1 { store.toggleDone(store.tasks[1].id) }
+            if f == 20 {
+                store.add(title: "Reply to Alisher — pricing deck", category: "Work",
+                          tags: ["email"], dueDate: Date(), priority: .medium)
+            }
+            if f == 28, let last = store.tasks.last(where: { !$0.isDone }) {
+                store.toggleDone(last.id)
+            }
+            write(TodayPanelView(timer: timer)
+                    .frame(width: 280)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .environment(\.colorScheme, .dark),
+                  to: String(format: "%@/anim-tasks/f%03d.png", outDir, f))
+        }
+        print("site assets rendered to \(outDir)")
+    }
+    exit(0)
+}
+
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate

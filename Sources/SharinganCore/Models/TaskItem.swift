@@ -9,14 +9,18 @@ public struct Subtask: Identifiable, Codable, Equatable, Sendable {
     public var estimatedPomodoros: Int?
     /// Focus sessions credited to this step.
     public var pomodorosDone: Int
+    /// Pomodoro size for this step (nil = inherit the task's, then the app's).
+    public var pomodoroKind: PomodoroKind?
 
     public init(id: UUID = UUID(), title: String, isDone: Bool = false,
-                estimatedPomodoros: Int? = nil, pomodorosDone: Int = 0) {
+                estimatedPomodoros: Int? = nil, pomodorosDone: Int = 0,
+                pomodoroKind: PomodoroKind? = nil) {
         self.id = id
         self.title = title
         self.isDone = isDone
         self.estimatedPomodoros = estimatedPomodoros
         self.pomodorosDone = pomodorosDone
+        self.pomodoroKind = pomodoroKind
     }
 
     // Pomodoro fields were added after subtasks first shipped — decode them
@@ -28,6 +32,7 @@ public struct Subtask: Identifiable, Codable, Equatable, Sendable {
         isDone = try c.decodeIfPresent(Bool.self, forKey: .isDone) ?? false
         estimatedPomodoros = try c.decodeIfPresent(Int.self, forKey: .estimatedPomodoros)
         pomodorosDone = try c.decodeIfPresent(Int.self, forKey: .pomodorosDone) ?? 0
+        pomodoroKind = ((try? c.decodeIfPresent(PomodoroKind.self, forKey: .pomodoroKind)) ?? nil)
     }
 }
 
@@ -201,6 +206,8 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
     public var priority: TaskPriority
     /// When the task was completed (nil while open; cleared on un-complete).
     public var completedAt: Date?
+    /// Pomodoro size to run against this task (nil = app default).
+    public var pomodoroKind: PomodoroKind?
 
     public init(id: UUID = UUID(),
                 title: String,
@@ -218,7 +225,8 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
                 recurrence: Recurrence = .none,
                 project: String? = nil,
                 priority: TaskPriority = .none,
-                completedAt: Date? = nil) {
+                completedAt: Date? = nil,
+                pomodoroKind: PomodoroKind? = nil) {
         self.id = id
         self.title = title
         self.category = category
@@ -236,6 +244,7 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         self.project = project
         self.priority = priority
         self.completedAt = completedAt
+        self.pomodoroKind = pomodoroKind
     }
 
     // Defensive decoding: several fields (category, tags, pomodorosDone) were
@@ -262,6 +271,7 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         project = try c.decodeIfPresent(String.self, forKey: .project)
         priority = try c.decodeIfPresent(TaskPriority.self, forKey: .priority) ?? .none
         completedAt = try c.decodeIfPresent(Date.self, forKey: .completedAt)
+        pomodoroKind = ((try? c.decodeIfPresent(PomodoroKind.self, forKey: .pomodoroKind)) ?? nil)
     }
 
     /// True when the task has a past deadline and isn't finished.

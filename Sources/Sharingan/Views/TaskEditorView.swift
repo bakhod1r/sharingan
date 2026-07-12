@@ -154,11 +154,11 @@ struct TaskEditorView: View {
         .popover(isPresented: $showCustomDue, arrowEdge: .bottom) {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Due date").dsSectionLabel()
-                DatePicker("", selection: Binding(
+                BlinkCalendar(date: Binding(
                     get: { draft.dueDate ?? Date() },
                     set: { draft.dueDate = $0 }),
-                    displayedComponents: [.date, .hourAndMinute])
-                    .datePickerStyle(.graphical).labelsHidden().frame(width: 260)
+                    accent: accent,
+                    weekStartsOnMonday: settings.weekStartsOnMonday)
                 HStack {
                     Button("Clear") { draft.dueDate = nil; showCustomDue = false }
                         .buttonStyle(.plain).foregroundStyle(.red.opacity(0.9))
@@ -215,6 +215,28 @@ struct TaskEditorView: View {
                          icon: "target")
                 }
                 .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Pomodoro").dsSectionLabel()
+                Menu {
+                    Button("Default") { draft.pomodoroKind = nil }
+                    Divider()
+                    ForEach(PomodoroKind.allCases) { kind in
+                        Button {
+                            draft.pomodoroKind = kind
+                        } label: {
+                            let cfg = settings.config(for: kind)
+                            Label("\(kind.label) · \(cfg.focusMinutes)/\(cfg.breakMinutes) min",
+                                  systemImage: draft.pomodoroKind == kind
+                                      ? "checkmark" : kind.systemImage)
+                        }
+                    }
+                } label: {
+                    chip(kindChipText(draft.pomodoroKind),
+                         icon: draft.pomodoroKind?.systemImage ?? "timer")
+                }
+                .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                .help("Which pomodoro size focus sessions on this task use")
             }
             VStack(alignment: .leading, spacing: 8) {
                 Text("Repeat").dsSectionLabel()
@@ -312,6 +334,34 @@ struct TaskEditorView: View {
                     }
                     // Estimate stepper stays visible even with badges hidden —
                     // the editor is the only place estimates can be set.
+                    // Per-step pomodoro size: overrides the task's kind when
+                    // this step is the focus target.
+                    Menu {
+                        Button("Task default") { sub.pomodoroKind = nil }
+                        Divider()
+                        ForEach(PomodoroKind.allCases) { kind in
+                            Button {
+                                sub.pomodoroKind = kind
+                            } label: {
+                                let cfg = settings.config(for: kind)
+                                Label("\(kind.label) · \(cfg.focusMinutes)/\(cfg.breakMinutes) min",
+                                      systemImage: sub.pomodoroKind == kind
+                                          ? "checkmark" : kind.systemImage)
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: sub.pomodoroKind?.systemImage ?? "timer")
+                                .font(.system(size: 9, weight: .semibold))
+                            Text(sub.pomodoroKind?.label ?? "Auto")
+                                .font(.system(size: 10, design: .rounded).weight(.medium))
+                        }
+                        .foregroundStyle(sub.pomodoroKind == nil ? Color.dsTertiary : accent)
+                        .padding(.horizontal, 7).padding(.vertical, 3)
+                        .background(Capsule().fill(Color.white.opacity(0.06)))
+                    }
+                    .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                    .help("Pomodoro size for this step")
                     Text(sub.estimatedPomodoros.map { "est \($0)" } ?? "no est")
                         .font(.system(size: 10, design: .rounded))
                         .foregroundStyle(Color.dsTertiary)
@@ -374,6 +424,13 @@ struct TaskEditorView: View {
     }
 
     // MARK: - Helpers
+
+    /// Chip label for the task-level pomodoro kind ("Big · 90/15" or "Default").
+    private func kindChipText(_ kind: PomodoroKind?) -> String {
+        guard let kind else { return "Default" }
+        let cfg = settings.config(for: kind)
+        return "\(kind.label) · \(cfg.focusMinutes)/\(cfg.breakMinutes)"
+    }
 
     private func chip(_ text: String, icon: String) -> some View {
         HStack(spacing: 5) {

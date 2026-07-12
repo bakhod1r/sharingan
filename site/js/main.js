@@ -1,4 +1,5 @@
 import { CONFIG } from "./config.js";
+import { initTimerDemo, initQuickAddDemo, initExerciseDemo, buildCarousel } from "./demos.js";
 
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -21,28 +22,24 @@ document.querySelector(".theme-toggle")?.addEventListener("click", () => {
   } catch {}
 });
 
+// ---- "try it live" widgets (no WebGL needed) ---------------------------------
+initTimerDemo();
+initQuickAddDemo();
+
 // ---- eyes (WebGL) — loaded AFTER first paint so three.js never blocks FCP;
 // the CSS .bg-fallback backdrop stays underneath either way -------------------
-let demo = null;
-document.querySelectorAll(".pattern-picker button").forEach((btn) =>
-  btn.addEventListener("click", () => {
-    demo?.setPattern(+btn.dataset.pattern);
-    document.querySelector(".pattern-picker .active")?.classList.remove("active");
-    btn.classList.add("active");
-  })
-);
-
 requestAnimationFrame(() =>
   setTimeout(async () => {
-    let initEyes;
+    let mod;
     try {
-      ({ initEyes } = await import("./eyes.js"));
+      mod = await import("./eyes.js");
     } catch {
       return; // no module/WebGL support — static fallback backdrop remains
     }
+    const { initEyes, STYLES, STYLE_LABELS } = mod;
 
     const bgCanvas = document.getElementById("bg-eyes");
-    const bg = initEyes(bgCanvas, { eyes: 2, patternIndex: 2 });
+    const bg = initEyes(bgCanvas, { eyes: 2, style: "classic" });
     if (!bg) bgCanvas.remove();
 
     // dim the eyes once the hero scrolls away so content reads
@@ -53,17 +50,29 @@ requestAnimationFrame(() =>
       ).observe(document.querySelector(".hero"));
     }
 
-    // the demo eye compiles its own GL program — wait until its section nears
-    const demoCanvas = document.getElementById("demo-eye");
-    new IntersectionObserver(
-      ([e], obs) => {
-        if (!e.isIntersecting) return;
-        obs.disconnect();
-        demo = initEyes(demoCanvas, { eyes: 1, patternIndex: 2 });
-        if (!demo) demoCanvas.style.display = "none";
-      },
-      { rootMargin: "600px" }
-    ).observe(demoCanvas);
+    // the demo and drill eyes are extra WebGL contexts — create each only
+    // when its section approaches the viewport
+    function lazyEye(canvasId, onReady) {
+      const canvas = document.getElementById(canvasId);
+      new IntersectionObserver(
+        ([e], obs) => {
+          if (!e.isIntersecting) return;
+          obs.disconnect();
+          const eye = initEyes(canvas, { eyes: 1, style: "classic" });
+          if (!eye) canvas.style.display = "none";
+          else onReady(eye);
+        },
+        { rootMargin: "400px" }
+      ).observe(canvas);
+    }
+
+    // wallpaper section: the live demo eye + the 18-style carousel picker
+    let demo = null;
+    lazyEye("demo-eye", (eye) => (demo = eye));
+    buildCarousel(STYLES, STYLE_LABELS, (name) => demo?.setStyle(name));
+
+    // eye-health pillar: the drill demo gets its own eye
+    lazyEye("exercise-eye", (eye) => initExerciseDemo(eye));
   }, 0)
 );
 
@@ -108,9 +117,14 @@ const LINES = [
 
 const body = document.getElementById("terminal-body");
 if (reduceMotion) {
-  body.innerHTML = LINES.map(
-    (l) => `<span class="${l.cls}">${l.text}</span>`
-  ).join("\n");
+  body.replaceChildren(
+    ...LINES.flatMap((l) => {
+      const s = document.createElement("span");
+      s.className = l.cls;
+      s.textContent = l.text;
+      return [s, "\n"];
+    })
+  );
 } else {
   const caret = document.createElement("span");
   caret.className = "caret";

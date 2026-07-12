@@ -120,10 +120,30 @@ public final class PomodoroTimer: ObservableObject {
     /// off (a plain `phase != .focus` check would wrongly reset it, because
     /// pausing rewrites `phase` to `.paused`); a break is reset to a fresh
     /// focus session first.
-    public func startFocusSession() {
+    ///
+    /// `kind` carries the task/subtask's pomodoro size (nil = keep the current
+    /// one). A DIFFERENT kind restarts the session fresh — resuming 7 minutes
+    /// into a Small session as a Big one would misattribute the whole block.
+    public func startFocusSession(kind: PomodoroKind? = nil) {
+        let kindChanged = kind != nil && kind != settings.activeKind
+        if let kind { settings.activeKind = kind }
         let effective = phase == .paused ? previousPhase : phase
-        if effective != .focus { stop() }
+        if effective != .focus || kindChanged { stop() }
         start()
+    }
+
+    /// Switches the pomodoro size (Small/Normal/Big). While idle, the pending
+    /// phase duration refreshes immediately so the countdown shows the new
+    /// length; a running session keeps its current block untouched.
+    public func applyKind(_ kind: PomodoroKind) {
+        guard settings.activeKind != kind else { return }
+        settings.activeKind = kind
+        guard !isRunning else { return }
+        durationOverride = nil
+        let effective = phase == .paused ? previousPhase : phase
+        remainingSeconds = settings.duration(for: effective)
+        elapsedSeconds = 0
+        syncPrecise()
     }
 
     public func toggle() {

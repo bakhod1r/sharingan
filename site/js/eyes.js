@@ -2,14 +2,34 @@
 // (Sources/Sharingan/Views/MoveEyesView.swift + WallpaperWindowManager.swift):
 // the same almond eye — Bézier lids, gray edge highlights, white sclera,
 // translating iris — with the wallpaper's gaze/blink/wink/doze behaviors.
-// Exposes initEyes(canvas, opts) -> { setPattern(i), dispose() } | null.
-// Patterns: 0=1-tomoe, 1=2-tomoe, 2=3-tomoe, 3=Mangekyō, 4=Rinnegan.
+// The iris itself is sampled from the app's own renders (one PNG per style),
+// so every one of the 18 styles is pixel-identical to the app.
+// Exposes initEyes(canvas, opts) -> api | null.
 
 import * as THREE from "./vendor/three.module.min.js";
 
-const PATTERN_COUNT = 5;
+// SharinganStyle.allCases, in the app's order — iris textures are the app's
+// own renders, one PNG per style under assets/app/iris/.
+export const STYLES = [
+  "tomoe1", "tomoe2", "classic", "mangekyou", "mangekyouKamui",
+  "mangekyouEternal", "itachi", "sixStar", "blade", "orbit", "crescent",
+  "fourBlade", "madara", "shuriken", "swirl", "triangleTomoe",
+  "ringCrescents", "rinnegan",
+];
+export const STYLE_LABELS = {
+  tomoe1: "Classic (1 tomoe)", tomoe2: "Classic (2 tomoe)",
+  classic: "Classic (3 tomoe)", mangekyou: "Mangekyō",
+  mangekyouKamui: "Mangekyō — Kamui", mangekyouEternal: "Mangekyō — Eternal",
+  itachi: "Itachi", sixStar: "Six-point star", blade: "Three-blade",
+  orbit: "Orbit rings", crescent: "Triple crescent", fourBlade: "Four-blade",
+  madara: "Madara — fan blades", shuriken: "Shuriken", swirl: "Single swirl",
+  triangleTomoe: "Triangle tomoe", ringCrescents: "Ring + crescents",
+  rinnegan: "Rinnegan",
+};
+const IRIS_URL = (name) => `assets/app/iris/${name}.png`;
+
 const REACH = 500; // px — same clamp radius as the wallpaper's gaze()
-const IDLE_SPIN_DELAY = 1.2; // s of stillness before tomoe start spinning
+const IDLE_SPIN_DELAY = 1.2; // s of stillness before the iris starts spinning
 const WINK_IDLE_DELAY = 6; // s of stillness before playful winks
 const DOZE_DELAY = 45; // s of stillness before the eyes drift shut
 
@@ -22,19 +42,18 @@ const EYE_VERT = /* glsl */ `
 `;
 
 // All geometry below mirrors MoveEyesView.swift exactly: control points,
-// stroke widths, offsets, gradient stops and tomoe proportions are the
-// app's numbers, evaluated in the same unit space (x across the 2.1:1
-// almond, y top→down like SwiftUI).
+// stroke widths, offsets and proportions are the app's numbers, evaluated
+// in the same unit space (x across the 2.1:1 almond, y top→down).
 const EYE_FRAG = /* glsl */ `
   precision highp float;
   varying vec2 vUv;
   uniform float uOpen;      // eyelid, 1 open … 0 closed
   uniform float uSquint;    // scroll-driven narrowing on top of uOpen
-  uniform float uSpin;      // tomoe rotation, radians
-  uniform float uEmergence; // 0…1 — pattern whirling out of the pupil
-  uniform int   uPattern;
+  uniform float uSpin;      // iris rotation, radians
+  uniform float uEmergence; // 0…1 — the pattern whirling awake
   uniform vec2  uGaze;      // normalized look direction, screen space
   uniform float uMirror;    // 1 = right eye
+  uniform sampler2D uIrisTex; // the app's iris render for the current style
 
   #define PI 3.14159265359
   #define W 2.1
@@ -83,47 +102,6 @@ const EYE_FRAG = /* glsl */ `
     return 1.0 - smoothstep(halfW - aa, halfW + aa, abs(y - center));
   }
 
-  // shortest signed angular difference
-  float angDiff(float a, float b) {
-    float d = mod(a - b + PI, 2.0 * PI) - PI;
-    return d;
-  }
-
-  // One comma tomoe riding a ring (MoveTomoeTail + head circle):
-  // head circle at (ringR, headA), tail sweeping "sweep" radians behind it
-  // with width tapering (1-t)^2 from startW.
-  float tomoe(vec2 pp, float rr, float aa2, float ringR, float headA,
-              float headR, float startW, float sweep, float aa) {
-    vec2 head = ringR * vec2(cos(headA), sin(headA));
-    float cov = 1.0 - smoothstep(headR - aa, headR + aa, length(pp - head));
-    float da = mod(headA - aa2, 2.0 * PI);
-    if (da < sweep) {
-      float t = da / sweep;
-      float w = startW * (1.0 - t) * (1.0 - t) * 0.5;
-      cov = max(cov, 1.0 - smoothstep(w - aa, w + aa, abs(rr - ringR)));
-    }
-    return cov;
-  }
-
-  // Iris base gradient — the app's exact RadialGradient stops.
-  vec3 irisBase(float rn, bool rinne) {
-    vec3 s0; vec3 s1; vec3 s2; vec3 s3; vec3 s4;
-    if (rinne) {
-      s0 = vec3(0.80, 0.72, 0.93); s1 = vec3(0.66, 0.53, 0.85);
-      s2 = vec3(0.58, 0.44, 0.80); s3 = vec3(0.44, 0.30, 0.66);
-      s4 = vec3(0.30, 0.17, 0.50);
-    } else {
-      s0 = vec3(0.58, 0.02, 0.03); s1 = vec3(0.65, 0.05, 0.05);
-      s2 = vec3(0.71, 0.08, 0.07); s3 = vec3(0.52, 0.02, 0.02);
-      s4 = vec3(0.34, 0.00, 0.01);
-    }
-    vec3 c = mix(s0, s1, smoothstep(0.00, 0.45, rn));
-    c = mix(c, s2, smoothstep(0.45, 0.65, rn));
-    c = mix(c, s3, smoothstep(0.65, 0.88, rn));
-    c = mix(c, s4, smoothstep(0.88, 1.00, rn));
-    return c;
-  }
-
   void main() {
     // unit rect coords, y down (SwiftUI space). The plane carries a margin
     // around the unit rect so lid strokes can overflow like the app's
@@ -140,10 +118,8 @@ const EYE_FRAG = /* glsl */ `
 
     vec2 up = upperLid(x, open);
     vec2 lo = lowerLid(x);
-    // inX also kills the antialiasing sliver where both lid curves collapse
-    // to the tip height across the overflow margin
     float almond = (1.0 - smoothstep(-aa, aa, up.x - y))
-                 * (1.0 - smoothstep(-aa, aa, y - lo.x)) * inX;
+                 * (1.0 - smoothstep(-aa, aa, y - lo.x));
 
     vec4 col = vec4(0.0);
 
@@ -193,71 +169,23 @@ const EYE_FRAG = /* glsl */ `
       sc = mix(sc, vec3(0.95, 0.68, 0.70), blush);
 
       if (rn < 1.0 + aa) {
-        bool rinne = uPattern == 4;
-        vec3 iris = irisBase(rn, rinne);
-
-        // rim stroke: 0.05r wide, inset 0.02r
-        vec3 rim = rinne ? vec3(0.12, 0.04, 0.22) : vec3(0.08, 0.0, 0.0);
-        iris = mix(iris, rim, 0.9 * band(rn, 0.98, 0.025, aa * 4.0));
-
-        // ---- spinning black pattern with emergence whirl ---------------
+        // the app's iris texture, spun by uSpin and whirling awake with
+        // uEmergence (scale + counter-twist + fade, like MoveIrisView)
         float e = clamp(uEmergence, 0.0, 1.0);
         float theta = uSpin - (1.0 - e) * 4.538; // -260° twist while closed
-        float scaleE = max(0.08 + 0.92 * e, 0.001);
         vec2 pd = (p - ic) / irisR;
-        float ca = cos(-theta), sa = sin(-theta);
-        vec2 q = mat2(ca, -sa, sa, ca) * pd / scaleE;
-        float rr = length(q);
-        float qa = atan(q.y, q.x);
-        float ink = 0.0;
-        float aaq = aa * 6.0 / scaleE;
+        if (uMirror > 0.5) { pd.x = -pd.x; theta = -theta; }
+        float ca = cos(theta), sa = sin(theta);
+        vec2 q = mat2(ca, sa, -sa, ca) * pd;
+        q /= (0.75 + 0.25 * e);
+        vec4 tex = texture2D(uIrisTex, clamp(q * 0.5 + 0.5, 0.0, 1.0));
+        float inQ = step(max(abs(q.x), abs(q.y)), 1.0);
 
-        if (uPattern <= 2) {
-          float n = float(uPattern + 1);
-          // dark-red ring through the tomoe orbit
-          float ring = band(rr, 0.52, 0.0175, aaq);
-          iris = mix(iris, vec3(0.22, 0.0, 0.01),
-                     0.85 * ring * min(1.0, e * 2.4));
-          for (int i = 0; i < 3; i++) {
-            if (i >= uPattern + 1) break;
-            float head = radians(-80.0) + float(i) * 2.0 * PI / n;
-            ink = max(ink, tomoe(q, rr, qa, 0.52, head,
-                                 0.16, 0.27, radians(100.0), aaq));
-          }
-        } else if (uPattern == 3) {
-          // Mangekyō pinwheel: 3 curved blades (lean 0.62)
-          float R = 0.86;
-          float s = rr / R;
-          if (s > 0.13 && s < 1.0) {
-            float w = mix(0.30, 0.03, smoothstep(0.16, 1.0, s));
-            for (int i = 0; i < 3; i++) {
-              float base = float(i) * 2.0 * PI / 3.0;
-              float phi = base + 0.62 * pow(s, 1.15);
-              float blade = 1.0 - smoothstep(w - aaq, w + aaq,
-                                             abs(angDiff(qa, phi)));
-              blade *= 1.0 - smoothstep(0.96, 1.0, s);
-              ink = max(ink, blade);
-            }
-          }
-        } else {
-          // Rinnegan: three rings + two staggered tomoe orbits
-          for (int i = 0; i < 3; i++) {
-            float rrad = 0.30 + 0.25 * float(i);
-            ink = max(ink, 0.78 * band(rr, rrad, 0.0175, aaq));
-          }
-          for (int i = 0; i < 3; i++) {
-            float h1 = radians(-90.0 + float(i) * 120.0);
-            float h2 = radians(-30.0 + float(i) * 120.0);
-            ink = max(ink, tomoe(q, rr, qa, 0.55, h1, 0.09, 0.11,
-                                 radians(45.0), aaq));
-            ink = max(ink, tomoe(q, rr, qa, 0.80, h2, 0.09, 0.11,
-                                 radians(45.0), aaq));
-          }
-        }
-        iris = mix(iris, vec3(0.0), ink * min(1.0, e * 2.4));
-
-        // pupil (over the pattern, unaffected by emergence)
-        iris = mix(vec3(0.0), iris, smoothstep(0.13 - aa * 4.0, 0.13 + aa * 4.0, rn));
+        // bare red iris base shows through while the pattern whirls awake
+        vec3 iris = mix(vec3(0.65, 0.05, 0.05), vec3(0.34, 0.0, 0.01),
+                        smoothstep(0.1, 1.0, rn));
+        iris = mix(vec3(0.0), iris, smoothstep(0.115, 0.145, rn)); // pupil
+        iris = mix(iris, tex.rgb, tex.a * inQ * min(1.0, e * 2.4));
 
         float irisCov = 1.0 - smoothstep(1.0 - aa * 2.0, 1.0 + aa * 2.0, rn);
         sc = mix(sc, iris, irisCov);
@@ -284,7 +212,7 @@ function makeGlowTexture() {
   return new THREE.CanvasTexture(c);
 }
 
-function buildEye(glowTexture, mirrored) {
+function buildEye(glowTexture, mirrored, irisTexture) {
   const group = new THREE.Group();
 
   const glow = new THREE.Sprite(
@@ -310,9 +238,9 @@ function buildEye(glowTexture, mirrored) {
       uSquint: { value: 0 },
       uSpin: { value: 0 },
       uEmergence: { value: 0 },
-      uPattern: { value: 2 },
       uGaze: { value: new THREE.Vector2(0, 0) },
       uMirror: { value: mirrored ? 1 : 0 },
+      uIrisTex: { value: irisTexture },
     },
   });
   // 2.1:1 almond (eye height = 2 world units) plus overflow margin for the
@@ -349,19 +277,32 @@ export function initEyes(canvas, opts = {}) {
   // which the gaze lerp then locks in forever.
   camera.updateMatrixWorld();
 
+  // ---- iris textures (the app's own renders, loaded lazily per style) ----
+  const loader = new THREE.TextureLoader();
+  const texCache = new Map();
+  function irisTexture(name) {
+    if (!texCache.has(name)) {
+      const tex = loader.load(IRIS_URL(name));
+      tex.flipY = false;
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = 4;
+      texCache.set(name, tex);
+    }
+    return texCache.get(name);
+  }
+  let style = opts.style ?? "classic";
+  let styleIndex = Math.max(0, STYLES.indexOf(style));
+
   const rig = new THREE.Group(); // scroll parallax target
   scene.add(rig);
 
   const glowTexture = makeGlowTexture();
   const eyes = [];
   for (let i = 0; i < eyeCount; i++) {
-    const eye = buildEye(glowTexture, eyeCount === 2 && i === 1);
+    const eye = buildEye(glowTexture, eyeCount === 2 && i === 1, irisTexture(style));
     rig.add(eye.group);
     eyes.push(eye);
   }
-
-  let pattern = opts.patternIndex ?? 2;
-  eyes.forEach((e) => (e.irisMat.uniforms.uPattern.value = pattern));
 
   // ---- tweens (lids + emergence) ----------------------------------------
   const tweens = [];
@@ -417,7 +358,6 @@ export function initEyes(canvas, opts = {}) {
   layout();
 
   // ---- gaze ----------------------------------------------------------------
-  const finePointer = matchMedia("(pointer: fine)");
   const pointer = { x: innerWidth / 2, y: innerHeight / 2, moved: performance.now() };
   const onMove = (ev) => {
     pointer.x = ev.clientX;
@@ -426,10 +366,14 @@ export function initEyes(canvas, opts = {}) {
   };
   addEventListener("pointermove", onMove, { passive: true });
 
+  // When set (exercise demo), the eyes look here instead of at the cursor.
+  let gazeOverride = null;
+
   const proj = new THREE.Vector3();
   function gazeTarget(eye, t) {
+    if (gazeOverride) return gazeOverride;
     const stillFor = (performance.now() - pointer.moved) / 1000;
-    if (stillFor > 30 || !finePointer.matches) {
+    if (stillFor > 30 || !matchMedia("(pointer: fine)").matches) {
       // no cursor to follow — slow autonomous wander
       return { dx: Math.sin(t * 0.23) * 0.6, dy: Math.cos(t * 0.17) * 0.4 };
     }
@@ -474,9 +418,6 @@ export function initEyes(canvas, opts = {}) {
       openBoth(0.16, easeOut, 0.2);
     }
   }
-  function advancePattern() {
-    setPattern((pattern + 1) % PATTERN_COUNT);
-  }
   function updateEyelids() {
     const now = performance.now();
     const stillFor = (now - pointer.moved) / 1000;
@@ -487,9 +428,10 @@ export function initEyes(canvas, opts = {}) {
     } else if (stillFor <= DOZE_DELAY && dozing) {
       dozing = false;
       nextBlink = now + rand(2000, 5000);
-      advancePattern(); // wake with the next pattern in the chain
+      // wake with the next pattern in the evolution chain
+      setStyle(STYLES[(styleIndex + 1) % STYLES.length]);
       openBoth(0.25, easeOut);
-      return; // setPattern already replays emergence
+      return; // setStyle already replays emergence
     }
     if (dozing || now < nextBlink) return;
     if (stillFor > WINK_IDLE_DELAY) {
@@ -514,14 +456,22 @@ export function initEyes(canvas, opts = {}) {
   addEventListener("pointerdown", onClick, { passive: true });
 
   // ---- public API ----------------------------------------------------------
-  function setPattern(i) {
-    pattern = ((i % PATTERN_COUNT) + PATTERN_COUNT) % PATTERN_COUNT;
-    eyes.forEach((e) => (e.irisMat.uniforms.uPattern.value = pattern));
+  function setStyle(name) {
+    if (!STYLES.includes(name)) return;
+    style = name;
+    styleIndex = STYLES.indexOf(name);
+    const tex = irisTexture(name);
+    eyes.forEach((e) => (e.irisMat.uniforms.uIrisTex.value = tex));
     if (reduceMotion) {
       setEmergence(1);
     } else {
       tween(setEmergence, 0, 1, 0.9, easeOut);
     }
+  }
+  // Back-compat with the old 5-pattern picker indices.
+  const LEGACY = ["tomoe1", "tomoe2", "classic", "mangekyou", "rinnegan"];
+  function setPattern(i) {
+    setStyle(LEGACY[((i % LEGACY.length) + LEGACY.length) % LEGACY.length]);
   }
 
   // ---- render loop -----------------------------------------------------------
@@ -540,7 +490,7 @@ export function initEyes(canvas, opts = {}) {
 
     runTweens(now);
 
-    // tomoe spin: eases in after a beat of stillness, out on movement;
+    // iris spin: eases in after a beat of stillness, out on movement;
     // click bursts stack on top regardless of idle state
     if (!reduceMotion) {
       const still = (now - pointer.moved) / 1000 > IDLE_SPIN_DELAY;
@@ -562,12 +512,8 @@ export function initEyes(canvas, opts = {}) {
       rig.position.y = s * 1.4;
       rig.rotation.z = s * 0.04;
 
-      // scroll spins the tomoe with the page: down = clockwise, up = counter
-      const dScroll = scrollY - lastScroll;
-      if (!reduceMotion) spin += dScroll * 0.0035;
-
       // scroll velocity → the eyes narrow while the page rushes past
-      const v = Math.abs(dScroll) / Math.max(dt, 0.001);
+      const v = Math.abs(scrollY - lastScroll) / Math.max(dt, 0.001);
       lastScroll = scrollY;
       const squintTarget = reduceMotion ? 0 : Math.min(0.85, v / 3200);
       squint += (squintTarget - squint) * Math.min(1, dt * (squintTarget > squint ? 10 : 3));
@@ -590,31 +536,39 @@ export function initEyes(canvas, opts = {}) {
   const onVisibility = () => (document.hidden ? stop() : start());
   document.addEventListener("visibilitychange", onVisibility);
 
+  // don't burn frames while the canvas is scrolled out of view
+  const vis = new IntersectionObserver(([e]) =>
+    e.isIntersecting && !document.hidden ? start() : stop()
+  );
+  vis.observe(canvas);
+
   if (location.hash === "#debug") {
     window.__eyes = window.__eyes || [];
     window.__eyes.push({ renderer, scene, camera, eyes, canvas });
   }
 
-  // Compile shaders off the main thread where the GPU supports it, then
-  // start rendering with the awakening whirl — keeps the page responsive
-  // while the eye program builds.
-  const awaken = () => {
-    if (disposed) return;
-    if (reduceMotion) {
-      setEmergence(1);
-    } else {
-      tween(setEmergence, 0, 1, 0.9, easeOut, 0.4);
-    }
-    start();
-  };
-  if (renderer.compileAsync) {
-    renderer.compileAsync(scene, camera).then(awaken, awaken);
+  // awakening: the pattern whirls out of the pupil on first show
+  if (reduceMotion) {
+    setEmergence(1);
   } else {
-    awaken();
+    tween(setEmergence, 0, 1, 0.9, easeOut, 0.4);
   }
+  start();
 
   return {
+    setStyle,
     setPattern,
+    get style() {
+      return style;
+    },
+    /// Exercise demo: aim the eyes at {dx,dy} (−1…1), or null → cursor.
+    setGazeTarget(target) {
+      gazeOverride = target;
+    },
+    /// Exercise demo: one deliberate blink.
+    blink() {
+      if (!reduceMotion) blinkOnce();
+    },
     dispose() {
       disposed = true;
       stop();
@@ -622,6 +576,7 @@ export function initEyes(canvas, opts = {}) {
       removeEventListener("pointermove", onMove);
       removeEventListener("pointerdown", onClick);
       document.removeEventListener("visibilitychange", onVisibility);
+      vis.disconnect();
       ro.disconnect();
       renderer.dispose();
     },

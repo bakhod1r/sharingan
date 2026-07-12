@@ -50,9 +50,55 @@ public enum FloatingTimerSize: String, Codable, CaseIterable, Sendable {
     }
 }
 
+/// The three pomodoro sizes — a quick gear shift between short bursts and deep
+/// work. Each kind carries its own (editable) focus/break lengths; the enum
+/// only names the slot and supplies factory defaults.
+public enum PomodoroKind: String, Codable, CaseIterable, Sendable, Identifiable {
+    case small, normal, big
+
+    public var id: String { rawValue }
+
+    public var label: String {
+        switch self {
+        case .small:  return "Small"
+        case .normal: return "Normal"
+        case .big:    return "Big"
+        }
+    }
+
+    public var systemImage: String {
+        switch self {
+        case .small:  return "hare.fill"
+        case .normal: return "timer"
+        case .big:    return "tortoise.fill"
+        }
+    }
+
+    /// Factory durations: small 10/3, normal 25/5, big 90/15.
+    public var defaultConfig: PomodoroKindConfig {
+        switch self {
+        case .small:  return .init(focusMinutes: 10, breakMinutes: 3)
+        case .normal: return .init(focusMinutes: 25, breakMinutes: 5)
+        case .big:    return .init(focusMinutes: 90, breakMinutes: 15)
+        }
+    }
+}
+
+/// Editable focus/break lengths for one pomodoro kind.
+public struct PomodoroKindConfig: Codable, Equatable, Sendable {
+    public var focusMinutes: Int
+    public var breakMinutes: Int
+    public init(focusMinutes: Int, breakMinutes: Int) {
+        self.focusMinutes = focusMinutes
+        self.breakMinutes = breakMinutes
+    }
+}
+
 public struct PomodoroSettings: Codable, Equatable, Sendable {
-    public var focusMinutes: Int = 25
-    public var shortBreakMinutes: Int = 5
+    /// Per-kind duration overrides; a missing key means the factory default.
+    public var kindConfigs: [String: PomodoroKindConfig] = [:]
+    /// The kind the timer currently runs (picked manually or by the task).
+    public var activeKind: PomodoroKind = .normal
     public var longBreakMinutes: Int = 15
     public var longBreakEvery: Int = 4
     public var autoStartFocus: Bool = false
@@ -166,6 +212,42 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
 
     public init() {}
 
+    /// Durations for a kind — the user's override, else the factory default.
+    public func config(for kind: PomodoroKind) -> PomodoroKindConfig {
+        kindConfigs[kind.rawValue] ?? kind.defaultConfig
+    }
+
+    public mutating func setConfig(_ config: PomodoroKindConfig, for kind: PomodoroKind) {
+        kindConfigs[kind.rawValue] = config
+    }
+
+    /// Focus length of the ACTIVE kind. Kept as a property (not renamed) so the
+    /// timer, stats and CLI paths read whichever kind is currently selected.
+    public var focusMinutes: Int {
+        get { config(for: activeKind).focusMinutes }
+        set {
+            var c = config(for: activeKind)
+            c.focusMinutes = newValue
+            kindConfigs[activeKind.rawValue] = c
+        }
+    }
+
+    /// Short-break length of the ACTIVE kind (long break stays global).
+    public var shortBreakMinutes: Int {
+        get { config(for: activeKind).breakMinutes }
+        set {
+            var c = config(for: activeKind)
+            c.breakMinutes = newValue
+            kindConfigs[activeKind.rawValue] = c
+        }
+    }
+
+    // Pre-kinds blobs stored flat focus/short-break minutes; those keys are no
+    // longer stored properties, so they need their own decode container.
+    private enum LegacyKeys: String, CodingKey {
+        case focusMinutes, shortBreakMinutes
+    }
+
     // Defensive decoding: settings are stored as one JSON blob and new fields are
     // added often. With synthesized Decodable, an older blob missing ANY key would
     // throw and the whole settings object would silently reset to defaults. Decode
@@ -173,8 +255,21 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let d = PomodoroSettings()
-        focusMinutes = try c.decodeIfPresent(Int.self, forKey: .focusMinutes) ?? d.focusMinutes
-        shortBreakMinutes = try c.decodeIfPresent(Int.self, forKey: .shortBreakMinutes) ?? d.shortBreakMinutes
+        kindConfigs = try c.decodeIfPresent([String: PomodoroKindConfig].self,
+                                            forKey: .kindConfigs) ?? [:]
+        activeKind = ((try? c.decodeIfPresent(PomodoroKind.self, forKey: .activeKind)) ?? nil)
+            ?? d.activeKind
+        // Migrate a pre-kinds blob: its custom focus/break lengths become the
+        // "normal" kind so an update doesn't reset the user's durations.
+        if kindConfigs[PomodoroKind.normal.rawValue] == nil {
+            let legacy = try decoder.container(keyedBy: LegacyKeys.self)
+            let focus = try legacy.decodeIfPresent(Int.self, forKey: .focusMinutes)
+            let brk = try legacy.decodeIfPresent(Int.self, forKey: .shortBreakMinutes)
+            if focus != nil || brk != nil {
+                kindConfigs[PomodoroKind.normal.rawValue] = PomodoroKindConfig(
+                    focusMinutes: focus ?? 25, breakMinutes: brk ?? 5)
+            }
+        }
         longBreakMinutes = try c.decodeIfPresent(Int.self, forKey: .longBreakMinutes) ?? d.longBreakMinutes
         longBreakEvery = try c.decodeIfPresent(Int.self, forKey: .longBreakEvery) ?? d.longBreakEvery
         autoStartFocus = try c.decodeIfPresent(Bool.self, forKey: .autoStartFocus) ?? d.autoStartFocus

@@ -358,6 +358,6 @@ struct MenuBarWeekView: View {
             return
         }
         store.setActive(task.id)
-        timer.startFocusSession()
+        timer.startFocusSession(kind: store.resolvedActiveKind)
     }
 }

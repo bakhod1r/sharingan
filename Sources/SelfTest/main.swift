@@ -20,6 +20,13 @@ struct SelfTest {
     static func main() {
         print("Sharingan self-tests")
         testModels()
+        testPomodoroKinds()
+        do { try testPomodoroKindCoding() } catch {
+            failures += 1
+            print("  ✗ Kind coding threw: \(error)")
+        }
+        testKindResolution()
+        testTimerKindSwitch()
         testTimerInitialState()
         testTimerSkipTransition()
         testTimerStopReset()
@@ -415,6 +422,156 @@ testBrightnessSettings()
         check(TimerMode.allCases.count == 2, "mode count == 2")
         check(SharinganTheme.allCases.count == 6, "theme count == 6")
         check(PomodoroPhase.focus.gradient.count == 2, "focus gradient stack")
+    }
+
+    static func testPomodoroKinds() {
+        print("• Pomodoro kinds (Small / Normal / Big)")
+        check(PomodoroKind.allCases.count == 3, "3 kinds")
+        check(PomodoroKind.small.defaultConfig == .init(focusMinutes: 10, breakMinutes: 3),
+              "small default 10/3")
+        check(PomodoroKind.normal.defaultConfig == .init(focusMinutes: 25, breakMinutes: 5),
+              "normal default 25/5")
+        check(PomodoroKind.big.defaultConfig == .init(focusMinutes: 90, breakMinutes: 15),
+              "big default 90/15")
+
+        var s = PomodoroSettings()
+        check(s.activeKind == .normal, "normal is the default kind")
+        check(s.focusMinutes == 25 && s.shortBreakMinutes == 5,
+              "flat accessors read the active kind")
+
+        // Switching the active kind swaps what the timer-facing accessors read.
+        s.activeKind = .small
+        check(s.focusMinutes == 10 && s.shortBreakMinutes == 3,
+              "small kind → 10/3 via accessors")
+        check(s.duration(for: .focus) == 10 * 60, "duration follows active kind")
+        s.activeKind = .big
+        check(s.focusMinutes == 90 && s.duration(for: .shortBreak) == 15 * 60,
+              "big kind → 90/15 via accessors")
+
+        // Every kind is user-configurable, independently of the others.
+        s.setConfig(.init(focusMinutes: 50, breakMinutes: 8), for: .big)
+        check(s.config(for: .big).focusMinutes == 50, "big focus configurable")
+        check(s.duration(for: .focus) == 50 * 60, "custom big drives the timer")
+        check(s.config(for: .small) == PomodoroKind.small.defaultConfig,
+              "editing big leaves small untouched")
+
+        // Writing through the flat accessor edits only the ACTIVE kind.
+        s.activeKind = .small
+        s.focusMinutes = 12
+        check(s.config(for: .small).focusMinutes == 12, "accessor writes small")
+        check(s.config(for: .normal).focusMinutes == 25, "normal unchanged")
+    }
+
+    static func testPomodoroKindCoding() throws {
+        print("• Pomodoro kind persistence & migration")
+        // Round-trip: per-kind overrides and the selected kind survive.
+        var s = PomodoroSettings()
+        s.setConfig(.init(focusMinutes: 15, breakMinutes: 4), for: .small)
+        s.activeKind = .small
+        let decoded = try JSONDecoder().decode(
+            PomodoroSettings.self, from: JSONEncoder().encode(s))
+        check(decoded == s, "kind settings encode/decode equal")
+        check(decoded.activeKind == .small, "activeKind survives")
+        check(decoded.config(for: .small).focusMinutes == 15, "small override survives")
+
+        // A pre-kinds blob (flat minutes) migrates into the normal kind so the
+        // user's custom durations survive the update.
+        let legacy = #"{"focusMinutes": 40, "shortBreakMinutes": 7}"#
+        let migrated = try JSONDecoder().decode(
+            PomodoroSettings.self, from: Data(legacy.utf8))
+        check(migrated.config(for: .normal) == .init(focusMinutes: 40, breakMinutes: 7),
+              "legacy 40/7 lands on normal")
+        check(migrated.activeKind == .normal, "legacy blob defaults to normal")
+        check(migrated.config(for: .small) == PomodoroKind.small.defaultConfig
+              && migrated.config(for: .big) == PomodoroKind.big.defaultConfig,
+              "small/big stay factory after migration")
+
+        // Legacy keys must NOT clobber an explicit normal config.
+        let mixed = #"{"focusMinutes": 40, "kindConfigs": {"normal": {"focusMinutes": 33, "breakMinutes": 6}}}"#
+        let kept = try JSONDecoder().decode(PomodoroSettings.self, from: Data(mixed.utf8))
+        check(kept.config(for: .normal).focusMinutes == 33,
+              "explicit kindConfigs beats legacy keys")
+
+        // Tasks & subtasks: kind round-trips, and old rows decode to nil.
+        var task = TaskItem(title: "Deep work")
+        task.pomodoroKind = .big
+        task.subtasks = [Subtask(title: "outline", pomodoroKind: .small)]
+        let t2 = try JSONDecoder().decode(TaskItem.self, from: JSONEncoder().encode(task))
+        check(t2.pomodoroKind == .big, "task kind survives round-trip")
+        check(t2.subtasks[0].pomodoroKind == .small, "subtask kind survives round-trip")
+        let oldTask = try JSONDecoder().decode(
+            TaskItem.self, from: Data(#"{"title": "old"}"#.utf8))
+        check(oldTask.pomodoroKind == nil, "pre-kind task decodes to nil kind")
+        let oldSub = try JSONDecoder().decode(
+            Subtask.self, from: Data(#"{"title": "old step"}"#.utf8))
+        check(oldSub.pomodoroKind == nil, "pre-kind subtask decodes to nil kind")
+    }
+
+    static func testKindResolution() {
+        print("• Kind resolution (subtask ▸ task ▸ none)")
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("blink-selftest-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let store = TaskStore(fileURL: dir.appendingPathComponent("tasks.json"))
+
+        store.add(title: "Thesis chapter")
+        store.add(title: "Inbox zero")
+        var thesis = store.tasks[0]
+        thesis.pomodoroKind = .big
+        thesis.subtasks = [Subtask(title: "outline", pomodoroKind: .small),
+                           Subtask(title: "draft")]
+        store.update(thesis)
+
+        check(store.resolvedActiveKind == nil, "no active task → no preference")
+        store.setActive(thesis.id)
+        check(store.resolvedActiveKind == .big, "task kind wins without a target step")
+        store.setActiveSubtask(taskID: thesis.id, subtaskID: thesis.subtasks[0].id)
+        check(store.resolvedActiveKind == .small, "targeted subtask kind overrides task")
+        store.setActiveSubtask(taskID: thesis.id, subtaskID: thesis.subtasks[1].id)
+        check(store.resolvedActiveKind == .big, "kindless subtask falls back to task kind")
+        store.setActive(store.tasks[1].id)
+        check(store.resolvedActiveKind == nil, "kindless task → no preference")
+
+        try? FileManager.default.removeItem(at: dir)
+    }
+
+    static func testTimerKindSwitch() {
+        print("• Timer kind switching")
+        let timer = PomodoroTimer()
+        let original = timer.settings   // restore afterwards: settings persist
+        timer.stop()
+
+        timer.applyKind(.small)
+        check(timer.settings.activeKind == .small, "applyKind selects small")
+        check(timer.remainingSeconds == timer.settings.duration(for: .focus),
+              "idle applyKind refreshes the countdown")
+        check(!timer.isRunning, "applyKind never starts the timer")
+        timer.applyKind(.small)
+        check(timer.remainingSeconds == timer.settings.duration(for: .focus),
+              "re-applying the same kind is a no-op")
+
+        timer.startFocusSession(kind: .big)
+        check(timer.isRunning && timer.phase == .focus, "session starts in focus")
+        check(timer.settings.activeKind == .big, "session adopts the task's kind")
+        check(timer.totalSeconds == timer.settings.duration(for: .focus),
+              "session length is the big focus length")
+
+        // Starting a task with a DIFFERENT kind mid-run restarts fresh.
+        timer.startFocusSession(kind: .small)
+        check(timer.settings.activeKind == .small, "mid-run switch adopts small")
+        check(timer.remainingSeconds == timer.settings.duration(for: .focus),
+              "mid-run switch restarts the countdown")
+
+        // Same kind (or none) resumes/keeps the session — no restart.
+        timer.pause()
+        let before = timer.remainingSeconds
+        timer.startFocusSession(kind: .small)
+        check(timer.remainingSeconds == before, "same-kind resume keeps progress")
+        timer.startFocusSession()
+        check(timer.remainingSeconds == before, "nil kind keeps the current kind")
+
+        timer.stop()
+        timer.settings = original
     }
 
     static func testTimerInitialState() {

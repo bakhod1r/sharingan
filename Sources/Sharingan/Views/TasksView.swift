@@ -614,11 +614,9 @@ struct TasksView: View {
         .popover(isPresented: $showCustomDue, arrowEdge: .bottom) {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Due date").dsSectionLabel()
-                DatePicker("", selection: $newDue,
-                           displayedComponents: [.date, .hourAndMinute])
-                    .datePickerStyle(.graphical)
-                    .labelsHidden()
-                    .frame(width: 260)
+                BlinkCalendar(date: $newDue,
+                              accent: timer.settings.theme.accent,
+                              weekStartsOnMonday: timer.settings.weekStartsOnMonday)
                 HStack {
                     Button("Clear") { setDue(nil) }
                         .buttonStyle(.pressableSubtle)
@@ -905,10 +903,9 @@ struct TasksView: View {
     private func snoozeSheet(_ task: TaskItem) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Snooze until").dsSectionLabel()
-            DatePicker("", selection: $snoozeDate, displayedComponents: [.date])
-                .datePickerStyle(.graphical)
-                .labelsHidden()
-                .frame(width: 260)
+            BlinkCalendar(date: $snoozeDate, showsTime: false,
+                          accent: timer.settings.theme.accent,
+                          weekStartsOnMonday: timer.settings.weekStartsOnMonday)
             HStack {
                 Button("Cancel") { snoozeTask = nil }
                     .buttonStyle(.pressableSubtle)
@@ -1721,6 +1718,6 @@ struct TasksView: View {
             return
         }
         store.setActive(task.id)
-        timer.startFocusSession()
+        timer.startFocusSession(kind: store.resolvedActiveKind)
     }
 }

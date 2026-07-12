@@ -874,7 +874,7 @@ struct MenuBarView: View {
             return
         }
         tasks.setActive(task.id)
-        timer.startFocusSession()
+        timer.startFocusSession(kind: tasks.resolvedActiveKind)
     }
 
     // MARK: - Pieces
@@ -909,6 +909,7 @@ struct MenuBarView: View {
 
     private var controls: some View {
         VStack(spacing: 8) {
+            kindSelector
             GlassButton(label: timer.isRunning ? "Pause" : "Start",
                         systemImage: timer.isRunning ? "pause.fill" : "play.fill",
                         prominent: true,
@@ -948,6 +949,47 @@ struct MenuBarView: View {
             }
             autoModeToggle
         }
+    }
+
+    /// Small / Normal / Big pomodoro switch. Applies to the next focus block —
+    /// a session that is already running keeps its length.
+    private var kindSelector: some View {
+        let accent = timer.settings.theme.accent
+        return HStack(spacing: 4) {
+            ForEach(PomodoroKind.allCases) { kind in
+                let selected = timer.settings.activeKind == kind
+                let cfg = timer.settings.config(for: kind)
+                Button {
+                    timer.applyKind(kind)
+                } label: {
+                    VStack(spacing: 1) {
+                        HStack(spacing: 4) {
+                            Image(systemName: kind.systemImage)
+                                .font(.system(size: 9, weight: .semibold))
+                            Text(kind.label)
+                                .font(.system(.caption, design: .rounded).weight(.bold))
+                        }
+                        Text("\(cfg.focusMinutes)′ + \(cfg.breakMinutes)′")
+                            .font(.system(size: 9, design: .rounded).weight(.medium))
+                            .opacity(0.7)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule().fill(selected ? accent.opacity(0.24) : Color.clear))
+                    .overlay(
+                        Capsule().stroke(selected ? accent.opacity(0.65) : Color.clear,
+                                         lineWidth: 1))
+                    .foregroundStyle(selected ? accent : Color.primary.opacity(0.7))
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.pressableSubtle)
+                .help("\(kind.label): \(cfg.focusMinutes) min focus, \(cfg.breakMinutes) min break")
+            }
+        }
+        .padding(3)
+        .background(Capsule().fill(Color.white.opacity(0.06)))
+        .animation(DS.Motion.snappy, value: timer.settings.activeKind)
     }
 
     /// Auto mode — run focus → break → focus → break continuously, hands-free.

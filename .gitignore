@@ -19,3 +19,6 @@ Package.resolved
 /original-*.mp4
 # Retired embedded prototype (deleted from git; leftover build artifacts only)
 /MoveEyes/
+
+
+/docs/

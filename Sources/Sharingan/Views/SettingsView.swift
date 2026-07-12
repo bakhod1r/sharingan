@@ -230,15 +230,33 @@ struct SettingsView: View {
                               isOn: $settings.flashAtFiveSecLeft)
                 }
 
-                Section("Durations") {
-                    StepperRow(title: "Focus",
-                               value: Binding(get: { settings.focusMinutes },
-                                              set: { settings.focusMinutes = $0 }),
-                               unit: "min")
-                    StepperRow(title: "Short break",
-                               value: Binding(get: { settings.shortBreakMinutes },
-                                              set: { settings.shortBreakMinutes = $0 }),
-                               unit: "min")
+                Section("Pomodoro sizes") {
+                    Text("Three gears: Small for quick wins, Normal for the classic rhythm, Big for deep work. Each task or subtask can pick its own.")
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.6))
+                    ForEach(PomodoroKind.allCases) { kind in
+                        StepperRow(title: "\(kind.label) · focus",
+                                   value: Binding(
+                                       get: { settings.config(for: kind).focusMinutes },
+                                       set: { v in
+                                           var c = settings.config(for: kind)
+                                           c.focusMinutes = v
+                                           settings.setConfig(c, for: kind)
+                                       }),
+                                   unit: "min")
+                        StepperRow(title: "\(kind.label) · break",
+                                   value: Binding(
+                                       get: { settings.config(for: kind).breakMinutes },
+                                       set: { v in
+                                           var c = settings.config(for: kind)
+                                           c.breakMinutes = v
+                                           settings.setConfig(c, for: kind)
+                                       }),
+                                   unit: "min")
+                    }
+                }
+
+                Section("Long break") {
                     StepperRow(title: "Long break",
                                value: Binding(get: { settings.longBreakMinutes },
                                               set: { settings.longBreakMinutes = $0 }),
