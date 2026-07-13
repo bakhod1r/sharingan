@@ -505,10 +505,12 @@ struct SettingsView: View {
                 Section("App blocking") {
                     ToggleRow(title: "Block distracting apps on break",
                               isOn: $settings.appBlockerSettings.enabled)
-                    ToggleRow(title: "Also block during focus session",
-                              isOn: $settings.blockAppsDuringFocus)
-                    ToggleRow(title: "Force quit (not just hide)",
-                              isOn: $settings.appBlockerSettings.killOnFrontmost)
+                    if advanced {
+                        ToggleRow(title: "Also block during focus session",
+                                  isOn: $settings.blockAppsDuringFocus)
+                        ToggleRow(title: "Force quit (not just hide)",
+                                  isOn: $settings.appBlockerSettings.killOnFrontmost)
+                    }
                     ForEach($settings.appBlockerSettings.blockedApps) { $app in
                         HStack(spacing: 8) {
                             Image(systemName: "app.dashed")
@@ -550,46 +552,50 @@ struct SettingsView: View {
                     .buttonStyle(.pressableSubtle)
                 }
 
-                Section("Do Not Disturb") {
-                    ToggleRow(title: "Turn on Focus during focus sessions",
-                              isOn: $settings.dndEnabled)
-                    if settings.dndEnabled {
-                        dndShortcutRow(label: "On shortcut",
-                                       name: $settings.dndShortcutOn)
-                        dndShortcutRow(label: "Off shortcut",
-                                       name: $settings.dndShortcutOff)
-                        Button {
-                            NSWorkspace.shared.open(URL(string: "shortcuts://")!)
-                        } label: {
-                            Label("Open Shortcuts app",
-                                  systemImage: "arrow.up.forward.app")
-                                .font(.system(.caption, design: .rounded).weight(.semibold))
+                if advanced {
+                    Section("Do Not Disturb") {
+                        ToggleRow(title: "Turn on Focus during focus sessions",
+                                  isOn: $settings.dndEnabled)
+                        if settings.dndEnabled {
+                            dndShortcutRow(label: "On shortcut",
+                                           name: $settings.dndShortcutOn)
+                            dndShortcutRow(label: "Off shortcut",
+                                           name: $settings.dndShortcutOff)
+                            Button {
+                                NSWorkspace.shared.open(URL(string: "shortcuts://")!)
+                            } label: {
+                                Label("Open Shortcuts app",
+                                      systemImage: "arrow.up.forward.app")
+                                    .font(.system(.caption, design: .rounded).weight(.semibold))
+                            }
+                            .buttonStyle(.pressableSubtle)
+                            Text("Create two shortcuts with these names: one sets a Focus (e.g. Do Not Disturb) on, the other turns it off. Sharingan runs them when a focus session starts and ends.")
+                                .font(.system(.caption2, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.6))
                         }
-                        .buttonStyle(.pressableSubtle)
-                        Text("Create two shortcuts with these names: one sets a Focus (e.g. Do Not Disturb) on, the other turns it off. Sharingan runs them when a focus session starts and ends.")
-                            .font(.system(.caption2, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.6))
                     }
                 }
 
                 Section("Reminders (posture / water / custom)") {
                     ToggleRow(title: "Reminders enabled",
                               isOn: $settings.reminderSettings.enabled)
-                    ToggleRow(title: "Only during focus phase",
-                              isOn: $settings.reminderSettings.duringFocusOnly)
-                    ForEach($settings.reminderSettings.reminders) { $item in
-                        ReminderRow(item: $item)
+                    if advanced {
+                        ToggleRow(title: "Only during focus phase",
+                                  isOn: $settings.reminderSettings.duringFocusOnly)
+                        ForEach($settings.reminderSettings.reminders) { $item in
+                            ReminderRow(item: $item)
+                        }
+                        Button {
+                            settings.reminderSettings.reminders.append(
+                                .init(kind: .custom, intervalMinutes: 45,
+                                      message: "Custom reminder")
+                            )
+                        } label: {
+                            Label("Add reminder", systemImage: "plus.circle.fill")
+                                .font(.system(.caption, design: .rounded).weight(.semibold))
+                        }
+                        .buttonStyle(.pressableSubtle)
                     }
-                    Button {
-                        settings.reminderSettings.reminders.append(
-                            .init(kind: .custom, intervalMinutes: 45,
-                                  message: "Custom reminder")
-                        )
-                    } label: {
-                        Label("Add reminder", systemImage: "plus.circle.fill")
-                            .font(.system(.caption, design: .rounded).weight(.semibold))
-                    }
-                    .buttonStyle(.pressableSubtle)
                 }
 
         case .eyeCare:
@@ -606,6 +612,15 @@ struct SettingsView: View {
                                               set: { settings.exerciseSettings.rounds = max(1, $0) }),
                                unit: "×")
 
+                    if !advanced {
+                        // Bridge: the one essential Voice control, surfaced here
+                        // because the Voice category is Advanced-only. Same
+                        // underlying setting as Voice Guidance → Spoken
+                        // instructions (in Advanced it lives only there).
+                        ToggleRow(title: "Spoken instructions",
+                                  isOn: $settings.ttsSettings.enabled)
+                    }
+
                     Button {
                         BreakWindowManager.shared.presentPreview(timer: timer) {
                             BreakWindowManager.shared.dismissAll()
@@ -615,31 +630,33 @@ struct SettingsView: View {
                             .font(.system(.callout, design: .rounded).weight(.medium))
                     }
                     .buttonStyle(.bordered)
-                    
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Step hold scale: \(String(format: "%.2f", settings.exerciseSettings.stepHoldScale))×")
-                            .font(.system(.caption, design: .rounded).weight(.medium))
-                        Slider(value: $settings.exerciseSettings.stepHoldScale,
-                               in: 0.5...2.0)
-                            
-                    }
-                    Text("Step length in seconds: \(String(format: "%.0f", settings.exerciseSettings.scaledHold(4)))")
-                        .font(.system(.caption2, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.7))
 
-                    if let selected = editingInstructionDirection {
-                        instructionEditor(for: selected)
-                    }
-                    StepsInstructionEditor(
-                        instructions: $settings.ttsSettings.instructions,
-                        onSelect: { editingInstructionDirection = $0 }
-                    )
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Kalib interval: \(Int(settings.ttsSettings.kalibIntervalSeconds))s")
-                            .font(.system(.caption, design: .rounded).weight(.medium))
-                        Slider(value: $settings.ttsSettings.kalibIntervalSeconds,
-                               in: 0...60)
-                            
+                    if advanced {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Step hold scale: \(String(format: "%.2f", settings.exerciseSettings.stepHoldScale))×")
+                                .font(.system(.caption, design: .rounded).weight(.medium))
+                            Slider(value: $settings.exerciseSettings.stepHoldScale,
+                                   in: 0.5...2.0)
+
+                        }
+                        Text("Step length in seconds: \(String(format: "%.0f", settings.exerciseSettings.scaledHold(4)))")
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.7))
+
+                        if let selected = editingInstructionDirection {
+                            instructionEditor(for: selected)
+                        }
+                        StepsInstructionEditor(
+                            instructions: $settings.ttsSettings.instructions,
+                            onSelect: { editingInstructionDirection = $0 }
+                        )
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Kalib interval: \(Int(settings.ttsSettings.kalibIntervalSeconds))s")
+                                .font(.system(.caption, design: .rounded).weight(.medium))
+                            Slider(value: $settings.ttsSettings.kalibIntervalSeconds,
+                                   in: 0...60)
+
+                        }
                     }
                 }
 
@@ -650,11 +667,13 @@ struct SettingsView: View {
                         Text("Works during breaks only. Alerts when blink rate is low.")
                             .font(.system(.caption, design: .rounded))
                             .foregroundStyle(.white.opacity(0.65))
-                        ToggleRow(title: "Strict exercise validation",
-                                  isOn: $settings.strictExerciseValidation)
-                        Text("A step won't advance until the camera confirms the movement (gaze directions and blinks). Off = auto-advance after a grace period.")
-                            .font(.system(.caption, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.65))
+                        if advanced {
+                            ToggleRow(title: "Strict exercise validation",
+                                      isOn: $settings.strictExerciseValidation)
+                            Text("A step won't advance until the camera confirms the movement (gaze directions and blinks). Off = auto-advance after a grace period.")
+                                .font(.system(.caption, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.65))
+                        }
                     }
                 }
 
@@ -686,30 +705,32 @@ struct SettingsView: View {
                         .fixedSize()
                     }
 
-                    ToggleRow(title: "Different style per eye",
-                              isOn: Binding(
-                                get: { settings.sharinganStyleRight != nil },
-                                set: { on in
-                                    settings.sharinganStyleRight =
-                                        on ? settings.sharinganStyle : nil
-                                }))
+                    if advanced {
+                        ToggleRow(title: "Different style per eye",
+                                  isOn: Binding(
+                                    get: { settings.sharinganStyleRight != nil },
+                                    set: { on in
+                                        settings.sharinganStyleRight =
+                                            on ? settings.sharinganStyle : nil
+                                    }))
 
-                    if let right = settings.sharinganStyleRight {
-                        HStack {
-                            Text("Right eye")
-                                .font(.system(.body, design: .rounded))
-                            Spacer()
-                            SpinningIrisSwatch(style: right)
-                            Picker("", selection: Binding(
-                                get: { settings.sharinganStyleRight ?? settings.sharinganStyle },
-                                set: { settings.sharinganStyleRight = $0 })) {
-                                ForEach(SharinganStyle.allCases) { s in
-                                    Text(s.label).tag(s)
+                        if let right = settings.sharinganStyleRight {
+                            HStack {
+                                Text("Right eye")
+                                    .font(.system(.body, design: .rounded))
+                                Spacer()
+                                SpinningIrisSwatch(style: right)
+                                Picker("", selection: Binding(
+                                    get: { settings.sharinganStyleRight ?? settings.sharinganStyle },
+                                    set: { settings.sharinganStyleRight = $0 })) {
+                                    ForEach(SharinganStyle.allCases) { s in
+                                        Text(s.label).tag(s)
+                                    }
                                 }
+                                .labelsHidden()
+                                .pickerStyle(.menu)
+                                .fixedSize()
                             }
-                            .labelsHidden()
-                            .pickerStyle(.menu)
-                            .fixedSize()
                         }
                     }
                     Text("Used everywhere the eyes appear: break screen and desktop wallpaper.")
@@ -736,48 +757,50 @@ struct SettingsView: View {
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(.white.opacity(0.65))
 
-                    HStack {
-                        Text("Pattern animation")
-                            .font(.system(.body, design: .rounded))
-                        Spacer()
-                        Picker("", selection: $settings.breakPatternTransition) {
-                            ForEach(PatternTransitionSpeed.allCases) { s in
-                                Text(s.label).tag(s)
+                    if advanced {
+                        HStack {
+                            Text("Pattern animation")
+                                .font(.system(.body, design: .rounded))
+                            Spacer()
+                            Picker("", selection: $settings.breakPatternTransition) {
+                                ForEach(PatternTransitionSpeed.allCases) { s in
+                                    Text(s.label).tag(s)
+                                }
                             }
+                            .labelsHidden()
+                            .pickerStyle(.segmented)
+                            .frame(width: 260)
                         }
-                        .labelsHidden()
-                        .pickerStyle(.segmented)
-                        .frame(width: 260)
-                    }
-                    Text("The pattern whirls open at break start and whirls shut as the break ends.")
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.65))
+                        Text("The pattern whirls open at break start and whirls shut as the break ends.")
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.65))
 
-                    if settings.breakPatternTransition != .off {
-                        ToggleRow(title: "Mixed patterns",
-                                  isOn: $settings.breakPatternMixed)
-                        Text("On: the pattern evolves through the whole chain during the break — 1 tomoe → 2 → 3 → Mangekyō… Off: only your selected style.")
+                        if settings.breakPatternTransition != .off {
+                            ToggleRow(title: "Mixed patterns",
+                                      isOn: $settings.breakPatternMixed)
+                            Text("On: the pattern evolves through the whole chain during the break — 1 tomoe → 2 → 3 → Mangekyō… Off: only your selected style.")
+                                .font(.system(.caption, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.65))
+                        }
+
+                        HStack {
+                            Text("Pattern spin")
+                                .font(.system(.body, design: .rounded))
+                            Spacer()
+                            Picker("", selection: $settings.breakPatternSpinSeconds) {
+                                Text("Off").tag(0.0)
+                                Text("Slow").tag(12.0)
+                                Text("Normal").tag(8.0)
+                                Text("Fast").tag(4.0)
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.segmented)
+                            .frame(width: 260)
+                        }
+                        Text("Continuous rotation of the iris pattern while the break runs.")
                             .font(.system(.caption, design: .rounded))
                             .foregroundStyle(.white.opacity(0.65))
                     }
-
-                    HStack {
-                        Text("Pattern spin")
-                            .font(.system(.body, design: .rounded))
-                        Spacer()
-                        Picker("", selection: $settings.breakPatternSpinSeconds) {
-                            Text("Off").tag(0.0)
-                            Text("Slow").tag(12.0)
-                            Text("Normal").tag(8.0)
-                            Text("Fast").tag(4.0)
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.segmented)
-                        .frame(width: 260)
-                    }
-                    Text("Continuous rotation of the iris pattern while the break runs.")
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.65))
 
                     Button {
                         BreakWindowManager.shared.presentPreview(timer: timer) {
@@ -797,52 +820,54 @@ struct SettingsView: View {
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(.white.opacity(0.65))
 
-                    HStack {
-                        Text("Sharingan spin")
-                            .font(.system(.body, design: .rounded))
-                        Spacer()
-                        Picker("", selection: $settings.wallpaperSpinTrigger) {
-                            ForEach(WallpaperSpinTrigger.allCases) { t in
-                                Text(t.label).tag(t)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .fixedSize()
-                    }
-
-                    if settings.wallpaperSpinTrigger != .off {
+                    if advanced {
                         HStack {
-                            Text("Spin speed")
+                            Text("Sharingan spin")
                                 .font(.system(.body, design: .rounded))
                             Spacer()
-                            Picker("", selection: $settings.wallpaperSpinDuration) {
-                                Text("Slow").tag(2.8)
-                                Text("Normal").tag(1.6)
-                                Text("Fast").tag(0.9)
+                            Picker("", selection: $settings.wallpaperSpinTrigger) {
+                                ForEach(WallpaperSpinTrigger.allCases) { t in
+                                    Text(t.label).tag(t)
+                                }
                             }
                             .labelsHidden()
-                            .pickerStyle(.segmented)
-                            .frame(width: 210)
+                            .pickerStyle(.menu)
+                            .fixedSize()
                         }
-                    }
 
-                    if settings.wallpaperSpinTrigger.spinsOnIdle {
+                        if settings.wallpaperSpinTrigger != .off {
+                            HStack {
+                                Text("Spin speed")
+                                    .font(.system(.body, design: .rounded))
+                                Spacer()
+                                Picker("", selection: $settings.wallpaperSpinDuration) {
+                                    Text("Slow").tag(2.8)
+                                    Text("Normal").tag(1.6)
+                                    Text("Fast").tag(0.9)
+                                }
+                                .labelsHidden()
+                                .pickerStyle(.segmented)
+                                .frame(width: 210)
+                            }
+                        }
+
+                        if settings.wallpaperSpinTrigger.spinsOnIdle {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Idle delay: \(String(format: "%.1f", settings.wallpaperIdleDelay))s")
+                                    .font(.system(.caption, design: .rounded).weight(.medium))
+                                Slider(value: $settings.wallpaperIdleDelay, in: 0.5...5, step: 0.5)
+                            }
+                        }
+
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Idle delay: \(String(format: "%.1f", settings.wallpaperIdleDelay))s")
+                            Text("Close eyes after: \(Int(settings.wallpaperDozeSeconds))s of stillness")
                                 .font(.system(.caption, design: .rounded).weight(.medium))
-                            Slider(value: $settings.wallpaperIdleDelay, in: 0.5...5, step: 0.5)
+                            Slider(value: $settings.wallpaperDozeSeconds, in: 10...300, step: 10)
                         }
+                        Text("When the mouse hasn't moved for this long, the eyes doze off; they wake on the first move.")
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.65))
                     }
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Close eyes after: \(Int(settings.wallpaperDozeSeconds))s of stillness")
-                            .font(.system(.caption, design: .rounded).weight(.medium))
-                        Slider(value: $settings.wallpaperDozeSeconds, in: 10...300, step: 10)
-                    }
-                    Text("When the mouse hasn't moved for this long, the eyes doze off; they wake on the first move.")
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.65))
                 }
                 .onChange(of: settings.eyesWallpaperEnabled) { _, on in
                     WallpaperWindowManager.shared.setEnabled(on, config: WallpaperConfig(from: settings))
