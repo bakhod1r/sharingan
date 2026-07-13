@@ -103,24 +103,28 @@ struct NotchGeometryTests {
     func hitTestMasksToShape() {
         let m = Self.notched
         let idle = NotchGeometry.layout(m, size: .idle)
-        let center = CGPoint(x: idle.panelSize.width / 2, y: 4)
-        let farLeft = CGPoint(x: 20, y: 4)                       // menu bar: must pass through
-        let below = CGPoint(x: idle.panelSize.width / 2, y: 200) // under the idle island
+        let panelWidth = idle.panelSize.width
+        let center = CGPoint(x: panelWidth / 2, y: 4)
+        let sideMargin = CGPoint(x: 2, y: 4)          // beside the idle island
+        let below = CGPoint(x: panelWidth / 2, y: 200) // under the idle island
 
+        // Idle: only the small lip over the cutout is hittable.
         #expect(NotchGeometry.hitTest(center, metrics: m, size: .idle))
-        #expect(!NotchGeometry.hitTest(farLeft, metrics: m, size: .idle))
+        #expect(!NotchGeometry.hitTest(sideMargin, metrics: m, size: .idle))
         #expect(!NotchGeometry.hitTest(below, metrics: m, size: .idle))
 
-        // expanded swallows the panel body, but still not the far menu bar
-        #expect(NotchGeometry.hitTest(below, metrics: m, size: .expanded))
-        #expect(!NotchGeometry.hitTest(farLeft, metrics: m, size: .expanded))
-
-        // live: the ears are hittable, the gap beyond them is not
-        let earPoint = CGPoint(x: idle.panelSize.width / 2 - m.notchWidth / 2 - 10, y: 10)
+        // Live: the ears reach the panel's edges, so the menu-bar row across
+        // the island IS hittable — that is the documented cost of the ears.
+        // Everything below the island still falls through.
+        let earPoint = CGPoint(x: panelWidth / 2 - m.notchWidth / 2 - 10, y: 10)
         #expect(NotchGeometry.hitTest(earPoint, metrics: m, size: .live))
-        #expect(!NotchGeometry.hitTest(farLeft, metrics: m, size: .live))
+        #expect(!NotchGeometry.hitTest(below, metrics: m, size: .live))
 
-        // hidden is never hittable
+        // Expanded: the panel body is hittable, its side margins are not.
+        #expect(NotchGeometry.hitTest(below, metrics: m, size: .expanded))
+        #expect(!NotchGeometry.hitTest(CGPoint(x: 2, y: 200), metrics: m, size: .expanded))
+
+        // Hidden is never hittable.
         #expect(!NotchGeometry.hitTest(center, metrics: m, size: .hidden))
     }
 }

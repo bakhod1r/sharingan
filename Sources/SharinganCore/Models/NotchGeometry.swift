@@ -99,14 +99,13 @@ public enum NotchGeometry {
                                cornerRadius: cornerRadius)
 
         case .live:
-            let island = centered(width: cutout.width,
+            let island = centered(width: cutout.width + 2 * earWidth,
                                   height: cutout.height + idleExtraHeight)
             let cutoutMinX = (panel.width - cutout.width) / 2
-            let earMinY = idleExtraHeight + 1
-            let left = CGRect(x: cutoutMinX - earWidth, y: earMinY,
-                              width: earWidth, height: cutout.height - earMinY)
-            let right = CGRect(x: cutoutMinX + cutout.width, y: earMinY,
-                               width: earWidth, height: cutout.height - earMinY)
+            let left = CGRect(x: cutoutMinX - earWidth, y: 0,
+                              width: earWidth, height: cutout.height)
+            let right = CGRect(x: cutoutMinX + cutout.width, y: 0,
+                               width: earWidth, height: cutout.height)
             let track = CGRect(x: island.minX,
                                y: island.maxY - progressHeight,
                                width: island.width, height: progressHeight)
@@ -122,7 +121,7 @@ public enum NotchGeometry {
                                cornerRadius: cornerRadius)
 
         case .expanded:
-            let island = centered(width: min(expandedSize.width, panel.width - 60),
+            let island = centered(width: expandedSize.width,
                                   height: expandedSize.height)
             return NotchLayout(panelSize: panel, island: island, leftEar: nil,
                                rightEar: nil, progressTrack: nil,
