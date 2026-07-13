@@ -34,6 +34,17 @@ a **Simple** tier (most-used essentials, ~32 rows) and an **Advanced** tier
 
 - **2026-07-13:** General moved to the top of the root list; Theme moved
   from Timer to General/Appearance (user decision).
+- **2026-07-13 (Task 8):** The global Simple|Advanced switch and
+  `SettingsTier` were removed entirely, after seeing the built UI. All 9
+  categories are now always visible on the root list; each category page
+  shows its essentials always, with the former Advanced rows moved into a
+  per-page collapsible "Advanced settings" accordion at the bottom (closed
+  by default, resets to closed on every page switch). Timer's Pomodoro
+  sizes grid (Small/Normal/Big) is now always visible — the two-stepper
+  "Durations" Simple substitute was deleted. The Eye Care "Spoken
+  instructions" bridge toggle was removed since Voice Guidance is now
+  always reachable from the root. See `task-8-brief.md` for the exact
+  per-category section split.
 
 ## Category visibility
 

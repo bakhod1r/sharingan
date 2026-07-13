@@ -240,15 +240,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
 
-        // One-shot Blink → Sharingan storage rename. Must run before
-        // SettingsTier.seedIfNeeded() below — seeding checks the NEW
-        // settings key, so an existing user's blob has to be copied first
-        // or they'd get seeded as a fresh Simple user instead of Advanced.
+        // One-shot Blink → Sharingan storage rename.
         RebrandMigration.migrate()
-
-        // Fresh install → Simple settings; updating user (existing settings
-        // blob) → Advanced, so nothing they already saw disappears.
-        SettingsTier.seedIfNeeded()
 
         // Sharingan's entire UI is a dark-glass design: every surface hardcodes white
         // text and `Color.white.opacity(...)` chrome over dark gradients and

@@ -100,30 +100,35 @@
 
 ---
 
-## Settings tiers (Simple / Advanced)
+## Settings layout (essentials + Advanced accordion)
 
-Settings has two surfaces controlled by one segmented switch on the root
-list: **Simple** (~30 most-used rows across 7 categories) and **Advanced**
-(all ~85 rows, 9 categories — adds Voice Guidance and Shortcuts).
+All 9 categories are always visible on the root list (General first —
+`SettingsCategory` declaration order). Each category page shows its
+essential rows always; extra rows live in one collapsible "Advanced
+settings" disclosure at the bottom of the page. There is no global
+Simple/Advanced switch and nothing to seed at launch.
 
-- `SettingsTier` (SharinganCore/Models) — `simple`/`advanced`; stored in
-  `UserDefaults` under `settingsTier` (never in the PomodoroSettings blob).
-  `seedIfNeeded()` runs at launch: fresh install → simple, existing
-  settings blob (`PomodoroSettings.defaultsKey`) → advanced.
-- `SettingsCategory` (SharinganCore/Models) — moved out of the view; owns
-  `tier`, `hasAdvancedRows`, `visible(in:)`, and search `matches(_:)`.
-  The `tint` color stays in a SettingsView extension.
-- Rows are gated in `SettingsView.categorySections` with `if advanced { }`.
-  Hidden ≠ disabled: advanced values persist and stay in effect.
-- Search always spans both tiers; an Advanced-only hit shows an "Advanced"
-  chip and opening it switches the tier. Simple category pages end with a
-  "More settings in Advanced →" link.
-- Simple Timer shows two steppers bound to the active pomodoro kind
-  (`settings.focusMinutes` / `shortBreakMinutes`); the Small/Normal/Big
-  grid is Advanced. The Spoken-instructions toggle appears in Eye Care in
-  Simple (same `ttsSettings.enabled` the Voice category edits).
-- Root-list order = `SettingsCategory` declaration order — General first.
-  The Theme picker lives in General → Appearance (both tiers).
+- `SettingsCategory` (SharinganCore/Models) — `hasAdvancedRows` is `true`
+  for every category except General, Voice, and Shortcuts (those three
+  have no accordion; all their content is always visible). Also owns
+  search `matches(_:)`. The `tint` color stays in a SettingsView extension.
+- `SettingsView.categorySections(_:)` builds the always-visible rows per
+  category; `SettingsView.advancedSections(_:)` builds the accordion
+  content, in its own `Section`s, shown when `advancedExpanded` is `true`.
+  `advancedExpanded` resets to `false` whenever the open category changes.
+- Timer's always-visible part shows the full "Pomodoro sizes" section (the
+  Small/Normal/Big grid) — there's no simplified two-stepper substitute.
+  The floating-timer detail rows (size, always-on-top, dots, task, opacity,
+  drag hint) are Advanced, still gated on `settings.floatingTimerEnabled`,
+  with a caption ("Enable the floating timer to configure it.") when it's
+  off. Eye Care's Advanced "Camera" section is gated on
+  `settings.cameraEyeTrackingEnabled` the same way.
+- The Sharingan "Desktop wallpaper" section (and its `.onChange` chain that
+  re-applies `WallpaperConfig`) stays in `categorySections` — always
+  visible — so it keeps observing even while the Advanced accordion
+  (which holds the wallpaper spin/idle/doze rows) is collapsed.
+- The old `settingsTier` UserDefaults key is a harmless leftover on
+  upgraded installs; nothing reads or writes it anymore.
 
 ---
 
@@ -137,10 +142,8 @@ list: **Simple** (~30 most-used rows across 7 categories) and **Advanced**
   in `~/Library/Application Support/Sharingan/` (SQLite db + the `tired` CLI's
   shared `cli/` snapshot files).
 - `RebrandMigration` (SharinganCore/Services) performs a one-shot Blink →
-  Sharingan copy/move at launch — called by both `AppDelegate` (before
-  `SettingsTier.seedIfNeeded()`, so an existing user's settings blob is
-  visible under the new key before tier seeding checks it) and the `tired`
-  CLI entry point. Old `UserDefaults` keys are copied to the new keys (old
+  Sharingan copy/move at launch — called by both `AppDelegate` and the
+  `tired` CLI entry point. Old `UserDefaults` keys are copied to the new keys (old
   kept, never deleted); the old `Blink/` Application Support directory is
   moved (renamed) to `Sharingan/`, never merged into an existing `Sharingan/`
   dir. Safe to call on every launch — a copy/move only happens once, the

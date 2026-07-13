@@ -1,30 +1,16 @@
 import Foundation
 
 /// Groups of settings, shown as drill-down rows on the root Settings screen.
-/// Lives in Core (not the view) so tier visibility and search stay testable.
+/// Lives in Core (not the view) so search and page metadata stay testable.
 public enum SettingsCategory: String, CaseIterable, Identifiable, Hashable, Sendable {
     case general, timer, tasks, breaks, focus, eyeCare, sharingan, voice, shortcuts
 
     public var id: String { rawValue }
 
-    /// Simple-tier categories appear in both tiers; advanced-only ones
-    /// (Voice, Shortcuts) appear on the root list only in Advanced. Their
-    /// one essential control — spoken instructions on/off — is surfaced in
-    /// Eye Care for Simple users.
-    public var tier: SettingsTier {
-        switch self {
-        case .voice, .shortcuts: return .advanced
-        default:                 return .simple
-        }
-    }
-
-    /// Whether the category's detail page hides extra rows in Simple
-    /// (drives the "More settings in Advanced" footer).
-    public var hasAdvancedRows: Bool { self != .general }
-
-    /// Categories for the root list in the given tier.
-    public static func visible(in tier: SettingsTier) -> [SettingsCategory] {
-        tier == .advanced ? allCases : allCases.filter { $0.tier == .simple }
+    /// Whether the category's detail page has a trailing "Advanced settings"
+    /// accordion. General, Voice, and Shortcuts show all their rows always.
+    public var hasAdvancedRows: Bool {
+        !(self == .general || self == .voice || self == .shortcuts)
     }
 
     public var title: String {

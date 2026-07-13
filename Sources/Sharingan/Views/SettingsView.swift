@@ -13,12 +13,9 @@ struct SettingsView: View {
     /// "Due soon" pre-reminder offset in minutes (0 = off); read by TaskStore
     /// when it schedules deadline notifications.
     @AppStorage(TaskStore.preReminderDefaultsKey) private var preReminderMinutes = 10
-    /// Simple | Advanced surface tier. UI state only — hidden advanced
-    /// values keep persisting and keep taking effect.
-    @AppStorage(SettingsTier.defaultsKey) private var tierRaw =
-        SettingsTier.simple.rawValue
-    private var tier: SettingsTier { SettingsTier.from(tierRaw) }
-    private var advanced: Bool { tier == .advanced }
+    /// Whether the trailing "Advanced settings" accordion is expanded on the
+    /// currently-open category page. Resets to collapsed on every page switch.
+    @State private var advancedExpanded = false
 
     var body: some View {
         ZStack {
@@ -35,6 +32,7 @@ struct SettingsView: View {
         // Sidebar "Settings" (or the menu-bar gear) re-selected while a
         // sub-page is open → pop back to the category list.
         .onChange(of: router.settingsPopToRoot) { openCategory = nil }
+        .onChange(of: openCategory) { advancedExpanded = false }
     }
 
     // MARK: - Root: category list (macOS System Settings style)
@@ -63,11 +61,11 @@ struct SettingsView: View {
         }
     }
 
-    /// Root-list categories: the tier's visible set normally; when searching,
-    /// ALL categories — an Advanced-only match shows an "Advanced" chip.
+    /// Root-list categories: all of them normally; when searching, only the
+    /// ones matching the query.
     private var filteredCategories: [SettingsCategory] {
         let q = searchText.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !q.isEmpty else { return SettingsCategory.visible(in: tier) }
+        guard !q.isEmpty else { return SettingsCategory.allCases }
         return SettingsCategory.allCases.filter { $0.matches(q) }
     }
 
@@ -104,14 +102,6 @@ struct SettingsView: View {
                 .font(.system(.callout, design: .rounded))
                 .foregroundStyle(.white.opacity(0.6))
                 .multilineTextAlignment(.center)
-            Picker("", selection: $tierRaw) {
-                Text("Simple").tag(SettingsTier.simple.rawValue)
-                Text("Advanced").tag(SettingsTier.advanced.rawValue)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(width: 220)
-            .padding(.top, 4)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 8).padding(.bottom, 6)
@@ -124,21 +114,28 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 20) {
                 categoryHeader(cat)
                 categorySections(cat)
-                if !advanced && cat.hasAdvancedRows {
+                if cat.hasAdvancedRows {
                     Button {
-                        tierRaw = SettingsTier.advanced.rawValue
+                        withAnimation(DS.Motion.gentle) { advancedExpanded.toggle() }
                     } label: {
-                        HStack(spacing: 4) {
-                            Text("More settings in Advanced")
-                            Image(systemName: "arrow.right")
+                        HStack(spacing: 6) {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .semibold))
+                                .rotationEffect(.degrees(advancedExpanded ? 90 : 0))
+                            Text("Advanced settings")
+                                .font(.system(.callout, design: .rounded).weight(.semibold))
+                            Spacer()
                         }
-                        .font(.system(.callout, design: .rounded).weight(.medium))
                         .foregroundStyle(.white.opacity(0.75))
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.pressableSubtle)
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 2)
+                    .padding(.top, 4)
+
+                    if advancedExpanded {
+                        advancedSections(cat)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
                 }
             }
             .frame(maxWidth: 600)
@@ -176,9 +173,6 @@ struct SettingsView: View {
 
     private func categoryRow(_ cat: SettingsCategory) -> some View {
         Button {
-            // Opening an Advanced-only category from a Simple search result
-            // switches the tier so its page isn't empty.
-            if cat.tier == .advanced { tierRaw = SettingsTier.advanced.rawValue }
             openCategory = cat
         } label: {
             HStack(spacing: 12) {
@@ -197,13 +191,6 @@ struct SettingsView: View {
                         .foregroundStyle(.white.opacity(0.5))
                 }
                 Spacer(minLength: 8)
-                if cat.tier == .advanced && !advanced {
-                    Text("Advanced")
-                        .font(.system(.caption2, design: .rounded).weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.7))
-                        .padding(.horizontal, 7).padding(.vertical, 2)
-                        .background(Capsule().fill(.white.opacity(0.12)))
-                }
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.35))
@@ -245,63 +232,29 @@ struct SettingsView: View {
     private func categorySections(_ cat: SettingsCategory) -> some View {
         switch cat {
         case .timer:
-                if advanced {
-                    Section("Timer mode") {
-                        Picker("Mode", selection: $settings.timerMode) {
-                            ForEach(TimerMode.allCases, id: \.self) { mode in
-                                Text(mode.label).tag(mode)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-
-                        Picker("Time format", selection: $settings.timeFormat) {
-                            ForEach(TimeDisplayFormat.allCases, id: \.self) { f in
-                                Text(f.label).tag(f)
-                            }
-                        }
-                        .pickerStyle(.menu)
-
-
-                        ToggleRow(title: "Flash at 5 seconds left",
-                                  isOn: $settings.flashAtFiveSecLeft)
-                    }
-                }
-
-                if !advanced {
-                    Section("Durations") {
-                        StepperRow(title: "Focus", value: $settings.focusMinutes,
+                Section("Pomodoro sizes") {
+                    Text("Three gears: Small for quick wins, Normal for the classic rhythm, Big for deep work. Each task or subtask can pick its own.")
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.6))
+                    ForEach(PomodoroKind.allCases) { kind in
+                        StepperRow(title: "\(kind.label) · focus",
+                                   value: Binding(
+                                       get: { settings.config(for: kind).focusMinutes },
+                                       set: { v in
+                                           var c = settings.config(for: kind)
+                                           c.focusMinutes = v
+                                           settings.setConfig(c, for: kind)
+                                       }),
                                    unit: "min")
-                        StepperRow(title: "Break", value: $settings.shortBreakMinutes,
+                        StepperRow(title: "\(kind.label) · break",
+                                   value: Binding(
+                                       get: { settings.config(for: kind).breakMinutes },
+                                       set: { v in
+                                           var c = settings.config(for: kind)
+                                           c.breakMinutes = v
+                                           settings.setConfig(c, for: kind)
+                                       }),
                                    unit: "min")
-                        Text("Lengths for the current pomodoro size (\(settings.activeKind.label)). All three sizes are editable in Advanced.")
-                            .font(.system(.caption2, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.6))
-                    }
-                } else {
-                    Section("Pomodoro sizes") {
-                        Text("Three gears: Small for quick wins, Normal for the classic rhythm, Big for deep work. Each task or subtask can pick its own.")
-                            .font(.system(.caption2, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.6))
-                        ForEach(PomodoroKind.allCases) { kind in
-                            StepperRow(title: "\(kind.label) · focus",
-                                       value: Binding(
-                                           get: { settings.config(for: kind).focusMinutes },
-                                           set: { v in
-                                               var c = settings.config(for: kind)
-                                               c.focusMinutes = v
-                                               settings.setConfig(c, for: kind)
-                                           }),
-                                       unit: "min")
-                            StepperRow(title: "\(kind.label) · break",
-                                       value: Binding(
-                                           get: { settings.config(for: kind).breakMinutes },
-                                           set: { v in
-                                               var c = settings.config(for: kind)
-                                               c.breakMinutes = v
-                                               settings.setConfig(c, for: kind)
-                                           }),
-                                       unit: "min")
-                        }
                     }
                 }
 
@@ -316,56 +269,9 @@ struct SettingsView: View {
                                unit: "pomodoros")
                 }
 
-                if advanced {
-                    Section("Repeat") {
-                        ToggleRow(title: "Repeat enabled",
-                                  isOn: $settings.repeatConfig.enabled)
-                        if settings.repeatConfig.enabled {
-                            ToggleRow(title: "Endless (repeat forever)",
-                                      isOn: $settings.repeatConfig.endless)
-                            if !settings.repeatConfig.endless {
-                                StepperRow(title: "Repeat count",
-                                           value: Binding(
-                                               get: { settings.repeatConfig.count },
-                                               set: { settings.repeatConfig.count = $0 }),
-                                           unit: "×")
-                            }
-                            StepperRow(title: "Delay",
-                                       value: Binding(
-                                           get: { Int(settings.repeatConfig.delaySeconds / 60) },
-                                           set: { settings.repeatConfig.delaySeconds = TimeInterval($0) * 60 }),
-                                       unit: "min")
-                        }
-                    }
-                }
-
                 Section("Floating timer") {
                     ToggleRow(title: "Floating timer (while running)",
                               isOn: $settings.floatingTimerEnabled)
-                    if settings.floatingTimerEnabled && advanced {
-                        Picker("Size", selection: $settings.floatingSize) {
-                            ForEach(FloatingTimerSize.allCases, id: \.self) { size in
-                                Text(size.label).tag(size)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-
-                        ToggleRow(title: "Always on top",
-                                  isOn: $settings.floatingAlwaysOnTop)
-                        ToggleRow(title: "Cycle dots on floating timer",
-                                  isOn: $settings.floatingShowDots)
-                        ToggleRow(title: "Active task on floating timer",
-                                  isOn: $settings.floatingShowTask)
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Opacity: \(Int(settings.floatingOpacity * 100))%")
-                                .font(.system(.caption, design: .rounded).weight(.medium))
-                            Slider(value: $settings.floatingOpacity, in: 0.3...1.0)
-
-                        }
-                        Text("Drag the floating timer to reposition — its spot is remembered. Right-click it for size presets.")
-                            .font(.system(.caption2, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.6))
-                    }
                 }
 
                 Section("Today panel") {
@@ -411,31 +317,6 @@ struct SettingsView: View {
                         .foregroundStyle(.white.opacity(0.6))
                 }
 
-                if advanced {
-                    Section("Planning") {
-                        ToggleRow(title: "Week starts on Monday",
-                                  isOn: $settings.weekStartsOnMonday)
-                        Text("Applies to the weekly board and the menu bar Week tab.")
-                            .font(.system(.caption2, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.6))
-                    }
-
-                    Section("Estimates & badges") {
-                        StepperRow(title: "Default subtask estimate",
-                                   value: $settings.defaultSubtaskEstimate,
-                                   unit: "🍅",
-                                   range: 0...8)
-                        Text("Applied to newly added steps. Set to 0 for no estimate.")
-                            .font(.system(.caption2, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.6))
-                        ToggleRow(title: "Show pomodoro badges",
-                                  isOn: $settings.showPomodoroBadges)
-                        Text("The 🍅 done/estimate chips on task and subtask rows.")
-                            .font(.system(.caption2, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.6))
-                    }
-                }
-
         case .breaks:
                 Section("Break message") {
                     TextField("Break message text",
@@ -473,44 +354,10 @@ struct SettingsView: View {
                     }
                 }
 
-                if advanced {
-                    Section("Screen brightness") {
-                        ToggleRow(title: "Dim screen on break",
-                                  isOn: $settings.brightnessDimEnabled)
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Dim level: \(settings.brightnessDimPercent)%")
-                                .font(.system(.caption, design: .rounded).weight(.medium))
-                            Slider(value: Binding(
-                                    get: { Double(settings.brightnessDimPercent) },
-                                    set: { settings.brightnessDimPercent = Int($0) }
-                                  ), in: 5...95)
-
-                        }
-                        ToggleRow(title: "Smooth transition",
-                                  isOn: $settings.brightnessSmooth)
-                        ToggleRow(title: "Warm colors on break",
-                                  isOn: $settings.nightShiftBreakEnabled)
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Warmth: \(Int(settings.nightShiftBreakStrength * 100))%")
-                                .font(.system(.caption, design: .rounded).weight(.medium))
-                            Slider(value: $settings.nightShiftBreakStrength, in: 0.1...1.0)
-                        }
-                        Text("Warms screen colors during breaks (uses Night Shift).")
-                            .font(.system(.caption2, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.6))
-                    }
-                }
-
         case .focus:
                 Section("App blocking") {
                     ToggleRow(title: "Block distracting apps on break",
                               isOn: $settings.appBlockerSettings.enabled)
-                    if advanced {
-                        ToggleRow(title: "Also block during focus session",
-                                  isOn: $settings.blockAppsDuringFocus)
-                        ToggleRow(title: "Force quit (not just hide)",
-                                  isOn: $settings.appBlockerSettings.killOnFrontmost)
-                    }
                     ForEach($settings.appBlockerSettings.blockedApps) { $app in
                         HStack(spacing: 8) {
                             Image(systemName: "app.dashed")
@@ -533,7 +380,7 @@ struct SettingsView: View {
                             // Pause/resume blocking without losing the entry.
                             Toggle("", isOn: $app.isEnabled)
                                 .tint(.green)
-                                
+
                                 .labelsHidden()
                         }
                         .padding(.vertical, 4)
@@ -552,50 +399,9 @@ struct SettingsView: View {
                     .buttonStyle(.pressableSubtle)
                 }
 
-                if advanced {
-                    Section("Do Not Disturb") {
-                        ToggleRow(title: "Turn on Focus during focus sessions",
-                                  isOn: $settings.dndEnabled)
-                        if settings.dndEnabled {
-                            dndShortcutRow(label: "On shortcut",
-                                           name: $settings.dndShortcutOn)
-                            dndShortcutRow(label: "Off shortcut",
-                                           name: $settings.dndShortcutOff)
-                            Button {
-                                NSWorkspace.shared.open(URL(string: "shortcuts://")!)
-                            } label: {
-                                Label("Open Shortcuts app",
-                                      systemImage: "arrow.up.forward.app")
-                                    .font(.system(.caption, design: .rounded).weight(.semibold))
-                            }
-                            .buttonStyle(.pressableSubtle)
-                            Text("Create two shortcuts with these names: one sets a Focus (e.g. Do Not Disturb) on, the other turns it off. Sharingan runs them when a focus session starts and ends.")
-                                .font(.system(.caption2, design: .rounded))
-                                .foregroundStyle(.white.opacity(0.6))
-                        }
-                    }
-                }
-
                 Section("Reminders (posture / water / custom)") {
                     ToggleRow(title: "Reminders enabled",
                               isOn: $settings.reminderSettings.enabled)
-                    if advanced {
-                        ToggleRow(title: "Only during focus phase",
-                                  isOn: $settings.reminderSettings.duringFocusOnly)
-                        ForEach($settings.reminderSettings.reminders) { $item in
-                            ReminderRow(item: $item)
-                        }
-                        Button {
-                            settings.reminderSettings.reminders.append(
-                                .init(kind: .custom, intervalMinutes: 45,
-                                      message: "Custom reminder")
-                            )
-                        } label: {
-                            Label("Add reminder", systemImage: "plus.circle.fill")
-                                .font(.system(.caption, design: .rounded).weight(.semibold))
-                        }
-                        .buttonStyle(.pressableSubtle)
-                    }
                 }
 
         case .eyeCare:
@@ -612,15 +418,6 @@ struct SettingsView: View {
                                               set: { settings.exerciseSettings.rounds = max(1, $0) }),
                                unit: "×")
 
-                    if !advanced {
-                        // Bridge: the one essential Voice control, surfaced here
-                        // because the Voice category is Advanced-only. Same
-                        // underlying setting as Voice Guidance → Spoken
-                        // instructions (in Advanced it lives only there).
-                        ToggleRow(title: "Spoken instructions",
-                                  isOn: $settings.ttsSettings.enabled)
-                    }
-
                     Button {
                         BreakWindowManager.shared.presentPreview(timer: timer) {
                             BreakWindowManager.shared.dismissAll()
@@ -630,34 +427,6 @@ struct SettingsView: View {
                             .font(.system(.callout, design: .rounded).weight(.medium))
                     }
                     .buttonStyle(.bordered)
-
-                    if advanced {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Step hold scale: \(String(format: "%.2f", settings.exerciseSettings.stepHoldScale))×")
-                                .font(.system(.caption, design: .rounded).weight(.medium))
-                            Slider(value: $settings.exerciseSettings.stepHoldScale,
-                                   in: 0.5...2.0)
-
-                        }
-                        Text("Step length in seconds: \(String(format: "%.0f", settings.exerciseSettings.scaledHold(4)))")
-                            .font(.system(.caption2, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.7))
-
-                        if let selected = editingInstructionDirection {
-                            instructionEditor(for: selected)
-                        }
-                        StepsInstructionEditor(
-                            instructions: $settings.ttsSettings.instructions,
-                            onSelect: { editingInstructionDirection = $0 }
-                        )
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Kalib interval: \(Int(settings.ttsSettings.kalibIntervalSeconds))s")
-                                .font(.system(.caption, design: .rounded).weight(.medium))
-                            Slider(value: $settings.ttsSettings.kalibIntervalSeconds,
-                                   in: 0...60)
-
-                        }
-                    }
                 }
 
                 Section("Camera & Vision") {
@@ -667,13 +436,6 @@ struct SettingsView: View {
                         Text("Works during breaks only. Alerts when blink rate is low.")
                             .font(.system(.caption, design: .rounded))
                             .foregroundStyle(.white.opacity(0.65))
-                        if advanced {
-                            ToggleRow(title: "Strict exercise validation",
-                                      isOn: $settings.strictExerciseValidation)
-                            Text("A step won't advance until the camera confirms the movement (gaze directions and blinks). Off = auto-advance after a grace period.")
-                                .font(.system(.caption, design: .rounded))
-                                .foregroundStyle(.white.opacity(0.65))
-                        }
                     }
                 }
 
@@ -704,35 +466,6 @@ struct SettingsView: View {
                         .pickerStyle(.menu)
                         .fixedSize()
                     }
-
-                    if advanced {
-                        ToggleRow(title: "Different style per eye",
-                                  isOn: Binding(
-                                    get: { settings.sharinganStyleRight != nil },
-                                    set: { on in
-                                        settings.sharinganStyleRight =
-                                            on ? settings.sharinganStyle : nil
-                                    }))
-
-                        if let right = settings.sharinganStyleRight {
-                            HStack {
-                                Text("Right eye")
-                                    .font(.system(.body, design: .rounded))
-                                Spacer()
-                                SpinningIrisSwatch(style: right)
-                                Picker("", selection: Binding(
-                                    get: { settings.sharinganStyleRight ?? settings.sharinganStyle },
-                                    set: { settings.sharinganStyleRight = $0 })) {
-                                    ForEach(SharinganStyle.allCases) { s in
-                                        Text(s.label).tag(s)
-                                    }
-                                }
-                                .labelsHidden()
-                                .pickerStyle(.menu)
-                                .fixedSize()
-                            }
-                        }
-                    }
                     Text("Used everywhere the eyes appear: break screen and desktop wallpaper.")
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(.white.opacity(0.65))
@@ -757,51 +490,6 @@ struct SettingsView: View {
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(.white.opacity(0.65))
 
-                    if advanced {
-                        HStack {
-                            Text("Pattern animation")
-                                .font(.system(.body, design: .rounded))
-                            Spacer()
-                            Picker("", selection: $settings.breakPatternTransition) {
-                                ForEach(PatternTransitionSpeed.allCases) { s in
-                                    Text(s.label).tag(s)
-                                }
-                            }
-                            .labelsHidden()
-                            .pickerStyle(.segmented)
-                            .frame(width: 260)
-                        }
-                        Text("The pattern whirls open at break start and whirls shut as the break ends.")
-                            .font(.system(.caption, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.65))
-
-                        if settings.breakPatternTransition != .off {
-                            ToggleRow(title: "Mixed patterns",
-                                      isOn: $settings.breakPatternMixed)
-                            Text("On: the pattern evolves through the whole chain during the break — 1 tomoe → 2 → 3 → Mangekyō… Off: only your selected style.")
-                                .font(.system(.caption, design: .rounded))
-                                .foregroundStyle(.white.opacity(0.65))
-                        }
-
-                        HStack {
-                            Text("Pattern spin")
-                                .font(.system(.body, design: .rounded))
-                            Spacer()
-                            Picker("", selection: $settings.breakPatternSpinSeconds) {
-                                Text("Off").tag(0.0)
-                                Text("Slow").tag(12.0)
-                                Text("Normal").tag(8.0)
-                                Text("Fast").tag(4.0)
-                            }
-                            .labelsHidden()
-                            .pickerStyle(.segmented)
-                            .frame(width: 260)
-                        }
-                        Text("Continuous rotation of the iris pattern while the break runs.")
-                            .font(.system(.caption, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.65))
-                    }
-
                     Button {
                         BreakWindowManager.shared.presentPreview(timer: timer) {
                             BreakWindowManager.shared.dismissAll()
@@ -813,61 +501,16 @@ struct SettingsView: View {
                     .buttonStyle(.bordered)
                 }
 
+                // Kept always-visible: this .onChange chain re-applies the
+                // wallpaper config, so it must stay observing even when the
+                // Advanced accordion (which holds the wallpaper motion
+                // details) is collapsed.
                 Section("Desktop wallpaper") {
                     ToggleRow(title: "Show eyes on the desktop",
                               isOn: $settings.eyesWallpaperEnabled)
                     Text("Live wallpaper: the eyes sit under your desktop icons and always follow the mouse.")
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(.white.opacity(0.65))
-
-                    if advanced {
-                        HStack {
-                            Text("Sharingan spin")
-                                .font(.system(.body, design: .rounded))
-                            Spacer()
-                            Picker("", selection: $settings.wallpaperSpinTrigger) {
-                                ForEach(WallpaperSpinTrigger.allCases) { t in
-                                    Text(t.label).tag(t)
-                                }
-                            }
-                            .labelsHidden()
-                            .pickerStyle(.menu)
-                            .fixedSize()
-                        }
-
-                        if settings.wallpaperSpinTrigger != .off {
-                            HStack {
-                                Text("Spin speed")
-                                    .font(.system(.body, design: .rounded))
-                                Spacer()
-                                Picker("", selection: $settings.wallpaperSpinDuration) {
-                                    Text("Slow").tag(2.8)
-                                    Text("Normal").tag(1.6)
-                                    Text("Fast").tag(0.9)
-                                }
-                                .labelsHidden()
-                                .pickerStyle(.segmented)
-                                .frame(width: 210)
-                            }
-                        }
-
-                        if settings.wallpaperSpinTrigger.spinsOnIdle {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("Idle delay: \(String(format: "%.1f", settings.wallpaperIdleDelay))s")
-                                    .font(.system(.caption, design: .rounded).weight(.medium))
-                                Slider(value: $settings.wallpaperIdleDelay, in: 0.5...5, step: 0.5)
-                            }
-                        }
-
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Close eyes after: \(Int(settings.wallpaperDozeSeconds))s of stillness")
-                                .font(.system(.caption, design: .rounded).weight(.medium))
-                            Slider(value: $settings.wallpaperDozeSeconds, in: 10...300, step: 10)
-                        }
-                        Text("When the mouse hasn't moved for this long, the eyes doze off; they wake on the first move.")
-                            .font(.system(.caption, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.65))
-                    }
                 }
                 .onChange(of: settings.eyesWallpaperEnabled) { _, on in
                     WallpaperWindowManager.shared.setEnabled(on, config: WallpaperConfig(from: settings))
@@ -917,7 +560,7 @@ struct SettingsView: View {
                         }
                     }
                     .pickerStyle(.menu)
-                    
+
                 }
 
         case .voice:
@@ -981,6 +624,356 @@ struct SettingsView: View {
                               isOn: $settings.globalShortcutsEnabled)
                     shortcutLegend
                 }
+        }
+    }
+
+    /// Rows shown only inside the "Advanced settings" accordion at the
+    /// bottom of a category page. Empty for General, Voice, and Shortcuts
+    /// (`SettingsCategory.hasAdvancedRows == false` for those, so the
+    /// accordion never renders and these cases are unreachable in practice).
+    @ViewBuilder
+    private func advancedSections(_ cat: SettingsCategory) -> some View {
+        switch cat {
+        case .timer:
+                Section("Timer mode") {
+                    Picker("Mode", selection: $settings.timerMode) {
+                        ForEach(TimerMode.allCases, id: \.self) { mode in
+                            Text(mode.label).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    Picker("Time format", selection: $settings.timeFormat) {
+                        ForEach(TimeDisplayFormat.allCases, id: \.self) { f in
+                            Text(f.label).tag(f)
+                        }
+                    }
+                    .pickerStyle(.menu)
+
+                    ToggleRow(title: "Flash at 5 seconds left",
+                              isOn: $settings.flashAtFiveSecLeft)
+                }
+
+                Section("Repeat") {
+                    ToggleRow(title: "Repeat enabled",
+                              isOn: $settings.repeatConfig.enabled)
+                    if settings.repeatConfig.enabled {
+                        ToggleRow(title: "Endless (repeat forever)",
+                                  isOn: $settings.repeatConfig.endless)
+                        if !settings.repeatConfig.endless {
+                            StepperRow(title: "Repeat count",
+                                       value: Binding(
+                                           get: { settings.repeatConfig.count },
+                                           set: { settings.repeatConfig.count = $0 }),
+                                       unit: "×")
+                        }
+                        StepperRow(title: "Delay",
+                                   value: Binding(
+                                       get: { Int(settings.repeatConfig.delaySeconds / 60) },
+                                       set: { settings.repeatConfig.delaySeconds = TimeInterval($0) * 60 }),
+                                   unit: "min")
+                    }
+                }
+
+                Section("Floating timer details") {
+                    if settings.floatingTimerEnabled {
+                        Picker("Size", selection: $settings.floatingSize) {
+                            ForEach(FloatingTimerSize.allCases, id: \.self) { size in
+                                Text(size.label).tag(size)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+
+                        ToggleRow(title: "Always on top",
+                                  isOn: $settings.floatingAlwaysOnTop)
+                        ToggleRow(title: "Cycle dots on floating timer",
+                                  isOn: $settings.floatingShowDots)
+                        ToggleRow(title: "Active task on floating timer",
+                                  isOn: $settings.floatingShowTask)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Opacity: \(Int(settings.floatingOpacity * 100))%")
+                                .font(.system(.caption, design: .rounded).weight(.medium))
+                            Slider(value: $settings.floatingOpacity, in: 0.3...1.0)
+
+                        }
+                        Text("Drag the floating timer to reposition — its spot is remembered. Right-click it for size presets.")
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.6))
+                    } else {
+                        Text("Enable the floating timer to configure it.")
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
+                }
+
+        case .tasks:
+                Section("Planning") {
+                    ToggleRow(title: "Week starts on Monday",
+                              isOn: $settings.weekStartsOnMonday)
+                    Text("Applies to the weekly board and the menu bar Week tab.")
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+
+                Section("Estimates & badges") {
+                    StepperRow(title: "Default subtask estimate",
+                               value: $settings.defaultSubtaskEstimate,
+                               unit: "🍅",
+                               range: 0...8)
+                    Text("Applied to newly added steps. Set to 0 for no estimate.")
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.6))
+                    ToggleRow(title: "Show pomodoro badges",
+                              isOn: $settings.showPomodoroBadges)
+                    Text("The 🍅 done/estimate chips on task and subtask rows.")
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+
+        case .breaks:
+                Section("Screen brightness") {
+                    ToggleRow(title: "Dim screen on break",
+                              isOn: $settings.brightnessDimEnabled)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Dim level: \(settings.brightnessDimPercent)%")
+                            .font(.system(.caption, design: .rounded).weight(.medium))
+                        Slider(value: Binding(
+                                get: { Double(settings.brightnessDimPercent) },
+                                set: { settings.brightnessDimPercent = Int($0) }
+                              ), in: 5...95)
+
+                    }
+                    ToggleRow(title: "Smooth transition",
+                              isOn: $settings.brightnessSmooth)
+                    ToggleRow(title: "Warm colors on break",
+                              isOn: $settings.nightShiftBreakEnabled)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Warmth: \(Int(settings.nightShiftBreakStrength * 100))%")
+                            .font(.system(.caption, design: .rounded).weight(.medium))
+                        Slider(value: $settings.nightShiftBreakStrength, in: 0.1...1.0)
+                    }
+                    Text("Warms screen colors during breaks (uses Night Shift).")
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+
+        case .focus:
+                Section("App blocking extras") {
+                    ToggleRow(title: "Also block during focus session",
+                              isOn: $settings.blockAppsDuringFocus)
+                    ToggleRow(title: "Force quit (not just hide)",
+                              isOn: $settings.appBlockerSettings.killOnFrontmost)
+                }
+
+                Section("Do Not Disturb") {
+                    ToggleRow(title: "Turn on Focus during focus sessions",
+                              isOn: $settings.dndEnabled)
+                    if settings.dndEnabled {
+                        dndShortcutRow(label: "On shortcut",
+                                       name: $settings.dndShortcutOn)
+                        dndShortcutRow(label: "Off shortcut",
+                                       name: $settings.dndShortcutOff)
+                        Button {
+                            NSWorkspace.shared.open(URL(string: "shortcuts://")!)
+                        } label: {
+                            Label("Open Shortcuts app",
+                                  systemImage: "arrow.up.forward.app")
+                                .font(.system(.caption, design: .rounded).weight(.semibold))
+                        }
+                        .buttonStyle(.pressableSubtle)
+                        Text("Create two shortcuts with these names: one sets a Focus (e.g. Do Not Disturb) on, the other turns it off. Sharingan runs them when a focus session starts and ends.")
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
+                }
+
+                Section("Reminder details") {
+                    ToggleRow(title: "Only during focus phase",
+                              isOn: $settings.reminderSettings.duringFocusOnly)
+                    ForEach($settings.reminderSettings.reminders) { $item in
+                        ReminderRow(item: $item)
+                    }
+                    Button {
+                        settings.reminderSettings.reminders.append(
+                            .init(kind: .custom, intervalMinutes: 45,
+                                  message: "Custom reminder")
+                        )
+                    } label: {
+                        Label("Add reminder", systemImage: "plus.circle.fill")
+                            .font(.system(.caption, design: .rounded).weight(.semibold))
+                    }
+                    .buttonStyle(.pressableSubtle)
+                }
+
+        case .eyeCare:
+                Section("Exercise tuning") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Step hold scale: \(String(format: "%.2f", settings.exerciseSettings.stepHoldScale))×")
+                            .font(.system(.caption, design: .rounded).weight(.medium))
+                        Slider(value: $settings.exerciseSettings.stepHoldScale,
+                               in: 0.5...2.0)
+
+                    }
+                    Text("Step length in seconds: \(String(format: "%.0f", settings.exerciseSettings.scaledHold(4)))")
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.7))
+
+                    if let selected = editingInstructionDirection {
+                        instructionEditor(for: selected)
+                    }
+                    StepsInstructionEditor(
+                        instructions: $settings.ttsSettings.instructions,
+                        onSelect: { editingInstructionDirection = $0 }
+                    )
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Kalib interval: \(Int(settings.ttsSettings.kalibIntervalSeconds))s")
+                            .font(.system(.caption, design: .rounded).weight(.medium))
+                        Slider(value: $settings.ttsSettings.kalibIntervalSeconds,
+                               in: 0...60)
+
+                    }
+                }
+
+                Section("Camera") {
+                    if settings.cameraEyeTrackingEnabled {
+                        ToggleRow(title: "Strict exercise validation",
+                                  isOn: $settings.strictExerciseValidation)
+                        Text("A step won't advance until the camera confirms the movement (gaze directions and blinks). Off = auto-advance after a grace period.")
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.65))
+                    } else {
+                        Text("Enable camera eye tracking to configure validation.")
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
+                }
+
+        case .sharingan:
+                Section("Iris details") {
+                    ToggleRow(title: "Different style per eye",
+                              isOn: Binding(
+                                get: { settings.sharinganStyleRight != nil },
+                                set: { on in
+                                    settings.sharinganStyleRight =
+                                        on ? settings.sharinganStyle : nil
+                                }))
+
+                    if let right = settings.sharinganStyleRight {
+                        HStack {
+                            Text("Right eye")
+                                .font(.system(.body, design: .rounded))
+                            Spacer()
+                            SpinningIrisSwatch(style: right)
+                            Picker("", selection: Binding(
+                                get: { settings.sharinganStyleRight ?? settings.sharinganStyle },
+                                set: { settings.sharinganStyleRight = $0 })) {
+                                ForEach(SharinganStyle.allCases) { s in
+                                    Text(s.label).tag(s)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+                            .fixedSize()
+                        }
+                    }
+                }
+
+                Section("Break screen effects") {
+                    HStack {
+                        Text("Pattern animation")
+                            .font(.system(.body, design: .rounded))
+                        Spacer()
+                        Picker("", selection: $settings.breakPatternTransition) {
+                            ForEach(PatternTransitionSpeed.allCases) { s in
+                                Text(s.label).tag(s)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(width: 260)
+                    }
+                    Text("The pattern whirls open at break start and whirls shut as the break ends.")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.65))
+
+                    if settings.breakPatternTransition != .off {
+                        ToggleRow(title: "Mixed patterns",
+                                  isOn: $settings.breakPatternMixed)
+                        Text("On: the pattern evolves through the whole chain during the break — 1 tomoe → 2 → 3 → Mangekyō… Off: only your selected style.")
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.65))
+                    }
+
+                    HStack {
+                        Text("Pattern spin")
+                            .font(.system(.body, design: .rounded))
+                        Spacer()
+                        Picker("", selection: $settings.breakPatternSpinSeconds) {
+                            Text("Off").tag(0.0)
+                            Text("Slow").tag(12.0)
+                            Text("Normal").tag(8.0)
+                            Text("Fast").tag(4.0)
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(width: 260)
+                    }
+                    Text("Continuous rotation of the iris pattern while the break runs.")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.65))
+                }
+
+                Section("Wallpaper motion") {
+                    HStack {
+                        Text("Sharingan spin")
+                            .font(.system(.body, design: .rounded))
+                        Spacer()
+                        Picker("", selection: $settings.wallpaperSpinTrigger) {
+                            ForEach(WallpaperSpinTrigger.allCases) { t in
+                                Text(t.label).tag(t)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .fixedSize()
+                    }
+
+                    if settings.wallpaperSpinTrigger != .off {
+                        HStack {
+                            Text("Spin speed")
+                                .font(.system(.body, design: .rounded))
+                            Spacer()
+                            Picker("", selection: $settings.wallpaperSpinDuration) {
+                                Text("Slow").tag(2.8)
+                                Text("Normal").tag(1.6)
+                                Text("Fast").tag(0.9)
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.segmented)
+                            .frame(width: 210)
+                        }
+                    }
+
+                    if settings.wallpaperSpinTrigger.spinsOnIdle {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Idle delay: \(String(format: "%.1f", settings.wallpaperIdleDelay))s")
+                                .font(.system(.caption, design: .rounded).weight(.medium))
+                            Slider(value: $settings.wallpaperIdleDelay, in: 0.5...5, step: 0.5)
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Close eyes after: \(Int(settings.wallpaperDozeSeconds))s of stillness")
+                            .font(.system(.caption, design: .rounded).weight(.medium))
+                        Slider(value: $settings.wallpaperDozeSeconds, in: 10...300, step: 10)
+                    }
+                    Text("When the mouse hasn't moved for this long, the eyes doze off; they wake on the first move.")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.65))
+                }
+
+        case .general, .voice, .shortcuts:
+                EmptyView()
         }
     }
 
