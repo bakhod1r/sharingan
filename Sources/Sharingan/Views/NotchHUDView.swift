@@ -59,11 +59,18 @@ struct NotchHUDView: View {
         }
     }
 
-    /// Filled in by later tasks: ears (Task 5), expanded panel (Task 6),
-    /// activity (Task 7). Idle draws nothing but the shape itself.
+    /// Filled in by later tasks: expanded panel (Task 6), activity (Task 7).
+    /// Idle draws nothing but the shape itself.
     @ViewBuilder
     private func content(_ l: NotchLayout) -> some View {
-        EmptyView()
+        switch model.state.size {
+        case .hidden, .idle:
+            EmptyView()
+        case .live:
+            NotchEars(model: model, layout: l)
+        case .activity, .expanded:
+            EmptyView()   // Tasks 6 and 7
+        }
     }
 }
 
