@@ -26,6 +26,7 @@
 ## Tasks & planning
 
 - Full task system: title, priority (P1–P4), tags, projects, categories, due dates, notes, and estimates.
+- Per-task pomodoro type (Small/Normal/Big, or Auto to inherit the app default) — shown as a small icon+label badge in the task row's metadata line when set (nil/Auto shows nothing); subtasks can override it too, shown as an icon-only badge next to the subtask row.
 - Subtasks with their own estimates — reorder them, or promote a subtask into a full task.
 - Recurrence: none, daily, weekdays, weekly, every N days, or monthly (on a chosen day). Completing a recurring task spawns the next occurrence.
 - Natural-language quick add in the **world's 25 most-spoken languages** at once, e.g. `ertaga 15:00 p1 #ish @blink ~2 hisobot yozish` — with live parse chips while you type, in both the main composer and the menu-bar quick-add. Recognizes:

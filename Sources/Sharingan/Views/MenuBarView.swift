@@ -528,6 +528,12 @@ struct MenuBarView: View {
                     .foregroundStyle(task.subtaskProgress.done == task.subtaskProgress.total
                                      ? Color.green : .secondary)
             }
+            if let kind = task.pomodoroKind {
+                Image(systemName: kind.systemImage)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .help(kind.label)
+            }
             pomodoroBadge(task)
 
             // Expand to manage subtasks / notes.

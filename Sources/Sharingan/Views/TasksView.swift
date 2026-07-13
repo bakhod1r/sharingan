@@ -1281,6 +1281,12 @@ struct TasksView: View {
                             .font(.system(size: 10, design: .rounded))
                             .foregroundStyle(.secondary)
                     }
+                    if let kind = sub.pomodoroKind {
+                        Image(systemName: kind.systemImage)
+                            .font(.system(size: 10, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .help(kind.label)
+                    }
                     if !sub.isDone {
                         Button {
                             store.setActiveSubtask(taskID: task.id,
@@ -1341,6 +1347,7 @@ struct TasksView: View {
         let hasMeta = !task.tags.isEmpty || task.dueDate != nil
             || task.recurrence != .none || task.project != nil
             || task.subtaskProgress.total > 0 || task.priority != .none
+            || task.pomodoroKind != nil
         if hasMeta {
             HStack(spacing: 7) {
                 if let due = task.dueDate {
@@ -1369,6 +1376,10 @@ struct TasksView: View {
                 }
                 if let project = task.project {
                     Label(project, systemImage: "folder")
+                        .foregroundStyle(Color.dsTertiary)
+                }
+                if let kind = task.pomodoroKind {
+                    Label(kind.label, systemImage: kind.systemImage)
                         .foregroundStyle(Color.dsTertiary)
                 }
             }
