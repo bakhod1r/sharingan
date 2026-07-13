@@ -1688,3 +1688,154 @@ not.)
 **Verification:** `swift build && swift test` green; SelfTest untouched.
 
 **Commit:** `feat(tasks): estimate derives from subtask sum; direct pomodoroKind in add()` and push.
+
+---
+
+### Task 14: "+" for Tags — persisted custom tags
+
+*(Added 2026-07-13, user decision: the sidebar's Tags section gets an add
+button like Categories.)*
+
+**Files:**
+- Modify: `Sources/SharinganCore/Services/TaskStore.swift` (persisted custom tags)
+- Modify: `Sources/Sharingan/Views/MainWindowView.swift` (sidebar `tagsSection` header + popover)
+- Test: the tests file covering TaskStore basics (find it; else append to `Tests/SharinganTests/SubtaskOpsTests.swift`'s neighborhood)
+
+**Design:**
+
+1. `TaskStore` gains `@Published private(set) var customTags: [String]`,
+   persisted the same way `customCategories` is (read how those persist —
+   mirror it exactly). API:
+   `@discardableResult public func addCustomTag(_ name: String) -> Bool`
+   (trim, strip a leading `#`, reject empty/duplicates case-insensitively
+   against `allTags`), and
+   `public func removeCustomTag(_ name: String)` (unused-tag cleanup from
+   the row's context menu; does NOT touch tags on tasks).
+2. `allTags` merges: derived-from-tasks frequency list (as today) plus
+   custom tags with 0 uses appended at the end (alphabetical). No
+   duplicates (a custom tag that gains real uses just appears with its
+   count).
+3. Sidebar: `tagsSection` uses the SAME `sectionHeader(_:collapsed:addHelp:onAdd:)`
+   overload Categories uses ("New tag" help) with a popover: one
+   TextField ("Name", `DarkGlassFieldStyle`, onSubmit commits) + Add
+   button (disabled when trimmed-empty). Mirror `addCategoryPopover`
+   minus the color swatches (tags have per-tag styles elsewhere via
+   `tagStyles` — do not add color UI here).
+4. Tag rows for 0-count custom tags render dimmed like 0-count priority
+   rows do; their context menu gains "Remove tag" (calls
+   `removeCustomTag`) — only for tags with 0 uses.
+5. Tests: add/dup-reject/normalize (`#foo` → `foo`), merge order (used
+   tags by frequency first, unused customs after), remove.
+
+**Verification:** `swift build && swift test` green. Docs: one line in
+TECHNICAL.md (Tasks section — custom tags precreatable from the sidebar).
+
+**Commit:** `feat(tags): create tags from the sidebar` and push.
+
+---
+
+### Task 15: "+" for Priority — user-defined priority levels
+
+*(Added 2026-07-13, user decision — accepted as a larger change: the
+sidebar's Priority section gets an add button; users can add levels above
+P1 and delete them again.)*
+
+**Files:**
+- Modify: `Sources/SharinganCore/Models/TaskItem.swift` (`TaskPriority` enum → struct)
+- Modify: `Sources/SharinganCore/Models/PomodoroSettings.swift` (`customPriorityLevels: [Int]`)
+- Modify: the 4 `TaskPriority.allCases` menu sites (WeeklyBoardView:423, TaskComponents:60, MenuBarView:622, TasksView:1592), `MainWindowView.prioritySection` (+ header add button + popover + delete), `EisenhowerQuadrant` importance rule, `TaskInputParser` p1–p4 mapping — read each before changing.
+- Test: `Tests/SharinganTests/` — new PriorityLevelsTests + update anything asserting `allCases`.
+
+**Model design (JSON/DB compatible):**
+
+1. `TaskPriority` becomes:
+
+```swift
+public struct TaskPriority: RawRepresentable, Codable, Hashable, Sendable, Identifiable {
+    public let rawValue: Int
+    public init(rawValue: Int) { self.rawValue = rawValue }
+    public init?(rawValue: Int) is NOT needed — keep the non-failable init; DB decode's `?? .none` fallback becomes unnecessary but harmless to keep compiling: change that line to `TaskPriority(rawValue: Int(int(stmt, 15)))`.
+    public var id: Int { rawValue }
+    public static let none  = TaskPriority(rawValue: 0)
+    public static let low   = TaskPriority(rawValue: 1)
+    public static let medium = TaskPriority(rawValue: 2)
+    public static let high  = TaskPriority(rawValue: 3)
+}
+```
+
+   RawRepresentable+Codable's default implementation encodes the bare Int —
+   byte-identical to the enum's encoding (verify with a decode test against
+   literal `3`). Higher rawValue = more urgent, unchanged.
+2. `CaseIterable` is dropped. Ordering helper replaces `allCases`:
+
+```swift
+    /// All levels, most-urgent first, ending with `.none`. Built-ins plus
+    /// the user's custom levels (rawValues stored in settings).
+    public static func levels(custom: [Int]) -> [TaskPriority] {
+        let flagged = ([1, 2, 3] + custom).sorted(by: >).map(TaskPriority.init(rawValue:))
+        return flagged + [.none]
+    }
+```
+
+3. Labels become rank-based: `label` ("P1"…) and `menuLabel` need the
+   level list, so they move to functions taking the custom list — OR
+   simpler: keep `label`/`menuLabel` for the four built-ins as today
+   (switch on rawValue) and give customs `label == "P!"`-style computed
+   from settings-provided rank AT CALL SITES via
+   `PomodoroSettings.priorityName(_:)` (which already exists and falls
+   back to `menuLabel`). Concretely: `menuLabel` default for a custom
+   level is `"Custom"` — but every UI reads names through
+   `settings.priorityName(p)`, and the add-popover REQUIRES a name, which
+   is written into `settings.priorityNames[String(rawValue)]`, so the
+   fallback is rarely visible. `label` (the "P1" chip) for customs:
+   compute rank at the one or two chip call sites via a new
+   `PomodoroSettings.priorityShortLabel(_ p:) -> String` = "P\(rank among
+   levels(custom:), 1-based; .none keeps no chip)". Built-in ranks shift
+   automatically when customs exist above them — that is the intended
+   renumbering semantic.
+4. `colorHex` stays for built-ins; customs' colors REQUIRED in the popover
+   and stored in the existing `settings.priorityColors[String(rawValue)]`
+   (read through the existing `settings.priorityColorHex(_:)`, which
+   already overrides built-ins and returns the stored hex for customs).
+5. `PomodoroSettings` gains `customPriorityLevels: [Int] = []` (decoded
+   defensively like every other field). Add level: next rawValue =
+   `(customPriorityLevels.max() ?? 3) + 1`. Delete level (context menu on
+   custom rows only): remove from the list, drop its
+   priorityNames/priorityColors entries, and reassign affected tasks via a
+   new `TaskStore.reassignPriority(from:to:)` (from custom → `.none`).
+6. `EisenhowerQuadrant` importance: replace the `== .high || == .medium`
+   check with `task.priority.rawValue >= TaskPriority.medium.rawValue`
+   (customs are above high → important; verify the file's exact line
+   first).
+7. `TaskInputParser` p1–p4: keep mapping to the four BUILT-INS (p1=high …
+   p4=none) — custom levels are menu-only, no parser change beyond
+   compiling with the struct.
+8. The four `allCases.reversed()` menus become
+   `TaskPriority.levels(custom: <settings source>)` (they already render
+   most-urgent-first via `.reversed()` — `levels` is already
+   most-urgent-first, so drop the `.reversed()`); each site needs access
+   to `customPriorityLevels` — all four already read
+   `timer.settings`/`settings` for priority names (verify; where a
+   component lacks it, thread the `[Int]` in as a parameter).
+9. Sidebar `prioritySection`: header gains the add-button overload
+   ("New priority level") with a popover: TextField name (required) +
+   the same color-swatch row as `addCategoryPopover` + Add. On add:
+   append rawValue to `customPriorityLevels`, write name+color into
+   `priorityNames`/`priorityColors`. Custom rows' context menu gains
+   Delete (built-ins keep rename/recolor only).
+10. SelfTest/DB: `TaskDatabase` line 117 adjusts as in (1); rawValue
+    round-trip unchanged. Run SelfTest — it must pass WITHOUT edits
+    unless it constructs TaskPriority as an enum case in a way structs
+    break (`.high` statics keep those call sites compiling).
+
+**Tests (PriorityLevelsTests):** decode from literal Int JSON (`3` →
+`.high`, `7` → rawValue 7); encode round-trip; `levels(custom: [4,5])`
+order = [5,4,3,2,1,0-none-last]; rank labels via
+`priorityShortLabel` (with custom [4]: rawValue 4 → "P1", high → "P2",
+none → no label); reassign-on-delete moves tasks to `.none`.
+
+**Verification:** `swift build && swift test` && `swift run SelfTest`
+green. TECHNICAL.md: priority levels are extensible; renumbering
+semantics one-liner.
+
+**Commit:** `feat(priority): user-defined priority levels above P1` and push.
