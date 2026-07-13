@@ -47,7 +47,13 @@ public struct NotchLayout: Equatable, Sendable {
 }
 
 public enum NotchGeometry {
-    public static let expandedSize = CGSize(width: 340, height: 260)
+    /// Tall enough for the panel's full content — a timer row, `NotchTaskRows`'
+    /// five rows, the quick actions and the blocker/streak strip. Measured, not
+    /// guessed: the same stack fits in 286pt with five rows (240pt with three),
+    /// so 260 cropped the strip clean off at the `.clipShape`; 300 leaves
+    /// headroom. The island is *drawn* over this whole rect, so the hit region
+    /// growing with it is honest.
+    public static let expandedSize = CGSize(width: 340, height: 300)
     public static let earWidth: CGFloat = 78
     /// The idle island is the cutout plus this lip, so it reads as hardware.
     public static let idleExtraHeight: CGFloat = 4
@@ -135,17 +141,45 @@ public enum NotchGeometry {
         }
     }
 
+    /// The island's silhouette: a rectangle whose *bottom* corners are rounded,
+    /// so it reads as an extension of the hardware cutout rather than a window
+    /// that appeared. This is the ONE definition of that shape — the app's
+    /// `IslandShape` draws this path and `hitTest` masks against it, so the drawn
+    /// pixels and the clickable region cannot drift apart. (They did: masking
+    /// against the bare rect left a wedge at each bottom corner that was hittable
+    /// but not drawn, and in `.live` that wedge sits on live menu-bar real
+    /// estate.)
+    public static func islandPath(in rect: CGRect,
+                                  cornerRadius: CGFloat = cornerRadius) -> CGPath {
+        let p = CGMutablePath()
+        guard rect.width > 0, rect.height > 0 else { return p }
+        let r = min(cornerRadius, rect.height / 2, rect.width / 2)
+        p.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - r))
+        p.addQuadCurve(to: CGPoint(x: rect.maxX - r, y: rect.maxY),
+                       control: CGPoint(x: rect.maxX, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.minX + r, y: rect.maxY))
+        p.addQuadCurve(to: CGPoint(x: rect.minX, y: rect.maxY - r),
+                       control: CGPoint(x: rect.minX, y: rect.maxY))
+        p.closeSubpath()
+        return p
+    }
+
     /// True when `point` (panel coordinates) is inside the *currently rendered*
     /// shape. The panel is far bigger than the island, so this is what keeps
     /// menu-bar clicks working: everything outside falls through. Always false
     /// without a hardware notch — nothing is rendered there.
+    ///
+    /// The ears need no test of their own: they are sub-rects of the island in
+    /// `.live` and are drawn inside its silhouette, so masking against the
+    /// silhouette covers them — and, unlike their rects, it does not claim the
+    /// rounded-off corners.
     public static func hitTest(_ point: CGPoint, metrics: NotchScreenMetrics,
                                size: NotchHUDSize) -> Bool {
         guard metrics.hasHardwareNotch else { return false }
         let l = layout(metrics, size: size)
-        if l.island.contains(point) { return true }
-        if let left = l.leftEar, left.contains(point) { return true }
-        if let right = l.rightEar, right.contains(point) { return true }
-        return false
+        guard !l.island.isEmpty else { return false }
+        return islandPath(in: l.island, cornerRadius: l.cornerRadius).contains(point)
     }
 }

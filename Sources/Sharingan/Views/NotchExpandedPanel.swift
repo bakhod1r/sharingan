@@ -172,12 +172,8 @@ struct NotchExpandedPanel: View {
             action("plus", "Quick add a task") {
                 AppServices.coordinator?.quickAddController?.showQuickAdd()
             }
-            // The app has no "start a break" entry point — `skip()` from a focus
-            // phase IS the break, and it is what the menu bar's Skip button and
-            // the CLI's `skip` command both call.
-            action("cup.and.saucer.fill", "Break now (skip to the next phase)") {
-                timer.skip()
-            }
+            // No "Break now" here: it would be `timer.skip()`, which is exactly
+            // what the Skip button one row up already does.
             action(blocker.isActive ? "hand.raised.fill" : "hand.raised",
                    blocker.isActive ? "Stop blocking apps" : "Block distracting apps") {
                 blocker.isActive ? blocker.deactivate() : blocker.activate()

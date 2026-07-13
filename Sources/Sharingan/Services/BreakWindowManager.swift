@@ -66,10 +66,13 @@ final class BreakWindowManager: BreakPresenter {
             ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
             for p in panels { p.animator().alphaValue = 1 }
         }
-        // The overlay now covers every screen; the island would otherwise
-        // float on top of it for a frame. Both `presentBreak` and
-        // `presentPreview` funnel through here, so this is the one place that
-        // needs the call.
+        // The overlay now covers every screen. It is drawn far above the island
+        // (`BreakPanel.level == .screenSaver`, the notch panel sits just above
+        // the menu bar), so this is not about z-order: standing the HUD down
+        // stops its hit-test mask claiming clicks in the strip of overlay it
+        // covers, and stops the island surfacing again as the overlay fades out.
+        // Both `presentBreak` and `presentPreview` funnel through here, so this
+        // is the one place that needs the call.
         NotchWindowManager.shared.setBreakOverlay(true)
     }
 

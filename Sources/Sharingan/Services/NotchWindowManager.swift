@@ -49,6 +49,20 @@ final class NotchWindowManager {
             }
             .store(in: &cancellables)
 
+        // The only signal that a phase truly *finished*: `PomodoroTimer` posts
+        // it from `phaseComplete()` and from nowhere else, so — unlike the phase
+        // sink above, which sees pauses, resumes, resets and skips alike — what
+        // arrives here really did run to zero. "Session complete" is announced
+        // from here or not at all.
+        NotificationCenter.default.publisher(for: .phaseDidComplete)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] note in
+                guard let phase = note.userInfo?["phase"] as? PomodoroPhase,
+                      let activity = NotchActivity.forCompletedPhase(phase) else { return }
+                self?.announce(activity)
+            }
+            .store(in: &cancellables)
+
         screenObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
             object: nil, queue: .main
@@ -235,16 +249,16 @@ final class NotchWindowManager {
         model.state.engaged = timer.isRunning
             || (timer.remainingSeconds > 0 && timer.remainingSeconds < timer.totalSeconds)
 
-        // A phase flip is the one moment worth interrupting for. This fires on
-        // any transition the timer makes — natural completion or a manual
-        // `skip()` — since both mutate `phase` the same way and nothing in
-        // this Combine sink distinguishes the two. Announcing on skip isn't
-        // noise: `skip()` never posts `.phaseDidComplete`, so the coordinator
-        // never runs `presentBreak` for it — a skip straight into a break has
-        // no full-screen takeover at all, and the island's announcement is the
-        // only thing that tells the user the break started.
+        // A break *starting* is the one moment this sink interrupts for, whether
+        // the focus phase ran out or the user hit Skip — `skip()` posts no
+        // `.phaseDidComplete`, so the coordinator never runs `presentBreak` for
+        // it and the island's announcement is the only thing that tells the user
+        // the break began. Everything else this sink sees (a pause, a resume, a
+        // Reset back to focus, a skip out of a break) is a write to `phase`
+        // rather than an event, and `forPhaseChange` keeps it quiet. A break
+        // that genuinely ends announces itself through `.phaseDidComplete`.
         if let last = lastPhase,
-           let activity = NotchActivity.forPhaseTransition(from: last, to: timer.phase) {
+           let activity = NotchActivity.forPhaseChange(from: last, to: timer.phase) {
             announce(activity)
         }
         lastPhase = timer.phase

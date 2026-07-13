@@ -150,4 +150,49 @@ struct NotchGeometryTests {
         // Hidden is never hittable.
         #expect(!NotchGeometry.hitTest(center, metrics: m, size: .hidden))
     }
+
+    /// The island is drawn with rounded *bottom* corners, so the mask has to be
+    /// cut from the same silhouette: a point inside the island's rect but
+    /// outside its rounded corner is menu bar, not island, and a click there
+    /// belongs to whatever is underneath.
+    @Test("the rounded bottom corners are not hittable, in live and expanded alike")
+    func roundedCornersFallThrough() {
+        let m = Self.notched
+        let live = NotchGeometry.layout(m, size: .live).island
+        let expanded = NotchGeometry.layout(m, size: .expanded).island
+
+        for island in [live, expanded] {
+            let inset: CGFloat = 2
+            let corners = [CGPoint(x: island.minX + inset, y: island.maxY - inset),
+                           CGPoint(x: island.maxX - inset, y: island.maxY - inset)]
+            for c in corners {
+                #expect(island.contains(c))                 // inside the bare rect …
+                #expect(!NotchGeometry.islandPath(in: island,
+                                                  cornerRadius: NotchGeometry.cornerRadius)
+                    .contains(c))                           // … outside the drawn shape
+            }
+        }
+        #expect(!NotchGeometry.hitTest(CGPoint(x: live.minX + 2, y: live.maxY - 2),
+                                       metrics: m, size: .live))
+        #expect(!NotchGeometry.hitTest(CGPoint(x: expanded.maxX - 2, y: expanded.maxY - 2),
+                                       metrics: m, size: .expanded))
+        // The straight part of the bottom edge, between the corners, still is.
+        #expect(NotchGeometry.hitTest(CGPoint(x: live.midX, y: live.maxY - 2),
+                                      metrics: m, size: .live))
+        #expect(NotchGeometry.hitTest(CGPoint(x: expanded.midX, y: expanded.maxY - 2),
+                                      metrics: m, size: .expanded))
+    }
+
+    /// The expanded island has to be tall enough for what the panel puts in it —
+    /// the timer row, `NotchTaskRows.defaultLimit` task rows, the quick actions
+    /// and the status strip — or the `.clipShape` crops the bottom off. A
+    /// SwiftUI replica of the panel measures 286pt at five rows (see the notch
+    /// report); the island must not be shorter than that.
+    @Test("the expanded island fits the panel's full content")
+    func expandedIslandFitsItsContent() {
+        #expect(NotchGeometry.expandedSize.height >= 286)
+        let expanded = NotchGeometry.layout(Self.notched, size: .expanded)
+        #expect(expanded.island.height == NotchGeometry.expandedSize.height)
+        #expect(expanded.panelSize.height >= expanded.island.height)
+    }
 }

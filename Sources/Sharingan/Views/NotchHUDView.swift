@@ -77,19 +77,23 @@ struct NotchHUDView: View {
             NotchExpandedPanel(model: model, timer: timer, layout: l)
         case .activity:
             if let activity = model.state.activity {
-                NotchActivityView(activity: activity,
-                                  topInset: model.metrics.cutout?.height ?? 0)
+                NotchActivityView(activity: activity, model: model, layout: l)
             }
         }
     }
 }
 
 /// The island's 2-second announcement: an icon and a line, then it collapses.
-/// Content sits below `topInset` (the hardware cutout's height) so the
-/// camera housing never hides it.
+/// Sized to `layout.island` like every other content view, and pushed below the
+/// hardware cutout so the camera housing never hides the line.
 struct NotchActivityView: View {
     let activity: NotchActivity
-    let topInset: CGFloat
+    @ObservedObject var model: NotchHUDModel
+    let layout: NotchLayout
+
+    /// See `NotchExpandedPanel.contentTop`: `cutout` is nil only on a display
+    /// with no notch, where this view is never built.
+    private var contentTop: CGFloat { (model.metrics.cutout?.height ?? 0) + 4 }
 
     var body: some View {
         HStack(spacing: 8) {
@@ -101,28 +105,22 @@ struct NotchActivityView: View {
                 .foregroundStyle(.white.opacity(0.9))
                 .lineLimit(1)
         }
-        .padding(.top, topInset + 4)
+        .padding(.top, contentTop)
         .padding(.horizontal, 16)
+        .frame(width: layout.island.width, height: layout.island.height,
+               alignment: .top)
         .transition(.opacity)
     }
 }
 
 /// A rectangle whose *bottom* corners are rounded — the notch's silhouette.
+/// The path itself lives in `NotchGeometry` (Core), which is also what the
+/// hit-test mask is cut from: one definition, so what is drawn and what is
+/// clickable are the same shape by construction.
 struct IslandShape: Shape {
     var cornerRadius: CGFloat
 
     func path(in rect: CGRect) -> Path {
-        let r = min(cornerRadius, rect.height / 2, rect.width / 2)
-        var p = Path()
-        p.move(to: CGPoint(x: rect.minX, y: rect.minY))
-        p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - r))
-        p.addQuadCurve(to: CGPoint(x: rect.maxX - r, y: rect.maxY),
-                       control: CGPoint(x: rect.maxX, y: rect.maxY))
-        p.addLine(to: CGPoint(x: rect.minX + r, y: rect.maxY))
-        p.addQuadCurve(to: CGPoint(x: rect.minX, y: rect.maxY - r),
-                       control: CGPoint(x: rect.minX, y: rect.maxY))
-        p.closeSubpath()
-        return p
+        Path(NotchGeometry.islandPath(in: rect, cornerRadius: cornerRadius))
     }
 }

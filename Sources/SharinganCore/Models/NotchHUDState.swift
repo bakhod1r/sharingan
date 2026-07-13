@@ -22,17 +22,41 @@ public enum NotchActivity: Equatable, Sendable {
         }
     }
 
-    /// The announcement a timer phase flip earns, if any. `nil` when the
-    /// phases match (no flip) or the flip isn't into or out of a break — e.g.
-    /// `.focus` to `.paused`. Pure so it can be tested without a running
-    /// timer; the manager's job is just to call this on every phase change it
-    /// observes and feed the result to `announce(_:)`.
-    public static func forPhaseTransition(from: PomodoroPhase,
-                                          to: PomodoroPhase) -> NotchActivity? {
+    /// The announcement a *live phase flip* earns, if any — the rule behind the
+    /// manager's `timer.$phase` sink.
+    ///
+    /// Only arriving in a break qualifies. The sink sees every write to `phase`,
+    /// including the ones that are not phase changes at all: `pause()` writes
+    /// `.paused` and resuming writes the real phase back, so `.shortBreak →
+    /// .paused` and `.paused → .shortBreak` are one break, not two events —
+    /// anything touching `.paused` is silent. And *leaving* a break says nothing
+    /// about a break having finished: `stop()` (the Reset button, and every task
+    /// row's play button, which calls it internally) also jumps straight to
+    /// `.focus`. Real completions come from `.phaseDidComplete` instead — see
+    /// `forCompletedPhase(_:)`.
+    ///
+    /// Pure, so it is tested without a running timer.
+    public static func forPhaseChange(from: PomodoroPhase,
+                                      to: PomodoroPhase) -> NotchActivity? {
         guard from != to else { return nil }
-        if to.isBreak { return .breakStarted }
-        if from.isBreak { return .sessionDone }
-        return nil
+        // A pause or a resume is not a phase change worth announcing.
+        guard from != .paused, to != .paused else { return nil }
+        return to.isBreak ? .breakStarted : nil
+    }
+
+    /// The announcement a phase that *actually ran to zero* earns — the rule
+    /// behind the manager's `.phaseDidComplete` sink. `PomodoroTimer` posts that
+    /// notification from `phaseComplete()` only; `pause()`, `stop()` and `skip()`
+    /// never do, which is exactly why the completed-phase signal, and not the
+    /// phase sink, is what may claim something finished.
+    ///
+    /// A finished break is the end of the whole focus → break cycle: the island
+    /// says "Session complete" as focus comes back. A finished *focus* phase is
+    /// not announced here — the break it rolls into announces itself one beat
+    /// later via `forPhaseChange`, and two announcements would only fight over
+    /// the island's single 2-second slot.
+    public static func forCompletedPhase(_ phase: PomodoroPhase) -> NotchActivity? {
+        phase.isBreak ? .sessionDone : nil
     }
 }
 

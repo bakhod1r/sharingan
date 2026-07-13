@@ -416,7 +416,12 @@ public final class PomodoroTimer: ObservableObject {
 }
 
 extension Notification.Name {
-    static let phaseDidComplete = Notification.Name("sharingan.phaseDidComplete")
+    /// The one "a phase really finished" signal — posted from `phaseComplete()`
+    /// and nowhere else (`pause()`, `stop()` and `skip()` never post it). Public
+    /// because the app layer's notch HUD announces completions off it: the phase
+    /// itself cannot be trusted for that, since pausing and resetting rewrite it
+    /// just the same. `userInfo["phase"]` is the `PomodoroPhase` that completed.
+    public static let phaseDidComplete = Notification.Name("sharingan.phaseDidComplete")
     static let focusFiveMinLeft = Notification.Name("sharingan.focusFiveMinLeft")
     static let breakShouldStart = Notification.Name("sharingan.breakShouldStart")
     static let breakShouldEnd   = Notification.Name("sharingan.breakShouldEnd")
