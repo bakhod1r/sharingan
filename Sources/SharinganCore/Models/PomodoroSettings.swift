@@ -99,6 +99,21 @@ public struct PomodoroKindConfig: Codable, Equatable, Sendable {
     }
 }
 
+/// Which live "ears" the notch HUD grows while a session runs. The ears sit in
+/// the menu bar row and therefore overlap the app's menu titles (left) and the
+/// status items (right) — an inherent cost of the notch, so it is a choice.
+public enum NotchEarsMode: String, Codable, CaseIterable, Identifiable, Sendable {
+    case both, trailingOnly, none
+    public var id: String { rawValue }
+    public var label: String {
+        switch self {
+        case .both:         return "Both sides"
+        case .trailingOnly: return "Right only"
+        case .none:         return "Progress bar only"
+        }
+    }
+}
+
 public struct PomodoroSettings: Codable, Equatable, Sendable {
     /// Per-kind duration overrides; a missing key means the factory default.
     public var kindConfigs: [String: PomodoroKindConfig] = [:]
@@ -214,6 +229,11 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var dndEnabled: Bool = false
     public var dndShortcutOn: String = "Sharingan Focus On"
     public var dndShortcutOff: String = "Sharingan Focus Off"
+
+    /// Notch HUD — the island around the camera housing.
+    public var notchHUDEnabled: Bool = true
+    public var notchEars: NotchEarsMode = .both
+    public var notchLiveActivity: Bool = true
 
     /// UserDefaults key of the persisted settings JSON blob (owned by
     /// PomodoroTimer; exposed so tier seeding can detect an existing user).
@@ -347,6 +367,9 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
         dndEnabled = try c.decodeIfPresent(Bool.self, forKey: .dndEnabled) ?? d.dndEnabled
         dndShortcutOn = try c.decodeIfPresent(String.self, forKey: .dndShortcutOn) ?? d.dndShortcutOn
         dndShortcutOff = try c.decodeIfPresent(String.self, forKey: .dndShortcutOff) ?? d.dndShortcutOff
+        notchHUDEnabled = try c.decodeIfPresent(Bool.self, forKey: .notchHUDEnabled) ?? d.notchHUDEnabled
+        notchEars = try c.decodeIfPresent(NotchEarsMode.self, forKey: .notchEars) ?? d.notchEars
+        notchLiveActivity = try c.decodeIfPresent(Bool.self, forKey: .notchLiveActivity) ?? d.notchLiveActivity
     }
 
     /// Custom flag color (hex) for a tag, nil when the default should apply.
