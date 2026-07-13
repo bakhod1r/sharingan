@@ -34,6 +34,29 @@ public enum HeadlessRender {
     /// (The other `--render-*` flags — the icon, the iris grid, the break
     /// preview — draw a view and exit without ever touching `TaskStore`, so they
     /// have no business redirecting it.)
+    ///
+    /// **What this seam does not cover: `UserDefaults`.** It redirects the task
+    /// *database* and nothing else. Every render process still reads and writes
+    /// the user's real preferences domain, and the app's persistence is
+    /// deliberately implicit — `PomodoroTimer.settings` and `PomodoroTimer.stats`
+    /// persist from a `didSet`, `FocusQueue` persists from every mutator — so a
+    /// render corrupts the user's settings by *looking* like it is only dressing
+    /// a view. Both of these shipped and had to be undone:
+    ///
+    /// - `timer.settings.breakBackgroundStyle = style`, to style a break
+    ///   preview, silently overwrote the user's chosen break background. Renders
+    ///   now build a `PomodoroSettings` value and pass it to
+    ///   `PomodoroTimer(settings:)`, whose `init` assignment does not fire
+    ///   `didSet`.
+    /// - `AppServices.focusQueue.clear()`, to keep the user's queued tasks out of
+    ///   the shots, emptied the user's real focus queue — permanently. It was
+    ///   never needed: a render's queued ids resolve against the *throwaway*
+    ///   store, where they name nothing, so `NotchTaskRows.rows` and
+    ///   `FocusQueue.current(validatedAgainst:)` skip them anyway.
+    ///
+    /// The rule for anything added to a render block: **read** these types, never
+    /// write them. If a render needs different state, build the value and inject
+    /// it — do not assign through a live, persisting object.
     public static let flags = ["--render-dev-preview", "--render-site-assets"]
 
     /// Where a render was told to write, `nil` if this is not that render.

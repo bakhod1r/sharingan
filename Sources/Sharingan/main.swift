@@ -231,11 +231,18 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-break-preview"),
    i + 1 < CommandLine.arguments.count {
     let out = CommandLine.arguments[i + 1]
     MainActor.assumeIsolated {
-        let timer = PomodoroTimer()
+        // The style is applied to the settings *value*, and the timer is built
+        // from it. Never `timer.settings.breakBackgroundStyle = style`:
+        // `PomodoroTimer.settings` persists to `UserDefaults` in `didSet`, so
+        // photographing a preview would rewrite the user's real break
+        // background. `didSet` does not run for an assignment inside `init`,
+        // which is the whole reason `PomodoroTimer(settings:)` exists.
+        var settings = PomodoroTimer.savedSettings()
         if i + 2 < CommandLine.arguments.count,
            let style = BreakBackgroundStyle(rawValue: CommandLine.arguments[i + 2]) {
-            timer.settings.breakBackgroundStyle = style
+            settings.breakBackgroundStyle = style
         }
+        let timer = PomodoroTimer(settings: settings)
         let preview = BreakView(timer: timer, onTapSkip: {}, forceExit: true)
             .frame(width: 1440, height: 900)
         let renderer = ImageRenderer(content: preview)
@@ -329,7 +336,7 @@ if let outDir = HeadlessRender.outputDirectory(for: "--render-site-assets") {
                   to: "\(outDir)/iris/\(style.rawValue).png")
         }
 
-        // 2) Seed sample tasks (isolated store — see HOME note above).
+        // 2) Seed sample tasks (isolated store — see the note above).
         let store = TaskStore.shared
         store.add(title: "Ship landing page v1", category: "Work", tags: ["launch"],
                   dueDate: Date(), estimatedPomodoros: 3, project: "Sharingan", priority: .high)
@@ -346,9 +353,11 @@ if let outDir = HeadlessRender.outputDirectory(for: "--render-site-assets") {
             store.addSubtask(first.id, title: "Verify Lighthouse 100")
             store.activeTaskID = first.id
         }
-        // cfprefsd leaks the REAL user's defaults through the HOME override —
-        // clear the bits that show up in renders (focus queue, stale actives).
-        AppServices.focusQueue.clear()
+        // (The focus queue is *read* here, never written: `NotchTaskRows.rows`
+        // only keeps queued ids that resolve to a task in the store, and this
+        // render's store is the throwaway — so the user's queued ids name nothing
+        // and simply do not appear. Nothing has to be cleared, and clearing it
+        // would empty the user's real, planned queue: `FocusQueue` persists.)
         print("store:", store.tasks.map(\.title))
         print("active:", store.activeTask?.title ?? "nil")
 

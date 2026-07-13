@@ -16,8 +16,16 @@ final class NotchHUDModel: ObservableObject {
     }
     /// The shape the island is morphing *from*.
     @Published private(set) var previousSize: NotchHUDSize = .hidden
-    @Published var metrics = NotchScreenMetrics(screenWidth: 1512, menuBarHeight: 37,
-                                                notchWidth: 200, notchHeight: 37)
+    /// **No notch until something proves otherwise.** The whole safety argument
+    /// of the HUD is "no cutout ⇒ nothing drawn and nothing hittable", so the
+    /// unwritten default has to be the safe answer, not a plausible one. A
+    /// 14"-MacBook-Pro fixture here would mean any path that built the view
+    /// before `NotchWindowManager.refresh()` stamped the real metrics claimed a
+    /// 200×37 cutout that may not exist — and the hit-test mask is cut from these
+    /// numbers. `refresh()` writes the truth on install; the dev-preview block in
+    /// `main.swift` sets the 14" fixture explicitly, which is the only caller
+    /// that ever wanted it.
+    @Published var metrics = NotchScreenMetrics.none
     /// What the island is configured to show — the ears it grows and the
     /// sections the expanded panel renders. The manager writes it from the
     /// settings, and *everything* geometric reads it from here: the view's

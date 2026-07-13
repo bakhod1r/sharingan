@@ -180,6 +180,24 @@ struct NotchGeometryTests {
         }
     }
 
+    /// The metrics a `NotchHUDModel` carries *before anyone tells it about a
+    /// screen* — `NotchScreenMetrics.none`. The default has to be the safe
+    /// answer, because the hit-test mask is cut from these numbers: a plausible
+    /// 14"-MacBook-Pro fixture as the default would have any path that drew the
+    /// island before `refresh()` ran claim a 200×37 cutout that may not exist.
+    @Test("the unwritten default metrics claim no notch, and nothing hittable")
+    func defaultMetricsAreNoNotch() {
+        let m = NotchScreenMetrics.none
+        #expect(!m.hasHardwareNotch)
+        #expect(m.cutout == nil)
+        #expect(NotchGeometry.panelSize(m) == .zero)
+        for size in NotchHUDSize.allCases {
+            #expect(NotchGeometry.layout(m, size: size).island.isEmpty)
+            #expect(!NotchGeometry.hitTest(CGPoint(x: 0, y: 0), metrics: m, size: size))
+            #expect(!NotchGeometry.hitTest(CGPoint(x: 100, y: 10), metrics: m, size: size))
+        }
+    }
+
     @Test("a notchless screen is never hittable")
     func notchlessScreenIsNeverHittable() {
         let probes = [CGPoint(x: 0, y: 0), CGPoint(x: 960, y: 0),

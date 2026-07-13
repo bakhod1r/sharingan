@@ -182,8 +182,35 @@ final class NotchWindowManager {
 
     /// The break overlay covers the whole screen; the HUD stands down so it
     /// isn't drawing an island on top of it.
+    ///
+    /// Raising the overlay is a *suspension*, exactly like `teardown()`, and it
+    /// has to forget the pointer for the same reason — with one extra edge the
+    /// teardown path does not have: the overlay is a `.screenSaver`-level window,
+    /// so it lands **on top of** the notch panel. A pointer resting on the island
+    /// when the break begins may therefore never produce the `mouseExited` that
+    /// would have closed it. Without this reset the island comes back `.expanded`
+    /// when the break ends — full hit-test mask over the menu bar, pointer
+    /// nowhere near it, and nothing left that can close it.
     func setBreakOverlay(_ up: Bool) {
         model.state.breakOverlayUp = up
+        if up { suspendInteraction() }
+    }
+
+    /// The half of `teardown()` that is about *state* rather than the window:
+    /// cancel the jobs, and clear what they were going to clear. Cancelling alone
+    /// is not enough — a cancelled hover job leaves `hovering` set at whatever it
+    /// was, which is the bug `NotchHUDState.clearTransientInteraction` describes.
+    ///
+    /// Shared by the two ways the island goes away: the HUD being switched off
+    /// (or its screen disappearing) and the break overlay coming up.
+    private func suspendInteraction() {
+        hoverJob?.cancel()
+        hoverJob = nil
+        pendingHover = nil
+        activityJob?.cancel()
+        activityJob = nil
+        model.state.clearTransientInteraction()
+        model.pointerInside = false
     }
 
     // MARK: - Screen
@@ -266,11 +293,6 @@ final class NotchWindowManager {
         // hosting view's tracking area, and a window drops those on the floor
         // unless it is told to accept them.
         panel.acceptsMouseMovedEvents = true
-        // Never take key from the frontmost app just because the island was
-        // clicked: `.nonactivatingPanel` keeps the *app* from activating, not
-        // the window from becoming key. Buttons still get their clicks in a
-        // non-key window; only a text field would need key status.
-        panel.becomesKeyOnlyIfNeeded = true
         // Above the menu bar — the whole point is to draw on the notch, which
         // the menu bar owns.
         panel.level = NSWindow.Level(
@@ -294,17 +316,11 @@ final class NotchWindowManager {
 
     private func teardown() {
         // Cancelling the jobs is not enough: whatever they were going to clear
-        // has to be cleared here, or disabling the HUD mid-hover (or
+        // has to be cleared too, or disabling the HUD mid-hover (or
         // mid-announcement) leaves `hovering`/`activity` set and re-enabling it
-        // brings the panel back already expanded.
-        hoverJob?.cancel()
-        hoverJob = nil
-        pendingHover = nil
-        activityJob?.cancel()
-        activityJob = nil
-        model.state.hovering = false
-        model.state.activity = nil
-        model.pointerInside = false
+        // brings the panel back already expanded. Shared with `setBreakOverlay`,
+        // which is the same suspension.
+        suspendInteraction()
         guard let panel else { return }
         self.panel = nil
         panel.orderOut(nil)

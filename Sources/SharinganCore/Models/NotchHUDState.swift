@@ -90,4 +90,26 @@ public struct NotchHUDState: Equatable, Sendable {
         if engaged { return .live }
         return .idle
     }
+
+    /// Forget the pointer and the announcement — everything that is true only
+    /// *while the island is on screen*.
+    ///
+    /// **Every suspension of the HUD has to call this, or the island comes back
+    /// expanded over a menu bar the pointer left long ago.** `hovering` and
+    /// `activity` are set by events the island itself receives; while it is
+    /// hidden it receives none, so whatever was true at the moment it went away
+    /// stays true. Hide it mid-hover — the HUD switched off, or a break overlay
+    /// (a `.screenSaver`-level window) drawn over the notch, which can swallow
+    /// the `mouseExited` that would have closed it — and `hovering` is still
+    /// set when it returns: `size` reads `.expanded`, the panel's ~340×290
+    /// hit-test mask goes live over the menu bar, and nothing takes it back
+    /// down, because the only thing that would (`mouseMoved`) fires when the
+    /// pointer moves *inside* the island. A menu bar that silently eats clicks.
+    ///
+    /// `engaged` is deliberately kept: a session that was running is still
+    /// running, and the timer re-publishes it anyway.
+    public mutating func clearTransientInteraction() {
+        hovering = false
+        activity = nil
+    }
 }

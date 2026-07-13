@@ -163,4 +163,64 @@ struct NotchHUDStateTests {
             #expect(NotchActivity.forPhaseChange(from: phase, to: phase) == nil)
         }
     }
+
+    // MARK: - Suspension
+
+    /// **The bug this exists to prevent.** The break overlay is a
+    /// `.screenSaver`-level window: it lands on top of the notch panel, so a
+    /// pointer sitting on the island when the break starts may never produce a
+    /// `mouseExited`. If the state is carried through the suspension untouched,
+    /// `hovering` is still set when the overlay drops — the island returns
+    /// `.expanded`, its full hit-test mask goes live over the menu bar with the
+    /// pointer nowhere near it, and nothing closes it, because `mouseMoved` only
+    /// fires *inside* the island. Clearing the interaction on the way down is
+    /// what makes the island come back the size the situation actually calls for.
+    @Test("a HUD suspended mid-hover does not come back expanded")
+    func suspensionForgetsTheHover() {
+        var s = NotchHUDState()
+        s.engaged = true
+        s.hovering = true
+        s.activity = .breakStarted
+        #expect(s.size == .expanded)
+
+        // The break overlay goes up: the island stands down, and forgets.
+        s.breakOverlayUp = true
+        s.clearTransientInteraction()
+        #expect(s.size == .hidden)
+
+        // The overlay drops. The session is still running, so the island is back
+        // — but as the live ears, not as the full expanded panel.
+        s.breakOverlayUp = false
+        #expect(s.size == .live)
+        #expect(!s.hovering)
+        #expect(s.activity == nil)
+    }
+
+    /// The same reset, from an idle HUD switched off mid-hover and back on: it
+    /// returns to the bare island, not to a 340×290 mask over the menu bar.
+    @Test("a disabled-then-re-enabled HUD returns idle, not expanded")
+    func teardownForgetsTheHover() {
+        var s = NotchHUDState()
+        s.hovering = true
+
+        s.enabled = false
+        s.clearTransientInteraction()
+        #expect(s.size == .hidden)
+
+        s.enabled = true
+        #expect(s.size == .idle)
+    }
+
+    /// `engaged` is *not* transient: a session that was running is still running
+    /// through a break overlay, and clearing it would flick the island back to
+    /// idle for a frame when the overlay drops.
+    @Test("a running session survives the suspension")
+    func suspensionKeepsTheSession() {
+        var s = NotchHUDState()
+        s.engaged = true
+        s.hovering = true
+        s.clearTransientInteraction()
+        #expect(s.engaged)
+        #expect(s.size == .live)
+    }
 }

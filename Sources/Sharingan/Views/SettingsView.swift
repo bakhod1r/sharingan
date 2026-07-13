@@ -794,8 +794,11 @@ struct SettingsView: View {
                 // Same order as the Simple tier above, where "Notch HUD" follows
                 // the floating timer and the menu bar: the surfaces the timer can
                 // paint itself on, from the desktop upwards.
+                // No `notchUnavailableNote` here: the Simple tier's "Notch HUD"
+                // section already carries it, next to the master toggle it
+                // explains, and both sections are on this same page — printing it
+                // twice reads as a bug. This section just comes up disabled.
                 Section("Notch HUD details") {
-                    notchUnavailableNote
                     if hasNotch && !settings.notchHUDEnabled {
                         Text("Turn the notch HUD on to configure it.")
                             .font(.system(.caption2, design: .rounded))

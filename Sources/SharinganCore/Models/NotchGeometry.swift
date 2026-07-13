@@ -19,6 +19,13 @@ public struct NotchScreenMetrics: Equatable, Sendable {
         self.notchHeight = notchHeight
     }
 
+    /// A display with no cutout — and, on this model, no screen either. The safe
+    /// default for anything that has not been told the real metrics yet: it
+    /// yields no cutout, no layout and a hit-test mask that claims nothing (see
+    /// `NotchHUDModel.metrics`).
+    public static let none = NotchScreenMetrics(screenWidth: 0, menuBarHeight: 0,
+                                                notchWidth: 0, notchHeight: 0)
+
     public var hasHardwareNotch: Bool { notchWidth > 0 && notchHeight > 0 }
 
     /// The hardware cutout the island is modelled on, `nil` when the display has

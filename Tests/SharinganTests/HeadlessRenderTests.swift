@@ -97,4 +97,102 @@ struct HeadlessRenderTests {
     func testProcessIsNotARender() {
         #expect(!HeadlessRender.isActive)
     }
+
+    // MARK: - What the seam does *not* cover: UserDefaults
+    //
+    // The database is redirected; the preferences domain is not. These two are
+    // the mutations that shipped through that gap, and the properties that make
+    // the fixes correct rather than merely careful.
+
+    /// **Why `--render-site-assets` never had to clear the user's focus queue.**
+    ///
+    /// It used to call `AppServices.focusQueue.clear()` to keep the user's queued
+    /// tasks out of the screenshots — and `FocusQueue` persists, so it emptied
+    /// the real, planned queue, permanently, every time the site was rebuilt.
+    ///
+    /// It was redundant on top of destructive. The queue holds *ids*; a render
+    /// resolves them against the throwaway store, which has never heard of them.
+    /// The ids fall out on their own: what the island lists is exactly the sample
+    /// tasks the render seeded, in their own order.
+    @Test("a render's queued ids resolve to nothing, so no clearing is needed")
+    func theUsersQueueVanishesFromARenderWithoutBeingCleared() {
+        // The render's throwaway store: only the seeded samples exist here.
+        let seeded = [TaskItem(title: "Ship landing page v1"),
+                      TaskItem(title: "Review pull request #42")]
+        // The user's real queue, read out of their real defaults: ids of tasks
+        // that live in the *real* database, which this process never opened.
+        let usersQueue = [UUID(), UUID(), UUID()]
+
+        let rows = NotchTaskRows.rows(today: seeded, queue: usersQueue, limit: 5)
+
+        #expect(rows.map(\.title) == ["Ship landing page v1", "Review pull request #42"])
+        // And nothing of the user's leaks into the shot.
+        #expect(!rows.contains { usersQueue.contains($0.id) })
+    }
+
+    /// The same property from the queue's own validated read: ids that resolve to
+    /// nothing in the store it is handed are skipped, not shown. (Isolated
+    /// defaults — this read *persists* the drop, which is exactly why no render
+    /// may call it against the throwaway store.)
+    @MainActor
+    @Test("the validated read skips ids the store does not have")
+    func validatedReadSkipsUnresolvableIDs() {
+        let suite = "blink-render-tests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = TaskStore(fileURL: FileManager.default.temporaryDirectory
+            .appendingPathComponent("blink-render-\(UUID().uuidString).sqlite"))
+
+        let queue = FocusQueue(defaults: defaults)
+        queue.enqueue(UUID())
+        queue.enqueue(UUID())
+
+        #expect(queue.current(validatedAgainst: store) == nil)
+    }
+
+    /// **`PomodoroTimer.settings` persists in its `didSet`.** So the way
+    /// `--render-break-preview` used to dress its shot —
+    /// `timer.settings.breakBackgroundStyle = style` — rewrote the user's real
+    /// break background as a side effect of taking a screenshot. A render builds
+    /// the value and hands it to `init` instead, and an assignment inside `init`
+    /// does not fire `didSet`: nothing is written.
+    @MainActor
+    @Test("building a timer from a settings value writes nothing to the defaults")
+    func initFromSettingsValueDoesNotPersist() {
+        let key = PomodoroSettings.defaultsKey
+        let before = UserDefaults.standard.data(forKey: key)
+
+        var settings = PomodoroTimer.savedSettings()
+        settings.breakBackgroundStyle = settings.breakBackgroundStyle == .slate
+            ? .graphite : .slate
+        let timer = PomodoroTimer(settings: settings)
+
+        // The view sees the styled settings...
+        #expect(timer.settings.breakBackgroundStyle == settings.breakBackgroundStyle)
+        // ...and the user's stored settings are byte-for-byte what they were.
+        #expect(UserDefaults.standard.data(forKey: key) == before)
+    }
+
+    /// **Merely constructing a timer used to write to the user's defaults.**
+    /// `stats` carried a default value, so `self.stats = Self.loadStats()` in
+    /// `init` was an assignment through the setter rather than an
+    /// initialization: `didSet` fired and re-encoded the stats straight back to
+    /// disk. Same values, so nothing was ever visibly lost — but every render
+    /// process wrote to the user's preferences, and a write-back of a value
+    /// loaded moments earlier is exactly how a concurrently-registered pomodoro
+    /// gets clobbered. A render reads; it does not write.
+    @MainActor
+    @Test("constructing a timer writes nothing — not the settings, not the stats")
+    func constructingATimerPersistsNothing() {
+        let statsKey = "com.sharingan.stats"          // PomodoroTimer.statsKey
+        let settingsKey = PomodoroSettings.defaultsKey
+        let statsBefore = UserDefaults.standard.data(forKey: statsKey)
+        let settingsBefore = UserDefaults.standard.data(forKey: settingsKey)
+
+        _ = PomodoroTimer()
+        _ = PomodoroTimer(settings: PomodoroTimer.savedSettings())
+
+        #expect(UserDefaults.standard.data(forKey: statsKey) == statsBefore)
+        #expect(UserDefaults.standard.data(forKey: settingsKey) == settingsBefore)
+    }
 }

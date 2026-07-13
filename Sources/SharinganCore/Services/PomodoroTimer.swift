@@ -10,7 +10,21 @@ public final class PomodoroTimer: ObservableObject {
     @Published public private(set) var isRunning: Bool = false
     @Published public private(set) var cyclesCompletedInRound: Int = 0
     @Published public private(set) var repeatIndex: Int = 0
-    @Published public private(set) var stats: PomodoroStats = .init() {
+    /// **No default value, deliberately.** A stored property that *has* one is
+    /// already initialized by the time an `init` body runs, so `self.stats = …`
+    /// in an initializer is an ordinary assignment — it goes through the setter
+    /// and fires `didSet`. With `= .init()` here, every `PomodoroTimer` ever
+    /// constructed re-encoded the stats it had just loaded and wrote them back to
+    /// the user's defaults, including in a render process, which is supposed to
+    /// read the user's data and never write it. (The values were identical, so
+    /// nothing was lost — but a render that reloads at t₀ and writes back at t₀+ε
+    /// would happily clobber a completion the real app registered in between.)
+    ///
+    /// Without a default, the assignment in `init` *is* the initialization, no
+    /// observer runs, and nothing is persisted until something actually changes
+    /// the stats. `settings` has always worked this way, which is why it never
+    /// had the bug.
+    @Published public private(set) var stats: PomodoroStats {
         didSet { persist(stats) }
     }
 
@@ -70,6 +84,30 @@ public final class PomodoroTimer: ObservableObject {
         self.remainingSeconds = saved.focusSeconds
         self.stats = Self.loadStats()
     }
+
+    /// A timer driven by a settings **value** rather than by what is on disk.
+    ///
+    /// **This is how a render dresses a view without writing to the user's
+    /// settings.** `settings` persists in its `didSet`, so `timer.settings.x = y`
+    /// — the obvious way to style a preview — rewrites the user's real
+    /// preferences as a side effect of taking a screenshot. An assignment inside
+    /// `init` does not run `didSet`, so building the value first and handing it
+    /// here writes nothing. `--render-break-preview` is the caller (see
+    /// `HeadlessRender`); any later render that needs different settings must
+    /// come through here too.
+    ///
+    /// Mutating `settings` on the returned timer persists exactly as it always
+    /// has: this initializer changes where the *initial* value comes from, and
+    /// nothing else.
+    public init(settings: PomodoroSettings) {
+        self.settings = settings
+        self.remainingSeconds = settings.focusSeconds
+        self.stats = Self.loadStats()
+    }
+
+    /// The settings as they are on disk — a read, so a render can copy them,
+    /// change one field and hand the copy to `init(settings:)`.
+    public static func savedSettings() -> PomodoroSettings { loadSettings() }
 
     // MARK: - Control
 
