@@ -34,6 +34,25 @@ public struct NotchScreenMetrics: Equatable, Sendable {
 /// (session done, break started) that collapses on its own.
 public enum NotchHUDSize: String, CaseIterable, Sendable {
     case hidden, idle, live, activity, expanded
+
+    /// How much room the shape takes, ordered — the one thing the motion layer
+    /// needs from a morph: is the island *growing* or *shrinking*? Opening and
+    /// closing are deliberately different springs (see `NotchMotion`), and one
+    /// spring for both directions is what makes a morph feel cheap.
+    ///
+    /// Ordered by island *area*, not width, because area is what the eye reads
+    /// as "bigger": `.live` is the widest state (the cutout plus two ears) but
+    /// only a 41pt-tall strip, so arriving at the shorter-but-far-taller
+    /// `.activity` still reads as the island opening, and is sprung as one.
+    public var growthRank: Int {
+        switch self {
+        case .hidden:   return 0
+        case .idle:     return 1
+        case .live:     return 2
+        case .activity: return 3
+        case .expanded: return 4
+        }
+    }
 }
 
 /// Rects for one state, in panel coordinates: origin top-left, y grows down.
@@ -59,7 +78,28 @@ public enum NotchGeometry {
     public static let idleExtraHeight: CGFloat = 4
     public static let activitySize = CGSize(width: 300, height: 68)
     public static let progressHeight: CGFloat = 3
+    /// The hardware cutout's own bottom corner — the radius of the short states
+    /// (`idle`, `live`), which are the cutout plus a 4pt lip.
     public static let cornerRadius: CGFloat = 14
+    /// … and the radius of the tall one. The expanded panel wearing the notch's
+    /// 14pt corner looks pinched; 22pt reads as the same shape, grown.
+    public static let maxCornerRadius: CGFloat = 22
+
+    /// The bottom radius interpolates with the island's height: a taller island
+    /// is a rounder one.
+    ///
+    /// This lives in Core, next to `islandPath`, for the same reason the path
+    /// does: the *drawn* radius and the radius `hitTest` masks with must be the
+    /// same number by construction. If they drift, a corner that is masked
+    /// rounder than it is painted leaves a wedge that is clickable but shows the
+    /// menu bar — and in `.live` that wedge sits on live menu-bar real estate.
+    public static func cornerRadius(forHeight height: CGFloat,
+                                    baseHeight: CGFloat) -> CGFloat {
+        guard height > baseHeight else { return cornerRadius }
+        let span = max(1, expandedSize.height - baseHeight)
+        let t = min(1, (height - baseHeight) / span)
+        return cornerRadius + (maxCornerRadius - cornerRadius) * t
+    }
 
     /// Hover must persist this long before the island opens (a pointer merely
     /// crossing the top of the screen must not trigger it) …
@@ -99,20 +139,26 @@ public enum NotchGeometry {
             CGRect(x: (panel.width - width) / 2, y: 0, width: width, height: height)
         }
 
+        /// The short states — the cutout plus its lip — are the baseline the
+        /// radius grows from.
+        let baseHeight = cutout.height + idleExtraHeight
+        func radius(_ island: CGRect) -> CGFloat {
+            cornerRadius(forHeight: island.height, baseHeight: baseHeight)
+        }
+
         switch size {
         case .hidden:
             return empty(panel: panel)
 
         case .idle:
-            let island = centered(width: cutout.width,
-                                  height: cutout.height + idleExtraHeight)
+            let island = centered(width: cutout.width, height: baseHeight)
             return NotchLayout(panelSize: panel, island: island, leftEar: nil,
                                rightEar: nil, progressTrack: nil,
-                               cornerRadius: cornerRadius)
+                               cornerRadius: radius(island))
 
         case .live:
             let island = centered(width: cutout.width + 2 * earWidth,
-                                  height: cutout.height + idleExtraHeight)
+                                  height: baseHeight)
             let cutoutMinX = (panel.width - cutout.width) / 2
             let left = CGRect(x: cutoutMinX - earWidth, y: 0,
                               width: earWidth, height: cutout.height)
@@ -123,21 +169,21 @@ public enum NotchGeometry {
                                width: island.width, height: progressHeight)
             return NotchLayout(panelSize: panel, island: island, leftEar: left,
                                rightEar: right, progressTrack: track,
-                               cornerRadius: cornerRadius)
+                               cornerRadius: radius(island))
 
         case .activity:
             let island = centered(width: max(activitySize.width, cutout.width),
                                   height: activitySize.height)
             return NotchLayout(panelSize: panel, island: island, leftEar: nil,
                                rightEar: nil, progressTrack: nil,
-                               cornerRadius: cornerRadius)
+                               cornerRadius: radius(island))
 
         case .expanded:
             let island = centered(width: expandedSize.width,
                                   height: expandedSize.height)
             return NotchLayout(panelSize: panel, island: island, leftEar: nil,
                                rightEar: nil, progressTrack: nil,
-                               cornerRadius: cornerRadius)
+                               cornerRadius: radius(island))
         }
     }
 

@@ -10,6 +10,12 @@ import SharinganCore
 /// must not steal focus from the frontmost app), and while AppKit still delivers
 /// clicks to buttons in a non-key window, a text field would never see a
 /// keystroke. Text entry goes out to Quick Add, which owns a real key window.
+///
+/// The panel assembles rather than blinks. The island grows first
+/// (`NotchMotion.contentLead`), then the four sections arrive in reading order,
+/// one `NotchMotion.stagger` apart — timer row, tasks, quick actions, status
+/// strip — each fading in, drifting up a few points and settling from 96%. The
+/// last one lands ~400ms after the hover commits, inside the budget.
 struct NotchExpandedPanel: View {
     @ObservedObject var model: NotchHUDModel
     @ObservedObject var timer: PomodoroTimer
@@ -21,6 +27,12 @@ struct NotchExpandedPanel: View {
     /// `layout.island` rather than to a constant, so the content can never
     /// drift outside the clickable area.
     let layout: NotchLayout
+    let reduceMotion: Bool
+
+    /// Flipped in `onAppear`; each section watches it through its own delayed
+    /// animation. Child `.transition`s would not run here — SwiftUI animates the
+    /// transition of the outermost inserted view only, and that is this panel.
+    @State private var assembled = false
 
     private var rows: [TaskItem] {
         NotchTaskRows.rows(today: tasks.grouped(filter: .today).flatMap(\.items),
@@ -42,12 +54,22 @@ struct NotchExpandedPanel: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            timerRow
-            Divider().overlay(Color.white.opacity(0.10))
+            VStack(spacing: 8) {
+                timerRow
+                Divider().overlay(Color.white.opacity(0.10))
+            }
+            .notchArrival(assembled, section: 0, reduceMotion: reduceMotion)
+
             taskList
+                .notchArrival(assembled, section: 1, reduceMotion: reduceMotion)
+
             Spacer(minLength: 0)
+
             quickActions
+                .notchArrival(assembled, section: 2, reduceMotion: reduceMotion)
+
             statusStrip
+                .notchArrival(assembled, section: 3, reduceMotion: reduceMotion)
         }
         .padding(.top, contentTop)
         .padding(.horizontal, 14)
@@ -57,6 +79,7 @@ struct NotchExpandedPanel: View {
         // stack would centre itself inside the island instead of filling it.
         .frame(width: layout.island.width, height: layout.island.height,
                alignment: .top)
+        .onAppear { assembled = true }
     }
 
     // MARK: - Timer

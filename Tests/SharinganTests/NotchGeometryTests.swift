@@ -19,6 +19,79 @@ struct NotchGeometryTests {
         #expect(!Self.plain.hasHardwareNotch)
     }
 
+    /// The motion layer picks the opening spring or the closing one off this
+    /// ordering and nothing else, so the order is the contract: every shape is
+    /// ranked, and no two share a rank (a tie would make a real morph read as
+    /// "neither growing nor shrinking" and take the closing spring by default).
+    @Test("the shapes are strictly ordered by how much room they take")
+    func growthRankIsAStrictOrder() {
+        let ranks = NotchHUDSize.allCases.map(\.growthRank)
+        #expect(Set(ranks).count == NotchHUDSize.allCases.count)
+
+        #expect(NotchHUDSize.hidden.growthRank < NotchHUDSize.idle.growthRank)
+        #expect(NotchHUDSize.idle.growthRank < NotchHUDSize.live.growthRank)
+        #expect(NotchHUDSize.live.growthRank < NotchHUDSize.activity.growthRank)
+        #expect(NotchHUDSize.activity.growthRank < NotchHUDSize.expanded.growthRank)
+
+        // The ordering claims to follow island *area*. Check it actually does on
+        // real hardware metrics — `.live` is the widest state but a thin strip,
+        // and ranking it above `.activity` would be a lie the springs act on.
+        let m = Self.notched
+        func area(_ s: NotchHUDSize) -> CGFloat {
+            let r = NotchGeometry.layout(m, size: s).island
+            return r.width * r.height
+        }
+        let ordered = NotchHUDSize.allCases.sorted { $0.growthRank < $1.growthRank }
+        for (a, b) in zip(ordered, ordered.dropFirst()) {
+            #expect(area(a) < area(b))
+        }
+    }
+
+    /// The radius is a pure function of height so that the drawn shape and the
+    /// hit-test mask can be cut from the same number. Two properties matter: it
+    /// never moves for the short states (`idle`/`live` are the cutout plus a
+    /// lip, and must keep the hardware's own 14pt corner), and it is monotone
+    /// and bounded, so no island can ever ask for a corner rounder than half of
+    /// itself.
+    @Test("the bottom radius grows with the island's height, and stays bounded")
+    func cornerRadiusFollowsHeight() {
+        let base = Self.notched.notchHeight + NotchGeometry.idleExtraHeight
+
+        // Short states: the notch's own corner, exactly.
+        #expect(NotchGeometry.cornerRadius(forHeight: base, baseHeight: base)
+                == NotchGeometry.cornerRadius)
+        // Shorter than the baseline (a metric we never produce, but the mask
+        // must not be asked for a negative interpolation) clamps to the base.
+        #expect(NotchGeometry.cornerRadius(forHeight: base - 10, baseHeight: base)
+                == NotchGeometry.cornerRadius)
+        // The tallest state we draw reaches the top of the ramp.
+        #expect(NotchGeometry.cornerRadius(forHeight: NotchGeometry.expandedSize.height,
+                                           baseHeight: base)
+                == NotchGeometry.maxCornerRadius)
+
+        // Monotone, and never outside [base, max] however tall the island gets.
+        var previous = NotchGeometry.cornerRadius
+        for h in stride(from: base, through: base + 600, by: 7) {
+            let r = NotchGeometry.cornerRadius(forHeight: h, baseHeight: base)
+            #expect(r >= previous)
+            #expect(r >= NotchGeometry.cornerRadius)
+            #expect(r <= NotchGeometry.maxCornerRadius)
+            previous = r
+        }
+
+        // And the layouts are cut from it: the two short states share the
+        // hardware corner, the panel gets the grown one.
+        let m = Self.notched
+        #expect(NotchGeometry.layout(m, size: .idle).cornerRadius
+                == NotchGeometry.cornerRadius)
+        #expect(NotchGeometry.layout(m, size: .live).cornerRadius
+                == NotchGeometry.cornerRadius)
+        #expect(NotchGeometry.layout(m, size: .expanded).cornerRadius
+                == NotchGeometry.maxCornerRadius)
+        #expect(NotchGeometry.layout(m, size: .activity).cornerRadius
+                > NotchGeometry.cornerRadius)
+    }
+
     @Test("the panel is always big enough for the largest state")
     func panelCoversExpanded() {
         for size in NotchHUDSize.allCases {

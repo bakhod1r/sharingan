@@ -236,6 +236,7 @@ final class NotchWindowManager {
         activityJob = nil
         model.state.hovering = false
         model.state.activity = nil
+        model.pointerInside = false
         guard let panel else { return }
         self.panel = nil
         panel.orderOut(nil)
@@ -266,8 +267,19 @@ final class NotchWindowManager {
 
     // MARK: - Hover (debounced)
 
-    /// Called by the hosting view's tracking area.
+    /// Called by the hosting view's tracking area on every pointer move.
     ///
+    /// Two things happen, on two different clocks. The island acknowledges the
+    /// pointer *immediately* — `model.pointerInside` drives a hairline on the
+    /// silhouette, so the HUD is not dead for the 250ms of `hoverOpenDelay` and
+    /// then suddenly enormous. Whether it actually *opens* still goes through the
+    /// debounce below, unchanged: a pointer merely crossing the top of the screen
+    /// lights the hairline for a few frames and nothing more.
+    func pointerMoved(inside: Bool) {
+        if model.pointerInside != inside { model.pointerInside = inside }
+        hoverChanged(inside)
+    }
+
     /// The debounce has to compare `inside` against the value that is *going*
     /// to be committed — the pending job's target if one is in flight, the
     /// committed value otherwise. Comparing against the committed value alone
@@ -349,10 +361,10 @@ private final class NotchHostingView<Content: View>: NSHostingView<Content> {
         // Hovering the *island* opens it; hovering the expanded body keeps it open.
         let inside = NotchGeometry.hitTest(geometryPoint(local), metrics: model.metrics,
                                            size: model.state.size)
-        NotchWindowManager.shared.hoverChanged(inside)
+        NotchWindowManager.shared.pointerMoved(inside: inside)
     }
 
     override func mouseExited(with event: NSEvent) {
-        NotchWindowManager.shared.hoverChanged(false)
+        NotchWindowManager.shared.pointerMoved(inside: false)
     }
 }

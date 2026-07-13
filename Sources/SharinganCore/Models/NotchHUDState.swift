@@ -1,7 +1,11 @@
 import Foundation
 
 /// A transient announcement the island makes on its own, then collapses.
-public enum NotchActivity: Equatable, Sendable {
+///
+/// `Hashable` so the island can use the announcement itself as the view's
+/// identity: one announcement replacing another mid-flight is a *new* thing
+/// arriving, not the old one's text changing, and the motion has to say so.
+public enum NotchActivity: Hashable, Sendable {
     case sessionDone
     case breakStarted
     case taskDone(String)
