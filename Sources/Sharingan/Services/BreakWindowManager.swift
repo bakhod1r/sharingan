@@ -66,9 +66,20 @@ final class BreakWindowManager: BreakPresenter {
             ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
             for p in panels { p.animator().alphaValue = 1 }
         }
+        // The overlay now covers every screen; the island would otherwise
+        // float on top of it for a frame. Both `presentBreak` and
+        // `presentPreview` funnel through here, so this is the one place that
+        // needs the call.
+        NotchWindowManager.shared.setBreakOverlay(true)
     }
 
     func dismissAll() {
+        // Stand the island back up before anything else, so there is no frame
+        // where the overlay is gone and the HUD hasn't caught up yet. Every
+        // teardown path — natural break completion, the in-overlay Skip
+        // button (via `timer.skip()`), and the Settings "Preview break
+        // screen" button's own onTapSkip — calls this one method.
+        NotchWindowManager.shared.setBreakOverlay(false)
         if isBlocking { endBreakSession() }
         let fading = panels
         panels.removeAll()

@@ -65,7 +65,6 @@ struct NotchHUDView: View {
         }
     }
 
-    /// Filled in by a later task: activity (Task 7).
     /// Idle draws nothing but the shape itself.
     @ViewBuilder
     private func content(_ l: NotchLayout) -> some View {
@@ -77,8 +76,34 @@ struct NotchHUDView: View {
         case .expanded:
             NotchExpandedPanel(model: model, timer: timer, layout: l)
         case .activity:
-            EmptyView()   // Task 7
+            if let activity = model.state.activity {
+                NotchActivityView(activity: activity,
+                                  topInset: model.metrics.cutout?.height ?? 0)
+            }
         }
+    }
+}
+
+/// The island's 2-second announcement: an icon and a line, then it collapses.
+/// Content sits below `topInset` (the hardware cutout's height) so the
+/// camera housing never hides it.
+struct NotchActivityView: View {
+    let activity: NotchActivity
+    let topInset: CGFloat
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: activity.systemImage)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.white)
+            Text(activity.message)
+                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .foregroundStyle(.white.opacity(0.9))
+                .lineLimit(1)
+        }
+        .padding(.top, topInset + 4)
+        .padding(.horizontal, 16)
+        .transition(.opacity)
     }
 }
 

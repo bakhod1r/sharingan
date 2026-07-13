@@ -73,4 +73,28 @@ struct NotchHUDStateTests {
         #expect(!NotchActivity.sessionDone.message.isEmpty)
         #expect(!NotchActivity.breakStarted.systemImage.isEmpty)
     }
+
+    @Test("focus flipping into a break announces breakStarted")
+    func focusToBreakAnnounces() {
+        #expect(NotchActivity.forPhaseTransition(from: .focus, to: .shortBreak) == .breakStarted)
+        #expect(NotchActivity.forPhaseTransition(from: .focus, to: .longBreak) == .breakStarted)
+    }
+
+    @Test("a break flipping back to focus announces sessionDone")
+    func breakToFocusAnnounces() {
+        #expect(NotchActivity.forPhaseTransition(from: .shortBreak, to: .focus) == .sessionDone)
+        #expect(NotchActivity.forPhaseTransition(from: .longBreak, to: .focus) == .sessionDone)
+    }
+
+    @Test("no flip, no announcement")
+    func noFlipNoAnnouncement() {
+        #expect(NotchActivity.forPhaseTransition(from: .focus, to: .focus) == nil)
+        #expect(NotchActivity.forPhaseTransition(from: .shortBreak, to: .shortBreak) == nil)
+    }
+
+    @Test("a flip that neither enters nor leaves a break stays silent")
+    func nonBreakFlipStaysSilent() {
+        #expect(NotchActivity.forPhaseTransition(from: .focus, to: .paused) == nil)
+        #expect(NotchActivity.forPhaseTransition(from: .paused, to: .focus) == nil)
+    }
 }

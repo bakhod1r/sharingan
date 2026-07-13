@@ -22,6 +22,11 @@ final class NotchWindowManager {
     private var pendingHover: Bool?
 
     private weak var timer: PomodoroTimer?
+    /// The phase `syncTimer` last saw, so a flip announces exactly once. `nil`
+    /// until the first tick, so app launch (restoring whatever phase the timer
+    /// was already in) never announces — only a transition *observed live*
+    /// does.
+    private var lastPhase: PomodoroPhase?
     /// Last settings we reacted to, so a settings edit re-places the panel while
     /// a plain countdown tick does not.
     private var appliedSettings: (enabled: Bool, ears: NotchEarsMode, activity: Bool)?
@@ -229,6 +234,20 @@ final class NotchWindowManager {
         model.phase = timer.phase
         model.state.engaged = timer.isRunning
             || (timer.remainingSeconds > 0 && timer.remainingSeconds < timer.totalSeconds)
+
+        // A phase flip is the one moment worth interrupting for. This fires on
+        // any transition the timer makes — natural completion or a manual
+        // `skip()` — since both mutate `phase` the same way and nothing in
+        // this Combine sink distinguishes the two. Announcing on skip isn't
+        // noise: `skip()` never posts `.phaseDidComplete`, so the coordinator
+        // never runs `presentBreak` for it — a skip straight into a break has
+        // no full-screen takeover at all, and the island's announcement is the
+        // only thing that tells the user the break started.
+        if let last = lastPhase,
+           let activity = NotchActivity.forPhaseTransition(from: last, to: timer.phase) {
+            announce(activity)
+        }
+        lastPhase = timer.phase
     }
 
     // MARK: - Hover (debounced)

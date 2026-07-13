@@ -21,6 +21,19 @@ public enum NotchActivity: Equatable, Sendable {
         case .taskDone:     return "checkmark.circle.fill"
         }
     }
+
+    /// The announcement a timer phase flip earns, if any. `nil` when the
+    /// phases match (no flip) or the flip isn't into or out of a break — e.g.
+    /// `.focus` to `.paused`. Pure so it can be tested without a running
+    /// timer; the manager's job is just to call this on every phase change it
+    /// observes and feed the result to `announce(_:)`.
+    public static func forPhaseTransition(from: PomodoroPhase,
+                                          to: PomodoroPhase) -> NotchActivity? {
+        guard from != to else { return nil }
+        if to.isBreak { return .breakStarted }
+        if from.isBreak { return .sessionDone }
+        return nil
+    }
 }
 
 /// Inputs in, one shape out. Every rule about what the island shows lives here
