@@ -461,16 +461,6 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-dev-preview"),
     exit(0)
 }
 
-// Dev-only: `Sharingan --notch-simulate` drives the notch HUD on a machine that
-// has no hardware notch, by pretending the menu-bar screen carries a 14" MacBook
-// Pro cutout (200×37). The HUD otherwise renders ONLY on a display with a real
-// notch — there is no synthetic pill — so without this flag the feature is
-// invisible on notchless dev hardware. Gated on the launch argument alone: no UI
-// toggle, no persisted setting, nothing a normal launch can flip.
-if CommandLine.arguments.contains("--notch-simulate") {
-    MainActor.assumeIsolated { NotchWindowManager.simulateNotch = true }
-}
-
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate

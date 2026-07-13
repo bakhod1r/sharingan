@@ -101,16 +101,6 @@ final class NotchWindowManager {
 
     // MARK: - Screen
 
-    /// Development escape hatch: pretend the menu-bar screen has a 14" MacBook
-    /// Pro cutout, so the HUD can actually be driven and looked at on notchless
-    /// hardware. Set once, from `main.swift`, when `--notch-simulate` is on the
-    /// command line — there is deliberately no UI toggle and no persisted
-    /// setting, so a normal launch cannot turn it on.
-    static var simulateNotch = false
-
-    /// 14" MacBook Pro cutout, in points — what `--notch-simulate` fakes.
-    private static let simulatedCutout = CGSize(width: 200, height: 37)
-
     /// A real hardware notch: a top safe-area inset *and* both auxiliary areas,
     /// which is what makes the cutout width computable. Without both, `notchWidth`
     /// would come out 0 and the island would have nothing to sit on.
@@ -123,10 +113,9 @@ final class NotchWindowManager {
     /// The one screen the HUD lives on: the notched one, or none at all. It never
     /// follows the mouse and it never falls back to a notchless display — on a
     /// Mac with no notch there is simply no HUD, and `refresh()` tears the panel
-    /// down. (`--notch-simulate` puts it on the menu-bar screen for development.)
+    /// down.
     static func hudScreen() -> NSScreen? {
-        if simulateNotch { return NSScreen.screens.first }
-        return NSScreen.screens.first(where: { hasHardwareNotch($0) })
+        NSScreen.screens.first(where: { hasHardwareNotch($0) })
     }
 
     static func metrics(for screen: NSScreen) -> NotchScreenMetrics {
@@ -138,19 +127,8 @@ final class NotchWindowManager {
         // Auto-hidden menu bar / full screen reports a 0 gap, so fall back to the
         // notch height, then to the status bar's own thickness.
         let topGap = frame.maxY - visible.maxY
-        var notchHeight = screen.safeAreaInsets.top
-        var menuBarHeight = max(topGap, notchHeight, NSStatusBar.system.thickness, 24)
-
-        // Dev only (see `simulateNotch`): hand back 14" MacBook Pro metrics so a
-        // notchless machine still produces a real cutout to render into.
-        if simulateNotch {
-            notchHeight = simulatedCutout.height
-            menuBarHeight = max(menuBarHeight, simulatedCutout.height)
-            return NotchScreenMetrics(screenWidth: frame.width,
-                                      menuBarHeight: menuBarHeight,
-                                      notchWidth: simulatedCutout.width,
-                                      notchHeight: notchHeight)
-        }
+        let notchHeight = screen.safeAreaInsets.top
+        let menuBarHeight = max(topGap, notchHeight, NSStatusBar.system.thickness, 24)
 
         var notchWidth: CGFloat = 0
         if notchHeight > 0 {
