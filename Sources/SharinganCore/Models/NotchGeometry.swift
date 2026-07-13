@@ -135,7 +135,7 @@ public struct NotchContentConfig: Equatable, Sendable {
     /// rows' worth of black for four tasks is dead space over the user's screen,
     /// and reserving it for *none* is a slab of nothing.
     ///
-    /// Zero is not "no section": the panel draws its "Nothing planned for today"
+    /// Zero is not "no section": the panel draws its "No open tasks"
     /// caption there, which has a height of its own (see
     /// `NotchGeometry.emptyTaskListHeight`) and is not one row's worth.
     public var renderedTaskRows: Int {
@@ -335,8 +335,8 @@ public enum NotchGeometry {
     /// … and 2pt of list spacing between rows, so a row *costs* 30pt — the 60pt
     /// over two rows the 5-row/3-row measurement shows (218 → 278).
     public static let taskRowSpacing: CGFloat = 2
-    /// With nothing on today's list the panel draws neither rows nor nothing: it
-    /// draws a centered "Nothing planned for today" caption, and that caption
+    /// With no open tasks the panel draws neither rows nor nothing: it
+    /// draws a centered "No open tasks" caption, and that caption
     /// needs a height of its own — 30pt measured (an 11pt rounded line inside
     /// 8pt of vertical padding).
     ///

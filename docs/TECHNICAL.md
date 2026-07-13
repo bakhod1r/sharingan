@@ -98,7 +98,7 @@
 - Main window sections: Timer, Tasks, Week, Progress, and Settings.
 - Menu-bar popover with timer, tasks, and week tabs plus today's goal.
 - Floating timer: an always-on-top panel that joins all Spaces, is draggable, has size presets, and auto shows/hides around breaks.
-- Notch HUD: an island over the MacBook camera housing — live ears while a session runs, today's tasks and quick actions on hover. Configurable (see below); absent, and disabled in Settings, on a Mac without a notch.
+- Notch HUD: an island over the MacBook camera housing — live ears while a session runs, the user's open tasks and quick actions on hover. Configurable (see below); absent, and disabled in Settings, on a Mac without a notch.
 - Confirmation prompt before quitting while a focus session is running.
 - Searchable settings, grouped into: Timer, Tasks & Planning, Breaks, Focus & Blocking, Eye Care, Sharingan Eyes, General, Voice Guidance, and Shortcuts.
 
@@ -193,12 +193,20 @@ disagree with the HUD about whether the Mac has a notch; it re-asks on
   Floored at `activitySize(menuBarHeight:).height`, so `NotchHUDSize.growthRank`'s
   promise that `.expanded` is the biggest shape survives an all-sections-off
   config.
+- **The list is the user's real open work, not just dated tasks.** `NotchTaskRows`
+  merges four tiers, deduped and capped: the active task (`TaskStore.activeTaskID`)
+  first, then the focus queue in order, then today's `.today` tasks, then a
+  fallback to the rest of the open (not-done) list — newest-created first, the
+  closest stand-in for "recently relevant" absent a touched-at stamp. The fallback
+  is why an all-undated task list still fills the island: the `.today` filter
+  (planned/due/overdue) can't see a dateless task, but the open-tasks tier can. The
+  empty caption therefore means *no open tasks at all*, not merely "nothing dated".
 - **The task list is sized from the rows that exist, not from the cap.**
-  `notchTaskRows` (3–5) is only a *bound*; `NotchWindowManager` counts today's
+  `notchTaskRows` (3–5) is only a *bound*; `NotchWindowManager` counts the
   rows off the same `NotchTaskRows` call the panel renders from and stamps it
   into `NotchContentConfig.taskCount`, and the island follows
   `min(cap, count)` — so four tasks no longer sit in an island built for five.
-  Zero tasks is not zero height: the panel draws its "Nothing planned for today"
+  Zero tasks is not zero height: the panel draws its "No open tasks"
   caption, measured at 30pt (taller than one 28pt row, shorter than two), so the
   body is 170pt at an empty list against 288pt at five rows (island = that plus
   the menu-bar row). The island resizes

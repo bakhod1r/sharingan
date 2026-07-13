@@ -199,7 +199,11 @@ struct NotchExpandedPanel: View {
     private var taskList: some View {
         let shown = rows
         if shown.isEmpty {
-            Text("Nothing planned for today")
+            // Shown only when there is genuinely no open work at all: the list is
+            // the active task, the focus queue, today's tasks, then a fallback to
+            // the rest of the open tasks (see `NotchWindowManager.taskRows`), so
+            // an empty result means every task is done or there are none.
+            Text("No open tasks")
                 .font(.system(size: 11, design: .rounded))
                 .foregroundStyle(.white.opacity(0.45))
                 .frame(maxWidth: .infinity, alignment: .center)

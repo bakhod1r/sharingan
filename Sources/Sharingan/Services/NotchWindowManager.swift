@@ -101,18 +101,33 @@ final class NotchWindowManager {
 
     // MARK: - Task rows
 
-    /// Today's tasks, in the order and to the cap the expanded island shows them.
+    /// The user's real open work, in the order and to the cap the expanded island
+    /// shows it: the active task, then the focus queue, then today's tasks, then
+    /// the rest of the open list — deduped (see `NotchTaskRows`). The last tier is
+    /// why an all-undated task list still fills the island instead of reporting
+    /// "No open tasks": the `.today` filter can't see a dateless task, but the
+    /// open-tasks fallback can.
     ///
     /// **This is the single list.** `NotchExpandedPanel` renders exactly what it
     /// returns, and `syncTaskRows` sizes the island from exactly its count — so
     /// the island cannot reserve room for a row the panel does not draw, and the
     /// panel cannot draw a row the island (and its hit-test mask) was not sized
-    /// for. Two separate readings of "today's tasks" would be free to drift, and
-    /// the drifting one would be a clipped row or a strip of dead black.
+    /// for. Two separate readings of the list would be free to drift, and the
+    /// drifting one would be a clipped row or a strip of dead black.
     static func taskRows(limit: Int) -> [TaskItem] {
-        NotchTaskRows.rows(today: TaskStore.shared.grouped(filter: .today).flatMap(\.items),
-                           queue: AppServices.focusQueue.taskIDs,
-                           limit: limit)
+        let store = TaskStore.shared
+        // Tier 4: the open list, most-recently-created first. There is no
+        // "last touched" stamp on a task, so creation time is the closest
+        // stand-in for "most recently relevant" — a task added just now is the
+        // likeliest thing the user means to work on.
+        let fallback = store.tasks
+            .filter { !$0.isDone }
+            .sorted { $0.createdAt > $1.createdAt }
+        return NotchTaskRows.rows(today: store.grouped(filter: .today).flatMap(\.items),
+                                  queue: AppServices.focusQueue.taskIDs,
+                                  active: store.activeTaskID,
+                                  fallback: fallback,
+                                  limit: limit)
     }
 
     /// Republish the row count into the model's config, which is where the
