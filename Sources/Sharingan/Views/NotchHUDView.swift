@@ -56,10 +56,16 @@ struct NotchHUDView: View {
             IslandShape(cornerRadius: l.cornerRadius)
                 .fill(.black)
                 .overlay(alignment: .top) { content(l) }
+                // The island's rects snap to the new state while the shape
+                // springs into it over ~320ms, so mid-morph the content is
+                // laid out for a box the shape hasn't grown into yet. Clip it
+                // to the silhouette or the expanded panel's rows briefly paint
+                // over the menu bar on the way open.
+                .clipShape(IslandShape(cornerRadius: l.cornerRadius))
         }
     }
 
-    /// Filled in by later tasks: expanded panel (Task 6), activity (Task 7).
+    /// Filled in by a later task: activity (Task 7).
     /// Idle draws nothing but the shape itself.
     @ViewBuilder
     private func content(_ l: NotchLayout) -> some View {
@@ -67,9 +73,11 @@ struct NotchHUDView: View {
         case .hidden, .idle:
             EmptyView()
         case .live:
-            NotchEars(model: model, layout: l)
-        case .activity, .expanded:
-            EmptyView()   // Tasks 6 and 7
+            NotchEars(model: model, timer: timer, layout: l)
+        case .expanded:
+            NotchExpandedPanel(model: model, timer: timer, layout: l)
+        case .activity:
+            EmptyView()   // Task 7
         }
     }
 }

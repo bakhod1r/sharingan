@@ -7,6 +7,9 @@ import SharinganCore
 /// `NotchEarsMode`, which lets the user drop one or both.
 struct NotchEars: View {
     @ObservedObject var model: NotchHUDModel
+    /// Only for `settings.timeFormat` — the countdown itself comes off the model,
+    /// which the window manager keeps in step with the timer.
+    @ObservedObject var timer: PomodoroTimer
     @ObservedObject var tasks = TaskStore.shared
     let layout: NotchLayout
 
@@ -39,7 +42,7 @@ struct NotchEars: View {
     }
 
     private var timeLabel: some View {
-        Text(Self.clock(model.remaining))
+        Text(timer.settings.timeFormat.string(max(0, model.remaining)))
             .font(.system(size: 12, weight: .semibold, design: .rounded))
             .monospacedDigit()
             .foregroundStyle(.white)
@@ -60,11 +63,6 @@ struct NotchEars: View {
         }
         .padding(.leading, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    static func clock(_ seconds: TimeInterval) -> String {
-        let s = Int(max(0, seconds))
-        return String(format: "%02d:%02d", s / 60, s % 60)
     }
 }
 
