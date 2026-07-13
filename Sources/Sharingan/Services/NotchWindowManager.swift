@@ -16,6 +16,10 @@ final class NotchWindowManager {
     private var cancellables: Set<AnyCancellable> = []
     private var activityJob: Task<Void, Never>?
     private var hoverJob: Task<Void, Never>?
+    /// What the in-flight `hoverJob` is about to commit, `nil` when nothing is
+    /// pending. Debouncing has to compare against *this*, not the committed
+    /// `state.hovering` — see `hoverChanged(_:)`.
+    private var pendingHover: Bool?
 
     private weak var timer: PomodoroTimer?
     /// Last settings we reacted to, so a settings edit re-places the panel while
@@ -27,8 +31,12 @@ final class NotchWindowManager {
         self.timer = timer
 
         // Track the timer so the ears and progress bar follow it.
+        // `DispatchQueue.main`, not `RunLoop.main`: the latter schedules in the
+        // default run-loop mode only, so the sink is starved while a menu is
+        // tracking or a window is being live-dragged — and the island's
+        // countdown would visibly freeze.
         timer.objectWillChange
-            .receive(on: RunLoop.main)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self, weak timer] _ in
                 guard let self, let timer else { return }
                 self.syncTimer(timer)
@@ -126,13 +134,15 @@ final class NotchWindowManager {
             screenWidth: frame.width,
             menuBarHeight: menuBarHeight,
             notchWidth: max(0, notchWidth),
-            notchHeight: notchHeight,
-            isBuiltIn: notchHeight > 0)
+            notchHeight: notchHeight)
     }
 
     // MARK: - Panel
 
     private func place(on screen: NSScreen) {
+        // Before anything is built: a panel with no timer to host has nothing
+        // to show, and constructing one first would just leak it.
+        guard let timer else { return }
         let size = NotchGeometry.panelSize(model.metrics)
         let frame = NSRect(
             x: screen.frame.midX - size.width / 2,
@@ -157,17 +167,30 @@ final class NotchWindowManager {
         panel.isMovable = false
         panel.ignoresMouseEvents = false
         panel.isFloatingPanel = true
+        // The whole hover interaction is driven by `.mouseMoved` out of the
+        // hosting view's tracking area, and a window drops those on the floor
+        // unless it is told to accept them.
+        panel.acceptsMouseMovedEvents = true
+        // Never take key from the frontmost app just because the island was
+        // clicked: `.nonactivatingPanel` keeps the *app* from activating, not
+        // the window from becoming key. Buttons still get their clicks in a
+        // non-key window; only a text field would need key status.
+        panel.becomesKeyOnlyIfNeeded = true
         // Above the menu bar — the whole point is to draw on the notch, which
         // the menu bar owns.
         panel.level = NSWindow.Level(
             rawValue: Int(CGWindowLevelForKey(.mainMenuWindow)) + 1)
 
-        guard let timer else { return }
         let host = NotchHostingView(
             rootView: NotchHUDView(model: model, timer: timer)
                 .environmentObject(timer))
         host.model = model
         host.autoresizingMask = [.width, .height]
+        // Belt and braces with the view's own `.ignoresSafeArea()`: on a
+        // notched Mac the hosted root would otherwise be inset by the screen's
+        // top safe area, drawing the island a notch-height below the rect the
+        // hit-test mask assumes it occupies.
+        host.safeAreaRegions = []
         panel.contentView = host
 
         self.panel = panel
@@ -175,8 +198,17 @@ final class NotchWindowManager {
     }
 
     private func teardown() {
+        // Cancelling the jobs is not enough: whatever they were going to clear
+        // has to be cleared here, or disabling the HUD mid-hover (or
+        // mid-announcement) leaves `hovering`/`activity` set and re-enabling it
+        // brings the panel back already expanded.
         hoverJob?.cancel()
+        hoverJob = nil
+        pendingHover = nil
         activityJob?.cancel()
+        activityJob = nil
+        model.state.hovering = false
+        model.state.activity = nil
         guard let panel else { return }
         self.panel = nil
         panel.orderOut(nil)
@@ -194,23 +226,44 @@ final class NotchWindowManager {
     // MARK: - Hover (debounced)
 
     /// Called by the hosting view's tracking area.
+    ///
+    /// The debounce has to compare `inside` against the value that is *going*
+    /// to be committed — the pending job's target if one is in flight, the
+    /// committed value otherwise. Comparing against the committed value alone
+    /// lets a pointer sweeping across the island leave the island stuck open:
+    /// `mouseMoved(inside)` schedules the open job, `mouseExited` 100ms later
+    /// sees `hovering == false, inside == false`, early-returns without
+    /// cancelling, and the open job fires behind the pointer's back.
     func hoverChanged(_ inside: Bool) {
-        guard model.state.hovering != inside else { return }
+        let target = pendingHover ?? model.state.hovering
+        guard target != inside else { return }
+
         hoverJob?.cancel()
+        hoverJob = nil
+        pendingHover = nil
+
+        // The pending job was the only thing standing between us and `inside`;
+        // cancelling it already got us there. Nothing left to schedule.
+        guard model.state.hovering != inside else { return }
+
+        pendingHover = inside
         let delay = inside ? NotchGeometry.hoverOpenDelay : NotchGeometry.hoverCloseDelay
         hoverJob = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(delay))
-            guard !Task.isCancelled else { return }
-            self?.model.state.hovering = inside
+            guard !Task.isCancelled, let self else { return }
+            self.model.state.hovering = inside
+            self.pendingHover = nil
+            self.hoverJob = nil
         }
     }
 }
 
-/// Never main, so the HUD does not become the app's main window. It *can* become
-/// key (a `.nonactivatingPanel` takes key without activating the app) because the
-/// expanded panel's buttons need clicks — see the report's note on this.
+/// Never key and never main: clicking the island must not take key status from
+/// the frontmost app's window (`.nonactivatingPanel` only stops the *app* from
+/// activating). SwiftUI/AppKit buttons still receive their clicks in a non-key
+/// window — matches `FloatingMiniPanel`.
 private final class NotchPanel: NSPanel {
-    override var canBecomeKey: Bool { true }
+    override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 }
 

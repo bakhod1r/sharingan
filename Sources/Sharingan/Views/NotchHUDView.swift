@@ -7,8 +7,7 @@ import SharinganCore
 final class NotchHUDModel: ObservableObject {
     @Published var state = NotchHUDState()
     @Published var metrics = NotchScreenMetrics(screenWidth: 1512, menuBarHeight: 37,
-                                                notchWidth: 200, notchHeight: 37,
-                                                isBuiltIn: true)
+                                                notchWidth: 200, notchHeight: 37)
     @Published var earsMode: NotchEarsMode = .both
     @Published var progress: Double = 0
     @Published var remaining: TimeInterval = 0
@@ -28,13 +27,23 @@ struct NotchHUDView: View {
 
     var body: some View {
         let l = layout
-        ZStack(alignment: .top) {
+        // Placement is driven entirely by the layout rect — the same rect
+        // `NotchGeometry.hitTest` masks against. Centering the island here by
+        // any other means (a `.top` ZStack, say) would let the drawn shape and
+        // the clickable shape drift apart the moment a state stops being
+        // horizontally centered.
+        ZStack(alignment: .topLeading) {
             Color.clear
             island(l)
                 .frame(width: l.island.width, height: l.island.height)
-                .offset(y: l.island.minY)
+                .offset(x: l.island.minX, y: l.island.minY)
         }
-        .frame(width: l.panelSize.width, height: l.panelSize.height, alignment: .top)
+        .frame(width: l.panelSize.width, height: l.panelSize.height,
+               alignment: .topLeading)
+        // The panel deliberately overlaps the menu bar and the notch; SwiftUI
+        // would otherwise inset the content by the screen's top safe area and
+        // push the island ~37pt below the rect the mask assumes it occupies.
+        .ignoresSafeArea()
         .animation(.spring(response: 0.32, dampingFraction: 0.82),
                    value: model.state.size)
     }

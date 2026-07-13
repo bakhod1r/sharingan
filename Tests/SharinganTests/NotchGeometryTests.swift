@@ -8,12 +8,10 @@ struct NotchGeometryTests {
 
     /// 14" MacBook Pro, points.
     static let notched = NotchScreenMetrics(screenWidth: 1512, menuBarHeight: 37,
-                                            notchWidth: 200, notchHeight: 37,
-                                            isBuiltIn: true)
+                                            notchWidth: 200, notchHeight: 37)
     /// External / notchless display: synthetic notch.
     static let plain = NotchScreenMetrics(screenWidth: 1920, menuBarHeight: 24,
-                                          notchWidth: 0, notchHeight: 0,
-                                          isBuiltIn: false)
+                                          notchWidth: 0, notchHeight: 0)
 
     @Test("hardware notch is detected from a non-zero cutout")
     func detectsHardwareNotch() {

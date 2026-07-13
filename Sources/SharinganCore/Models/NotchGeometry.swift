@@ -10,15 +10,13 @@ public struct NotchScreenMetrics: Equatable, Sendable {
     public var notchWidth: CGFloat
     /// Height of the hardware cutout (== safe-area top), 0 when there is none.
     public var notchHeight: CGFloat
-    public var isBuiltIn: Bool
 
     public init(screenWidth: CGFloat, menuBarHeight: CGFloat,
-                notchWidth: CGFloat, notchHeight: CGFloat, isBuiltIn: Bool) {
+                notchWidth: CGFloat, notchHeight: CGFloat) {
         self.screenWidth = screenWidth
         self.menuBarHeight = menuBarHeight
         self.notchWidth = notchWidth
         self.notchHeight = notchHeight
-        self.isBuiltIn = isBuiltIn
     }
 
     public var hasHardwareNotch: Bool { notchWidth > 0 && notchHeight > 0 }
