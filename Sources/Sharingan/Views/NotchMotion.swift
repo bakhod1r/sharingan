@@ -53,6 +53,15 @@ final class ReduceMotionMonitor: ObservableObject {
 /// it. The overshoot that sells "mass" lives only where it cannot escape that
 /// rect — the anticipation squash (which only ever scales *down*), and the
 /// content, which is clipped to the silhouette.
+///
+/// Since the island became a **T** — a cutout-wide stem through the menu-bar row
+/// and a body below it — that rect is no longer the whole story: the mask is a
+/// non-convex *path* cut from it, and the menu-bar strip either side of the stem
+/// is outside both. The spring that would break it is not here but in
+/// `IslandShape`, and it is the one that does not exist: the silhouette's stem
+/// and body-top are deliberately **not** animatable, so they flip with the mask
+/// while the frame springs inside it. Read `IslandShape` before adding a spring
+/// to the shape's geometry.
 enum NotchMotion {
 
     // MARK: - The shape

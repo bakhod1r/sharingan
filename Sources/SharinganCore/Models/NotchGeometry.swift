@@ -28,6 +28,17 @@ public struct NotchScreenMetrics: Equatable, Sendable {
 
     public var hasHardwareNotch: Bool { notchWidth > 0 && notchHeight > 0 }
 
+    /// How deep the island's **stem** runs — the menu-bar row it passes through,
+    /// and where the body below it begins.
+    ///
+    /// It is the menu bar's height, floored at the camera housing's: the body
+    /// carries every readable thing the island has, so it must start below
+    /// *both* or the housing eats the top of the timer. `NotchWindowManager`
+    /// already computes the menu bar as a `max` that includes the notch height,
+    /// so on real hardware this floor never bites; it is here because the
+    /// geometry is pure and will be handed whatever a caller has.
+    public var stemHeight: CGFloat { max(menuBarHeight, notchHeight) }
+
     /// The hardware cutout the island is modelled on, `nil` when the display has
     /// none. There is deliberately no synthetic fallback: an app-drawn pill
     /// hanging over the menu bar of a notchless Mac reads as a bug, so on such a
@@ -156,14 +167,76 @@ public struct NotchContentConfig: Equatable, Sendable {
     public static let `default` = NotchContentConfig()
 }
 
+/// The island's silhouette, as a set of numbers a path can be cut from — the
+/// **T**: a stem the width of the hardware cutout occupying the menu-bar row,
+/// and a body that begins below the menu bar and hangs into the desktop.
+///
+/// Every state's shape is one of these, including the flat ones: an island whose
+/// `stemWidth` is its own full width has no waist to speak of and degenerates to
+/// the rounded-bottom rectangle the short states have always drawn. That is the
+/// point — one path definition, one hit-test mask, no special cases.
+///
+/// It is deliberately expressed **relative to the rect it is drawn in** rather
+/// than in panel coordinates: the SwiftUI shape is handed an animating rect and
+/// has to cut the same silhouette from it that `hitTest` cuts from the island's
+/// resting rect.
+public struct NotchSilhouette: Equatable, Sendable {
+    /// Width of the part that lives in the menu-bar row, centered in the rect.
+    /// The hardware cutout's width for the wide states; the rect's own width for
+    /// the flat ones (which is what makes them plain rectangles).
+    public var stemWidth: CGFloat
+    /// Where the wide body starts, measured down from the rect's top edge — the
+    /// menu-bar height. Everything above it is stem; everything below is body.
+    public var bodyTop: CGFloat
+    /// The body's bottom corners (the notch's own, grown — see
+    /// `NotchGeometry.cornerRadius(forHeight:baseHeight:maxHeight:)`).
+    public var cornerRadius: CGFloat
+    /// The body's outer top corners, where it meets the bottom of the menu bar.
+    public var bodyTopRadius: CGFloat
+    /// The **concave** fillet where the body meets the stem: the black flares
+    /// outward into the menu-bar row instead of turning a square inner corner,
+    /// which is what makes the island read as the cutout stretching rather than
+    /// as a window that appeared under it.
+    public var filletRadius: CGFloat
+
+    public init(stemWidth: CGFloat, bodyTop: CGFloat, cornerRadius: CGFloat,
+                bodyTopRadius: CGFloat, filletRadius: CGFloat) {
+        self.stemWidth = stemWidth
+        self.bodyTop = bodyTop
+        self.cornerRadius = cornerRadius
+        self.bodyTopRadius = bodyTopRadius
+        self.filletRadius = filletRadius
+    }
+}
+
 /// Rects for one state, in panel coordinates: origin top-left, y grows down.
 public struct NotchLayout: Equatable, Sendable {
     public var panelSize: CGSize
+    /// The silhouette's **bounding box** — as wide as the body and as tall as
+    /// the whole T, menu-bar row included. The content views are framed to it
+    /// and the drawn shape is cut from it, so it is the one rect everything
+    /// geometric is anchored to.
     public var island: CGRect
     public var leftEar: CGRect?
     public var rightEar: CGRect?
     public var progressTrack: CGRect?
-    public var cornerRadius: CGFloat
+    public var silhouette: NotchSilhouette
+
+    /// The bottom radius, for the callers that only ever wanted that.
+    public var cornerRadius: CGFloat { silhouette.cornerRadius }
+
+    /// **Where content goes**: the part of the island below the menu bar. The
+    /// expanded panel and the announcement fill this and nothing above it — the
+    /// stem is a strip of hardware-width black over the camera housing, not a
+    /// place anything can be read.
+    ///
+    /// Meaningless for the flat states (`idle`, `live`), whose whole island *is*
+    /// the menu-bar row; they lay their ears out against `island` instead.
+    public var body: CGRect {
+        CGRect(x: island.minX, y: island.minY + silhouette.bodyTop,
+               width: island.width,
+               height: max(0, island.height - silhouette.bodyTop))
+    }
 }
 
 public enum NotchGeometry {
@@ -174,7 +247,16 @@ public enum NotchGeometry {
     public static let earWidth: CGFloat = 78
     /// The idle island is the cutout plus this lip, so it reads as hardware.
     public static let idleExtraHeight: CGFloat = 4
-    public static let activitySize = CGSize(width: 300, height: 68)
+    /// The announcement's width, and the height of its **body** — the part below
+    /// the menu bar. (Measured: a 14pt icon beside a 12pt line is 16pt of
+    /// content; 14pt of air above and below it is 44.) The island itself is this
+    /// plus the menu-bar row the stem occupies, so `activitySize(menuBarHeight:)`
+    /// and not a constant.
+    public static let activityWidth: CGFloat = 300
+    public static let activityBodyHeight: CGFloat = 44
+    public static func activitySize(menuBarHeight: CGFloat) -> CGSize {
+        CGSize(width: activityWidth, height: menuBarHeight + activityBodyHeight)
+    }
     public static let progressHeight: CGFloat = 3
     /// The hardware cutout's own bottom corner — the radius of the short states
     /// (`idle`, `live`), which are the cutout plus a 4pt lip.
@@ -182,6 +264,26 @@ public enum NotchGeometry {
     /// … and the radius of the tall one. The expanded panel wearing the notch's
     /// 14pt corner looks pinched; 22pt reads as the same shape, grown.
     public static let maxCornerRadius: CGFloat = 22
+
+    // MARK: - The T
+    //
+    // The wide states used to be rectangles anchored to the top of the screen,
+    // which put a slab of black — and, since the mask follows the drawn shape, a
+    // dead hit region — across the menu-bar titles either side of the notch. The
+    // island is now a T: the stem is exactly the hardware cutout's width and
+    // occupies the menu-bar row (space the camera housing already took, so it
+    // costs the user nothing), and the body starts at `menuBarHeight` and hangs
+    // into the desktop below it.
+
+    /// The body's outer top corners, where it meets the bottom of the menu bar.
+    public static let bodyTopRadius: CGFloat = 12
+    /// The concave fillet where the body meets the stem. It flares the black
+    /// outward into the menu-bar row for these few points either side of the
+    /// cutout — the join reads as the notch stretching instead of as two
+    /// rectangles glued together, and it costs a `filletRadius`-square of
+    /// menu bar hard against the camera housing, where nothing is clickable
+    /// anyway.
+    public static let filletRadius: CGFloat = 10
 
     // MARK: - Expanded panel sizing (measured, not guessed)
     //
@@ -197,9 +299,15 @@ public enum NotchGeometry {
     // once, at a 260pt guess); too large and the HUD hangs dead black over the
     // user's screen.
 
-    /// Gap between the camera housing and the first pixel of content
-    /// (`NotchExpandedPanel.contentTop` is the cutout's height plus this).
-    public static let contentTopGap: CGFloat = 6
+    /// The body's top padding: the gap between the body's own top edge — the
+    /// bottom of the menu bar — and the first pixel of content.
+    ///
+    /// It used to be a 6pt gap *under the camera housing*, because the content
+    /// sat inside a rectangle that started at the top of the screen and had to
+    /// clear the cutout. The T's body starts below the menu bar, so this is now
+    /// an ordinary inset from a rounded edge, and it is measured with the rest:
+    /// the replica's body is 288pt at five rows against 278 with no top padding.
+    public static let contentTopPadding: CGFloat = 10
     /// The panel's bottom padding.
     public static let contentBottomPadding: CGFloat = 10
     /// The `VStack`'s spacing — one gap per section, plus one for the trailing
@@ -256,9 +364,10 @@ public enum NotchGeometry {
         return taskRowHeight * n + taskRowSpacing * (n - 1)
     }
 
-    /// Height of the panel's content — everything below the camera housing.
-    /// The cutout gap is added by `expandedSize`, which knows the real cutout,
-    /// rather than baked in at one machine's notch height.
+    /// Height of the island's **body** — the whole of it, since the body is now
+    /// all there is below the menu bar: its own top padding, its sections, its
+    /// bottom padding and the slack. The menu-bar row the stem occupies is added
+    /// by `expandedSize`, which knows the real menu bar.
     ///
     /// The task list is sized from `config.renderedTaskRows` — what the panel
     /// *draws* — and not from `clampedTaskRows`, which is only the user's cap.
@@ -275,24 +384,35 @@ public enum NotchGeometry {
 
         // n sections and the always-present `Spacer` are n+1 children, so n+1-1
         // = n gaps between them.
-        return contentBottomPadding
+        return contentTopPadding
+            + contentBottomPadding
             + sections.reduce(0, +)
             + sectionSpacing * CGFloat(sections.count)
             + bodySlack
     }
 
-    /// The expanded island, sized to what it was configured to show.
+    /// The expanded island, sized to what it was configured to show: the
+    /// menu-bar row the stem passes through, plus the body that hangs below it.
+    ///
+    /// The **cutout's** height is not in it any more, and that is the change: the
+    /// content used to be pushed clear of the camera housing inside a rectangle
+    /// that started at the top of the screen, so the island was as tall as the
+    /// housing plus its content. The body now starts where the menu bar ends
+    /// (`menuBarHeight ≥ notchHeight` by construction — see
+    /// `NotchWindowManager.metrics`), so the housing is the stem's problem and
+    /// not the content's.
     ///
     /// Floored at the announcement's height for a reason that is not
     /// cosmetic: `NotchHUDSize.growthRank` promises `.expanded` is the biggest
     /// shape, and the motion layer picks the opening spring or the closing one
     /// off that promise alone. An all-sections-off config would otherwise
-    /// produce a 57pt island — smaller than `.activity` — and hovering it would
-    /// spring *shut* as it opened.
+    /// produce a body of 24pt — a smaller island than `.activity` — and hovering
+    /// it would spring *shut* as it opened.
     public static func expandedSize(_ config: NotchContentConfig = .default,
-                                    cutout: CGSize) -> CGSize {
-        let height = cutout.height + contentTopGap + expandedBodyHeight(config)
-        return CGSize(width: expandedWidth, height: max(height, activitySize.height))
+                                    menuBarHeight: CGFloat) -> CGSize {
+        let height = menuBarHeight + expandedBodyHeight(config)
+        return CGSize(width: expandedWidth,
+                      height: max(height, activitySize(menuBarHeight: menuBarHeight).height))
     }
 
     /// How wide the live island grows: the cutout, plus one ear per ear the user
@@ -351,7 +471,7 @@ public enum NotchGeometry {
     public static func panelSize(_ m: NotchScreenMetrics,
                                  config: NotchContentConfig = .default) -> CGSize {
         guard let cutout = m.cutout else { return .zero }
-        let expanded = expandedSize(config.sizedForRowCap, cutout: cutout)
+        let expanded = expandedSize(config.sizedForRowCap, menuBarHeight: m.stemHeight)
         // The panel is centered on the cutout, but a one-eared island is *not*
         // symmetric about it — so an ear must be reserved on both sides even
         // when only one is grown, or the trailing ear (island 278pt wide, panel
@@ -362,7 +482,7 @@ public enum NotchGeometry {
         let earReserve = config.ears.earCount > 0 ? 2 * earWidth : 0
         let width = max(expanded.width,
                         cutout.width + earReserve,
-                        activitySize.width)
+                        activityWidth)
         let height = max(expanded.height, cutout.height + idleExtraHeight)
         return CGSize(width: width, height: height)
     }
@@ -372,7 +492,29 @@ public enum NotchGeometry {
     private static func empty(panel: CGSize) -> NotchLayout {
         NotchLayout(panelSize: panel, island: .zero, leftEar: nil,
                     rightEar: nil, progressTrack: nil,
-                    cornerRadius: cornerRadius)
+                    silhouette: flat(width: 0, cornerRadius: cornerRadius,
+                                     menuBarHeight: 0))
+    }
+
+    /// The silhouette of a state that lives **entirely in the menu-bar row** —
+    /// `idle` and `live`, the cutout plus a 4pt lip. A stem as wide as the island
+    /// itself has no body beside it, so the T degenerates to the rounded-bottom
+    /// rectangle these states have always drawn.
+    ///
+    /// `bodyTop` is carried anyway, and it matters *while the island is moving*.
+    /// The silhouette is not animated (see `IslandShape`) — it flips to the new
+    /// state's the instant the hit-test mask does — but the island's **frame**
+    /// springs. Closing from `.expanded`, the frame is still 340pt wide for a few
+    /// frames after the mask has shrunk to the live island; with `bodyTop` set,
+    /// those wide frames are drawn as a T whose stem is exactly the live island's
+    /// width, so the overhang hangs *below* the menu bar (over the desktop, where
+    /// it is click-through and harmless) instead of painting a slab across the
+    /// menu-bar titles on the way out.
+    private static func flat(width: CGFloat, cornerRadius: CGFloat,
+                             menuBarHeight: CGFloat) -> NotchSilhouette {
+        NotchSilhouette(stemWidth: width, bodyTop: menuBarHeight,
+                        cornerRadius: cornerRadius, bodyTopRadius: bodyTopRadius,
+                        filletRadius: 0)
     }
 
     public static func layout(_ m: NotchScreenMetrics, size: NotchHUDSize,
@@ -381,7 +523,8 @@ public enum NotchGeometry {
         // size was asked for.
         guard let cutout = m.cutout else { return empty(panel: .zero) }
         let panel = panelSize(m, config: config)
-        let expanded = expandedSize(config, cutout: cutout)
+        let expanded = expandedSize(config, menuBarHeight: m.stemHeight)
+        let menuBar = m.stemHeight
 
         func centered(width: CGFloat, height: CGFloat) -> CGRect {
             CGRect(x: (panel.width - width) / 2, y: 0, width: width, height: height)
@@ -393,6 +536,15 @@ public enum NotchGeometry {
         func radius(_ island: CGRect) -> CGFloat {
             cornerRadius(forHeight: island.height, baseHeight: baseHeight,
                          maxHeight: expanded.height)
+        }
+
+        /// The T: a stem the width of the hardware cutout through the menu-bar
+        /// row, and the body — the island's full width — below it.
+        func tee(_ island: CGRect) -> NotchSilhouette {
+            NotchSilhouette(stemWidth: cutout.width, bodyTop: menuBar,
+                            cornerRadius: radius(island),
+                            bodyTopRadius: bodyTopRadius,
+                            filletRadius: filletRadius)
         }
 
         /// The cutout's own left edge. The island is anchored to the hardware,
@@ -408,13 +560,19 @@ public enum NotchGeometry {
             let island = centered(width: cutout.width, height: baseHeight)
             return NotchLayout(panelSize: panel, island: island, leftEar: nil,
                                rightEar: nil, progressTrack: nil,
-                               cornerRadius: radius(island))
+                               silhouette: flat(width: island.width,
+                                                cornerRadius: radius(island),
+                                                menuBarHeight: menuBar))
 
         case .live:
             // The island grows only the ears the user still wants — so this is
             // also how much menu bar the mask below can swallow. `.none` leaves
             // the island exactly the cutout, with the progress line along its
             // bottom edge and not one pixel of the menu bar taken.
+            //
+            // The ears stay in the menu-bar row on purpose: they are the point of
+            // a notch HUD, they are what `notchEars` exists to switch off, and a
+            // 41pt strip of time-and-task is not the slab the T removes.
             let ears = config.ears
             let width = liveWidth(cutout: cutout, ears: ears)
             let minX = ears.showsLeadingEar ? cutoutMinX - earWidth : cutoutMinX
@@ -432,46 +590,123 @@ public enum NotchGeometry {
                                width: island.width, height: progressHeight)
             return NotchLayout(panelSize: panel, island: island, leftEar: left,
                                rightEar: right, progressTrack: track,
-                               cornerRadius: radius(island))
+                               silhouette: flat(width: island.width,
+                                                cornerRadius: radius(island),
+                                                menuBarHeight: menuBar))
 
         case .activity:
-            let island = centered(width: max(activitySize.width, cutout.width),
-                                  height: activitySize.height)
+            let size = activitySize(menuBarHeight: menuBar)
+            let island = centered(width: max(size.width, cutout.width),
+                                  height: size.height)
             return NotchLayout(panelSize: panel, island: island, leftEar: nil,
                                rightEar: nil, progressTrack: nil,
-                               cornerRadius: radius(island))
+                               silhouette: tee(island))
 
         case .expanded:
             let island = centered(width: expanded.width, height: expanded.height)
             return NotchLayout(panelSize: panel, island: island, leftEar: nil,
                                rightEar: nil, progressTrack: nil,
-                               cornerRadius: radius(island))
+                               silhouette: tee(island))
         }
     }
 
-    /// The island's silhouette: a rectangle whose *bottom* corners are rounded,
-    /// so it reads as an extension of the hardware cutout rather than a window
-    /// that appeared. This is the ONE definition of that shape — the app's
-    /// `IslandShape` draws this path and `hitTest` masks against it, so the drawn
-    /// pixels and the clickable region cannot drift apart. (They did: masking
-    /// against the bare rect left a wedge at each bottom corner that was hittable
-    /// but not drawn, and in `.live` that wedge sits on live menu-bar real
-    /// estate.)
+    /// **The one definition of the island's shape.** The app's `IslandShape`
+    /// draws this path and `hitTest` masks against it, so the drawn pixels and
+    /// the clickable region cannot drift apart. (They did, once: masking against
+    /// the bare rect left a wedge at each bottom corner that was hittable but not
+    /// drawn, and in `.live` that wedge sits on live menu-bar real estate.)
+    ///
+    /// It cuts the **T** of `NotchSilhouette` from `rect`:
+    ///
+    ///                    ┌──────┐               ← stem: the cutout's width,
+    ///                    │      │                 through the menu-bar row
+    ///     ╭──────────────╯      ╰──────────────╮ ← concave fillets, flaring out
+    ///     │                                    │   into the menu bar
+    ///     │              body                  │
+    ///     ╰────────────────────────────────────╯
+    ///
+    /// and degenerates — with no branch of its own — to the rounded-bottom
+    /// rectangle the short states draw, the moment the stem is as wide as the
+    /// rect it is cut from.
+    ///
+    /// Non-convex for the first time, which is the whole point: the menu-bar row
+    /// either side of the stem is **outside** this path, so it is outside the
+    /// mask, so a click there reaches the menu bar.
     public static func islandPath(in rect: CGRect,
-                                  cornerRadius: CGFloat = cornerRadius) -> CGPath {
+                                  silhouette s: NotchSilhouette) -> CGPath {
         let p = CGMutablePath()
         guard rect.width > 0, rect.height > 0 else { return p }
-        let r = min(cornerRadius, rect.height / 2, rect.width / 2)
-        p.move(to: CGPoint(x: rect.minX, y: rect.minY))
-        p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+
+        // The waist. Nothing to cut when the stem is the whole width (the flat
+        // states), or when there is no menu-bar row above the body to cut it
+        // through: fall back to the plain rounded-bottom rect.
+        let stemW = min(s.stemWidth, rect.width)
+        let halfGap = (rect.width - stemW) / 2
+        let bodyTop = s.bodyTop
+        guard halfGap > 0.01, bodyTop > 0.01, bodyTop < rect.height - 0.01 else {
+            let r = min(s.cornerRadius, rect.height / 2, rect.width / 2)
+            p.move(to: CGPoint(x: rect.minX, y: rect.minY))
+            p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+            p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - r))
+            p.addQuadCurve(to: CGPoint(x: rect.maxX - r, y: rect.maxY),
+                           control: CGPoint(x: rect.maxX, y: rect.maxY))
+            p.addLine(to: CGPoint(x: rect.minX + r, y: rect.maxY))
+            p.addQuadCurve(to: CGPoint(x: rect.minX, y: rect.maxY - r),
+                           control: CGPoint(x: rect.minX, y: rect.maxY))
+            p.closeSubpath()
+            return p
+        }
+
+        let bodyHeight = rect.height - bodyTop
+        // Every radius is clamped to the room there actually is, because the rect
+        // is *animating*: the island springs from 200pt wide to 340 while these
+        // numbers stay put, so for a few frames the body is barely wider than the
+        // stem and the corners have to give way rather than fold the path back
+        // through itself.
+        let fillet = min(s.filletRadius, bodyTop, halfGap)
+        let topR = max(0, min(s.bodyTopRadius, bodyHeight / 2, halfGap - fillet))
+        let r = min(s.cornerRadius, bodyHeight / 2, rect.width / 2)
+
+        let stemMinX = rect.midX - stemW / 2
+        let stemMaxX = rect.midX + stemW / 2
+        let top = rect.minY
+        let bt = rect.minY + bodyTop
+
+        p.move(to: CGPoint(x: stemMinX, y: top))
+        p.addLine(to: CGPoint(x: stemMaxX, y: top))
+        // Down the stem's trailing edge, then out into the menu-bar row: the
+        // control point sits at the *fillet's* corner, not at the join's, so the
+        // curve bows away from the join and the black flares outward. (Bowing the
+        // other way would chamfer the corner off — the cheap look.)
+        p.addLine(to: CGPoint(x: stemMaxX, y: bt - fillet))
+        p.addQuadCurve(to: CGPoint(x: stemMaxX + fillet, y: bt),
+                       control: CGPoint(x: stemMaxX + fillet, y: bt - fillet))
+        p.addLine(to: CGPoint(x: rect.maxX - topR, y: bt))
+        p.addQuadCurve(to: CGPoint(x: rect.maxX, y: bt + topR),
+                       control: CGPoint(x: rect.maxX, y: bt))
         p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - r))
         p.addQuadCurve(to: CGPoint(x: rect.maxX - r, y: rect.maxY),
                        control: CGPoint(x: rect.maxX, y: rect.maxY))
         p.addLine(to: CGPoint(x: rect.minX + r, y: rect.maxY))
         p.addQuadCurve(to: CGPoint(x: rect.minX, y: rect.maxY - r),
                        control: CGPoint(x: rect.minX, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.minX, y: bt + topR))
+        p.addQuadCurve(to: CGPoint(x: rect.minX + topR, y: bt),
+                       control: CGPoint(x: rect.minX, y: bt))
+        p.addLine(to: CGPoint(x: stemMinX - fillet, y: bt))
+        p.addQuadCurve(to: CGPoint(x: stemMinX, y: bt - fillet),
+                       control: CGPoint(x: stemMinX - fillet, y: bt - fillet))
         p.closeSubpath()
         return p
+    }
+
+    /// The flat silhouette — a rounded-bottom rectangle — for callers that have
+    /// only a radius to hand.
+    public static func islandPath(in rect: CGRect,
+                                  cornerRadius: CGFloat = cornerRadius) -> CGPath {
+        islandPath(in: rect,
+                   silhouette: flat(width: rect.width, cornerRadius: cornerRadius,
+                                    menuBarHeight: 0))
     }
 
     /// True when `point` (panel coordinates) is inside the *currently rendered*
@@ -484,6 +719,11 @@ public enum NotchGeometry {
     /// silhouette covers them — and, unlike their rects, it does not claim the
     /// rounded-off corners.
     ///
+    /// Since the silhouette became a **T**, this is also what hands the menu bar
+    /// back in the wide states: the mask is the island's *path*, not its bounding
+    /// box, and the menu-bar row either side of the stem is outside it. A click
+    /// on `File` while the island is expanded falls through to `File`.
+    ///
     /// `config` must be the one the view is drawing with, or the mask and the
     /// shape drift: an island narrowed to one ear but masked for two would keep
     /// swallowing menu-bar clicks in a strip that is no longer even black.
@@ -493,6 +733,6 @@ public enum NotchGeometry {
         guard metrics.hasHardwareNotch else { return false }
         let l = layout(metrics, size: size, config: config)
         guard !l.island.isEmpty else { return false }
-        return islandPath(in: l.island, cornerRadius: l.cornerRadius).contains(point)
+        return islandPath(in: l.island, silhouette: l.silhouette).contains(point)
     }
 }

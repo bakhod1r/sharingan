@@ -117,7 +117,7 @@ struct NotchHUDView: View {
         if model.state.size == .hidden {
             EmptyView()
         } else {
-            IslandShape(cornerRadius: l.cornerRadius)
+            IslandShape(silhouette: l.silhouette)
                 .fill(.black)
                 .overlay(alignment: .top) {
                     content(l, reduce: reduce)
@@ -138,7 +138,7 @@ struct NotchHUDView: View {
                 // silhouette, so it can only ever light pixels the island
                 // already paints. Inside the clip, like everything else.
                 .overlay {
-                    IslandShape(cornerRadius: l.cornerRadius)
+                    IslandShape(silhouette: l.silhouette)
                         .stroke(Color.white.opacity(
                             model.pointerInside ? NotchMotion.hoverHairline : 0),
                                 lineWidth: 1)
@@ -152,7 +152,7 @@ struct NotchHUDView: View {
                 // on the way open. This clip is also what makes the content's
                 // overshoot safe: anything a content spring throws outside the
                 // silhouette is eaten here.
-                .clipShape(IslandShape(cornerRadius: l.cornerRadius))
+                .clipShape(IslandShape(silhouette: l.silhouette))
                 .transition(.opacity)
         }
     }
@@ -193,8 +193,10 @@ struct NotchHUDView: View {
 }
 
 /// The island's 2-second announcement: an icon and a line, then it collapses.
-/// Sized to `layout.island` like every other content view, and pushed below the
-/// hardware cutout so the camera housing never hides the line.
+/// Sized to `layout.island` like every other content view, and laid out inside
+/// `layout.body` — the part of the T below the menu bar. It used to be *pushed*
+/// clear of the camera housing with a top padding; the body already starts below
+/// the housing, so the line simply centers in it.
 ///
 /// It has two seconds; it uses them. The icon lands with a bounce and unwinds a
 /// small tilt, the line follows it in a beat later, and the pair leaves by
@@ -209,10 +211,6 @@ struct NotchActivityView: View {
     /// on these children would never run: SwiftUI animates the transition of the
     /// outermost inserted view only, and that is this view.
     @State private var landed = false
-
-    /// See `NotchExpandedPanel.contentTop`: `cutout` is nil only on a display
-    /// with no notch, where this view is never built.
-    private var contentTop: CGFloat { (model.metrics.cutout?.height ?? 0) + 4 }
 
     var body: some View {
         // Reduce Motion keeps the fade and drops the spring, the tilt and the
@@ -239,31 +237,61 @@ struct NotchActivityView: View {
                 .animation(NotchMotion.announceText(reduceMotion: reduceMotion),
                            value: landed)
         }
-        .padding(.top, contentTop)
         .padding(.horizontal, 16)
+        // Centered in the body — the part below the menu bar — and then the body
+        // is hung off the island's top edge. Two frames rather than one padding:
+        // the announcement is a single line and it belongs in the middle of the
+        // black, not pressed against its top edge.
+        .frame(width: layout.island.width, height: layout.body.height)
+        .padding(.top, layout.body.minY - layout.island.minY)
         .frame(width: layout.island.width, height: layout.island.height,
                alignment: .top)
         .onAppear { landed = true }
     }
 }
 
-/// A rectangle whose *bottom* corners are rounded — the notch's silhouette.
-/// The path itself lives in `NotchGeometry` (Core), which is also what the
-/// hit-test mask is cut from: one definition, so what is drawn and what is
-/// clickable are the same shape by construction.
+/// The island's silhouette — the **T** in the wide states, a rounded-bottom
+/// rectangle in the short ones. The path itself lives in `NotchGeometry` (Core),
+/// which is also what the hit-test mask is cut from: one definition, so what is
+/// drawn and what is clickable are the same shape by construction.
+///
+/// **Only the corner radius animates, and that is a safety property, not an
+/// oversight.** SwiftUI interpolates `animatableData` and takes every other
+/// stored property at its new value immediately — so when the state flips, the
+/// stem's width and the body's top edge land on the new state's *at the same
+/// instant the hit-test mask does*, while the island's frame springs into place
+/// underneath them. That is what keeps the drawn shape inside the mask through
+/// the whole morph, in both directions:
+///
+/// - **Opening** (`live` → `expanded`), the mask is already the T. The stem is
+///   already the cutout's width, so the growing frame can only ever fill the
+///   T's body — which is below the menu bar. Not one frame of the open paints
+///   black over a menu-bar title. (The cost: the ears' black does not retract,
+///   it is simply gone on the first frame. Everything the eye is following —
+///   the body dropping out of the notch — is the part that moves.)
+/// - **Closing**, the mask has already shrunk to the live island, and the frame
+///   is still expanded-wide for a few frames. Those frames are drawn as a T
+///   whose stem is the *live* island's width (see `NotchGeometry.flat`), so the
+///   overhang hangs below the menu bar, over the desktop, where it is
+///   click-through and invisible against the wallpaper for 260ms.
+///
+/// Interpolating the stem would look smoother and would be wrong: a stem
+/// halfway between 278pt and 200pt is 39pt of black over `Window` and `Help`
+/// that the mask has already given back to the menu bar — drawn, unclickable,
+/// and precisely the thing this shape exists to stop.
 struct IslandShape: Shape {
-    var cornerRadius: CGFloat
+    var silhouette: NotchSilhouette
 
     /// The radius grows with the island's height, so it has to *interpolate*
     /// with the morph rather than jump to the new state's value on frame one —
     /// a 14pt corner snapping to 22pt at the start of the open is exactly the
     /// snap this pass exists to remove.
     var animatableData: CGFloat {
-        get { cornerRadius }
-        set { cornerRadius = newValue }
+        get { silhouette.cornerRadius }
+        set { silhouette.cornerRadius = newValue }
     }
 
     func path(in rect: CGRect) -> Path {
-        Path(NotchGeometry.islandPath(in: rect, cornerRadius: cornerRadius))
+        Path(NotchGeometry.islandPath(in: rect, silhouette: silhouette))
     }
 }
