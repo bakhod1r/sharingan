@@ -55,21 +55,24 @@ struct TaskTagOverflow: View {
 /// editor, which previously carried near-identical copies that had already drifted.
 struct PriorityMenu: View {
     @Binding var priority: SharinganCore.TaskPriority
+    /// Priority names/colors/custom levels — the menu lists `levels(custom:)`
+    /// and shows each level's user-facing name, rank chip, and flag color.
+    let settings: PomodoroSettings
     var body: some View {
         Menu {
-            ForEach(SharinganCore.TaskPriority.allCases.reversed()) { p in
+            ForEach(SharinganCore.TaskPriority.levels(custom: settings.customPriorityLevels)) { p in
                 Button { priority = p } label: {
-                    Label(p.menuLabel,
+                    Label(settings.priorityName(p),
                           systemImage: priority == p ? "checkmark"
                                        : (p == .none ? "flag.slash" : "flag.fill"))
                 }
             }
         } label: {
-            let hex = priority.colorHex
+            let hex = settings.priorityColorHex(priority)
             HStack(spacing: 5) {
                 Image(systemName: priority == .none ? "flag" : "flag.fill")
                     .font(.system(size: 10, weight: .semibold))
-                Text(priority == .none ? "Priority" : priority.label)
+                Text(priority == .none ? "Priority" : settings.priorityShortLabel(priority))
                     .font(.system(.caption, design: .rounded).weight(.medium))
             }
             .foregroundStyle(hex.map { Color(hex: $0) } ?? Color.dsSecondary)

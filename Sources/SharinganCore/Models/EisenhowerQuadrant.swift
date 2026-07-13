@@ -66,7 +66,9 @@ public enum EisenhowerQuadrant: CaseIterable, Identifiable, Sendable {
     /// - important: priority is P1 (.high) or P2 (.medium).
     public static func classify(_ task: TaskItem, now: Date = Date()) -> EisenhowerQuadrant {
         let urgent = isUrgent(task, now: now)
-        let important = task.priority == .high || task.priority == .medium
+        // Important = P2 (medium) or higher — custom levels sit above P1, so a
+        // `>=` on rawValue folds them into "important" automatically.
+        let important = task.priority.rawValue >= TaskPriority.medium.rawValue
         switch (urgent, important) {
         case (true,  true):  return .doFirst
         case (false, true):  return .schedule

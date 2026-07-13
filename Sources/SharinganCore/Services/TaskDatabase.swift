@@ -119,7 +119,7 @@ final class TaskDatabase {
             t.subtasks = decodeJSON([Subtask].self, text(stmt, 12)) ?? []
             t.recurrence = Recurrence(string: text(stmt, 13) ?? "none")
             t.project = isNull(stmt, 14) ? nil : text(stmt, 14)
-            t.priority = TaskPriority(rawValue: Int(int(stmt, 15))) ?? .none
+            t.priority = TaskPriority(rawValue: Int(int(stmt, 15)))
             t.completedAt = date(stmt, 16)
             out.append(t)
         }

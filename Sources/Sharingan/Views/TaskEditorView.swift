@@ -95,7 +95,7 @@ struct TaskEditorView: View {
     private var chipsRow: some View {
         HStack(spacing: 8) {
             categoryMenu
-            PriorityMenu(priority: $draft.priority)
+            PriorityMenu(priority: $draft.priority, settings: settings)
             dueMenu
             Spacer(minLength: 0)
         }

@@ -579,6 +579,18 @@ public final class TaskStore: ObservableObject {
         persist()
     }
 
+    /// Moves every task currently at `from` to `to`. Used when a custom priority
+    /// level is deleted — its tasks fall back to `.none` so no task is left
+    /// pointing at a level that no longer exists.
+    public func reassignPriority(from: TaskPriority, to: TaskPriority) {
+        var touched = false
+        for i in tasks.indices where tasks[i].priority == from {
+            tasks[i].priority = to
+            touched = true
+        }
+        if touched { persist() }
+    }
+
     public func setProject(_ id: UUID, _ project: String?) {
         guard let i = tasks.firstIndex(where: { $0.id == id }) else { return }
         let trimmed = project?.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -204,6 +204,10 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var priorityNames: [String: String] = [:]
     /// Custom flag colors (hex) per priority level, keyed by String(rawValue).
     public var priorityColors: [String: String] = [:]
+    /// User-added priority levels ABOVE the built-in P1 — their rawValues
+    /// (each ≥ 4). Built-ins (0…3) are implicit and never stored here. Adding a
+    /// custom level renumbers the built-ins down (see `priorityShortLabel`).
+    public var customPriorityLevels: [Int] = []
     /// Custom icon/color per tag (label), keyed by the tag text.
     public var tagStyles: [String: TagStyle] = [:]
     /// Show the MM:SS countdown next to the menu-bar icon while a session
@@ -342,6 +346,7 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
         showPomodoroBadges = try c.decodeIfPresent(Bool.self, forKey: .showPomodoroBadges) ?? d.showPomodoroBadges
         priorityNames = try c.decodeIfPresent([String: String].self, forKey: .priorityNames) ?? d.priorityNames
         priorityColors = try c.decodeIfPresent([String: String].self, forKey: .priorityColors) ?? d.priorityColors
+        customPriorityLevels = try c.decodeIfPresent([Int].self, forKey: .customPriorityLevels) ?? d.customPriorityLevels
         tagStyles = try c.decodeIfPresent([String: TagStyle].self, forKey: .tagStyles) ?? d.tagStyles
         showMenuBarCountdown = try c.decodeIfPresent(Bool.self, forKey: .showMenuBarCountdown) ?? d.showMenuBarCountdown
         dndEnabled = try c.decodeIfPresent(Bool.self, forKey: .dndEnabled) ?? d.dndEnabled
@@ -370,6 +375,17 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     /// (nil for `.none`, which renders no flag).
     public func priorityColorHex(_ p: TaskPriority) -> String? {
         priorityColors[String(p.rawValue)] ?? p.colorHex
+    }
+
+    /// Rank-based chip label ("P1", "P2", …) computed against the current level
+    /// ordering: customs sit above the built-ins, so adding one custom level
+    /// makes IT "P1" and pushes built-in high to "P2". `.none` gets no chip.
+    public func priorityShortLabel(_ p: TaskPriority) -> String {
+        guard p != .none else { return "" }
+        let ordered = TaskPriority.levels(custom: customPriorityLevels)
+            .filter { $0 != .none }
+        guard let idx = ordered.firstIndex(of: p) else { return p.label }
+        return "P\(idx + 1)"
     }
 
     /// "Auto" mode: the whole focus ↔ break cycle runs hands-free (25 focus →
