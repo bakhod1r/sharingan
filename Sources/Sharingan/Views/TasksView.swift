@@ -1699,7 +1699,7 @@ struct TasksView: View {
 
     private func exportCSV() {
         let panel = NSSavePanel()
-        panel.nameFieldStringValue = "blink-tasks.csv"
+        panel.nameFieldStringValue = "sharingan-tasks.csv"
         panel.allowedContentTypes = [.commaSeparatedText]
         guard panel.runModal() == .OK, let url = panel.url else { return }
         try? store.csv().write(to: url, atomically: true, encoding: .utf8)
