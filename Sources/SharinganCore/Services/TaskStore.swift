@@ -729,6 +729,42 @@ public final class TaskStore: ObservableObject {
         NotificationService.shared.cancel(identifier: preNoteID(id))
     }
 
+    /// UserDefaults flag guarding `sweepLegacyNotificationsIfNeeded` below so
+    /// it only ever runs the sweep once per install.
+    public static let legacyNotificationSweepDefaultsKey = "sharingan.migration.notificationsSwept"
+
+    /// One-shot post-rebrand cleanup. `dueNoteID`/`preNoteID` moved from
+    /// "blink.task.*" to "sharingan.task.*" identifiers when the app renamed
+    /// (see `RebrandMigration`), but `cancelDueNotifications` only ever
+    /// cancels the new-form id. A user upgrading with a due/pre reminder
+    /// already pending under an OLD id would never have it cancelled —
+    /// completing, rescheduling or deleting the task would leave a stale
+    /// notification that still fires. This sweeps every pending
+    /// "blink.task."-prefixed request out of `UNUserNotificationCenter`, then
+    /// reschedules reminders (via `syncDueNotifications`, the same path every
+    /// other mutation uses) for tasks that still have a future due date —
+    /// TaskStore only (re)schedules notifications on mutation, never on
+    /// launch, so the swept reminders would otherwise vanish silently instead
+    /// of reappearing under the new id.
+    ///
+    /// Safe to call on every launch: guarded by `legacyNotificationSweepDefaultsKey`
+    /// so only the first call after upgrading does any work. If there's no
+    /// bundle id (dev/test runs, where `NotificationService` can't reach
+    /// `UNUserNotificationCenter`), the flag is left unset so a later, real
+    /// launch still performs the sweep.
+    public func sweepLegacyNotificationsIfNeeded(defaults: UserDefaults = .standard) async {
+        guard !defaults.bool(forKey: Self.legacyNotificationSweepDefaultsKey) else { return }
+        guard let removed = await NotificationService.shared.removePendingRequests(withPrefix: "blink.task.") else {
+            return
+        }
+        if !removed.isEmpty {
+            for task in tasks where !task.isDone && task.dueDate != nil {
+                syncDueNotifications(for: task)
+            }
+        }
+        defaults.set(true, forKey: Self.legacyNotificationSweepDefaultsKey)
+    }
+
     /// Single source of truth for a task's deadline reminders: cancels both the
     /// due-time and pre-reminder notifications, then reschedules them when the
     /// task is open with a future due date. Every mutation that touches

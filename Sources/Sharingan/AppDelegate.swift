@@ -285,6 +285,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // UNUserNotificationCenter.add fails while status is .notDetermined.
         Task { await NotificationService.shared.requestAuthorization() }
 
+        // One-shot cleanup for the Blink → Sharingan notification-id rename
+        // (RebrandMigration only covers UserDefaults/App Support, not
+        // already-pending UNUserNotificationCenter requests): sweep any
+        // leftover "blink.task.*" due/pre reminders and reschedule the ones
+        // that still apply. No-ops after the first successful run.
+        Task { await TaskStore.shared.sweepLegacyNotificationsIfNeeded() }
+
         // Eyes wallpaper: restore on launch if the user left it enabled.
         if timer.settings.eyesWallpaperEnabled {
             WallpaperWindowManager.shared.setEnabled(true, config: WallpaperConfig(from: timer.settings))

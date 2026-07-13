@@ -60,4 +60,20 @@ public final class NotificationService {
     public func cancel(identifier: String) {
         center?.removePendingNotificationRequests(withIdentifiers: [identifier])
     }
+
+    /// Removes every pending request whose identifier starts with `prefix` and
+    /// returns the identifiers removed. Used by the one-shot Blink → Sharingan
+    /// notification-ID sweep (see `TaskStore.sweepLegacyNotificationsIfNeeded`).
+    /// Returns `nil` — instead of an empty array — when there's no bundle id
+    /// (dev/test runs), so the caller can tell "nothing to sweep" apart from
+    /// "couldn't ask the notification center" and avoid marking the sweep done.
+    public func removePendingRequests(withPrefix prefix: String) async -> [String]? {
+        guard let center else { return nil }
+        let pending = await center.pendingNotificationRequests()
+        let ids = pending.map(\.identifier).filter { $0.hasPrefix(prefix) }
+        if !ids.isEmpty {
+            center.removePendingNotificationRequests(withIdentifiers: ids)
+        }
+        return ids
+    }
 }
