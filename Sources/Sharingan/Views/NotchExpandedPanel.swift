@@ -59,11 +59,18 @@ struct NotchExpandedPanel: View {
         NotchWindowManager.taskRows(limit: config.renderedTaskRows)
     }
 
-    /// The camera housing sits in the cutout: the first pixel of content has to
-    /// start below it. `cutout` is nil on a display with no notch — where this
-    /// view is never built, since the layout collapses to `.zero` — so 0 is a
-    /// formality, not a fallback.
-    private var contentTop: CGFloat { (model.metrics.cutout?.height ?? 0) + 6 }
+    /// The island is a **T**, and the crossbar — `layout.body` — is everything
+    /// below the menu bar, which is everywhere content is allowed to be. The stem
+    /// above it is a cutout-wide strip of black over the camera housing: nothing
+    /// is legible there and nothing is drawn there.
+    ///
+    /// The panel used to pad its top by the cutout's height, pushing its content
+    /// clear of the housing inside a rectangle that started at the top of the
+    /// screen. With a T that padding would be a *second* menu-bar row of dead
+    /// black inside the body. The body already starts below the menu bar, so the
+    /// content simply fills it, inset by `contentTopPadding` — the same 10pt the
+    /// body's height was measured with.
+    private var bodyRect: CGRect { layout.body }
 
     /// The whole app formats durations through the user's `TimeDisplayFormat`
     /// (see `TodayPanelView` / `FloatingTimerView`); the island is not an
@@ -94,9 +101,9 @@ struct NotchExpandedPanel: View {
     }
 
     /// This stack is the one the height constants were measured from (a
-    /// structural replica of it, at 340pt — see `NotchGeometry`). Changing the
-    /// spacing, the padding or a section's content here without re-measuring is
-    /// how the island starts clipping again.
+    /// structural replica of it, at 340pt, with this exact top padding — see
+    /// `NotchGeometry`). Changing the spacing, the padding or a section's content
+    /// here without re-measuring is how the island starts clipping again.
     var body: some View {
         VStack(spacing: 8) {
             if shows(.timer) {
@@ -126,12 +133,15 @@ struct NotchExpandedPanel: View {
                                   reduceMotion: reduceMotion)
             }
         }
-        .padding(.top, contentTop)
+        .padding(.top, NotchGeometry.contentTopPadding)
         .padding(.horizontal, 14)
-        .padding(.bottom, 10)
-        // Pin to the island's own rect, like `NotchEars` does: the parent hangs
-        // us off the shape with `.overlay(alignment: .top)`, and an auto-sized
-        // stack would centre itself inside the island instead of filling it.
+        .padding(.bottom, NotchGeometry.contentBottomPadding)
+        // Pin to the *body's* rect, and then hang the body off the island's top
+        // edge. The parent attaches us with `.overlay(alignment: .top)` on the
+        // whole silhouette, so without this the stack would centre itself over
+        // the stem and the menu bar — an auto-sized stack fills nothing.
+        .frame(width: bodyRect.width, height: bodyRect.height, alignment: .top)
+        .padding(.top, bodyRect.minY - layout.island.minY)
         .frame(width: layout.island.width, height: layout.island.height,
                alignment: .top)
         .onAppear { assembled = true }

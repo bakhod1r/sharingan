@@ -13,6 +13,9 @@ struct NotchGeometryTests {
     static let plain = NotchScreenMetrics(screenWidth: 1920, menuBarHeight: 24,
                                           notchWidth: 0, notchHeight: 0)
     static let cutout = CGSize(width: 200, height: 37)
+    /// The menu-bar row the island's stem passes through — and where its body
+    /// starts. On this machine it is exactly the camera housing's height.
+    static let menuBar: CGFloat = 37
 
     @Test("hardware notch is detected from a non-zero cutout")
     func detectsHardwareNotch() {
@@ -57,7 +60,7 @@ struct NotchGeometryTests {
     @Test("the bottom radius grows with the island's height, and stays bounded")
     func cornerRadiusFollowsHeight() {
         let base = Self.notched.notchHeight + NotchGeometry.idleExtraHeight
-        let tallest = NotchGeometry.expandedSize(cutout: Self.cutout).height
+        let tallest = NotchGeometry.expandedSize(menuBarHeight: Self.menuBar).height
 
         // Short states: the notch's own corner, exactly.
         #expect(NotchGeometry.cornerRadius(forHeight: base, baseHeight: base,
@@ -99,7 +102,7 @@ struct NotchGeometryTests {
 
     @Test("the panel is always big enough for the largest state")
     func panelCoversExpanded() {
-        let expanded = NotchGeometry.expandedSize(cutout: Self.cutout)
+        let expanded = NotchGeometry.expandedSize(menuBarHeight: Self.menuBar)
         for size in NotchHUDSize.allCases {
             let l = NotchGeometry.layout(Self.notched, size: size)
             #expect(l.panelSize.width >= expanded.width)
@@ -282,17 +285,222 @@ struct NotchGeometryTests {
 
     /// The expanded island has to be tall enough for what the panel puts in it —
     /// the timer row, `NotchTaskRows.defaultLimit` task rows, the quick actions
-    /// and the status strip — or the `.clipShape` crops the bottom off. A
-    /// SwiftUI replica of the panel measures 321pt at five rows (286 before the
-    /// rows grew the subtask badge and the pomodoro ring); the island must not be
-    /// shorter than that.
+    /// and the status strip — or the `.clipShape` crops the bottom off. A SwiftUI
+    /// replica of the panel measures a **288pt body** at five rows, and the body
+    /// is everything below the menu bar, so the island is the menu-bar row plus
+    /// that. (It was 278 of body under a 37pt cutout — 321 — before the T moved
+    /// the content out of the menu-bar row and gave it a 10pt top padding of its
+    /// own instead of a 6pt gap under the camera housing.)
     @Test("the expanded island fits the panel's full content")
     func expandedIslandFitsItsContent() {
-        #expect(NotchGeometry.expandedSize(cutout: Self.cutout).height >= 321)
         let expanded = NotchGeometry.layout(Self.notched, size: .expanded)
-        #expect(expanded.island.height
-                == NotchGeometry.expandedSize(cutout: Self.cutout).height)
+        let size = NotchGeometry.expandedSize(menuBarHeight: Self.menuBar)
+        #expect(size.height >= Self.menuBar + 288)
+        #expect(expanded.island.height == size.height)
         #expect(expanded.panelSize.height >= expanded.island.height)
+        // …and every pixel of that content is *below* the menu bar: the body is
+        // the whole of it, and it is as tall as the measured stack.
+        #expect(expanded.body.minY == Self.menuBar)
+        #expect(expanded.body.height >= 288)
+    }
+}
+
+/// The island is a **T**: a stem the width of the hardware cutout through the
+/// menu-bar row, and a body that starts *below* the menu bar. The drawn shape and
+/// the hit-test mask are the same path, so these tests pin both at once — and the
+/// one they really pin is the mask, because the panel floats above the menu bar
+/// and everything the mask claims but the island does not draw is a menu-bar
+/// click the user loses.
+///
+/// The island shipped as a top-anchored rectangle 340pt wide, which is 70pt of
+/// black — and of dead hit region — over the menu-bar titles either side of the
+/// notch. That is the bug these tests exist to keep fixed.
+@Suite("Notch T-shape")
+struct NotchTeeTests {
+    static let m = NotchScreenMetrics(screenWidth: 1512, menuBarHeight: 37,
+                                      notchWidth: 200, notchHeight: 37)
+    static let menuBar: CGFloat = 37
+
+    static var panelWidth: CGFloat { NotchGeometry.panelSize(m).width }
+    static var cutoutMinX: CGFloat { panelWidth / 2 - m.notchWidth / 2 }
+    static var cutoutMaxX: CGFloat { panelWidth / 2 + m.notchWidth / 2 }
+
+    private static func hit(_ p: CGPoint, _ size: NotchHUDSize) -> Bool {
+        NotchGeometry.hitTest(p, metrics: m, size: size)
+    }
+
+    /// **The bug, pinned.** A point in the menu-bar row, 100pt to the left of the
+    /// cutout's edge — where `File`, `Edit`, `View` live — is not the island's,
+    /// in either wide state. The same point 100pt to the *right* is the status
+    /// items', and is not the island's either.
+    @Test("the menu bar either side of the notch is not hittable while the island is wide")
+    func menuBarSurvivesTheWideStates() {
+        for size in [NotchHUDSize.expanded, .activity] {
+            for y in [CGFloat(2), 10, 18, 30, Self.menuBar - 1] {
+                #expect(!Self.hit(CGPoint(x: Self.cutoutMinX - 100, y: y), size))
+                #expect(!Self.hit(CGPoint(x: Self.cutoutMaxX + 100, y: y), size))
+            }
+        }
+    }
+
+    /// The three regions the T is made of, in `.expanded`: the stem is HUD, the
+    /// body is HUD, and the notch-row *gap* between the stem's edge and the body's
+    /// edge — the strip the old rectangle swallowed — is not.
+    @Test("stem and body are hittable; the notch-row gap between them is not")
+    func theTeeIsHittableExactlyWhereItIsDrawn() {
+        let l = NotchGeometry.layout(Self.m, size: .expanded)
+
+        // The stem: over the camera housing, in the menu-bar row.
+        #expect(Self.hit(CGPoint(x: l.panelSize.width / 2, y: 4), .expanded))
+        #expect(Self.hit(CGPoint(x: Self.cutoutMinX + 4, y: Self.menuBar - 2), .expanded))
+
+        // The body: below the menu bar, out to its own edges.
+        #expect(Self.hit(CGPoint(x: l.panelSize.width / 2, y: Self.menuBar + 8), .expanded))
+        #expect(Self.hit(CGPoint(x: l.island.minX + 4, y: l.island.midY), .expanded))
+        #expect(Self.hit(CGPoint(x: l.island.maxX - 4, y: l.island.midY), .expanded))
+
+        // The gap: the menu-bar row, between the stem's edge and the body's. It
+        // is inside the island's *bounding box* — and outside its path.
+        for x in [Self.cutoutMinX - 20, Self.cutoutMinX - 60,
+                  Self.cutoutMaxX + 20, Self.cutoutMaxX + 60] {
+            let p = CGPoint(x: x, y: 8)
+            #expect(l.island.contains(p))              // inside the bare rect …
+            #expect(!Self.hit(p, .expanded))           // … and outside the shape
+        }
+    }
+
+    /// The body begins exactly at the menu bar's bottom edge, and the stem is
+    /// exactly the cutout — no wider, or it is eating menu bar for nothing.
+    @Test("the body starts below the menu bar and the stem is the cutout's width")
+    func theBodyStartsBelowTheMenuBar() {
+        for size in [NotchHUDSize.expanded, .activity] {
+            let l = NotchGeometry.layout(Self.m, size: size)
+            #expect(l.silhouette.stemWidth == Self.m.notchWidth)
+            #expect(l.silhouette.bodyTop == Self.menuBar)
+            #expect(l.body.minY == Self.menuBar)
+            #expect(l.body.maxY == l.island.maxY)
+            #expect(l.body.width == l.island.width)
+            #expect(l.body.height > 0)
+            // The island's bounding box still hangs from the top of the screen —
+            // the stem lives in it — but nothing in the menu-bar row outside the
+            // cutout is drawn.
+            #expect(l.island.minY == 0)
+            #expect(l.island.width > Self.m.notchWidth)
+        }
+    }
+
+    /// The concave fillet is the join, and it is *black*: it flares out of the
+    /// stem into the menu-bar row over the last `filletRadius` points before the
+    /// body, so the island reads as the cutout stretching. It is drawn, so it is
+    /// hittable — which is the invariant, not an exception to it.
+    @Test("the fillet flares the join outward, and is claimed by the mask")
+    func theFilletIsPartOfTheShape() {
+        let f = NotchGeometry.filletRadius
+        // Hard against the stem, one point above the body's top edge: inside the
+        // fillet's flare, so black, so hittable.
+        #expect(Self.hit(CGPoint(x: Self.cutoutMinX - 1, y: Self.menuBar - 1), .expanded))
+        #expect(Self.hit(CGPoint(x: Self.cutoutMaxX + 1, y: Self.menuBar - 1), .expanded))
+        // A fillet's width further out, and a fillet's height up, is past the
+        // flare: menu bar again.
+        #expect(!Self.hit(CGPoint(x: Self.cutoutMinX - f - 2, y: Self.menuBar - f - 2),
+                          .expanded))
+        // The flare is bounded: it never reaches beyond `filletRadius` of the
+        // cutout, so it can only ever cost the menu bar a 10pt square hard
+        // against the camera housing.
+        for x in stride(from: Self.cutoutMinX - 60, to: Self.cutoutMinX - f - 0.5, by: 3) {
+            for y in stride(from: CGFloat(1), to: Self.menuBar, by: 3) {
+                #expect(!Self.hit(CGPoint(x: x, y: y), .expanded))
+            }
+        }
+    }
+
+    /// The short states are untouched: `idle` is the cutout plus its lip and
+    /// `live` is that plus the ears, both flat rectangles in the menu-bar row.
+    /// The ears are the point of a notch HUD and `notchEars` is what switches
+    /// them off — the T is not a second, silent way to do it.
+    @Test("the flat states keep their rectangle")
+    func theShortStatesAreUnchanged() {
+        for size in [NotchHUDSize.idle, .live] {
+            let l = NotchGeometry.layout(Self.m, size: size)
+            // A stem as wide as the island is no stem at all: the path degenerates
+            // to the rounded-bottom rect these states have always drawn.
+            #expect(l.silhouette.stemWidth == l.island.width)
+            #expect(l.silhouette.filletRadius == 0)
+        }
+        // Live still swallows the ears' worth of menu bar, exactly as documented.
+        #expect(Self.hit(CGPoint(x: Self.cutoutMinX - 10, y: 10), .live))
+        #expect(!Self.hit(CGPoint(x: Self.cutoutMinX - 10, y: 10), .idle))
+        // …and the whole of the live island's own row is solid: no waist in it.
+        for x in stride(from: Self.cutoutMinX - NotchGeometry.earWidth + 2,
+                        to: Self.cutoutMaxX + NotchGeometry.earWidth - 2, by: 5) {
+            #expect(Self.hit(CGPoint(x: x, y: 8), .live))
+        }
+    }
+
+    /// The mask is the *path*, and the path is non-convex, so a point can be
+    /// inside the island's rect and outside the island. That is the whole
+    /// mechanism — and it must not leak: sweep the entire menu-bar row of the
+    /// panel while expanded, and the only thing hittable in it is the cutout
+    /// (plus the fillet's flare either side).
+    @Test("nothing but the cutout is hittable in the menu-bar row, expanded")
+    func theMenuBarRowIsTheCutoutAndNothingElse() {
+        let f = NotchGeometry.filletRadius
+        for x in stride(from: CGFloat(1), to: Self.panelWidth, by: 2) {
+            for y in stride(from: CGFloat(1), to: Self.menuBar, by: 3) {
+                let inTheStem = x >= Self.cutoutMinX && x <= Self.cutoutMaxX
+                let inTheFlare = x > Self.cutoutMinX - f && x < Self.cutoutMaxX + f
+                    && y > Self.menuBar - f
+                if !inTheStem && !inTheFlare {
+                    #expect(!Self.hit(CGPoint(x: x, y: y), .expanded),
+                            "menu bar at (\(x), \(y)) was swallowed by the island")
+                }
+            }
+        }
+    }
+
+    /// The row count resizes the island; it must not resize the stem, or a user
+    /// with three tasks would get a different amount of menu bar back than a user
+    /// with five.
+    @Test("the T holds for every config the panel can draw")
+    func theTeeHoldsForEveryConfig() {
+        for rows in 0...5 {
+            for tasks in [true, false] {
+                var c = NotchContentConfig.default
+                c.showTasks = tasks
+                c.taskCount = rows
+                let l = NotchGeometry.layout(Self.m, size: .expanded, config: c)
+                #expect(l.silhouette.stemWidth == Self.m.notchWidth)
+                #expect(l.body.minY == Self.menuBar)
+                #expect(l.body.height > 0)
+                #expect(!NotchGeometry.hitTest(CGPoint(x: Self.cutoutMinX - 100, y: 10),
+                                               metrics: Self.m, size: .expanded, config: c))
+                #expect(NotchGeometry.hitTest(CGPoint(x: Self.panelWidth / 2,
+                                                      y: Self.menuBar + 6),
+                                              metrics: Self.m, size: .expanded, config: c))
+            }
+        }
+    }
+
+    /// A menu bar deeper than the camera housing (an external-display metric, or
+    /// a future Mac) must push the body down with it, not leave a strip of menu
+    /// bar under the island's shoulder.
+    @Test("the body follows the menu bar, not the cutout")
+    func theBodyFollowsTheMenuBar() {
+        for menuBar in [CGFloat(24), 37, 55] {
+            var m = Self.m
+            m.menuBarHeight = menuBar
+            let l = NotchGeometry.layout(m, size: .expanded)
+            // Never above the camera housing, whatever the menu bar claims: the
+            // body carries the content, and the housing would eat the top of it.
+            let expected = max(menuBar, m.notchHeight)
+            #expect(l.body.minY == expected)
+            // Just above the body's top edge, well clear of the cutout: menu bar.
+            #expect(!NotchGeometry.hitTest(CGPoint(x: Self.cutoutMinX - 50, y: expected - 2),
+                                           metrics: m, size: .expanded))
+            // Just below it, same column: island.
+            #expect(NotchGeometry.hitTest(CGPoint(x: Self.cutoutMinX - 50, y: expected + 4),
+                                          metrics: m, size: .expanded))
+        }
     }
 }
 
@@ -308,54 +516,67 @@ struct NotchGeometryTests {
 @Suite("Notch expanded sizing")
 struct NotchExpandedSizingTests {
     static let cutout = CGSize(width: 200, height: 37)
+    static let menuBar: CGFloat = 37
     static let metrics = NotchScreenMetrics(screenWidth: 1512, menuBarHeight: 37,
                                             notchWidth: 200, notchHeight: 37)
 
-    /// The measured body heights (top padding excluded), from the replica.
+    /// The measured body heights, from the replica. The body is now the *whole*
+    /// of the island below the menu bar and carries its own 10pt top padding —
+    /// where it used to be measured with no top padding at all and have the
+    /// cutout's height plus a 6pt gap added on top of it by `expandedSize`. Every
+    /// number below is therefore the old one plus 10, re-measured rather than
+    /// re-derived: the replica prints 170/168/198/228/258/288 for 0…5 rows
+    /// against the shipped 160/158/188/218/248/278.
     @Test("the body height matches the measured replica for the shipped config")
     func bodyMatchesMeasurement() {
-        // Replica: five rows, every section on → 278pt of body, 321pt of island
-        // over a 37pt cutout. The geometry adds `bodySlack` on top, and nothing
-        // else. (243/286 before the rows grew the subtask badge and the ring.)
+        // Replica: five rows, every section on → 288pt of body, and an island of
+        // the menu-bar row plus that. The geometry adds `bodySlack` on top, and
+        // nothing else.
         let full = NotchContentConfig.default
         #expect(NotchGeometry.expandedBodyHeight(full)
-                == 278 + NotchGeometry.bodySlack)
-        #expect(NotchGeometry.expandedSize(full, cutout: Self.cutout).height
-                == 321 + NotchGeometry.bodySlack)
+                == 288 + NotchGeometry.bodySlack)
+        #expect(NotchGeometry.expandedSize(full, menuBarHeight: Self.menuBar).height
+                == Self.menuBar + 288 + NotchGeometry.bodySlack)
 
-        // Replica: three rows, every section on → 218pt of body.
+        // Replica: three rows, every section on → 228pt of body.
         var three = full
         three.taskRows = 3
-        #expect(NotchGeometry.expandedBodyHeight(three) == 218 + NotchGeometry.bodySlack)
+        #expect(NotchGeometry.expandedBodyHeight(three) == 228 + NotchGeometry.bodySlack)
 
-        // Replica: tasks only, five rows → 166pt of body.
+        // Replica: tasks only, five rows → 176pt of body.
         let tasksOnly = NotchContentConfig(showTimerControls: false, showTasks: true,
                                            showQuickActions: false,
                                            showStatusStrip: false, taskRows: 5)
-        #expect(NotchGeometry.expandedBodyHeight(tasksOnly) == 166 + NotchGeometry.bodySlack)
+        #expect(NotchGeometry.expandedBodyHeight(tasksOnly) == 176 + NotchGeometry.bodySlack)
 
-        // Replica: timer row only → 69pt of body.
+        // Replica: timer row only → 79pt of body.
         let timerOnly = NotchContentConfig(showTimerControls: true, showTasks: false,
                                            showQuickActions: false, showStatusStrip: false)
-        #expect(NotchGeometry.expandedBodyHeight(timerOnly) == 69 + NotchGeometry.bodySlack)
+        #expect(NotchGeometry.expandedBodyHeight(timerOnly) == 79 + NotchGeometry.bodySlack)
 
-        // Replica: timer + quick actions, no tasks, no strip → 101pt of body.
+        // Replica: timer + quick actions, no tasks, no strip → 111pt of body.
         let noTasks = NotchContentConfig(showTimerControls: true, showTasks: false,
                                          showQuickActions: true, showStatusStrip: false)
-        #expect(NotchGeometry.expandedBodyHeight(noTasks) == 101 + NotchGeometry.bodySlack)
+        #expect(NotchGeometry.expandedBodyHeight(noTasks) == 111 + NotchGeometry.bodySlack)
+
+        // Replica: nothing on at all → 20pt of body (its own two paddings), which
+        // is why the island has a floor.
+        let bare = NotchContentConfig(showTimerControls: false, showTasks: false,
+                                      showQuickActions: false, showStatusStrip: false)
+        #expect(NotchGeometry.expandedBodyHeight(bare) == 20 + NotchGeometry.bodySlack)
     }
 
     @Test("switching a section off makes the island materially shorter")
     func sectionsShrinkTheIsland() {
         let full = NotchContentConfig.default
-        let fullH = NotchGeometry.expandedSize(full, cutout: Self.cutout).height
+        let fullH = NotchGeometry.expandedSize(full, menuBarHeight: Self.menuBar).height
 
         for keyPath: WritableKeyPath<NotchContentConfig, Bool> in [
             \.showTimerControls, \.showTasks, \.showQuickActions, \.showStatusStrip
         ] {
             var c = full
             c[keyPath: keyPath] = false
-            let h = NotchGeometry.expandedSize(c, cutout: Self.cutout).height
+            let h = NotchGeometry.expandedSize(c, menuBarHeight: Self.menuBar).height
             // Every section costs at least its own height plus the stack gap it
             // takes: nothing here is free, so nothing may shrink by nothing.
             #expect(h < fullH)
@@ -366,7 +587,7 @@ struct NotchExpandedSizingTests {
         bare.showTasks = false
         bare.showQuickActions = false
         bare.showStatusStrip = false
-        let bareH = NotchGeometry.expandedSize(bare, cutout: Self.cutout).height
+        let bareH = NotchGeometry.expandedSize(bare, menuBarHeight: Self.menuBar).height
         // Every section off is not "a bit shorter", it is a different island:
         // less than half the full one, i.e. no 300pt slab over an empty panel.
         #expect(bareH < fullH / 2)
@@ -378,7 +599,7 @@ struct NotchExpandedSizingTests {
         for rows in NotchContentConfig.taskRowRange {
             var c = NotchContentConfig.default
             c.taskRows = rows
-            heights.append(NotchGeometry.expandedSize(c, cutout: Self.cutout).height)
+            heights.append(NotchGeometry.expandedSize(c, menuBarHeight: Self.menuBar).height)
         }
         for (a, b) in zip(heights, heights.dropFirst()) {
             #expect(b > a)
@@ -392,8 +613,8 @@ struct NotchExpandedSizingTests {
         off.showTasks = false
         var off3 = off
         off3.taskRows = 3
-        #expect(NotchGeometry.expandedSize(off, cutout: Self.cutout)
-                == NotchGeometry.expandedSize(off3, cutout: Self.cutout))
+        #expect(NotchGeometry.expandedSize(off, menuBarHeight: Self.menuBar)
+                == NotchGeometry.expandedSize(off3, menuBarHeight: Self.menuBar))
     }
 
     /// The floor is not arbitrary: the motion layer springs a morph on
@@ -404,8 +625,8 @@ struct NotchExpandedSizingTests {
     func heightHasAFloor() {
         let bare = NotchContentConfig(showTimerControls: false, showTasks: false,
                                       showQuickActions: false, showStatusStrip: false)
-        let h = NotchGeometry.expandedSize(bare, cutout: Self.cutout).height
-        #expect(h >= NotchGeometry.activitySize.height)
+        let h = NotchGeometry.expandedSize(bare, menuBarHeight: Self.menuBar).height
+        #expect(h >= NotchGeometry.activitySize(menuBarHeight: Self.menuBar).height)
         #expect(h > Self.cutout.height + NotchGeometry.idleExtraHeight)
 
         // …and it is still an ordered morph for every config: the expanded
@@ -454,7 +675,7 @@ struct NotchExpandedSizingTests {
         var c = NotchContentConfig.default
         c.showTasks = false
         c.showStatusStrip = false
-        let expected = NotchGeometry.expandedSize(c, cutout: Self.cutout)
+        let expected = NotchGeometry.expandedSize(c, menuBarHeight: Self.menuBar)
         let l = NotchGeometry.layout(Self.metrics, size: .expanded, config: c)
         #expect(l.island.size == expected)
         // …and the mask follows it: a point just under the shortened island is
@@ -598,6 +819,7 @@ struct NotchEarsGeometryTests {
 @Suite("Notch task-row sizing")
 struct NotchTaskRowSizingTests {
     static let cutout = CGSize(width: 200, height: 37)
+    static let menuBar: CGFloat = 37
     static let metrics = NotchScreenMetrics(screenWidth: 1512, menuBarHeight: 37,
                                             notchWidth: 200, notchHeight: 37)
 
@@ -607,7 +829,7 @@ struct NotchTaskRowSizingTests {
     }
 
     private static func height(count: Int?, cap: Int = 5) -> CGFloat {
-        NotchGeometry.expandedSize(config(count: count, cap: cap), cutout: cutout).height
+        NotchGeometry.expandedSize(config(count: count, cap: cap), menuBarHeight: menuBar).height
     }
 
     /// The row carries what the main window's row carries — subtask badge,
@@ -637,8 +859,8 @@ struct NotchTaskRowSizingTests {
         for (rows, h) in measured {
             #expect(NotchGeometry.taskSectionHeight(rows: rows) == h)
         }
-        // …and the body it lands in, likewise (10 bottom + Σ sections + 8 × n).
-        let body: [Int: CGFloat] = [0: 160, 1: 158, 2: 188, 3: 218, 4: 248, 5: 278]
+        // …and the body it lands in, likewise (10 top + 10 bottom + Σ + 8 × n).
+        let body: [Int: CGFloat] = [0: 170, 1: 168, 2: 198, 3: 228, 4: 258, 5: 288]
         for (rows, h) in body {
             #expect(NotchGeometry.expandedBodyHeight(Self.config(count: rows))
                     == h + NotchGeometry.bodySlack)
@@ -649,8 +871,9 @@ struct NotchTaskRowSizingTests {
     /// five left a row's worth (30pt) of black above the quick-actions row.
     @Test("the height follows the real row count, not the cap")
     func heightFollowsTheCountNotTheCap() {
-        // Four tasks, cap five: an island for four, not for five.
-        #expect(Self.height(count: 4) == 37 + 6 + 248 + NotchGeometry.bodySlack)
+        // Four tasks, cap five: an island for four, not for five — the menu-bar
+        // row the stem passes through, plus a 258pt body (measured).
+        #expect(Self.height(count: 4) == Self.menuBar + 258 + NotchGeometry.bodySlack)
         #expect(Self.height(count: 4) < Self.height(count: 5))
         #expect(Self.height(count: 5) - Self.height(count: 4)
                 == NotchGeometry.taskRowHeight + NotchGeometry.taskRowSpacing)
@@ -687,8 +910,8 @@ struct NotchTaskRowSizingTests {
         let empty = Self.height(count: 0)
         let full = Self.height(count: 5)
 
-        // 207 vs 325: 118pt of dead black gone.
-        #expect(empty == 37 + 6 + 160 + NotchGeometry.bodySlack)
+        // 211 vs 329: 118pt of dead black gone.
+        #expect(empty == Self.menuBar + 170 + NotchGeometry.bodySlack)
         #expect(full - empty == 118)
         // "Materially" shorter — not a rounding: more than a quarter of the tall
         // island, and shorter than every list that has anything in it but one.
@@ -704,7 +927,7 @@ struct NotchTaskRowSizingTests {
         // room for, so *that* island is shorter still.
         var off = Self.config(count: 0)
         off.showTasks = false
-        #expect(NotchGeometry.expandedSize(off, cutout: Self.cutout).height < empty)
+        #expect(NotchGeometry.expandedSize(off, menuBarHeight: Self.menuBar).height < empty)
     }
 
     /// An island that was never told the count sizes for the cap — exactly what
@@ -732,7 +955,7 @@ struct NotchTaskRowSizingTests {
         for count in [0, 1, 2, 3, 4, 5] {
             let c = Self.config(count: count)
             let l = NotchGeometry.layout(Self.metrics, size: .expanded, config: c)
-            let expected = NotchGeometry.expandedSize(c, cutout: Self.cutout)
+            let expected = NotchGeometry.expandedSize(c, menuBarHeight: Self.menuBar)
 
             // Drawn == masked == computed.
             #expect(l.island.size == expected)

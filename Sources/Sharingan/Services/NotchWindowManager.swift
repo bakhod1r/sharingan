@@ -280,8 +280,11 @@ final class NotchWindowManager {
             contentRect: frame,
             styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
             backing: .buffered, defer: false)
+        // `.transient` makes the panel step aside during Mission Control /
+        // Exposé (and when the app is hidden), just like the menu bar does —
+        // AppKit removes transient windows from the screen for the duration.
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary,
-                                    .stationary, .ignoresCycle]
+                                    .transient, .ignoresCycle]
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false

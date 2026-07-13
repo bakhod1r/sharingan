@@ -153,22 +153,46 @@ pill and no simulate flag. Settings asks the same function, so it can never
 disagree with the HUD about whether the Mac has a notch; it re-asks on
 `didChangeScreenParametersNotification`.
 
+- **The wide states are a T, not a slab.** `activity` and `expanded` used to be
+  rectangles anchored to the top of the screen, so their black — and, since the
+  mask follows the drawn shape, their dead hit region — covered the menu-bar
+  titles either side of the notch. The silhouette is now a **stem** the width of
+  the hardware cutout occupying the menu-bar row (space the camera housing
+  already took), and a **body** that begins at `menuBarHeight` and hangs below
+  it, centered under the cutout. `NotchSilhouette` (SharinganCore) carries the
+  numbers — `stemWidth`, `bodyTop`, the bottom radius, the body's outer top
+  radius and the **concave fillet** where the body flares out of the stem — and
+  `NotchGeometry.islandPath(in:silhouette:)` cuts one non-convex path from them
+  that both `IslandShape` draws and `hitTest` masks against. The menu-bar strip
+  either side of the stem is outside the path, so it is outside the mask: a click
+  on `File` while the island is expanded reaches `File`. The short states
+  (`idle`, `live`) are unchanged — a stem as wide as the island degenerates the T
+  to the rounded-bottom rectangle they always drew, so the ears still sit in the
+  menu-bar row. Only the corner radius animates on `IslandShape`; the stem width
+  and body top are deliberately non-animatable, so they flip with the mask while
+  the frame springs, keeping the drawn shape inside the mask through the morph.
+
 - **Configurable content.** `PomodoroSettings.notchShow{TimerControls,Tasks,
   QuickActions,StatusStrip}` + `notchTaskRows` (3–5), projected through
   `settings.notchContent` into `NotchContentConfig` (SharinganCore) — the one
   value the layout, the drawn shape, the panel's sections and the hit-test mask
   all read, off `NotchHUDModel.config`.
 - **The island is sized from that config**, not from a constant:
-  `NotchGeometry.expandedSize(_:cutout:)` = `cutout + 6 + body`, where
-  `body = 10 + Σ(sections) + 8 × count + 4`. Every constant
-  (`timerRowHeight` 51, `taskRowHeight` 28 + 2 spacing, `quickActionsHeight` 24,
-  `statusStripHeight` 13) was **measured** off a structural SwiftUI replica of
-  `NotchExpandedPanel` at the island's 340pt width via `fittingSize` — full
-  panel, five rows = 321pt over a 37pt cutout. Guessing here clips the content at
-  the `.clipShape` or hangs dead black over the screen. Changing the panel's
-  stack, fonts, spacing or width means re-measuring.
-  Floored at `activitySize.height`, so `NotchHUDSize.growthRank`'s promise that
-  `.expanded` is the biggest shape survives an all-sections-off config.
+  `NotchGeometry.expandedSize(_:menuBarHeight:)` = `menuBarHeight + body`, where
+  the body is the whole crossbar below the menu bar,
+  `body = 10 + Σ(sections) + 8 × count + 4 top-and-bottom` (`10` top padding, `10`
+  bottom, `4` slack). Every constant (`timerRowHeight` 51, `taskRowHeight` 28 + 2
+  spacing, `quickActionsHeight` 24, `statusStripHeight` 13) was **measured** off a
+  structural SwiftUI replica of `NotchExpandedPanel` at the island's 340pt width
+  via `fittingSize` — full panel, five rows = **288pt of body** (the T moved the
+  content out of the menu-bar row and gave it a 10pt top padding of its own, where
+  it used to clear the camera housing with a 6pt gap: 278 → 288). The island is
+  that body plus the menu-bar row the stem passes through. Guessing here clips the
+  content at the `.clipShape` or hangs dead black over the screen; changing the
+  panel's stack, fonts, spacing or width means re-measuring.
+  Floored at `activitySize(menuBarHeight:).height`, so `NotchHUDSize.growthRank`'s
+  promise that `.expanded` is the biggest shape survives an all-sections-off
+  config.
 - **The task list is sized from the rows that exist, not from the cap.**
   `notchTaskRows` (3–5) is only a *bound*; `NotchWindowManager` counts today's
   rows off the same `NotchTaskRows` call the panel renders from and stamps it
@@ -176,7 +200,8 @@ disagree with the HUD about whether the Mac has a notch; it re-asks on
   `min(cap, count)` — so four tasks no longer sit in an island built for five.
   Zero tasks is not zero height: the panel draws its "Nothing planned for today"
   caption, measured at 30pt (taller than one 28pt row, shorter than two), so the
-  island is 207pt at an empty list against 325pt at five rows. The island resizes
+  body is 170pt at an empty list against 288pt at five rows (island = that plus
+  the menu-bar row). The island resizes
   live as tasks are ticked off (`NotchMotion.resize`, critically damped like every
   other spring on the frame). The panel *window* stays pinned to the cap
   (`panelSize` reads `config.sizedForRowCap`): it is invisible and click-through
