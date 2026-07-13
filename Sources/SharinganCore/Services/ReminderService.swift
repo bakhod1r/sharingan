@@ -73,7 +73,7 @@ public final class ReminderService: ObservableObject {
         NotificationService.shared.notify(
             title: "Sharingan — \(reminder.kind.label)",
             body: reminder.resolvedMessage,
-            identifier: "blink.reminder.\(reminder.id)"
+            identifier: "sharingan.reminder.\(reminder.id)"
         )
         NotificationCenter.default.post(name: .reminderFired,
                                         object: self,
@@ -82,5 +82,5 @@ public final class ReminderService: ObservableObject {
 }
 
 extension Notification.Name {
-    static let reminderFired = Notification.Name("blink.reminderFired")
+    static let reminderFired = Notification.Name("sharingan.reminderFired")
 }

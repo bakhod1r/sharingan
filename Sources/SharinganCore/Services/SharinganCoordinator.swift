@@ -316,7 +316,7 @@ public final class SharinganCoordinator: ObservableObject {
                 NotificationService.shared.notify(
                     title: "Daily goal reached 🎯",
                     body: "\(n)/\(n) pomodoros today. Great work!",
-                    identifier: "blink.dailyGoal")
+                    identifier: "sharingan.dailyGoal")
             }
             .store(in: &cancellables)
 
@@ -557,14 +557,14 @@ public final class SharinganCoordinator: ObservableObject {
                 NotificationService.shared.notify(
                     title: "Sharingan",
                     body: "Focus session done — next repetition starting.",
-                    identifier: "blink.repeat")
+                    identifier: "sharingan.repeat")
                 return
             }
 
             NotificationService.shared.notify(
                 title: "Sharingan",
                 body: "Focus complete. Starting break.",
-                identifier: "blink.focusDone")
+                identifier: "sharingan.focusDone")
             ReminderService.shared.pauseForBreak()
             floatingController?.hideFloating()
             if let p = breakPresenter, timer.settings.blockScreenDuringBreak {
@@ -581,7 +581,7 @@ public final class SharinganCoordinator: ObservableObject {
             NotificationService.shared.notify(
                 title: "Sharingan",
                 body: "Break complete. Back to focus.",
-                identifier: "blink.breakDone")
+                identifier: "sharingan.breakDone")
             AlarmSoundService.shared.playSelected()
             breakPresenter?.dismissAll()
             BreakAmbienceService.shared.stop()
@@ -673,7 +673,7 @@ public final class SharinganCoordinator: ObservableObject {
         NotificationService.shared.notify(
             title: "Sharingan — Milestone achieved",
             body: "\(reward.badge.emoji) \(reward.badge.title): \(reward.badge.subtitle)",
-            identifier: "blink.streak.\(reward.badge.id)"
+            identifier: "sharingan.streak.\(reward.badge.id)"
         )
         if timer.settings.ttsSettings.enabled {
             TTSService.shared.speak(

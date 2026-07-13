@@ -37,7 +37,7 @@ public final class NotificationService {
     public func focusFiveMinLeft() {
         notify(title: "Sharingan",
                body: "Pomodoro ends in 5 minutes. Break coming up soon.",
-               identifier: "blink.fiveMinLeft")
+               identifier: "sharingan.fiveMinLeft")
     }
 
     /// Schedules a one-off notification to fire at `date` (ignored if in the past).

@@ -8,10 +8,10 @@ final class FloatingWindowManager: FloatingTimerController {
     private var panel: NSPanel?
     private var moveObserver: NSObjectProtocol?
     private var resizeObserver: NSObjectProtocol?
-    private let posKeyX = "blink.floating.x"
-    private let posKeyY = "blink.floating.y"
-    private let sizeKeyW = "blink.floating.w"
-    private let sizeKeyH = "blink.floating.h"
+    private let posKeyX = "sharingan.floating.x"
+    private let posKeyY = "sharingan.floating.y"
+    private let sizeKeyW = "sharingan.floating.w"
+    private let sizeKeyH = "sharingan.floating.h"
     /// Last size preset applied to the panel, so a Settings change is
     /// distinguishable from every other refresh (opacity drags etc. must not
     /// clobber a manual resize).
@@ -77,8 +77,8 @@ final class FloatingWindowManager: FloatingTimerController {
             guard let panel else { return }
             let origin = panel.frame.origin
             let d = UserDefaults.standard
-            d.set(Double(origin.x), forKey: "blink.floating.x")
-            d.set(Double(origin.y), forKey: "blink.floating.y")
+            d.set(Double(origin.x), forKey: "sharingan.floating.x")
+            d.set(Double(origin.y), forKey: "sharingan.floating.y")
             MainActor.assumeIsolated {
                 FloatingMotion.shared.moved(to: origin.x)
             }
@@ -89,8 +89,8 @@ final class FloatingWindowManager: FloatingTimerController {
             guard let panel else { return }
             let s = panel.frame.size
             let d = UserDefaults.standard
-            d.set(Double(s.width), forKey: "blink.floating.w")
-            d.set(Double(s.height), forKey: "blink.floating.h")
+            d.set(Double(s.width), forKey: "sharingan.floating.w")
+            d.set(Double(s.height), forKey: "sharingan.floating.h")
         }
     }
 

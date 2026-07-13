@@ -27,7 +27,7 @@ public struct ParsedTaskInput: Equatable, Sendable {
     }
 }
 
-/// Turns a quick-add line like `ertaga 15:00 p1 #ish @blink ~2 hisobot yozish`
+/// Turns a quick-add line like `ertaga 15:00 p1 #ish @sharingan ~2 hisobot yozish`
 /// into structured task fields, in the world's 25 most-spoken languages at once
 /// (see `LocalizedKeywords`). Pure — pass `now` for deterministic tests.
 ///

@@ -46,7 +46,7 @@ public final class TaskStore: ObservableObject {
     private let database: TaskDatabase?
 
     /// `fileURL`, when given (tests), is the SQLite database path. In the app it
-    /// defaults to `Application Support/Blink/blink.sqlite`.
+    /// defaults to `Application Support/Sharingan/blink.sqlite`.
     public init(fileURL: URL? = nil) {
         let dbURL: URL
         if let fileURL {
@@ -60,7 +60,7 @@ public final class TaskStore: ObservableObject {
             let base = FileManager.default.urls(for: .applicationSupportDirectory,
                                                 in: .userDomainMask).first
                 ?? FileManager.default.temporaryDirectory
-            let dir = base.appendingPathComponent("Blink", isDirectory: true)
+            let dir = base.appendingPathComponent("Sharingan", isDirectory: true)
             try? FileManager.default.createDirectory(at: dir,
                                                      withIntermediateDirectories: true)
             dbURL = dir.appendingPathComponent("blink.sqlite")
@@ -713,10 +713,10 @@ public final class TaskStore: ObservableObject {
 
     /// UserDefaults key for the "Due soon" pre-reminder offset in minutes.
     /// Absent key means the default of 10; 0 disables the pre-reminder.
-    public static let preReminderDefaultsKey = "blink.task.preReminderMinutes"
+    public static let preReminderDefaultsKey = "sharingan.task.preReminderMinutes"
 
-    private func dueNoteID(_ id: UUID) -> String { "blink.task.due.\(id.uuidString)" }
-    private func preNoteID(_ id: UUID) -> String { "blink.task.pre.\(id.uuidString)" }
+    private func dueNoteID(_ id: UUID) -> String { "sharingan.task.due.\(id.uuidString)" }
+    private func preNoteID(_ id: UUID) -> String { "sharingan.task.pre.\(id.uuidString)" }
 
     private var preReminderMinutes: Int {
         let defaults = UserDefaults.standard

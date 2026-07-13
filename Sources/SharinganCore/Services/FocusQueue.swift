@@ -13,7 +13,7 @@ import Combine
 @MainActor
 public final class FocusQueue: ObservableObject {
     /// UserDefaults key: the queue as an array of uuid strings.
-    public static let defaultsKey = "blink.focusQueue"
+    public static let defaultsKey = "sharingan.focusQueue"
 
     @Published public private(set) var taskIDs: [UUID] = []
 

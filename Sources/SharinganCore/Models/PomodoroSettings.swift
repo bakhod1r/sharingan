@@ -207,12 +207,12 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     /// Toggle macOS Focus during focus sessions by running user-created
     /// Shortcuts (there is no public Focus API).
     public var dndEnabled: Bool = false
-    public var dndShortcutOn: String = "Blink Focus On"
-    public var dndShortcutOff: String = "Blink Focus Off"
+    public var dndShortcutOn: String = "Sharingan Focus On"
+    public var dndShortcutOff: String = "Sharingan Focus Off"
 
     /// UserDefaults key of the persisted settings JSON blob (owned by
     /// PomodoroTimer; exposed so tier seeding can detect an existing user).
-    public static let defaultsKey = "com.blink.settings"
+    public static let defaultsKey = "com.sharingan.settings"
 
     public init() {}
 

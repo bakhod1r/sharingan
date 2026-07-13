@@ -387,7 +387,7 @@ public final class PomodoroTimer: ObservableObject {
     // MARK: - Persistence
 
     private static let settingsKey = PomodoroSettings.defaultsKey
-    private static let statsKey = "com.blink.stats"
+    private static let statsKey = "com.sharingan.stats"
 
     private static func loadSettings() -> PomodoroSettings {
         guard let d = UserDefaults.standard.data(forKey: settingsKey),
@@ -416,10 +416,10 @@ public final class PomodoroTimer: ObservableObject {
 }
 
 extension Notification.Name {
-    static let phaseDidComplete = Notification.Name("blink.phaseDidComplete")
-    static let focusFiveMinLeft = Notification.Name("blink.focusFiveMinLeft")
-    static let breakShouldStart = Notification.Name("blink.breakShouldStart")
-    static let breakShouldEnd   = Notification.Name("blink.breakShouldEnd")
-    static let streakUpdated    = Notification.Name("blink.streakUpdated")
-    static let dailyGoalReached = Notification.Name("blink.dailyGoalReached")
+    static let phaseDidComplete = Notification.Name("sharingan.phaseDidComplete")
+    static let focusFiveMinLeft = Notification.Name("sharingan.focusFiveMinLeft")
+    static let breakShouldStart = Notification.Name("sharingan.breakShouldStart")
+    static let breakShouldEnd   = Notification.Name("sharingan.breakShouldEnd")
+    static let streakUpdated    = Notification.Name("sharingan.streakUpdated")
+    static let dailyGoalReached = Notification.Name("sharingan.dailyGoalReached")
 }

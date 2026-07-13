@@ -11,7 +11,7 @@ struct FocusQueueTests {
         return TaskStore(fileURL: url)
     }
 
-    /// Isolated defaults so tests never touch the real "blink.focusQueue" key.
+    /// Isolated defaults so tests never touch the real "sharingan.focusQueue" key.
     private func tempDefaults() -> (defaults: UserDefaults, name: String) {
         let name = "blink-fq-tests-\(UUID().uuidString)"
         return (UserDefaults(suiteName: name)!, name)
@@ -164,7 +164,7 @@ struct FocusQueueCoordinatorTests {
     }
 
     /// Coordinator with a queue backed by throwaway defaults, so tests never
-    /// touch the real "blink.focusQueue" key.
+    /// touch the real "sharingan.focusQueue" key.
     private func makeCoordinator() -> (SharinganCoordinator, cleanup: () -> Void) {
         let name = "blink-fqc-tests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: name)!

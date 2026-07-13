@@ -32,8 +32,8 @@ final class MenuBarController: NSObject {
         // bar pushes the newest (leftmost) status item under the camera housing
         // where it renders invisible; with an autosave name the position can be
         // seeded/moved (defaults key "NSStatusItem Preferred Position
-        // blink.menubar") and any manual ⌘-drag by the user sticks.
-        item.autosaveName = "blink.menubar"
+        // sharingan.menubar") and any manual ⌘-drag by the user sticks.
+        item.autosaveName = "sharingan.menubar"
         statusItem = item
 
         let popover = NSPopover()
@@ -239,6 +239,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+
+        // One-shot Blink → Sharingan storage rename. Must run before
+        // SettingsTier.seedIfNeeded() below — seeding checks the NEW
+        // settings key, so an existing user's blob has to be copied first
+        // or they'd get seeded as a fresh Simple user instead of Advanced.
+        RebrandMigration.migrate()
 
         // Fresh install → Simple settings; updating user (existing settings
         // blob) → Advanced, so nothing they already saw disappears.

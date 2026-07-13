@@ -20,6 +20,10 @@ import SharinganCore
 @main
 struct TiredCLI {
     static func main() {
+        // One-shot Blink → Sharingan storage rename, before any CLIBridge/
+        // TaskStore access below reads from the (possibly old) locations.
+        RebrandMigration.migrate()
+
         let args = Array(CommandLine.arguments.dropFirst())
         guard !args.isEmpty else {
             printUsage()
@@ -172,7 +176,7 @@ struct TiredCLI {
           tired start 5pm          # until 5:00 PM
           tired add 5m             # +5 minutes
           tired status             # → Focus 12:34 ● 3 today, streak 7
-          tired task add juma 9:00 p2 @blink release notes
+          tired task add juma 9:00 p2 @sharingan release notes
           tired task done 2        # complete task #2 from 'task list'
         """)
     }

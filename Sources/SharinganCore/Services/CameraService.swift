@@ -33,7 +33,7 @@ public final class CameraService: NSObject, ObservableObject {
 
     private let session = AVCaptureSession()
     private let videoOutput = AVCaptureVideoDataOutput()
-    private let sessionQueue = DispatchQueue(label: "blink.camera.session")
+    private let sessionQueue = DispatchQueue(label: "sharingan.camera.session")
     private let sink = FrameSink()
     private var framePipe: AsyncStream<CVImageBuffer>?
     private var configured = false

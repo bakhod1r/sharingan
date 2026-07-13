@@ -6,19 +6,19 @@ import Foundation
 /// State: app viewWillAppear va phase o'zgarishida `UserDefaults`'ga snapshot yozadi,
 /// CLI esa shuni stdout'ga chiqaradi.
 public enum CLIBridge {
-    public static let snapshotKey = "com.blink.cliSnapshot"
-    public static let darwinCommandStart    = "com.blink.cli.start"
-    public static let darwinCommandPause    = "com.blink.cli.pause"
-    public static let darwinCommandResume   = "com.blink.cli.resume"
-    public static let darwinCommandSkip     = "com.blink.cli.skip"
-    public static let darwinCommandStop     = "com.blink.cli.stop"
-    public static let darwinCommandAdd       = "com.blink.cli.add"
-    public static let darwinCommandRemove    = "com.blink.cli.remove"
-    public static let darwinCommandSetDuration = "com.blink.cli.setDuration"
-    public static let darwinCommandTaskAdd   = "com.blink.cli.task.add"
-    public static let darwinCommandTaskDone  = "com.blink.cli.task.done"
-    public static let darwinCommandTaskStart = "com.blink.cli.task.start"
-    public static let darwinCommandTaskQueue = "com.blink.cli.task.queue"
+    public static let snapshotKey = "com.sharingan.cliSnapshot"
+    public static let darwinCommandStart    = "com.sharingan.cli.start"
+    public static let darwinCommandPause    = "com.sharingan.cli.pause"
+    public static let darwinCommandResume   = "com.sharingan.cli.resume"
+    public static let darwinCommandSkip     = "com.sharingan.cli.skip"
+    public static let darwinCommandStop     = "com.sharingan.cli.stop"
+    public static let darwinCommandAdd       = "com.sharingan.cli.add"
+    public static let darwinCommandRemove    = "com.sharingan.cli.remove"
+    public static let darwinCommandSetDuration = "com.sharingan.cli.setDuration"
+    public static let darwinCommandTaskAdd   = "com.sharingan.cli.task.add"
+    public static let darwinCommandTaskDone  = "com.sharingan.cli.task.done"
+    public static let darwinCommandTaskStart = "com.sharingan.cli.task.start"
+    public static let darwinCommandTaskQueue = "com.sharingan.cli.task.queue"
 
     /// CLI'dan yuboriladigan snapshot.
     public struct StateSnapshot: Codable, Equatable, Sendable {
@@ -82,7 +82,7 @@ public enum CLIBridge {
         let base = FileManager.default.urls(for: .applicationSupportDirectory,
                                             in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
-        let dir = base.appendingPathComponent("Blink/cli", isDirectory: true)
+        let dir = base.appendingPathComponent("Sharingan/cli", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }

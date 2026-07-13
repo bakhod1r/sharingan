@@ -34,7 +34,7 @@ public final class TemplateStore: ObservableObject {
     private let database: TaskDatabase?
 
     /// `fileURL`, when given (tests), is the SQLite database path. In the app
-    /// it defaults to `Application Support/Blink/blink.sqlite` — the same
+    /// it defaults to `Application Support/Sharingan/blink.sqlite` — the same
     /// database TaskStore uses.
     public init(fileURL: URL? = nil) {
         let dbURL: URL
@@ -44,7 +44,7 @@ public final class TemplateStore: ObservableObject {
             let base = FileManager.default.urls(for: .applicationSupportDirectory,
                                                 in: .userDomainMask).first
                 ?? FileManager.default.temporaryDirectory
-            let dir = base.appendingPathComponent("Blink", isDirectory: true)
+            let dir = base.appendingPathComponent("Sharingan", isDirectory: true)
             try? FileManager.default.createDirectory(at: dir,
                                                      withIntermediateDirectories: true)
             dbURL = dir.appendingPathComponent("blink.sqlite")

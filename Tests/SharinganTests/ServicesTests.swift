@@ -588,7 +588,7 @@ struct DNDShortcutServiceTests {
         svc.sync(focusActive: true, settings: s)   // no edge — no extra run
         #expect(spy.calls.count == 1)
         #expect(spy.calls[0].path == "/usr/bin/shortcuts")
-        #expect(spy.calls[0].args == ["run", "Blink Focus On"])
+        #expect(spy.calls[0].args == ["run", "Sharingan Focus On"])
     }
 
     @Test func focusEndRunsTheOffShortcut() {
@@ -597,8 +597,8 @@ struct DNDShortcutServiceTests {
         let s = makeSettings()
         svc.sync(focusActive: true, settings: s)
         svc.sync(focusActive: false, settings: s)
-        #expect(spy.calls.map(\.args) == [["run", "Blink Focus On"],
-                                          ["run", "Blink Focus Off"]])
+        #expect(spy.calls.map(\.args) == [["run", "Sharingan Focus On"],
+                                          ["run", "Sharingan Focus Off"]])
     }
 
     @Test func disabledSettingIsANoOp() {
@@ -613,8 +613,8 @@ struct DNDShortcutServiceTests {
         let svc = DNDShortcutService(runner: spy.runner)
         svc.sync(focusActive: true, settings: makeSettings())
         svc.sync(focusActive: true, settings: makeSettings(enabled: false))
-        #expect(spy.calls.map(\.args) == [["run", "Blink Focus On"],
-                                          ["run", "Blink Focus Off"]])
+        #expect(spy.calls.map(\.args) == [["run", "Sharingan Focus On"],
+                                          ["run", "Sharingan Focus Off"]])
     }
 
     @Test func deactivateIsBestEffortAndIdempotent() {
@@ -625,8 +625,8 @@ struct DNDShortcutServiceTests {
         svc.sync(focusActive: true, settings: s)
         svc.deactivate(settings: s)
         svc.deactivate(settings: s)                 // second call — no run
-        #expect(spy.calls.map(\.args) == [["run", "Blink Focus On"],
-                                          ["run", "Blink Focus Off"]])
+        #expect(spy.calls.map(\.args) == [["run", "Sharingan Focus On"],
+                                          ["run", "Sharingan Focus Off"]])
     }
 
     @Test func emptyShortcutNameNeverSpawnsAProcess() {
@@ -639,8 +639,8 @@ struct DNDShortcutServiceTests {
     @Test func settingsFieldsDefaultAndDecode() throws {
         let d = PomodoroSettings()
         #expect(d.dndEnabled == false)
-        #expect(d.dndShortcutOn == "Blink Focus On")
-        #expect(d.dndShortcutOff == "Blink Focus Off")
+        #expect(d.dndShortcutOn == "Sharingan Focus On")
+        #expect(d.dndShortcutOff == "Sharingan Focus Off")
         let old = try JSONSerialization.data(withJSONObject: ["focusMinutes": 25])
         let s = try JSONDecoder().decode(PomodoroSettings.self, from: old)
         #expect(s.dndEnabled == false)

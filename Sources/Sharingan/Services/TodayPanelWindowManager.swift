@@ -14,7 +14,7 @@ final class TodayPanelWindowManager: TodayPanelController {
     private var panel: NSPanel?
     private var moveObserver: NSObjectProtocol?
     private var resizeCancellable: AnyCancellable?
-    private let originKey = "blink.todayPanel.origin"
+    private let originKey = "sharingan.todayPanel.origin"
 
     func showTodayPanel(timer: PomodoroTimer) {
         guard panel == nil else { return }
@@ -64,7 +64,7 @@ final class TodayPanelWindowManager: TodayPanelController {
         ) { [weak panel] _ in
             guard let panel else { return }
             UserDefaults.standard.set(NSStringFromPoint(panel.frame.origin),
-                                      forKey: "blink.todayPanel.origin")
+                                      forKey: "sharingan.todayPanel.origin")
         }
         // The card's height tracks the task list (rows appear/disappear as
         // tasks complete or get planned) — refit the panel on every change,

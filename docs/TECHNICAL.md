@@ -127,6 +127,30 @@ list: **Simple** (~30 most-used rows across 7 categories) and **Advanced**
 
 ---
 
+## Storage identifiers
+
+- All on-disk identifiers are namespaced `com.sharingan.*` / `sharingan.*`
+  (settings `com.sharingan.settings`, stats `com.sharingan.stats`, CLI
+  snapshot `com.sharingan.cliSnapshot`, CLI darwin commands
+  `com.sharingan.cli.*`, floating-timer/today-panel position keys, the focus
+  queue, and the task pre-reminder-minutes setting). Task/template data lives
+  in `~/Library/Application Support/Sharingan/` (SQLite db + the `tired` CLI's
+  shared `cli/` snapshot files).
+- `RebrandMigration` (SharinganCore/Services) performs a one-shot Blink →
+  Sharingan copy/move at launch — called by both `AppDelegate` (before
+  `SettingsTier.seedIfNeeded()`, so an existing user's settings blob is
+  visible under the new key before tier seeding checks it) and the `tired`
+  CLI entry point. Old `UserDefaults` keys are copied to the new keys (old
+  kept, never deleted); the old `Blink/` Application Support directory is
+  moved (renamed) to `Sharingan/`, never merged into an existing `Sharingan/`
+  dir. Safe to call on every launch — a copy/move only happens once, the
+  first time the new location is still empty. Stored `dndShortcutOn/Off`
+  values inside a user's settings blob are deliberately NOT rewritten (they
+  name real user-created Shortcuts.app shortcuts); only the code defaults for
+  fresh installs changed, to "Sharingan Focus On/Off".
+
+---
+
 ## Focus enforcement & integrations
 
 - **App blocking**: hide or force-quit distracting apps (presets include Chrome, Safari, VS Code, Slack, Telegram, Messages) — during breaks, during focus, or always.

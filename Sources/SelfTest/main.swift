@@ -282,7 +282,7 @@ testBrightnessSettings()
             s.add(title: "Ship v2", category: "Work",
                   tags: ["urgent", "release"], dueDate: due,
                   estimatedPomodoros: 4, recurrence: .weekly,
-                  project: "Blink", notes: "line1\nline2", priority: .high)
+                  project: "Sharingan", notes: "line1\nline2", priority: .high)
             let id = s.tasks[0].id
             s.addSubtask(id, title: "step 1")
             s.addSubtask(id, title: "step 2")
@@ -298,7 +298,7 @@ testBrightnessSettings()
         check(t.tags == ["urgent", "release"], "tags (JSON) round-trip")
         check(t.priority == .high, "priority round-trips")
         check(t.recurrence == .weekly, "recurrence round-trips")
-        check(t.project == "Blink", "project round-trips")
+        check(t.project == "Sharingan", "project round-trips")
         check(t.notes == "line1\nline2", "multiline notes round-trip")
         check(t.estimatedPomodoros == 4, "estimate round-trips")
         check(t.subtasks.count == 2, "subtasks (JSON) round-trip")

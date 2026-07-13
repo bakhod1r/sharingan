@@ -328,7 +328,7 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-site-assets"),
         // 2) Seed sample tasks (isolated store — see HOME note above).
         let store = TaskStore.shared
         store.add(title: "Ship landing page v1", category: "Work", tags: ["launch"],
-                  dueDate: Date(), estimatedPomodoros: 3, project: "Blink", priority: .high)
+                  dueDate: Date(), estimatedPomodoros: 3, project: "Sharingan", priority: .high)
         store.add(title: "Review pull request #42", category: "Work", tags: ["code"],
                   dueDate: Date(), estimatedPomodoros: 1, priority: .medium)
         store.add(title: "Outline the weekly report", category: "Study", tags: ["writing"],
@@ -431,7 +431,7 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-dev-preview"),
 
         let store = TaskStore.shared
         store.add(title: "Ship landing page v1", category: "Work", tags: ["launch"],
-                  dueDate: Date(), estimatedPomodoros: 3, project: "Blink", priority: .high)
+                  dueDate: Date(), estimatedPomodoros: 3, project: "Sharingan", priority: .high)
         store.add(title: "Review pull request #42", category: "Work",
                   dueDate: Calendar.current.date(byAdding: .day, value: 2, to: Date()),
                   priority: .medium)
