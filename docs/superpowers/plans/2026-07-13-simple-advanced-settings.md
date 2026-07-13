@@ -1601,3 +1601,90 @@ chosen pomodoro type must be visible on its row in the Tasks list.)*
 **Verification:** `swift build && swift test` green.
 
 **Commit:** `feat(tasks): pomodoro-type badge on task rows` and push.
+
+---
+
+### Task 13: Effective estimate — subtask sum when subtasks exist
+
+*(Added 2026-07-13, user decision: "taskda subtask bo'lmasa pomidoro
+estimate qilsin. subtask bo'lsa total sum pomidoro estimate qil" — a task
+without subtasks uses its own estimate; a task with subtasks derives its
+estimate as the SUM of its subtasks' estimates.)*
+
+**Files:**
+- Modify: `Sources/SharinganCore/Models/TaskItem.swift` (computed `effectiveEstimate`)
+- Modify: display sites that show a task-level estimate (grep
+  `estimatedPomodoros` in `Sources/Sharingan/Views/` — task row 🍅 badges,
+  editor summary, menu-bar rows if they show estimates) — switch DISPLAY to
+  `effectiveEstimate`; editing paths keep writing `estimatedPomodoros`.
+- Modify: `Sources/Sharingan/Views/TasksView.swift` — also clean up Task 11's
+  add-path workaround: add a `pomodoroKind: PomodoroKind? = nil` parameter to
+  `TaskStore.add(...)` (Sources/SharinganCore/Services/TaskStore.swift:244,
+  threaded into the `TaskItem(...)` construction inside), replace the
+  tasks.count/tasks.last/update dance in `TasksView.add()` with a direct
+  argument. (The workaround is correct today but silently breaks if add()
+  ever stops appending.)
+- Test: `Tests/SharinganTests/PomodoroModelsTests.swift` or the tasks test
+  file that already covers `TaskItem` (find `SubtaskOpsTests.swift` —
+  append there if it fits better).
+
+**Model:**
+
+```swift
+    /// Estimate shown for the task: its own when it has no subtasks;
+    /// otherwise the sum of subtask estimates (falling back to its own
+    /// when no subtask carries one).
+    public var effectiveEstimate: Int? {
+        guard !subtasks.isEmpty else { return estimatedPomodoros }
+        let sum = subtasks.compactMap(\.estimatedPomodoros).reduce(0, +)
+        return sum > 0 ? sum : estimatedPomodoros
+    }
+```
+
+**Rules:**
+- Display-only change: `estimatedPomodoros` stays the stored, user-edited
+  value everywhere (editor stepper, parser, CSV); `effectiveEstimate` is
+  what rows/badges/progress show.
+- Done-count badges (`🍅 done/est`) use `effectiveEstimate` for the "est"
+  half; the "done" half is unchanged.
+- Subtask-level badges unchanged.
+
+**Tests:**
+
+```swift
+@Suite("Effective estimate")
+struct EffectiveEstimateTests {
+    @Test("no subtasks → own estimate")
+    func ownEstimate() {
+        var t = TaskItem(title: "t"); t.estimatedPomodoros = 3
+        #expect(t.effectiveEstimate == 3)
+    }
+    @Test("subtasks with estimates → their sum, own ignored")
+    func subtaskSum() {
+        var t = TaskItem(title: "t"); t.estimatedPomodoros = 3
+        t.subtasks = [Subtask(title: "a", estimatedPomodoros: 2),
+                      Subtask(title: "b", estimatedPomodoros: 4)]
+        #expect(t.effectiveEstimate == 6)
+    }
+    @Test("subtasks without estimates → falls back to own")
+    func fallbackToOwn() {
+        var t = TaskItem(title: "t"); t.estimatedPomodoros = 3
+        t.subtasks = [Subtask(title: "a")]
+        #expect(t.effectiveEstimate == 3)
+    }
+    @Test("nothing anywhere → nil")
+    func allNil() {
+        var t = TaskItem(title: "t")
+        t.subtasks = [Subtask(title: "a")]
+        #expect(t.effectiveEstimate == nil)
+    }
+}
+```
+
+(Adapt the `TaskItem`/`Subtask` initializers to their real signatures —
+read the model first; the test INTENT is binding, the constructor calls are
+not.)
+
+**Verification:** `swift build && swift test` green; SelfTest untouched.
+
+**Commit:** `feat(tasks): estimate derives from subtask sum; direct pomodoroKind in add()` and push.
