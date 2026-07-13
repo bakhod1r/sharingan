@@ -65,6 +65,11 @@ final class TaskDatabase {
             json TEXT NOT NULL
         );
         """)
+        exec("""
+        CREATE TABLE IF NOT EXISTS tags (
+            name TEXT PRIMARY KEY
+        );
+        """)
         // Databases created before the column shipped need it added in place
         // (CREATE IF NOT EXISTS won't touch an existing table).
         if !tableHasColumn("tasks", "completedAt") {
@@ -114,7 +119,7 @@ final class TaskDatabase {
             t.subtasks = decodeJSON([Subtask].self, text(stmt, 12)) ?? []
             t.recurrence = Recurrence(string: text(stmt, 13) ?? "none")
             t.project = isNull(stmt, 14) ? nil : text(stmt, 14)
-            t.priority = TaskPriority(rawValue: Int(int(stmt, 15))) ?? .none
+            t.priority = TaskPriority(rawValue: Int(int(stmt, 15)))
             t.completedAt = date(stmt, 16)
             out.append(t)
         }
@@ -187,6 +192,39 @@ final class TaskDatabase {
                 bindText(stmt, 1, c.name)
                 bindText(stmt, 2, c.colorHex)
                 bindText(stmt, 3, c.icon)
+                guard sqlite3_step(stmt) == SQLITE_DONE else { return false }
+            }
+            return true
+        }
+    }
+
+    // MARK: - Tags
+
+    /// User-precreated tags with 0 uses so far (sidebar "+"). Tags born from
+    /// typing `#tag` on a task live only on the task itself and never appear
+    /// here — this table is purely the "precreated, unused so far" registry.
+    func loadTags() -> [String] {
+        var out: [String] = []
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, "SELECT name FROM tags;", -1, &stmt, nil) == SQLITE_OK
+        else { return out }
+        defer { sqlite3_finalize(stmt) }
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            if let n = text(stmt, 0) { out.append(n) }
+        }
+        return out
+    }
+
+    func saveTags(_ tags: [String]) {
+        transaction {
+            guard exec("DELETE FROM tags;") else { return false }
+            let sql = "INSERT INTO tags (name) VALUES (?);"
+            var stmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
+            defer { sqlite3_finalize(stmt) }
+            for t in tags {
+                sqlite3_reset(stmt)
+                bindText(stmt, 1, t)
                 guard sqlite3_step(stmt) == SQLITE_DONE else { return false }
             }
             return true

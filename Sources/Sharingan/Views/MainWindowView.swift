@@ -15,11 +15,18 @@ struct MainWindowView: View {
     @State private var newCatColor = TaskCategory.palette[0]
     /// Priority level whose name/color editor popover is open.
     @State private var editingPriority: TaskPriority?
+    /// Inline "new priority level" popover state (sidebar Priority +).
+    @State private var showAddPriority = false
+    @State private var newPrioName = ""
+    @State private var newPrioColor = TaskCategory.palette[0]
     /// Category whose editor popover is open, and the rename draft.
     @State private var editingCategory: String?
     @State private var editCatName = ""
     /// Tag whose icon/color editor popover is open.
     @State private var editingTag: String?
+    /// Inline "new tag" popover state (sidebar Tags +).
+    @State private var showAddTag = false
+    @State private var newTagName = ""
     /// Sidebar filter row under the pointer — reveals its edit pencil.
     @State private var hoveredRowKey: String?
     /// Accordion state of the sidebar groups, persisted across launches.
@@ -193,6 +200,27 @@ struct MainWindowView: View {
         showAddCategory = false
     }
 
+    /// Precreate a tag with no color UI — per-tag icon/color live on the
+    /// row's own editor popover (`tagEditorPopover`) once the tag exists.
+    private var addTagPopover: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("New tag").dsSectionLabel()
+            TextField("Name", text: $newTagName)
+                .textFieldStyle(DarkGlassFieldStyle())
+                .frame(width: 180)
+                .onSubmit(commitNewTag)
+            Button("Add", action: commitNewTag)
+                .disabled(newTagName.trimmingCharacters(in: .whitespaces).isEmpty)
+        }
+        .padding(14)
+    }
+
+    private func commitNewTag() {
+        guard tasks.addCustomTag(newTagName) else { return }
+        newTagName = ""
+        showAddTag = false
+    }
+
     /// Todoist-style shortcut row: not a section of its own, just a deep-link
     /// into Tasks (search focus / smart filter). Count badge optional.
     private func shortcutRow(icon: String, title: String, count: Int = 0,
@@ -324,8 +352,17 @@ struct MainWindowView: View {
         let counts: [String: Int] = open.reduce(into: [:]) { acc, t in
             for tag in t.tags { acc[tag, default: 0] += 1 }
         }
-        let names = tasks.allTags.prefix(8)
-        sectionHeader("Tags", collapsed: $tagsCollapsed)
+        // Cap the busy frequency-ordered list, but never hide precreated
+        // custom tags (they sit at the tail of allTags and a plain cap
+        // would swallow a tag the user just added via "+").
+        let names = tasks.allTags.prefix(8 + tasks.customTags.count)
+        sectionHeader("Tags", collapsed: $tagsCollapsed,
+                      addHelp: "New tag") {
+            showAddTag = true
+        }
+        .popover(isPresented: $showAddTag, arrowEdge: .trailing) {
+            addTagPopover
+        }
         if !tagsCollapsed {
             if names.isEmpty {
                 Text("Type #tag when adding a task")
@@ -381,8 +418,14 @@ struct MainWindowView: View {
     }
 
     /// Icon + color editor for a tag, with delete-everywhere at the bottom.
+    /// A precreated custom tag with 0 uses also gets a separate, non-
+    /// destructive "Remove tag" — unlike "Delete label" (which strips the tag
+    /// off every task), it only drops the precreated placeholder itself.
     private func tagEditorPopover(_ tag: String) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let totalUses = tasks.tasks.reduce(0) { $0 + ($1.tags.contains(tag) ? 1 : 0) }
+        let isRemovableCustom = totalUses == 0
+            && tasks.customTags.contains { $0.caseInsensitiveCompare(tag) == .orderedSame }
+        return VStack(alignment: .leading, spacing: 10) {
             Text("@\(tag)").dsSectionLabel()
             HStack(spacing: 5) {
                 ForEach(TagStyle.iconChoices, id: \.self) { icon in
@@ -435,6 +478,19 @@ struct MainWindowView: View {
                 }
             }
             .font(.system(.caption, design: .rounded))
+            if isRemovableCustom {
+                HStack {
+                    Button {
+                        tasks.removeCustomTag(tag)
+                        editingTag = nil
+                    } label: {
+                        Text("Remove tag")
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
+                    Spacer()
+                }
+                .font(.system(.caption2, design: .rounded))
+            }
         }
         .padding(14)
     }
@@ -453,18 +509,75 @@ struct MainWindowView: View {
         .help("Edit")
     }
 
-    /// Every priority level, always visible; zero-count rows render dimmed.
-    /// The number of levels is fixed (Todoist-style P1–P4), but each level's
-    /// display name and flag color are editable via the row's context menu.
+    /// Every priority level, always visible; zero-count rows render dimmed. The
+    /// four built-ins (P1–P4) are fixed; "+" adds a custom level ABOVE P1 and a
+    /// custom row's context menu deletes it. Each level's display name and flag
+    /// color are editable via the row's hover pencil.
     @ViewBuilder
     private var prioritySection: some View {
         let open = tasks.tasks.filter { !$0.isDone }
-        sectionHeader("Priority", collapsed: $prioCollapsed)
+        sectionHeader("Priority", collapsed: $prioCollapsed,
+                      addHelp: "New priority level") {
+            showAddPriority = true
+        }
+        .popover(isPresented: $showAddPriority, arrowEdge: .trailing) {
+            addPriorityPopover
+        }
         if !prioCollapsed {
-            ForEach([TaskPriority.high, .medium, .low, .none], id: \.self) { p in
+            ForEach(TaskPriority.levels(custom: timer.settings.customPriorityLevels)) { p in
                 priorityRow(p, count: open.filter { $0.priority == p }.count)
             }
         }
+    }
+
+    private var addPriorityPopover: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("New priority level").dsSectionLabel()
+            TextField("Name", text: $newPrioName)
+                .textFieldStyle(DarkGlassFieldStyle())
+                .frame(width: 180)
+                .onSubmit(commitNewPriority)
+            HStack(spacing: 6) {
+                ForEach(TaskCategory.palette, id: \.self) { hex in
+                    Button { newPrioColor = hex } label: {
+                        Circle()
+                            .fill(Color(hex: hex))
+                            .frame(width: 16, height: 16)
+                            .overlay(Circle().stroke(.white.opacity(newPrioColor == hex ? 0.9 : 0),
+                                                     lineWidth: 2))
+                    }
+                    .buttonStyle(.pressableSubtle)
+                }
+            }
+            Button("Add", action: commitNewPriority)
+                .disabled(newPrioName.trimmingCharacters(in: .whitespaces).isEmpty)
+        }
+        .padding(14)
+    }
+
+    /// Adds a custom level above P1: next rawValue is one past the current max
+    /// (built-ins cap at 3), stored with the required name + color override.
+    private func commitNewPriority() {
+        let name = newPrioName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
+        let raw = (timer.settings.customPriorityLevels.max() ?? 3) + 1
+        timer.settings.customPriorityLevels.append(raw)
+        timer.settings.priorityNames[String(raw)] = name
+        timer.settings.priorityColors[String(raw)] = newPrioColor
+        newPrioName = ""
+        newPrioColor = TaskCategory.palette[0]
+        showAddPriority = false
+    }
+
+    /// Deletes a custom level: its tasks fall back to `.none`, and the level's
+    /// rawValue + name/color overrides are dropped. Built-ins can't be deleted.
+    private func deletePriorityLevel(_ p: TaskPriority) {
+        guard p.rawValue > 3 else { return }
+        tasks.reassignPriority(from: p, to: .none)
+        timer.settings.customPriorityLevels.removeAll { $0 == p.rawValue }
+        timer.settings.priorityNames[String(p.rawValue)] = nil
+        timer.settings.priorityColors[String(p.rawValue)] = nil
+        if editingPriority == p { editingPriority = nil }
     }
 
     private func priorityRow(_ p: TaskPriority, count: Int) -> some View {
@@ -504,11 +617,22 @@ struct MainWindowView: View {
         ), arrowEdge: .trailing) {
             editPriorityPopover(p)
         }
+        .contextMenu {
+            Button { editingPriority = p } label: {
+                Label("Edit…", systemImage: "pencil")
+            }
+            if p.rawValue > 3 {
+                Divider()
+                Button(role: .destructive) { deletePriorityLevel(p) } label: {
+                    Label("Delete level", systemImage: "trash")
+                }
+            }
+        }
     }
 
     private func editPriorityPopover(_ p: TaskPriority) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Edit \(p.label)").dsSectionLabel()
+            Text("Edit \(p == .none ? "P4" : timer.settings.priorityShortLabel(p))").dsSectionLabel()
             TextField(p.menuLabel, text: Binding(
                 get: { timer.settings.priorityNames[String(p.rawValue)] ?? "" },
                 set: { timer.settings.priorityNames[String(p.rawValue)] =

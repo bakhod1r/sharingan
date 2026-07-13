@@ -42,6 +42,10 @@ public final class TaskStore: ObservableObject {
     @Published public var activeSubtaskID: UUID?
     /// User-created categories, persisted alongside (and merged after) the presets.
     @Published public private(set) var customCategories: [TaskCategory] = []
+    /// User-precreated tags (sidebar "+"), persisted until they either gain a
+    /// real use (at which point `allTags` reports them via task frequency
+    /// like any other tag) or are removed again.
+    @Published public private(set) var customTags: [String] = []
 
     private let database: TaskDatabase?
 
@@ -74,6 +78,7 @@ public final class TaskStore: ObservableObject {
         self.database = TaskDatabase(path: dbURL.path)
         load()
         loadCategories()
+        loadTags()
         migrateLegacyJSONIfNeeded(dbDir: dbURL.deletingLastPathComponent())
     }
 
@@ -580,6 +585,18 @@ public final class TaskStore: ObservableObject {
         persist()
     }
 
+    /// Moves every task currently at `from` to `to`. Used when a custom priority
+    /// level is deleted — its tasks fall back to `.none` so no task is left
+    /// pointing at a level that no longer exists.
+    public func reassignPriority(from: TaskPriority, to: TaskPriority) {
+        var touched = false
+        for i in tasks.indices where tasks[i].priority == from {
+            tasks[i].priority = to
+            touched = true
+        }
+        if touched { persist() }
+    }
+
     public func setProject(_ id: UUID, _ project: String?) {
         guard let i = tasks.firstIndex(where: { $0.id == id }) else { return }
         let trimmed = project?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -604,12 +621,45 @@ public final class TaskStore: ObservableObject {
         if touched { persist() }
     }
 
-    /// Distinct tags across all tasks, most-used first — powers tag suggestions.
+    /// Distinct tags across all tasks (most-used first), plus any precreated
+    /// custom tags that have no uses yet, appended alphabetically at the end.
+    /// A custom tag that gains real uses simply appears in the frequency list
+    /// instead — never duplicated.
     public var allTags: [String] {
         var freq: [String: Int] = [:]
         for t in tasks { for tag in t.tags { freq[tag, default: 0] += 1 } }
-        return freq.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }
+        let used = freq.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }
             .map(\.key)
+        let usedLower = Set(used.map { $0.lowercased() })
+        let unusedCustom = customTags
+            .filter { !usedLower.contains($0.lowercased()) }
+            .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        return used + unusedCustom
+    }
+
+    /// Precreates a tag with 0 uses so it shows up (dimmed) in the sidebar and
+    /// as a suggestion before it's ever typed on a task. Trims whitespace,
+    /// strips a leading `#`, and rejects empty/case-insensitive-duplicate
+    /// names against `allTags`.
+    @discardableResult
+    public func addCustomTag(_ name: String) -> Bool {
+        var trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("#") { trimmed.removeFirst() }
+        trimmed = trimmed.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              !allTags.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame })
+        else { return false }
+        customTags.append(trimmed)
+        persistTags()
+        return true
+    }
+
+    /// Removes a tag from the precreated custom list only — never touches
+    /// tasks. Offered by the UI only for tags with 0 uses; a tag still in use
+    /// simply keeps appearing via the task-frequency half of `allTags`.
+    public func removeCustomTag(_ name: String) {
+        customTags.removeAll { $0.caseInsensitiveCompare(name) == .orderedSame }
+        persistTags()
     }
 
     public func delete(_ id: UUID) {
@@ -689,6 +739,14 @@ public final class TaskStore: ObservableObject {
 
     private func persistCategories() {
         database?.saveCategories(customCategories)
+    }
+
+    private func loadTags() {
+        customTags = database?.loadTags() ?? []
+    }
+
+    private func persistTags() {
+        database?.saveTags(customTags)
     }
 
     /// One-time import of the pre-SQLite JSON files sitting next to the database.

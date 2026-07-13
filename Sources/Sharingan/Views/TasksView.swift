@@ -569,7 +569,7 @@ struct TasksView: View {
             // Row 2 — the three you set most: category, priority, due. One tap each.
             HStack(spacing: 8) {
                 categoryMenu
-                PriorityMenu(priority: $newPriority)
+                PriorityMenu(priority: $newPriority, settings: timer.settings)
                 dueMenu
                 if !templates.templates.isEmpty { templateMenu }
                 Spacer(minLength: 4)
@@ -1355,7 +1355,7 @@ struct TasksView: View {
                         .foregroundStyle(task.isOverdue() ? Color.red : Color.dsSecondary)
                 }
                 if task.priority != .none, let hex = timer.settings.priorityColorHex(task.priority) {
-                    Label(task.priority.label, systemImage: "flag.fill")
+                    Label(timer.settings.priorityShortLabel(task.priority), systemImage: "flag.fill")
                         .foregroundStyle(Color(hex: hex))
                 }
                 ForEach(task.tags.prefix(2), id: \.self) { t in
@@ -1589,7 +1589,7 @@ struct TasksView: View {
                 Label("Rename", systemImage: "character.cursor.ibeam")
             }
             Menu {
-                ForEach(TaskPriority.allCases.reversed()) { p in
+                ForEach(TaskPriority.levels(custom: timer.settings.customPriorityLevels)) { p in
                     Button {
                         store.setPriority(task.id, p)
                     } label: {

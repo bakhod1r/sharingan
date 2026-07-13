@@ -146,34 +146,70 @@ public enum Recurrence: Codable, Equatable, Hashable, Sendable, CaseIterable, Id
 
 /// Task priority, Todoist-style: P1 (urgent, red) … P4 (none). Higher rawValue
 /// = more urgent, so sorting descending puts P1 first.
-public enum TaskPriority: Int, Codable, Sendable, CaseIterable, Identifiable {
-    case none = 0   // P4 — no flag
-    case low  = 1   // P3 — blue
-    case medium = 2 // P2 — orange
-    case high = 3   // P1 — red
+///
+/// Was an `Int` enum; now a struct so users can add their own levels ABOVE P1
+/// (rawValues 4+, stored in `PomodoroSettings.customPriorityLevels`). The four
+/// built-ins keep their rawValues (0…3) and static accessors, and Codable
+/// encodes the bare `Int` — byte-identical to the old enum, so persisted JSON
+/// blobs and SQLite rows decode unchanged.
+public struct TaskPriority: RawRepresentable, Codable, Hashable, Sendable, Identifiable {
+    public let rawValue: Int
+    public init(rawValue: Int) { self.rawValue = rawValue }
 
     public var id: Int { rawValue }
 
-    /// "P1"…"P4".
-    public var label: String { "P\(4 - rawValue)" }
+    public static let none   = TaskPriority(rawValue: 0)   // P4 — no flag
+    public static let low    = TaskPriority(rawValue: 1)   // P3 — blue
+    public static let medium = TaskPriority(rawValue: 2)   // P2 — orange
+    public static let high   = TaskPriority(rawValue: 3)   // P1 — red
 
-    /// Menu label.
-    public var menuLabel: String {
-        switch self {
-        case .none:   return "No priority"
-        case .low:    return "P3 · Low"
-        case .medium: return "P2 · Medium"
-        case .high:   return "P1 · Urgent"
+    // Encode/decode as a single bare Int (matching the old enum) so old data
+    // round-trips identically. The default struct synthesis would emit a
+    // keyed `{"rawValue": 3}` object instead, breaking compatibility.
+    public init(from decoder: Decoder) throws {
+        rawValue = try decoder.singleValueContainer().decode(Int.self)
+    }
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        try c.encode(rawValue)
+    }
+
+    /// All levels, most-urgent first, ending with `.none`. Built-ins (1…3)
+    /// plus the user's custom levels (rawValues stored in settings).
+    public static func levels(custom: [Int]) -> [TaskPriority] {
+        let flagged = ([1, 2, 3] + custom).sorted(by: >).map(TaskPriority.init(rawValue:))
+        return flagged + [.none]
+    }
+
+    /// "P1"…"P4" for the built-ins. Custom levels have no fixed rank in
+    /// isolation — UI shows their rank via `PomodoroSettings.priorityShortLabel`.
+    public var label: String {
+        switch rawValue {
+        case 0...3: return "P\(4 - rawValue)"
+        default:    return "P!"
         }
     }
 
-    /// Flag color hex, or nil for `.none`.
+    /// Menu label — the built-in default; custom levels always carry a
+    /// user-supplied name in settings, so "Custom" is rarely seen.
+    public var menuLabel: String {
+        switch rawValue {
+        case 0:  return "No priority"
+        case 1:  return "P3 · Low"
+        case 2:  return "P2 · Medium"
+        case 3:  return "P1 · Urgent"
+        default: return "Custom"
+        }
+    }
+
+    /// Flag color hex for the built-ins; nil for `.none` and for custom levels
+    /// (whose colors live in settings, read via `priorityColorHex`).
     public var colorHex: String? {
-        switch self {
-        case .none:   return nil
-        case .low:    return "#4F8DFD"
-        case .medium: return "#FFB020"
-        case .high:   return "#FF5E5B"
+        switch rawValue {
+        case 1:  return "#4F8DFD"
+        case 2:  return "#FFB020"
+        case 3:  return "#FF5E5B"
+        default: return nil
         }
     }
 }

@@ -420,7 +420,7 @@ struct WeeklyBoardView: View {
                 Label("Edit…", systemImage: "pencil")
             }
             Menu {
-                ForEach(TaskPriority.allCases.reversed()) { p in
+                ForEach(TaskPriority.levels(custom: timer.settings.customPriorityLevels)) { p in
                     Button {
                         store.setPriority(task.id, p)
                     } label: {

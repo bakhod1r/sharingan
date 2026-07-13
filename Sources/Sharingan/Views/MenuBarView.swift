@@ -619,7 +619,7 @@ struct MenuBarView: View {
                 Label("Change category", systemImage: "tag")
             }
             Menu {
-                ForEach(SharinganCore.TaskPriority.allCases.reversed()) { p in
+                ForEach(SharinganCore.TaskPriority.levels(custom: timer.settings.customPriorityLevels)) { p in
                     Button {
                         tasks.setPriority(task.id, p)
                     } label: {
