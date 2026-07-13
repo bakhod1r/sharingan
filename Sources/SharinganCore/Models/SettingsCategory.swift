@@ -3,7 +3,7 @@ import Foundation
 /// Groups of settings, shown as drill-down rows on the root Settings screen.
 /// Lives in Core (not the view) so search and page metadata stay testable.
 public enum SettingsCategory: String, CaseIterable, Identifiable, Hashable, Sendable {
-    case general, timer, tasks, breaks, focus, eyeCare, sharingan, voice, shortcuts
+    case general, timer, notch, tasks, breaks, focus, eyeCare, sharingan, voice, shortcuts
 
     public var id: String { rawValue }
 
@@ -16,6 +16,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable, Hashable, Send
     public var title: String {
         switch self {
         case .timer:     return "Timer"
+        case .notch:     return "Notch HUD"
         case .tasks:     return "Tasks & Planning"
         case .breaks:    return "Breaks"
         case .focus:     return "Focus & Blocking"
@@ -30,6 +31,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable, Hashable, Send
     public var subtitle: String {
         switch self {
         case .timer:     return "Durations, mode, repeat, floating timer"
+        case .notch:     return "Island, ears, what it shows"
         case .tasks:     return "Goal, estimates, weekly planning, badges"
         case .breaks:    return "Break screen, ambience, brightness"
         case .focus:     return "App blocking, reminders"
@@ -44,6 +46,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable, Hashable, Send
     public var icon: String {
         switch self {
         case .timer:     return "timer"
+        case .notch:     return "rectangle.topthird.inset.filled"
         case .tasks:     return "checklist"
         case .breaks:    return "cup.and.saucer.fill"
         case .focus:     return "hand.raised.fill"
@@ -65,9 +68,10 @@ public enum SettingsCategory: String, CaseIterable, Identifiable, Hashable, Send
                     "float", "opacity", "always on top", "compact",
                     "size", "small", "medium", "large", "preset",
                     "dots", "cycle dots", "active task", "task pill",
-                    "today panel", "panel", "desktop", "widget",
-                    "notch", "island", "hud", "ears", "camera housing",
-                    "menu bar", "countdown"]
+                    "today panel", "panel", "desktop", "widget"]
+        case .notch:
+            return ["notch", "island", "dynamic island", "hud",
+                    "ears", "camera housing", "menu bar", "live activity"]
         case .tasks:
             return ["task", "subtask", "estimate", "goal", "week", "weekly",
                     "monday", "sunday", "badge", "plan", "planner", "🍅"]

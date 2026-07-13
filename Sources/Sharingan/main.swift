@@ -508,9 +508,9 @@ if let outDir = HeadlessRender.outputDirectory(for: "--render-dev-preview") {
                 .frame(width: 460, height: 640)
                 .environment(\.colorScheme, .dark),
               to: "\(outDir)/editor.png")
-        // The Timer page, Advanced accordion down: the notch section, and on a
-        // Mac with no camera housing its disabled state — the one part of the
-        // HUD that is visible without a notch, so the one part that can be
+        // The Notch HUD page, Advanced accordion down: the whole category, and
+        // on a Mac with no camera housing its disabled state — the one part of
+        // the HUD that is visible without a notch, so the one part that can be
         // reviewed on any machine.
         //
         // Hosted, not `ImageRenderer`-ed: the renderer does not rasterize a
@@ -518,10 +518,10 @@ if let outDir = HeadlessRender.outputDirectory(for: "--render-dev-preview") {
         // Settings page is one. A real hosting view in a real window also runs
         // `onAppear`, which is where the page asks whether this Mac has a notch.
         writeHosted(SettingsView(timer: timer, settings: .constant(timer.settings),
-                                 initialCategory: .timer, initialAdvancedExpanded: true)
+                                 initialCategory: .notch, initialAdvancedExpanded: true)
                         .background(Color(white: 0.12))
                         .environment(\.colorScheme, .dark),
-                    to: "\(outDir)/settings-timer.png",
+                    to: "\(outDir)/settings-notch.png",
                     size: NSSize(width: 640, height: 2000))
         // The notch island, in each shape it takes. This machine has no camera
         // housing, so the HUD never instantiates at runtime here — but the view
