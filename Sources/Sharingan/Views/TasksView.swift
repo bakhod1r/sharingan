@@ -27,6 +27,8 @@ struct TasksView: View {
     @State private var newProject = ""
     @State private var newNotes = ""
     @State private var newPriority: TaskPriority = .none
+    /// Pomodoro length override for the new task; nil means Auto (settings default).
+    @State private var newKind: PomodoroKind? = nil
     /// Tasks whose subtasks/notes panel is expanded.
     @State private var expanded: Set<UUID> = []
     @State private var subtaskDrafts: [UUID: String] = [:]
@@ -739,6 +741,27 @@ struct TasksView: View {
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
                 .fixedSize()
+
+                HStack(spacing: 2) {
+                    ForEach(PomodoroKind.allCases) { kind in
+                        Button {
+                            newKind = (newKind == kind) ? nil : kind
+                        } label: {
+                            Image(systemName: kind.systemImage)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(newKind == kind ? Color.white : .white.opacity(0.45))
+                                .frame(width: 26, height: 22)
+                                .background(
+                                    Capsule().fill(newKind == kind
+                                        ? Color.accentColor.opacity(0.45)
+                                        : Color.white.opacity(0.06)))
+                                .contentShape(Capsule())
+                        }
+                        .buttonStyle(.pressableSubtle)
+                        .help("\(kind.label) pomodoro — tap again for Auto")
+                    }
+                }
+
                 Spacer()
             }
 
@@ -1677,6 +1700,7 @@ struct TasksView: View {
         let parsed = TaskInputParser.parse(newTitle, now: Date())
         var tags = newTagList
         for t in parsed.tags where !tags.contains(t) { tags.append(t) }
+        let countBefore = store.tasks.count
         store.add(title: parsed.title.isEmpty ? newTitle : parsed.title,
                   category: newCategory, tags: tags,
                   dueDate: hasDue ? newDue : parsed.dueDate,
@@ -1685,6 +1709,13 @@ struct TasksView: View {
                   project: newProject.isEmpty ? parsed.project : newProject,
                   notes: newNotes,
                   priority: newPriority != .none ? newPriority : parsed.priority)
+        // TaskStore.add doesn't take a pomodoroKind, and it no-ops on a blank
+        // title, so only thread the picked kind through when a task actually
+        // landed — then patch it onto the freshly appended task.
+        if let kind = newKind, store.tasks.count > countBefore, var added = store.tasks.last {
+            added.pomodoroKind = kind
+            store.update(added)
+        }
         newTitle = ""
         newTagList = []
         tagDraft = ""
@@ -1695,6 +1726,7 @@ struct TasksView: View {
         newProject = ""
         newNotes = ""
         newPriority = .none
+        newKind = nil
     }
 
     private func exportCSV() {
