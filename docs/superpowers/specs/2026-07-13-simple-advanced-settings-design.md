@@ -48,7 +48,7 @@ row-by-row split is the authority.
 | Category | Simple rows | Advanced adds |
 |---|---|---|
 | General | 6 | — |
-| Timer | 7 | +19 |
+| Timer | 7 | +18 |
 | Tasks & Planning | 3 | +3 |
 | Breaks | 4 | +5 |
 | Focus & Blocking | 3 | +7 |
