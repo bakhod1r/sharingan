@@ -88,9 +88,14 @@ public enum PomodoroKind: String, Codable, CaseIterable, Sendable, Identifiable 
 public struct PomodoroKindConfig: Codable, Equatable, Sendable {
     public var focusMinutes: Int
     public var breakMinutes: Int
-    public init(focusMinutes: Int, breakMinutes: Int) {
+    /// Per-size long-break override; nil = fall back to the global
+    /// `PomodoroSettings.longBreakMinutes`. Synthesized Codable decodes a
+    /// missing key as nil, so pre-per-size JSON blobs keep behaving identically.
+    public var longBreakMinutes: Int? = nil
+    public init(focusMinutes: Int, breakMinutes: Int, longBreakMinutes: Int? = nil) {
         self.focusMinutes = focusMinutes
         self.breakMinutes = breakMinutes
+        self.longBreakMinutes = longBreakMinutes
     }
 }
 
@@ -377,7 +382,11 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
 
     public var focusSeconds: TimeInterval { TimeInterval(focusMinutes) * 60 }
     public var shortBreakSeconds: TimeInterval { TimeInterval(shortBreakMinutes) * 60 }
-    public var longBreakSeconds: TimeInterval { TimeInterval(longBreakMinutes) * 60 }
+    /// Long-break length of the ACTIVE kind: per-size override, else the
+    /// stored global value (pre-per-size blobs keep behaving identically).
+    public var longBreakSeconds: TimeInterval {
+        TimeInterval(config(for: activeKind).longBreakMinutes ?? longBreakMinutes) * 60
+    }
 
     public func duration(for phase: PomodoroPhase) -> TimeInterval {
         // Floor real phases at 1s: a 0-minute duration (from decoded/CLI garbage)

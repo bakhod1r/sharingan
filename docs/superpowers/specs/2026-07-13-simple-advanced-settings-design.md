@@ -45,6 +45,15 @@ a **Simple** tier (most-used essentials, ~32 rows) and an **Advanced** tier
   instructions" bridge toggle was removed since Voice Guidance is now
   always reachable from the root. See `task-8-brief.md` for the exact
   per-category section split.
+- **2026-07-13 (Task 10):** Timer's "Pomodoro sizes" section is now a
+  compact `Grid` (rows = Small/Normal/Big, columns = Focus/Break/Long
+  break) instead of 6 stacked stepper rows, and each size can now override
+  the long-break length (`PomodoroKindConfig.longBreakMinutes`, optional;
+  nil falls back to the global `PomodoroSettings.longBreakMinutes`). The
+  "Long break" section's global minutes stepper was removed — only "Long
+  break every N pomodoros" remains there; the stored global value silently
+  stays as the fallback for sizes never overridden, so old settings blobs
+  behave identically. See `task-10-brief.md`.
 
 ## Category visibility
 

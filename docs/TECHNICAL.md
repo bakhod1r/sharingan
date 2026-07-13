@@ -11,7 +11,7 @@
 
 ## Timer / Pomodoro
 
-- Configurable focus, short break, and long break durations (25 / 5 / 15 by default).
+- Configurable focus, short break, and long break durations (25 / 5 / 15 by default). Settings' "Pomodoro sizes" section renders as a compact grid (Small/Normal/Big rows × Focus/Break/Long break columns); each size can override its own long-break length, falling back to the global long-break minutes when not overridden.
 - Countdown and count-up modes.
 - Long break automatically after every N pomodoros.
 - Auto-start focus and auto-start break toggles.

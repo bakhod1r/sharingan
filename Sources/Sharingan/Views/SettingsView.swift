@@ -236,33 +236,32 @@ struct SettingsView: View {
                     Text("Three gears: Small for quick wins, Normal for the classic rhythm, Big for deep work. Each task or subtask can pick its own.")
                         .font(.system(.caption2, design: .rounded))
                         .foregroundStyle(.white.opacity(0.6))
-                    ForEach(PomodoroKind.allCases) { kind in
-                        StepperRow(title: "\(kind.label) · focus",
-                                   value: Binding(
-                                       get: { settings.config(for: kind).focusMinutes },
-                                       set: { v in
-                                           var c = settings.config(for: kind)
-                                           c.focusMinutes = v
-                                           settings.setConfig(c, for: kind)
-                                       }),
-                                   unit: "min")
-                        StepperRow(title: "\(kind.label) · break",
-                                   value: Binding(
-                                       get: { settings.config(for: kind).breakMinutes },
-                                       set: { v in
-                                           var c = settings.config(for: kind)
-                                           c.breakMinutes = v
-                                           settings.setConfig(c, for: kind)
-                                       }),
-                                   unit: "min")
+                    Grid(horizontalSpacing: 10, verticalSpacing: 8) {
+                        GridRow {
+                            Color.clear.frame(width: 1, height: 1)
+                            ForEach(["Focus", "Break", "Long break"], id: \.self) { h in
+                                Text(h)
+                                    .font(.system(.caption, design: .rounded).weight(.semibold))
+                                    .foregroundStyle(.white.opacity(0.55))
+                                    .frame(maxWidth: .infinity)
+                            }
+                        }
+                        ForEach(PomodoroKind.allCases) { kind in
+                            GridRow {
+                                Label(kind.label, systemImage: kind.systemImage)
+                                    .font(.system(.callout, design: .rounded).weight(.medium))
+                                    .foregroundStyle(.white)
+                                    .labelStyle(.titleAndIcon)
+                                    .gridColumnAlignment(.leading)
+                                kindCell(kind, \.focusMinutes)
+                                kindCell(kind, \.breakMinutes)
+                                longBreakCell(kind)
+                            }
+                        }
                     }
                 }
 
                 Section("Long break") {
-                    StepperRow(title: "Long break",
-                               value: Binding(get: { settings.longBreakMinutes },
-                                              set: { settings.longBreakMinutes = $0 }),
-                               unit: "min")
                     StepperRow(title: "Long break every",
                                value: Binding(get: { settings.longBreakEvery },
                                               set: { settings.longBreakEvery = $0 }),
@@ -1043,6 +1042,43 @@ struct SettingsView: View {
     private func effectiveBinding(_ sh: GlobalShortcut) -> ShortcutBinding {
         if let b = settings.shortcutBindings[sh.rawValue], b.isValid { return b }
         return sh.defaultBinding
+    }
+
+    /// One table cell: minutes value + compact stepper for a kind's field.
+    private func kindCell(_ kind: PomodoroKind,
+                          _ field: WritableKeyPath<PomodoroKindConfig, Int>) -> some View {
+        let binding = Binding<Int>(
+            get: { settings.config(for: kind)[keyPath: field] },
+            set: { v in
+                var c = settings.config(for: kind)
+                c[keyPath: field] = v
+                settings.setConfig(c, for: kind)
+            })
+        return VStack(spacing: 3) {
+            Text("\(binding.wrappedValue) min")
+                .font(.system(.caption, design: .rounded).weight(.semibold).monospacedDigit())
+                .foregroundStyle(Color.dsSecondary)
+            DSStepper(value: binding)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// Long-break cell: per-size override, falling back to the global value.
+    private func longBreakCell(_ kind: PomodoroKind) -> some View {
+        let binding = Binding<Int>(
+            get: { settings.config(for: kind).longBreakMinutes ?? settings.longBreakMinutes },
+            set: { v in
+                var c = settings.config(for: kind)
+                c.longBreakMinutes = v
+                settings.setConfig(c, for: kind)
+            })
+        return VStack(spacing: 3) {
+            Text("\(binding.wrappedValue) min")
+                .font(.system(.caption, design: .rounded).weight(.semibold).monospacedDigit())
+                .foregroundStyle(Color.dsSecondary)
+            DSStepper(value: binding)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private func Section<C: View>(_ title: LocalizedStringKey,

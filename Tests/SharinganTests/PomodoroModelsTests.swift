@@ -148,3 +148,30 @@ struct MenuBarCountdownSettingTests {
         #expect(back.showMenuBarCountdown == false)
     }
 }
+
+@Suite("Per-kind long break")
+struct PerKindLongBreakTests {
+    @Test("override wins over the global value")
+    func overrideWins() {
+        var s = PomodoroSettings()
+        s.activeKind = .big
+        s.setConfig(.init(focusMinutes: 90, breakMinutes: 15, longBreakMinutes: 30),
+                    for: .big)
+        #expect(s.longBreakSeconds == 30 * 60)
+    }
+
+    @Test("no override falls back to the global value")
+    func fallback() {
+        var s = PomodoroSettings()
+        s.activeKind = .small
+        s.longBreakMinutes = 21
+        #expect(s.longBreakSeconds == 21 * 60)
+    }
+
+    @Test("pre-per-size config JSON decodes with a nil override")
+    func legacyConfigDecodes() throws {
+        let json = Data(#"{"focusMinutes":25,"breakMinutes":5}"#.utf8)
+        let c = try JSONDecoder().decode(PomodoroKindConfig.self, from: json)
+        #expect(c.longBreakMinutes == nil)
+    }
+}
