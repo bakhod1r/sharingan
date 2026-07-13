@@ -21,12 +21,12 @@ public struct NotchScreenMetrics: Equatable, Sendable {
 
     public var hasHardwareNotch: Bool { notchWidth > 0 && notchHeight > 0 }
 
-    /// The cutout the island is modelled on — real on a notched Mac, synthetic
-    /// (a pill of the same nominal size) everywhere else.
-    public var cutout: CGSize {
-        hasHardwareNotch
-            ? CGSize(width: notchWidth, height: notchHeight)
-            : CGSize(width: NotchGeometry.syntheticNotchWidth, height: menuBarHeight)
+    /// The hardware cutout the island is modelled on, `nil` when the display has
+    /// none. There is deliberately no synthetic fallback: an app-drawn pill
+    /// hanging over the menu bar of a notchless Mac reads as a bug, so on such a
+    /// display the HUD simply does not exist — no cutout, no layout, no panel.
+    public var cutout: CGSize? {
+        hasHardwareNotch ? CGSize(width: notchWidth, height: notchHeight) : nil
     }
 }
 
@@ -47,8 +47,6 @@ public struct NotchLayout: Equatable, Sendable {
 }
 
 public enum NotchGeometry {
-    /// Nominal 14"/16" cutout width, used when the display has no real notch.
-    public static let syntheticNotchWidth: CGFloat = 190
     public static let expandedSize = CGSize(width: 340, height: 260)
     public static let earWidth: CGFloat = 78
     /// The idle island is the cutout plus this lip, so it reads as hardware.
@@ -67,17 +65,29 @@ public enum NotchGeometry {
 
     /// The panel never resizes: it always covers the union of every state, so
     /// the tracking area can see the pointer before the island grows.
+    /// `.zero` without a hardware notch — there is no panel to size.
     public static func panelSize(_ m: NotchScreenMetrics) -> CGSize {
+        guard let cutout = m.cutout else { return .zero }
         let width = max(expandedSize.width,
-                        m.cutout.width + 2 * earWidth,
+                        cutout.width + 2 * earWidth,
                         activitySize.width)
-        let height = max(expandedSize.height, m.cutout.height + idleExtraHeight)
+        let height = max(expandedSize.height, cutout.height + idleExtraHeight)
         return CGSize(width: width, height: height)
     }
 
+    /// Nothing drawn, nothing hittable — the layout of a display with no notch,
+    /// and of the `.hidden` state.
+    private static func empty(panel: CGSize) -> NotchLayout {
+        NotchLayout(panelSize: panel, island: .zero, leftEar: nil,
+                    rightEar: nil, progressTrack: nil,
+                    cornerRadius: cornerRadius)
+    }
+
     public static func layout(_ m: NotchScreenMetrics, size: NotchHUDSize) -> NotchLayout {
+        // No hardware notch, no HUD: every state collapses to nothing, whatever
+        // size was asked for.
+        guard let cutout = m.cutout else { return empty(panel: .zero) }
         let panel = panelSize(m)
-        let cutout = m.cutout
 
         func centered(width: CGFloat, height: CGFloat) -> CGRect {
             CGRect(x: (panel.width - width) / 2, y: 0, width: width, height: height)
@@ -85,9 +95,7 @@ public enum NotchGeometry {
 
         switch size {
         case .hidden:
-            return NotchLayout(panelSize: panel, island: .zero, leftEar: nil,
-                               rightEar: nil, progressTrack: nil,
-                               cornerRadius: cornerRadius)
+            return empty(panel: panel)
 
         case .idle:
             let island = centered(width: cutout.width,
@@ -129,9 +137,11 @@ public enum NotchGeometry {
 
     /// True when `point` (panel coordinates) is inside the *currently rendered*
     /// shape. The panel is far bigger than the island, so this is what keeps
-    /// menu-bar clicks working: everything outside falls through.
+    /// menu-bar clicks working: everything outside falls through. Always false
+    /// without a hardware notch — nothing is rendered there.
     public static func hitTest(_ point: CGPoint, metrics: NotchScreenMetrics,
                                size: NotchHUDSize) -> Bool {
+        guard metrics.hasHardwareNotch else { return false }
         let l = layout(metrics, size: size)
         if l.island.contains(point) { return true }
         if let left = l.leftEar, left.contains(point) { return true }

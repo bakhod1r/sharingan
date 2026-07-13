@@ -9,7 +9,7 @@ struct NotchGeometryTests {
     /// 14" MacBook Pro, points.
     static let notched = NotchScreenMetrics(screenWidth: 1512, menuBarHeight: 37,
                                             notchWidth: 200, notchHeight: 37)
-    /// External / notchless display: synthetic notch.
+    /// External / notchless display: no cutout, and therefore no HUD at all.
     static let plain = NotchScreenMetrics(screenWidth: 1920, menuBarHeight: 24,
                                           notchWidth: 0, notchHeight: 0)
 
@@ -81,11 +81,36 @@ struct NotchGeometryTests {
         #expect(NotchGeometry.layout(Self.notched, size: .idle).progressTrack == nil)
     }
 
-    @Test("a notchless screen gets a synthetic cutout of the fallback width")
-    func syntheticNotch() {
-        let idle = NotchGeometry.layout(Self.plain, size: .idle)
-        #expect(idle.island.width == NotchGeometry.syntheticNotchWidth)
-        #expect(idle.island.height == Self.plain.menuBarHeight + NotchGeometry.idleExtraHeight)
+    /// The synthetic-notch fallback is gone: a display with no hardware cutout
+    /// gets no island, no ears, no track and no panel, in *every* state — and
+    /// nothing on it is ever hittable, so the menu bar stays entirely the
+    /// menu bar's.
+    @Test("a notchless screen has no cutout and no HUD in any state")
+    func notchlessScreenHasNoHUD() {
+        #expect(Self.plain.cutout == nil)
+        #expect(NotchGeometry.panelSize(Self.plain) == .zero)
+
+        for size in NotchHUDSize.allCases {
+            let l = NotchGeometry.layout(Self.plain, size: size)
+            #expect(l.panelSize == .zero)
+            #expect(l.island == .zero)
+            #expect(l.island.isEmpty)
+            #expect(l.leftEar == nil)
+            #expect(l.rightEar == nil)
+            #expect(l.progressTrack == nil)
+        }
+    }
+
+    @Test("a notchless screen is never hittable")
+    func notchlessScreenIsNeverHittable() {
+        let probes = [CGPoint(x: 0, y: 0), CGPoint(x: 960, y: 0),
+                      CGPoint(x: 960, y: 12), CGPoint(x: 960, y: 130),
+                      CGPoint(x: 170, y: 4)]
+        for size in NotchHUDSize.allCases {
+            for p in probes {
+                #expect(!NotchGeometry.hitTest(p, metrics: Self.plain, size: size))
+            }
+        }
     }
 
     @Test("hidden draws nothing")
