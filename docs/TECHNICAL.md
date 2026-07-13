@@ -106,8 +106,8 @@
 
 ## Settings layout (essentials + Advanced accordion)
 
-All 9 categories are always visible on the root list (General first —
-`SettingsCategory` declaration order). Each category page shows its
+All 10 categories are always visible on the root list (General first,
+Notch HUD right after Timer — `SettingsCategory` declaration order). Each category page shows its
 essential rows always; extra rows live in one collapsible "Advanced
 settings" disclosure at the bottom of the page. There is no global
 Simple/Advanced switch and nothing to seed at launch.
@@ -131,13 +131,17 @@ Simple/Advanced switch and nothing to seed at launch.
   re-applies `WallpaperConfig`) stays in `categorySections` — always
   visible — so it keeps observing even while the Advanced accordion
   (which holds the wallpaper spin/idle/doze rows) is collapsed.
-- Timer's Advanced tier also holds "Notch HUD details" (after the floating
-  timer's, matching the essentials order): the ears picker, the live-activity
-  toggle, and the four "what the panel shows" switches plus the 3–5 task-row
-  stepper. The master "Show the notch HUD" toggle is an essential row.
-  Everything but the master toggle greys out while the HUD is off — and on a
-  Mac with **no camera housing the whole section renders disabled** (visible,
-  greyed, inert) with a note saying so, rather than being hidden.
+- The **Notch HUD** is its own category (declared right after Timer, so it
+  sits under Timer in the sidebar), not buried in Timer's Advanced tier. Its
+  essential rows are the master "Show the notch HUD" toggle and the ears
+  picker; its Advanced tier ("Notch HUD details") holds the live-activity
+  toggle and the four "what the panel shows" switches plus the 3–5 task-row
+  stepper. Everything but the master toggle greys out while the HUD is off —
+  and on a Mac with **no camera housing the whole category renders disabled**
+  (visible, greyed, inert) with a note saying so, rather than being hidden.
+  The notch search terms (notch, island, ears, camera housing, menu bar, …)
+  route to `.notch`, not Timer. `hasNotch` is answered by
+  `NotchWindowManager.hudScreen()`, re-asked on screen-parameter changes.
 - The old `settingsTier` UserDefaults key is a harmless leftover on
   upgraded installs; nothing reads or writes it anymore.
 

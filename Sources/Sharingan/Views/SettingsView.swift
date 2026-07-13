@@ -358,6 +358,7 @@ struct SettingsView: View {
                               isOn: $settings.showMenuBarCountdown)
                 }
 
+        case .notch:
                 Section("Notch HUD") {
                     // The master switch is the only control that stays live
                     // when the HUD is off — but not when the Mac has no notch,
@@ -369,6 +370,28 @@ struct SettingsView: View {
                     Text("A black island around the camera housing: the countdown and progress while a session runs, today's tasks and quick actions when you hover it.")
                         .font(.system(.caption2, design: .rounded))
                         .foregroundStyle(.white.opacity(0.6))
+
+                    // The ears follow the master switch (not `requiresHUD: false`):
+                    // there is nothing to shape when the island is off.
+                    notchControls {
+                        HStack {
+                            Text("Ears")
+                                .font(.system(.body, design: .rounded))
+                                .foregroundStyle(.white)
+                            Spacer()
+                            Picker("", selection: $settings.notchEars) {
+                                ForEach(NotchEarsMode.allCases) { mode in
+                                    Text(mode.label).tag(mode)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+                            .fixedSize()
+                        }
+                        Text("The ears are the strips beside the notch: the countdown on the left, the task on the right. They sit in the menu bar row, so they can cover your app's menus and status items — dropping one gives those pixels back, clicks included. The progress line stays either way.")
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
                     notchUnavailableNote
                 }
 
@@ -791,9 +814,7 @@ struct SettingsView: View {
                     }
                 }
 
-                // Same order as the Simple tier above, where "Notch HUD" follows
-                // the floating timer and the menu bar: the surfaces the timer can
-                // paint itself on, from the desktop upwards.
+        case .notch:
                 // No `notchUnavailableNote` here: the Simple tier's "Notch HUD"
                 // section already carries it, next to the master toggle it
                 // explains, and both sections are on this same page — printing it
@@ -805,24 +826,6 @@ struct SettingsView: View {
                             .foregroundStyle(.white.opacity(0.6))
                     }
                     notchControls {
-                        HStack {
-                            Text("Ears")
-                                .font(.system(.body, design: .rounded))
-                                .foregroundStyle(.white)
-                            Spacer()
-                            Picker("", selection: $settings.notchEars) {
-                                ForEach(NotchEarsMode.allCases) { mode in
-                                    Text(mode.label).tag(mode)
-                                }
-                            }
-                            .labelsHidden()
-                            .pickerStyle(.menu)
-                            .fixedSize()
-                        }
-                        Text("The ears are the strips beside the notch: the countdown on the left, the task on the right. They sit in the menu bar row, so they can cover your app's menus and status items — dropping one gives those pixels back, clicks included. The progress line stays either way.")
-                            .font(.system(.caption2, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.6))
-
                         ToggleRow(title: "Announce session and break changes",
                                   isOn: $settings.notchLiveActivity)
                         Text("A two-second banner in the island when a session finishes or a break begins.")
@@ -1338,6 +1341,7 @@ private extension SettingsCategory {
     var tint: Color {
         switch self {
         case .timer:     return .blue
+        case .notch:     return .cyan
         case .tasks:     return .mint
         case .breaks:    return .teal
         case .focus:     return .indigo
