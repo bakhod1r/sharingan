@@ -3,7 +3,7 @@ import Foundation
 /// Groups of settings, shown as drill-down rows on the root Settings screen.
 /// Lives in Core (not the view) so tier visibility and search stay testable.
 public enum SettingsCategory: String, CaseIterable, Identifiable, Hashable, Sendable {
-    case timer, tasks, breaks, focus, eyeCare, sharingan, general, voice, shortcuts
+    case general, timer, tasks, breaks, focus, eyeCare, sharingan, voice, shortcuts
 
     public var id: String { rawValue }
 
@@ -49,7 +49,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable, Hashable, Send
         case .focus:     return "App blocking, reminders"
         case .eyeCare:   return "Exercises, camera tracking"
         case .sharingan: return "Iris style, desktop wallpaper, spin"
-        case .general:   return "Auto-start, sound, notifications"
+        case .general:   return "Theme, auto-start, sound, notifications"
         case .voice:     return "Spoken instructions"
         case .shortcuts: return "Global keyboard shortcuts"
         }
@@ -97,7 +97,8 @@ public enum SettingsCategory: String, CaseIterable, Identifiable, Hashable, Send
             return ["sharingan", "iris", "style", "tomoe", "mangekyou",
                     "wallpaper", "desktop", "spin", "eyes", "follow", "mouse"]
         case .general:
-            return ["auto-start", "auto start", "sound", "alarm", "chime",
+            return ["theme", "appearance", "liquid", "glass",
+                    "auto-start", "auto start", "sound", "alarm", "chime",
                     "notification", "launch at login", "startup"]
         case .voice:
             return ["tts", "voice", "speak", "spoken", "announcement", "rate", "pitch"]

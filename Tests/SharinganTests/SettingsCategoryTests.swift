@@ -10,6 +10,7 @@ struct SettingsCategoryTests {
         #expect(visible.count == 7)
         #expect(!visible.contains(.voice))
         #expect(!visible.contains(.shortcuts))
+        #expect(visible.first == .general)
     }
 
     @Test("Advanced root shows all 9 in declaration order")

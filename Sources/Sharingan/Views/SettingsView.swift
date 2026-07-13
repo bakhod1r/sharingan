@@ -245,57 +245,63 @@ struct SettingsView: View {
     private func categorySections(_ cat: SettingsCategory) -> some View {
         switch cat {
         case .timer:
-                Section("Timer mode") {
-                    Picker("Mode", selection: $settings.timerMode) {
-                        ForEach(TimerMode.allCases, id: \.self) { mode in
-                            Text(mode.label).tag(mode)
+                if advanced {
+                    Section("Timer mode") {
+                        Picker("Mode", selection: $settings.timerMode) {
+                            ForEach(TimerMode.allCases, id: \.self) { mode in
+                                Text(mode.label).tag(mode)
+                            }
                         }
-                    }
-                    .pickerStyle(.segmented)
+                        .pickerStyle(.segmented)
 
-                    Picker("Theme", selection: $settings.theme) {
-                        ForEach(SharinganTheme.allCases, id: \.self) { theme in
-                            Text(theme.label).tag(theme)
+                        Picker("Time format", selection: $settings.timeFormat) {
+                            ForEach(TimeDisplayFormat.allCases, id: \.self) { f in
+                                Text(f.label).tag(f)
+                            }
                         }
-                    }
-                    .pickerStyle(.menu)
-                    
+                        .pickerStyle(.menu)
 
-                    Picker("Time format", selection: $settings.timeFormat) {
-                        ForEach(TimeDisplayFormat.allCases, id: \.self) { f in
-                            Text(f.label).tag(f)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    
 
-                    ToggleRow(title: "Flash at 5 seconds left",
-                              isOn: $settings.flashAtFiveSecLeft)
+                        ToggleRow(title: "Flash at 5 seconds left",
+                                  isOn: $settings.flashAtFiveSecLeft)
+                    }
                 }
 
-                Section("Pomodoro sizes") {
-                    Text("Three gears: Small for quick wins, Normal for the classic rhythm, Big for deep work. Each task or subtask can pick its own.")
-                        .font(.system(.caption2, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.6))
-                    ForEach(PomodoroKind.allCases) { kind in
-                        StepperRow(title: "\(kind.label) · focus",
-                                   value: Binding(
-                                       get: { settings.config(for: kind).focusMinutes },
-                                       set: { v in
-                                           var c = settings.config(for: kind)
-                                           c.focusMinutes = v
-                                           settings.setConfig(c, for: kind)
-                                       }),
+                if !advanced {
+                    Section("Durations") {
+                        StepperRow(title: "Focus", value: $settings.focusMinutes,
                                    unit: "min")
-                        StepperRow(title: "\(kind.label) · break",
-                                   value: Binding(
-                                       get: { settings.config(for: kind).breakMinutes },
-                                       set: { v in
-                                           var c = settings.config(for: kind)
-                                           c.breakMinutes = v
-                                           settings.setConfig(c, for: kind)
-                                       }),
+                        StepperRow(title: "Break", value: $settings.shortBreakMinutes,
                                    unit: "min")
+                        Text("Lengths for the current pomodoro size (\(settings.activeKind.label)). All three sizes are editable in Advanced.")
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
+                } else {
+                    Section("Pomodoro sizes") {
+                        Text("Three gears: Small for quick wins, Normal for the classic rhythm, Big for deep work. Each task or subtask can pick its own.")
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.6))
+                        ForEach(PomodoroKind.allCases) { kind in
+                            StepperRow(title: "\(kind.label) · focus",
+                                       value: Binding(
+                                           get: { settings.config(for: kind).focusMinutes },
+                                           set: { v in
+                                               var c = settings.config(for: kind)
+                                               c.focusMinutes = v
+                                               settings.setConfig(c, for: kind)
+                                           }),
+                                       unit: "min")
+                            StepperRow(title: "\(kind.label) · break",
+                                       value: Binding(
+                                           get: { settings.config(for: kind).breakMinutes },
+                                           set: { v in
+                                               var c = settings.config(for: kind)
+                                               c.breakMinutes = v
+                                               settings.setConfig(c, for: kind)
+                                           }),
+                                       unit: "min")
+                        }
                     }
                 }
 
@@ -310,31 +316,33 @@ struct SettingsView: View {
                                unit: "pomodoros")
                 }
 
-                Section("Repeat") {
-                    ToggleRow(title: "Repeat enabled",
-                              isOn: $settings.repeatConfig.enabled)
-                    if settings.repeatConfig.enabled {
-                        ToggleRow(title: "Endless (repeat forever)",
-                                  isOn: $settings.repeatConfig.endless)
-                        if !settings.repeatConfig.endless {
-                            StepperRow(title: "Repeat count",
+                if advanced {
+                    Section("Repeat") {
+                        ToggleRow(title: "Repeat enabled",
+                                  isOn: $settings.repeatConfig.enabled)
+                        if settings.repeatConfig.enabled {
+                            ToggleRow(title: "Endless (repeat forever)",
+                                      isOn: $settings.repeatConfig.endless)
+                            if !settings.repeatConfig.endless {
+                                StepperRow(title: "Repeat count",
+                                           value: Binding(
+                                               get: { settings.repeatConfig.count },
+                                               set: { settings.repeatConfig.count = $0 }),
+                                           unit: "×")
+                            }
+                            StepperRow(title: "Delay",
                                        value: Binding(
-                                           get: { settings.repeatConfig.count },
-                                           set: { settings.repeatConfig.count = $0 }),
-                                       unit: "×")
+                                           get: { Int(settings.repeatConfig.delaySeconds / 60) },
+                                           set: { settings.repeatConfig.delaySeconds = TimeInterval($0) * 60 }),
+                                       unit: "min")
                         }
-                        StepperRow(title: "Delay",
-                                   value: Binding(
-                                       get: { Int(settings.repeatConfig.delaySeconds / 60) },
-                                       set: { settings.repeatConfig.delaySeconds = TimeInterval($0) * 60 }),
-                                   unit: "min")
                     }
                 }
 
                 Section("Floating timer") {
                     ToggleRow(title: "Floating timer (while running)",
                               isOn: $settings.floatingTimerEnabled)
-                    if settings.floatingTimerEnabled {
+                    if settings.floatingTimerEnabled && advanced {
                         Picker("Size", selection: $settings.floatingSize) {
                             ForEach(FloatingTimerSize.allCases, id: \.self) { size in
                                 Text(size.label).tag(size)
@@ -403,27 +411,29 @@ struct SettingsView: View {
                         .foregroundStyle(.white.opacity(0.6))
                 }
 
-                Section("Planning") {
-                    ToggleRow(title: "Week starts on Monday",
-                              isOn: $settings.weekStartsOnMonday)
-                    Text("Applies to the weekly board and the menu bar Week tab.")
-                        .font(.system(.caption2, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.6))
-                }
+                if advanced {
+                    Section("Planning") {
+                        ToggleRow(title: "Week starts on Monday",
+                                  isOn: $settings.weekStartsOnMonday)
+                        Text("Applies to the weekly board and the menu bar Week tab.")
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
 
-                Section("Estimates & badges") {
-                    StepperRow(title: "Default subtask estimate",
-                               value: $settings.defaultSubtaskEstimate,
-                               unit: "🍅",
-                               range: 0...8)
-                    Text("Applied to newly added steps. Set to 0 for no estimate.")
-                        .font(.system(.caption2, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.6))
-                    ToggleRow(title: "Show pomodoro badges",
-                              isOn: $settings.showPomodoroBadges)
-                    Text("The 🍅 done/estimate chips on task and subtask rows.")
-                        .font(.system(.caption2, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.6))
+                    Section("Estimates & badges") {
+                        StepperRow(title: "Default subtask estimate",
+                                   value: $settings.defaultSubtaskEstimate,
+                                   unit: "🍅",
+                                   range: 0...8)
+                        Text("Applied to newly added steps. Set to 0 for no estimate.")
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.6))
+                        ToggleRow(title: "Show pomodoro badges",
+                                  isOn: $settings.showPomodoroBadges)
+                        Text("The 🍅 done/estimate chips on task and subtask rows.")
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
                 }
 
         case .breaks:
@@ -450,7 +460,7 @@ struct SettingsView: View {
                         }
                     }
                     .pickerStyle(.menu)
-                    
+
                     HStack(spacing: 8) {
                         Button("Preview") {
                             BreakAmbienceService.shared.preview(
@@ -463,30 +473,32 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("Screen brightness") {
-                    ToggleRow(title: "Dim screen on break",
-                              isOn: $settings.brightnessDimEnabled)
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Dim level: \(settings.brightnessDimPercent)%")
-                            .font(.system(.caption, design: .rounded).weight(.medium))
-                        Slider(value: Binding(
-                                get: { Double(settings.brightnessDimPercent) },
-                                set: { settings.brightnessDimPercent = Int($0) }
-                              ), in: 5...95)
-                            
+                if advanced {
+                    Section("Screen brightness") {
+                        ToggleRow(title: "Dim screen on break",
+                                  isOn: $settings.brightnessDimEnabled)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Dim level: \(settings.brightnessDimPercent)%")
+                                .font(.system(.caption, design: .rounded).weight(.medium))
+                            Slider(value: Binding(
+                                    get: { Double(settings.brightnessDimPercent) },
+                                    set: { settings.brightnessDimPercent = Int($0) }
+                                  ), in: 5...95)
+
+                        }
+                        ToggleRow(title: "Smooth transition",
+                                  isOn: $settings.brightnessSmooth)
+                        ToggleRow(title: "Warm colors on break",
+                                  isOn: $settings.nightShiftBreakEnabled)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Warmth: \(Int(settings.nightShiftBreakStrength * 100))%")
+                                .font(.system(.caption, design: .rounded).weight(.medium))
+                            Slider(value: $settings.nightShiftBreakStrength, in: 0.1...1.0)
+                        }
+                        Text("Warms screen colors during breaks (uses Night Shift).")
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.6))
                     }
-                    ToggleRow(title: "Smooth transition",
-                              isOn: $settings.brightnessSmooth)
-                    ToggleRow(title: "Warm colors on break",
-                              isOn: $settings.nightShiftBreakEnabled)
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Warmth: \(Int(settings.nightShiftBreakStrength * 100))%")
-                            .font(.system(.caption, design: .rounded).weight(.medium))
-                        Slider(value: $settings.nightShiftBreakStrength, in: 0.1...1.0)
-                    }
-                    Text("Warms screen colors during breaks (uses Night Shift).")
-                        .font(.system(.caption2, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.6))
                 }
 
         case .focus:
@@ -843,6 +855,15 @@ struct SettingsView: View {
                 .onChange(of: settings.sharinganStyleRight) { refreshWallpaper() }
 
         case .general:
+                Section("Appearance") {
+                    Picker("Theme", selection: $settings.theme) {
+                        ForEach(SharinganTheme.allCases, id: \.self) { theme in
+                            Text(theme.label).tag(theme)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+
                 Section("Auto-start") {
                     ToggleRow(title: "Auto-start focus",
                               isOn: $settings.autoStartFocus)
