@@ -523,10 +523,7 @@ struct MenuBarView: View {
                     .help(task.recurrence.label)
             }
             if task.subtaskProgress.total > 0 {
-                Text("☑\(task.subtaskProgress.done)/\(task.subtaskProgress.total)")
-                    .font(.system(.caption2, design: .rounded).weight(.medium))
-                    .foregroundStyle(task.subtaskProgress.done == task.subtaskProgress.total
-                                     ? Color.green : .secondary)
+                SubtaskProgressBadge(task.subtaskProgress)
             }
             if let kind = task.pomodoroKind {
                 Image(systemName: kind.systemImage)

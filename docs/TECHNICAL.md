@@ -161,10 +161,10 @@ disagree with the HUD about whether the Mac has a notch; it re-asks on
 - **The island is sized from that config**, not from a constant:
   `NotchGeometry.expandedSize(_:cutout:)` = `cutout + 6 + body`, where
   `body = 10 + Σ(sections) + 8 × count + 4`. Every constant
-  (`timerRowHeight` 51, `taskRowHeight` 21 + 2 spacing, `quickActionsHeight` 24,
+  (`timerRowHeight` 51, `taskRowHeight` 28 + 2 spacing, `quickActionsHeight` 24,
   `statusStripHeight` 13) was **measured** off a structural SwiftUI replica of
   `NotchExpandedPanel` at the island's 340pt width via `fittingSize` — full
-  panel, five rows = 286pt over a 37pt cutout. Guessing here clips the content at
+  panel, five rows = 321pt over a 37pt cutout. Guessing here clips the content at
   the `.clipShape` or hangs dead black over the screen. Changing the panel's
   stack, fonts, spacing or width means re-measuring.
   Floored at `activitySize.height`, so `NotchHUDSize.growthRank`'s promise that
@@ -175,13 +175,29 @@ disagree with the HUD about whether the Mac has a notch; it re-asks on
   into `NotchContentConfig.taskCount`, and the island follows
   `min(cap, count)` — so four tasks no longer sit in an island built for five.
   Zero tasks is not zero height: the panel draws its "Nothing planned for today"
-  caption, measured at 30pt (taller than one 21pt row, shorter than two), so the
-  island is 207pt at an empty list against 290pt at five rows. The island resizes
+  caption, measured at 30pt (taller than one 28pt row, shorter than two), so the
+  island is 207pt at an empty list against 325pt at five rows. The island resizes
   live as tasks are ticked off (`NotchMotion.resize`, critically damped like every
   other spring on the frame). The panel *window* stays pinned to the cap
   (`panelSize` reads `config.sizedForRowCap`): it is invisible and click-through
   everywhere the mask says no, and resizing the window under an island that is
   still springing would clip it.
+- **The panel's task rows say what the main window's rows say.** Each row carries
+  the done box, the title, the subtask badge (`2/2`), the pomodoro ring and a
+  play button that is a *pause* button when that task is the one the timer is
+  running (`toggleRespectingTaskGuard()`; any other row starts a focus session on
+  itself via `setActive` + `startFocusSession(kind: resolvedActiveKind)`). The
+  badge and the ring are `SubtaskProgressBadge` / `TaskPomodoroBadge` in
+  `TaskComponents.swift` — the *same* views the Tasks window and the menu-bar
+  popover draw, not a copy (the ring came out of `TasksView.estimateRing`, and it
+  still handles a task with no estimate the way it always did: a plain 🍅 count).
+  There is no disclosure chevron: the island cannot expand subtasks inline.
+  The row's height is **pinned** to `taskRowContentHeight` (22pt, the ring's
+  diameter) + `taskRowPadding` × 2 = the 28pt `taskRowHeight` the geometry sizes
+  the island from. Unpinned it would measure 21pt for a task with no badges and
+  28 for one with them, and a list of bare tasks would sit 35pt short of the black
+  reserved for it — the island is sized from the row *count*, which knows nothing
+  about what any row carries.
 - **`notchEars` changes the silhouette, not just the labels.** `.both` → cutout +
   2 ears, `.trailingOnly` → cutout + 1 (the island is anchored to the cutout's
   left edge, never centred), `.none` → the cutout alone with the progress line.

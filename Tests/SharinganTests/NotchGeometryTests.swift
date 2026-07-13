@@ -283,11 +283,12 @@ struct NotchGeometryTests {
     /// The expanded island has to be tall enough for what the panel puts in it —
     /// the timer row, `NotchTaskRows.defaultLimit` task rows, the quick actions
     /// and the status strip — or the `.clipShape` crops the bottom off. A
-    /// SwiftUI replica of the panel measures 286pt at five rows (see the notch
-    /// report); the island must not be shorter than that.
+    /// SwiftUI replica of the panel measures 321pt at five rows (286 before the
+    /// rows grew the subtask badge and the pomodoro ring); the island must not be
+    /// shorter than that.
     @Test("the expanded island fits the panel's full content")
     func expandedIslandFitsItsContent() {
-        #expect(NotchGeometry.expandedSize(cutout: Self.cutout).height >= 286)
+        #expect(NotchGeometry.expandedSize(cutout: Self.cutout).height >= 321)
         let expanded = NotchGeometry.layout(Self.notched, size: .expanded)
         #expect(expanded.island.height
                 == NotchGeometry.expandedSize(cutout: Self.cutout).height)
@@ -313,25 +314,25 @@ struct NotchExpandedSizingTests {
     /// The measured body heights (top padding excluded), from the replica.
     @Test("the body height matches the measured replica for the shipped config")
     func bodyMatchesMeasurement() {
-        // Replica: five rows, every section on → 243pt of body, 286pt of island
+        // Replica: five rows, every section on → 278pt of body, 321pt of island
         // over a 37pt cutout. The geometry adds `bodySlack` on top, and nothing
-        // else.
+        // else. (243/286 before the rows grew the subtask badge and the ring.)
         let full = NotchContentConfig.default
         #expect(NotchGeometry.expandedBodyHeight(full)
-                == 243 + NotchGeometry.bodySlack)
+                == 278 + NotchGeometry.bodySlack)
         #expect(NotchGeometry.expandedSize(full, cutout: Self.cutout).height
-                == 286 + NotchGeometry.bodySlack)
+                == 321 + NotchGeometry.bodySlack)
 
-        // Replica: three rows, every section on → 197pt of body.
+        // Replica: three rows, every section on → 218pt of body.
         var three = full
         three.taskRows = 3
-        #expect(NotchGeometry.expandedBodyHeight(three) == 197 + NotchGeometry.bodySlack)
+        #expect(NotchGeometry.expandedBodyHeight(three) == 218 + NotchGeometry.bodySlack)
 
-        // Replica: tasks only, five rows → 131pt of body.
+        // Replica: tasks only, five rows → 166pt of body.
         let tasksOnly = NotchContentConfig(showTimerControls: false, showTasks: true,
                                            showQuickActions: false,
                                            showStatusStrip: false, taskRows: 5)
-        #expect(NotchGeometry.expandedBodyHeight(tasksOnly) == 131 + NotchGeometry.bodySlack)
+        #expect(NotchGeometry.expandedBodyHeight(tasksOnly) == 166 + NotchGeometry.bodySlack)
 
         // Replica: timer row only → 69pt of body.
         let timerOnly = NotchContentConfig(showTimerControls: true, showTasks: false,
@@ -381,11 +382,11 @@ struct NotchExpandedSizingTests {
         }
         for (a, b) in zip(heights, heights.dropFirst()) {
             #expect(b > a)
-            // One row is the measured 23pt (a 21pt row plus the list's 2pt gap).
+            // One row is the measured 30pt (a 28pt row plus the list's 2pt gap).
             #expect(b - a == NotchGeometry.taskRowHeight + NotchGeometry.taskRowSpacing)
         }
-        // Five rows against three: the 46pt the brief's measurement predicted.
-        #expect(heights.last! - heights.first! == 46)
+        // Five rows against three: 60pt (218 → 278 of body), measured.
+        #expect(heights.last! - heights.first! == 60)
         // …and rows cost nothing at all when the task list is off.
         var off = NotchContentConfig.default
         off.showTasks = false
@@ -583,11 +584,17 @@ struct NotchEarsGeometryTests {
 ///
 ///     rows | task section | body  | island over a 37pt cutout
 ///        0 |        30    | 160   | 203      ← the empty-state caption
-///        1 |        21    | 151   | 194
-///        2 |        44    | 174   | 217
-///        3 |        67    | 197   | 240
-///        4 |        90    | 220   | 263
-///        5 |       113    | 243   | 286
+///        1 |        28    | 158   | 201
+///        2 |        58    | 188   | 231
+///        3 |        88    | 218   | 261
+///        4 |       118    | 248   | 291
+///        5 |       148    | 278   | 321
+///
+/// The rows carry the subtask badge and the pomodoro ring the main window's rows
+/// carry, which is what took a row from 21pt to 28: the ring is 22pt, inside 3pt
+/// of padding either side. The panel *pins* the row to that, so a task with no
+/// badges is not a shorter row (it would measure 21) and the island fits the list
+/// whatever today's tasks happen to carry.
 @Suite("Notch task-row sizing")
 struct NotchTaskRowSizingTests {
     static let cutout = CGSize(width: 200, height: 37)
@@ -603,14 +610,35 @@ struct NotchTaskRowSizingTests {
         NotchGeometry.expandedSize(config(count: count, cap: cap), cutout: cutout).height
     }
 
+    /// The row carries what the main window's row carries — subtask badge,
+    /// pomodoro ring, play/pause — and the ring is the tallest thing in it. The
+    /// panel *pins* the row to `taskRowContentHeight` and hands that same number
+    /// to the ring as its diameter, so the drawn row and the reserved row are one
+    /// number, whatever the task happens to carry: a task with no subtasks and no
+    /// estimate measures 21pt on its own (measured), and is held to 28 here.
+    @Test("one task row is the measured 28pt, and its parts add up to it")
+    func theRowIsTheConstant() {
+        #expect(NotchGeometry.taskRowContentHeight == 22)   // the ring's diameter
+        #expect(NotchGeometry.taskRowPadding == 3)
+        #expect(NotchGeometry.taskRowHeight == 28)
+        #expect(NotchGeometry.taskRowHeight
+                == NotchGeometry.taskRowContentHeight + 2 * NotchGeometry.taskRowPadding)
+        // One row's section is one row — no spacing to add on its own.
+        #expect(NotchGeometry.taskSectionHeight(rows: 1) == NotchGeometry.taskRowHeight)
+        // The empty-state caption is still not a row, and still the one place the
+        // island is taller with *fewer* tasks (30 against 28).
+        #expect(NotchGeometry.emptyTaskListHeight > NotchGeometry.taskRowHeight)
+        #expect(NotchGeometry.emptyTaskListHeight < NotchGeometry.taskSectionHeight(rows: 2))
+    }
+
     @Test("the task section matches the measured replica for 0…5 rows")
     func taskSectionMatchesTheReplica() {
-        let measured: [Int: CGFloat] = [0: 30, 1: 21, 2: 44, 3: 67, 4: 90, 5: 113]
+        let measured: [Int: CGFloat] = [0: 30, 1: 28, 2: 58, 3: 88, 4: 118, 5: 148]
         for (rows, h) in measured {
             #expect(NotchGeometry.taskSectionHeight(rows: rows) == h)
         }
         // …and the body it lands in, likewise (10 bottom + Σ sections + 8 × n).
-        let body: [Int: CGFloat] = [0: 160, 1: 151, 2: 174, 3: 197, 4: 220, 5: 243]
+        let body: [Int: CGFloat] = [0: 160, 1: 158, 2: 188, 3: 218, 4: 248, 5: 278]
         for (rows, h) in body {
             #expect(NotchGeometry.expandedBodyHeight(Self.config(count: rows))
                     == h + NotchGeometry.bodySlack)
@@ -618,11 +646,11 @@ struct NotchTaskRowSizingTests {
     }
 
     /// The defect: the height followed the cap. Four tasks in an island built for
-    /// five left a 23pt strip of black above the quick-actions row.
+    /// five left a row's worth (30pt) of black above the quick-actions row.
     @Test("the height follows the real row count, not the cap")
     func heightFollowsTheCountNotTheCap() {
         // Four tasks, cap five: an island for four, not for five.
-        #expect(Self.height(count: 4) == 37 + 6 + 220 + NotchGeometry.bodySlack)
+        #expect(Self.height(count: 4) == 37 + 6 + 248 + NotchGeometry.bodySlack)
         #expect(Self.height(count: 4) < Self.height(count: 5))
         #expect(Self.height(count: 5) - Self.height(count: 4)
                 == NotchGeometry.taskRowHeight + NotchGeometry.taskRowSpacing)
@@ -631,7 +659,7 @@ struct NotchTaskRowSizingTests {
         // three: what is drawn decides the height, and only what is drawn.
         #expect(Self.height(count: 2, cap: 5) == Self.height(count: 2, cap: 3))
 
-        // Rows 1…5 are monotone, and a row costs the measured 23pt throughout.
+        // Rows 1…5 are monotone, and a row costs the measured 30pt throughout.
         for n in 1..<5 {
             #expect(Self.height(count: n + 1) - Self.height(count: n)
                     == NotchGeometry.taskRowHeight + NotchGeometry.taskRowSpacing)
@@ -651,17 +679,17 @@ struct NotchTaskRowSizingTests {
 
     /// Nothing planned today used to reserve five rows of black. It now reserves
     /// the caption's height — which is a *real* height, not zero and not a row:
-    /// 30pt measured, taller than one row (21) and shorter than two (44). The
-    /// island is therefore 9pt taller at zero tasks than at one, the single place
+    /// 30pt measured, taller than one row (28) and shorter than two (58). The
+    /// island is therefore 2pt taller at zero tasks than at one, the single place
     /// the height is not monotone in the count.
     @Test("the empty state is materially shorter than a full list, and is not one row")
     func emptyStateIsShortButNotARow() {
         let empty = Self.height(count: 0)
         let full = Self.height(count: 5)
 
-        // 207 vs 290: 83pt of dead black gone.
+        // 207 vs 325: 118pt of dead black gone.
         #expect(empty == 37 + 6 + 160 + NotchGeometry.bodySlack)
-        #expect(full - empty == 83)
+        #expect(full - empty == 118)
         // "Materially" shorter — not a rounding: more than a quarter of the tall
         // island, and shorter than every list that has anything in it but one.
         #expect(empty < full * 0.75)

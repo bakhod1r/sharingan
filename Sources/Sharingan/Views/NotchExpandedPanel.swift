@@ -201,8 +201,35 @@ struct NotchExpandedPanel: View {
         }
     }
 
+    /// The island's task row, carrying what the main window's row carries: the
+    /// done box, the title, subtask progress, the pomodoro ring, and a play
+    /// button that is a *pause* button when this is the task the timer is
+    /// running. The two badges are the shared components (`TaskComponents`), so
+    /// "2/2" and the ring mean here exactly what they mean in the Tasks window.
+    ///
+    /// No disclosure chevron: the island cannot expand subtasks inline (its
+    /// height is computed before it draws), and a control that does nothing is
+    /// worse than no control.
+    ///
+    /// **This row's height is a load-bearing number.** `NotchGeometry` sizes the
+    /// island from `taskRowHeight` × the row count, so a row that is taller than
+    /// the constant is a row cropped at the island's `.clipShape`, and one that
+    /// is shorter is a strip of dead black.
+    ///
+    /// Which is why the content is *pinned* to `taskRowContentHeight` rather than
+    /// left to its intrinsic size: the badges are conditional, and a row with no
+    /// subtasks and no pomodoros measures 21pt against a badged row's 28pt (both
+    /// measured). Left free, five bare tasks would draw 35pt short of the island
+    /// the geometry reserved for them — and the list would jitter row to row as
+    /// tasks earn their first tomato. Pinned, every row is the constant, and the
+    /// island fits it by construction whatever today's tasks happen to carry.
     private func taskRow(_ task: TaskItem) -> some View {
         let isActive = tasks.activeTaskID == task.id
+        // The task is the one the timer is counting down — the only case where
+        // this button pauses rather than starts.
+        let isRunning = isActive && timer.isRunning
+        let accent = Color(hex: tasks.color(for: task.category))
+        let subtasks = task.subtaskProgress
 
         return HStack(spacing: 8) {
             Button { tasks.toggleDone(task.id) } label: {
@@ -222,18 +249,33 @@ struct NotchExpandedPanel: View {
 
             Spacer(minLength: 4)
 
-            Button {
-                tasks.activeTaskID = task.id
-                timer.startFocusSession(kind: task.pomodoroKind)
-            } label: {
-                Image(systemName: "play.circle.fill")
+            if subtasks.total > 0 {
+                SubtaskProgressBadge(subtasks, size: 9)
+            }
+
+            // Gated on the same setting as every other pomodoro badge in the app:
+            // a user who turned the tomatoes off does not want them in the notch
+            // either. The ring is the tallest thing in the row, and the row is
+            // pinned to it below — so switching the badges off (or a task simply
+            // having none) changes what the row shows, never how tall it is.
+            if timer.settings.showPomodoroBadges {
+                TaskPomodoroBadge(done: task.pomodorosDone,
+                                  estimate: task.effectiveEstimate,
+                                  color: accent,
+                                  diameter: NotchGeometry.taskRowContentHeight)
+            }
+
+            Button { focus(on: task) } label: {
+                Image(systemName: isRunning ? "pause.circle.fill" : "play.circle.fill")
                     .font(.system(size: 13))
-                    .foregroundStyle(.white.opacity(0.55))
+                    .foregroundStyle(.white.opacity(isRunning ? 0.95 : 0.55))
             }
             .buttonStyle(.plain)
-            .help("Focus on “\(task.title)”")
+            .help(isRunning ? "Pause “\(task.title)”" : "Focus on “\(task.title)”")
         }
-        .padding(.vertical, 3)
+        // The row *is* `NotchGeometry.taskRowHeight` — not "about" it. See above.
+        .frame(height: NotchGeometry.taskRowContentHeight)
+        .padding(.vertical, NotchGeometry.taskRowPadding)
         .padding(.horizontal, 6)
         .background {
             if isActive {
@@ -241,6 +283,30 @@ struct NotchExpandedPanel: View {
                     .fill(Color.white.opacity(0.09))
             }
         }
+    }
+
+    /// Play/pause for one row — the same two calls the main window's row makes
+    /// (`TasksView.startFocus`), with the pause routed through the coordinator so
+    /// the "require a task before focusing" guard holds here as it does on the
+    /// timer row above.
+    ///
+    /// Pausing is only ever the *running, active* task: for any other row the
+    /// button starts a focus session on it, which is what a play button on that
+    /// row has to mean.
+    private func focus(on task: TaskItem) {
+        if tasks.activeTaskID == task.id, timer.isRunning {
+            if let coord = AppServices.coordinator {
+                coord.toggleRespectingTaskGuard()
+            } else {
+                timer.toggle()
+            }
+            return
+        }
+        // `setActive` (not a raw write to `activeTaskID`) so a stale focused
+        // subtask from another task is cleared, and `resolvedActiveKind` so a
+        // task whose focused subtask asks for a short pomodoro gets one.
+        tasks.setActive(task.id)
+        timer.startFocusSession(kind: tasks.resolvedActiveKind)
     }
 
     // MARK: - Actions

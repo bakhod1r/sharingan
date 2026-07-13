@@ -477,9 +477,21 @@ if let outDir = HeadlessRender.outputDirectory(for: "--render-dev-preview") {
                   priority: .medium)
         var big = store.tasks[0]
         big.pomodoroKind = .big
-        big.subtasks = [Subtask(title: "Write the hero copy", pomodoroKind: .small),
+        big.pomodorosDone = 2
+        big.subtasks = [Subtask(title: "Write the hero copy", isDone: true,
+                                pomodoroKind: .small),
                         Subtask(title: "Verify Lighthouse 100")]
         store.update(big)
+        // Two more due *today*, so the notch's task list (which draws today's
+        // open tasks) photographs all three shapes a row can take: an estimate to
+        // fill (the ring), pomodoros with no estimate (a 🍅 count), and neither
+        // (no badge at all). The rows are pinned to one height, and the shot is
+        // where that is checked.
+        store.add(title: "Draft the release notes", category: "Work", dueDate: Date())
+        store.add(title: "Answer support mail", category: "Personal", dueDate: Date())
+        var counted = store.tasks.first { $0.title == "Draft the release notes" }!
+        counted.pomodorosDone = 4
+        store.update(counted)
 
         let timer = PomodoroTimer()
         write(MenuBarView(timer: timer)

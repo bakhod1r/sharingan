@@ -207,18 +207,33 @@ public enum NotchGeometry {
     public static let sectionSpacing: CGFloat = 8
     /// The timer row and the divider under it: 51pt measured.
     public static let timerRowHeight: CGFloat = 51
-    /// One task row: 21pt of row …
-    public static let taskRowHeight: CGFloat = 21
-    /// … and 2pt of list spacing between rows, so a row *costs* 23pt — which is
-    /// the 46pt over two rows the shipped 5-row/3-row measurement showed.
+    /// A task row's *content*: the pomodoro ring, which is the tallest thing in
+    /// it — the checkbox (12pt), the 12pt title and the 13pt play button all sit
+    /// inside it. `NotchExpandedPanel` pins the row to this and hands it to the
+    /// ring as its diameter, so the two cannot drift.
+    ///
+    /// The pin is not decoration. The row's badges are conditional — a task with
+    /// no subtasks and no estimate measures 21pt against a badged row's 28 — and
+    /// the island's height is computed from the row *count*, which knows nothing
+    /// about what any row carries. Unpinned, a list of bare tasks would sit 35pt
+    /// short of the black reserved for it.
+    public static let taskRowContentHeight: CGFloat = 22
+    /// The row's vertical padding, either side of the content.
+    public static let taskRowPadding: CGFloat = 3
+    /// One task row: 28pt measured (22 + 3 + 3) — the enriched row, which carries
+    /// the subtask badge and the pomodoro ring the main window's rows carry.
+    /// (It was 21pt when the row was a checkbox, a title and a play button.)
+    public static let taskRowHeight: CGFloat = taskRowContentHeight + 2 * taskRowPadding
+    /// … and 2pt of list spacing between rows, so a row *costs* 30pt — the 60pt
+    /// over two rows the 5-row/3-row measurement shows (218 → 278).
     public static let taskRowSpacing: CGFloat = 2
     /// With nothing on today's list the panel draws neither rows nor nothing: it
     /// draws a centered "Nothing planned for today" caption, and that caption
     /// needs a height of its own — 30pt measured (an 11pt rounded line inside
     /// 8pt of vertical padding).
     ///
-    /// It is deliberately *not* `taskRowHeight`. It is taller than one row (21)
-    /// and shorter than two (44), so the island at zero tasks is 9pt taller than
+    /// It is deliberately *not* `taskRowHeight`. It is taller than one row (28)
+    /// and shorter than two (58), so the island at zero tasks is 2pt taller than
     /// at one — the one place the height is not monotone in the row count, and a
     /// real measurement rather than a rounding.
     public static let emptyTaskListHeight: CGFloat = 30
@@ -233,8 +248,8 @@ public enum NotchGeometry {
     public static let bodySlack: CGFloat = 4
 
     /// The task section's height for the number of rows the panel will actually
-    /// draw. Measured: 0 → 30 (the empty-state caption), 1 → 21, 2 → 44, 3 → 67,
-    /// 4 → 90, 5 → 113.
+    /// draw. Measured: 0 → 30 (the empty-state caption), 1 → 28, 2 → 58, 3 → 88,
+    /// 4 → 118, 5 → 148.
     public static func taskSectionHeight(rows: Int) -> CGFloat {
         guard rows > 0 else { return emptyTaskListHeight }
         let n = CGFloat(rows)

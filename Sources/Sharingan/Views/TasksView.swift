@@ -1364,10 +1364,7 @@ struct TasksView: View {
                 }
                 if task.tags.count > 2 { TaskTagOverflow(count: task.tags.count - 2) }
                 if task.subtaskProgress.total > 0 {
-                    Label("\(task.subtaskProgress.done)/\(task.subtaskProgress.total)",
-                          systemImage: "checklist")
-                        .foregroundStyle(task.subtaskProgress.done == task.subtaskProgress.total
-                                         ? Color.green : Color.dsSecondary)
+                    SubtaskProgressBadge(task.subtaskProgress)
                 }
                 if task.recurrence != .none {
                     Image(systemName: "repeat")
@@ -1388,25 +1385,6 @@ struct TasksView: View {
             .truncationMode(.tail)
             .padding(.top, 1)
         }
-    }
-
-    /// A small circular progress ring for pomodoro estimates (done / total).
-    private func estimateRing(done: Int, total: Int, color: Color) -> some View {
-        let frac = min(1, Double(done) / Double(max(1, total)))
-        let complete = done >= total
-        return ZStack {
-            Circle().stroke(Color.dsFillStrong, lineWidth: 3)
-            Circle()
-                .trim(from: 0, to: frac)
-                .stroke(complete ? Color.green : color,
-                        style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-            Text("\(done)")
-                .font(.system(size: 10, design: .rounded).weight(.bold))
-                .foregroundStyle(complete ? Color.green : Color.dsPrimary)
-        }
-        .frame(width: 26, height: 26)
-        .help("\(done) of \(total) pomodoros")
     }
 
     /// One icon in the hover action pill (edit / delete).
@@ -1489,14 +1467,10 @@ struct TasksView: View {
 
             // Estimate progress ring (or a plain count when no estimate).
             // Estimate is the subtask sum when subtasks carry estimates.
+            // `TaskPomodoroBadge` is that pair of cases, shared with the notch.
             if timer.settings.showPomodoroBadges {
-                if let est = task.effectiveEstimate {
-                    estimateRing(done: task.pomodorosDone, total: est, color: accent)
-                } else if task.pomodorosDone > 0 {
-                    Text("🍅\(task.pomodorosDone)")
-                        .font(.system(.caption, design: .rounded).weight(.medium))
-                        .foregroundStyle(Color.dsSecondary)
-                }
+                TaskPomodoroBadge(done: task.pomodorosDone,
+                                  estimate: task.effectiveEstimate, color: accent)
             }
 
             // Expand chevron — an info affordance, only when there's more to see.
