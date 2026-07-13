@@ -1561,3 +1561,43 @@ existing dev-preview flag if it renders the task editor/composer, else
 reasoning + tests.
 
 **Commit:** `feat(tasks): pomodoro-type icons in the composer` and push.
+
+---
+
+### Task 12: Pomodoro-type badge on task rows
+
+*(Added 2026-07-13, user decision: "pomidoro type ko'rinsin" — a task's
+chosen pomodoro type must be visible on its row in the Tasks list.)*
+
+**Files:**
+- Modify: `Sources/Sharingan/Views/TasksView.swift` (task row metadata line; subtask rows if they render metadata)
+- Possibly: `Sources/Sharingan/Views/TaskComponents.swift` if the row metadata HStack lives there — find the row view that renders the due-date + priority-flag + subtask-progress chips (the screenshot shows `Jul 14, 09:00  ⚑ P2  0/1`) and add the badge THERE, wherever that is.
+
+**Design:**
+
+1. In the task row's metadata HStack (due date, priority, subtask count),
+   append — only when `task.pomodoroKind != nil`:
+
+```swift
+                if let kind = task.pomodoroKind {
+                    HStack(spacing: 3) {
+                        Image(systemName: kind.systemImage)
+                        Text(kind.label)
+                    }
+                    .font(.system(.caption2, design: .rounded).weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.6))
+                }
+```
+
+   Match the exact font/opacity idiom of the neighboring metadata chips —
+   read them first and mirror (the snippet above is the intent, not the
+   letter; if neighbors use a shared chip helper, use it).
+2. Auto (nil) shows nothing — no badge noise on default tasks.
+3. If subtask rows show per-subtask metadata and `sub.pomodoroKind` exists
+   there, add the same icon-only (no label) badge; if subtask rows are
+   bare title rows, skip them.
+4. No model changes.
+
+**Verification:** `swift build && swift test` green.
+
+**Commit:** `feat(tasks): pomodoro-type badge on task rows` and push.
