@@ -167,6 +167,19 @@ disagree with the HUD about whether the Mac has a notch; it re-asks on
   stack, fonts, spacing or width means re-measuring.
   Floored at `activitySize.height`, so `NotchHUDSize.growthRank`'s promise that
   `.expanded` is the biggest shape survives an all-sections-off config.
+- **The task list is sized from the rows that exist, not from the cap.**
+  `notchTaskRows` (3–5) is only a *bound*; `NotchWindowManager` counts today's
+  rows off the same `NotchTaskRows` call the panel renders from and stamps it
+  into `NotchContentConfig.taskCount`, and the island follows
+  `min(cap, count)` — so four tasks no longer sit in an island built for five.
+  Zero tasks is not zero height: the panel draws its "Nothing planned for today"
+  caption, measured at 30pt (taller than one 21pt row, shorter than two), so the
+  island is 207pt at an empty list against 290pt at five rows. The island resizes
+  live as tasks are ticked off (`NotchMotion.resize`, critically damped like every
+  other spring on the frame). The panel *window* stays pinned to the cap
+  (`panelSize` reads `config.sizedForRowCap`): it is invisible and click-through
+  everywhere the mask says no, and resizing the window under an island that is
+  still springing would clip it.
 - **`notchEars` changes the silhouette, not just the labels.** `.both` → cutout +
   2 ears, `.trailingOnly` → cutout + 1 (the island is anchored to the cutout's
   left edge, never centred), `.none` → the cutout alone with the progress line.
@@ -191,6 +204,15 @@ disagree with the HUD about whether the Mac has a notch; it re-asks on
   queue, and the task pre-reminder-minutes setting). Task/template data lives
   in `~/Library/Application Support/Sharingan/` (SQLite db + the `tired` CLI's
   shared `cli/` snapshot files).
+- **A headless render never touches that database.** `--render-dev-preview` and
+  `--render-site-assets` seed sample tasks into `TaskStore.shared` to have
+  something to photograph, and `TaskStore.shared` persists — so `HeadlessRender`
+  (SharinganCore/Services) redirects the *shared* store to a throwaway SQLite
+  under the temp dir whenever the process was launched with one of those flags.
+  The seam is the process's own argv and nothing else — no environment variable,
+  no preference, no UI — and `main.swift` parses the flag through the same call
+  that redirects the store, so a process cannot redirect its database and then go
+  on to run as the app. A normal launch passes no arguments and is unaffected.
 - `RebrandMigration` (SharinganCore/Services) performs a one-shot Blink →
   Sharingan copy/move at launch — called by both `AppDelegate` and the
   `tired` CLI entry point. Old `UserDefaults` keys are copied to the new keys (old

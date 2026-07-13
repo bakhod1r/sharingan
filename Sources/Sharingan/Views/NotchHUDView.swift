@@ -96,6 +96,12 @@ struct NotchHUDView: View {
         // `layout.island` from the inside and never overshoot it.
         .animation(NotchMotion.shape(expanding: expanding, reduceMotion: reduce),
                    value: model.state.size)
+        // …and the island's height also moves *without* the shape changing: tick
+        // a task off the open panel and the list — and the island sized from it —
+        // is one row shorter. `state.size` is `.expanded` on both sides of that,
+        // so the morph spring above never sees it; this is the spring that
+        // carries it, and without it the island would snap.
+        .animation(NotchMotion.resize(reduceMotion: reduce), value: model.config)
     }
 
     @ViewBuilder

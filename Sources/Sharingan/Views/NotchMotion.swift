@@ -83,6 +83,27 @@ enum NotchMotion {
                 .delay(closeLead)
     }
 
+    /// The island **re-sizing in place**: a task ticked off the panel's own list
+    /// leaves the island one row taller than it needs to be, so the black closes
+    /// up behind it.
+    ///
+    /// This is not a morph and cannot use `shape(expanding:)`. The shape stays
+    /// `.expanded` throughout — `NotchHUDSize` does not change, and neither does
+    /// `growthRank`, which is the only thing `expanding` is computed from. What
+    /// changes is `NotchContentConfig.taskCount`, and with it the island's
+    /// height. Without its own spring keyed on the config, that height would
+    /// *snap*.
+    ///
+    /// Between the two responses, and critically damped like every other spring
+    /// that touches the frame: the hit-test mask does not animate — it flips to
+    /// the new island rect the instant the row count does — so the drawn shape
+    /// has to approach that rect from the inside and never overshoot it.
+    static let resizeResponse: Double = 0.32
+    static func resize(reduceMotion: Bool) -> Animation? {
+        guard !reduceMotion else { return nil }   // instant cut
+        return .spring(response: resizeResponse, dampingFraction: shapeDamping)
+    }
+
     // MARK: - Anticipation squash
 
     /// The island dips a hair before it grows — the classic anticipation beat,

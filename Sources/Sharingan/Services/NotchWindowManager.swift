@@ -66,6 +66,28 @@ final class NotchWindowManager {
             }
             .store(in: &cancellables)
 
+        // The island is sized from the number of task rows the panel actually
+        // draws, so the task list — and the focus queue, which orders it — are
+        // inputs to the *geometry*, not just to the content. Tick a task off the
+        // island and it has to close up behind it.
+        //
+        // The queue comes from the `coordinator` we were handed, not from
+        // `AppServices`: that is the same object, but only once the AppDelegate
+        // has assigned it, and subscribing to the orphan queue instead would be a
+        // silent no-op that nothing would ever fail on.
+        //
+        // `receive(on:)` and not a direct sink: `objectWillChange` fires *before*
+        // the store has changed, so a synchronous read here would count the row
+        // that is about to leave. The hop puts the read after the mutation, which
+        // is the same reason the timer sink above takes it.
+        for source in [TaskStore.shared.objectWillChange.eraseToAnyPublisher(),
+                       coordinator.focusQueue.objectWillChange.eraseToAnyPublisher()] {
+            source
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] _ in self?.syncTaskRows() }
+                .store(in: &cancellables)
+        }
+
         screenObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
             object: nil, queue: .main
@@ -75,6 +97,36 @@ final class NotchWindowManager {
 
         syncTimer(timer)
         refresh()
+    }
+
+    // MARK: - Task rows
+
+    /// Today's tasks, in the order and to the cap the expanded island shows them.
+    ///
+    /// **This is the single list.** `NotchExpandedPanel` renders exactly what it
+    /// returns, and `syncTaskRows` sizes the island from exactly its count — so
+    /// the island cannot reserve room for a row the panel does not draw, and the
+    /// panel cannot draw a row the island (and its hit-test mask) was not sized
+    /// for. Two separate readings of "today's tasks" would be free to drift, and
+    /// the drifting one would be a clipped row or a strip of dead black.
+    static func taskRows(limit: Int) -> [TaskItem] {
+        NotchTaskRows.rows(today: TaskStore.shared.grouped(filter: .today).flatMap(\.items),
+                           queue: AppServices.focusQueue.taskIDs,
+                           limit: limit)
+    }
+
+    /// Republish the row count into the model's config, which is where the
+    /// geometry reads it — one write, so the drawn shape, the mask and the
+    /// panel's list all keep coming off one number.
+    ///
+    /// The panel's *window* is not re-placed: `NotchGeometry.panelSize` is pinned
+    /// to the row cap on purpose, so it already covers the fullest list this
+    /// config can draw. Resizing the window here would clip the island while it
+    /// is still springing to its new height (see `panelSize`).
+    private func syncTaskRows() {
+        let count = Self.taskRows(limit: model.config.clampedTaskRows).count
+        guard model.config.taskCount != count else { return }
+        model.config.taskCount = count
     }
 
     /// Re-reads settings and screens: shows, hides or re-places the panel.
@@ -87,7 +139,13 @@ final class NotchWindowManager {
         model.state.liveActivityEnabled = settings.notchLiveActivity
         // The one write of the config: the view's layout, the panel's sections
         // and the hosting view's hit-test mask all read it back off the model.
-        model.config = settings.notchContent
+        //
+        // The settings only carry the row *cap*; the count of rows there actually
+        // are is not a setting and has to be stamped on here, or a settings edit
+        // would reset the island to the cap and hang the dead black back over the
+        // screen until the next task edit.
+        let rows = Self.taskRows(limit: settings.notchContent.clampedTaskRows).count
+        model.config = settings.notchContent.withTaskCount(rows)
 
         guard settings.notchHUDEnabled, let screen = Self.hudScreen() else {
             teardown()

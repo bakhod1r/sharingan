@@ -551,3 +551,194 @@ struct NotchEarsGeometryTests {
         #expect(Set(sizes.map(\.height)).count == 1)
     }
 }
+
+/// The island is sized from the rows the panel **actually draws** — today's open
+/// tasks, bounded by the user's cap — and not from the cap alone. Sizing from the
+/// cap is what left a strip of dead black over the screen for rows that did not
+/// exist (four tasks in an island built for five), and a full five rows' worth of
+/// nothing on a day with no tasks at all.
+///
+/// Every number here comes from the same structural SwiftUI replica of
+/// `NotchExpandedPanel` the rest of the table came from, hosted at the island's
+/// real 340pt width and asked for its `fittingSize`. The 0…5 sweep, all sections
+/// on (body height, cutout gap excluded):
+///
+///     rows | task section | body  | island over a 37pt cutout
+///        0 |        30    | 160   | 203      ← the empty-state caption
+///        1 |        21    | 151   | 194
+///        2 |        44    | 174   | 217
+///        3 |        67    | 197   | 240
+///        4 |        90    | 220   | 263
+///        5 |       113    | 243   | 286
+@Suite("Notch task-row sizing")
+struct NotchTaskRowSizingTests {
+    static let cutout = CGSize(width: 200, height: 37)
+    static let metrics = NotchScreenMetrics(screenWidth: 1512, menuBarHeight: 37,
+                                            notchWidth: 200, notchHeight: 37)
+
+    /// Cap 5 (the default), told there are `count` tasks today.
+    private static func config(count: Int?, cap: Int = 5) -> NotchContentConfig {
+        NotchContentConfig(taskRows: cap, taskCount: count)
+    }
+
+    private static func height(count: Int?, cap: Int = 5) -> CGFloat {
+        NotchGeometry.expandedSize(config(count: count, cap: cap), cutout: cutout).height
+    }
+
+    @Test("the task section matches the measured replica for 0…5 rows")
+    func taskSectionMatchesTheReplica() {
+        let measured: [Int: CGFloat] = [0: 30, 1: 21, 2: 44, 3: 67, 4: 90, 5: 113]
+        for (rows, h) in measured {
+            #expect(NotchGeometry.taskSectionHeight(rows: rows) == h)
+        }
+        // …and the body it lands in, likewise (10 bottom + Σ sections + 8 × n).
+        let body: [Int: CGFloat] = [0: 160, 1: 151, 2: 174, 3: 197, 4: 220, 5: 243]
+        for (rows, h) in body {
+            #expect(NotchGeometry.expandedBodyHeight(Self.config(count: rows))
+                    == h + NotchGeometry.bodySlack)
+        }
+    }
+
+    /// The defect: the height followed the cap. Four tasks in an island built for
+    /// five left a 23pt strip of black above the quick-actions row.
+    @Test("the height follows the real row count, not the cap")
+    func heightFollowsTheCountNotTheCap() {
+        // Four tasks, cap five: an island for four, not for five.
+        #expect(Self.height(count: 4) == 37 + 6 + 220 + NotchGeometry.bodySlack)
+        #expect(Self.height(count: 4) < Self.height(count: 5))
+        #expect(Self.height(count: 5) - Self.height(count: 4)
+                == NotchGeometry.taskRowHeight + NotchGeometry.taskRowSpacing)
+
+        // Two tasks under a cap of five is the same island as two under a cap of
+        // three: what is drawn decides the height, and only what is drawn.
+        #expect(Self.height(count: 2, cap: 5) == Self.height(count: 2, cap: 3))
+
+        // Rows 1…5 are monotone, and a row costs the measured 23pt throughout.
+        for n in 1..<5 {
+            #expect(Self.height(count: n + 1) - Self.height(count: n)
+                    == NotchGeometry.taskRowHeight + NotchGeometry.taskRowSpacing)
+        }
+    }
+
+    /// …and it is still the user's cap that bounds it. Twenty tasks today does
+    /// not mean a twenty-row island: the panel draws `cap` of them.
+    @Test("the cap still bounds the island")
+    func theCapStillBounds() {
+        #expect(Self.height(count: 20, cap: 3) == Self.height(count: 3, cap: 3))
+        #expect(Self.height(count: 9, cap: 5) == Self.height(count: 5, cap: 5))
+        // A cap outside the measured 3…5 range is clamped before it is used, as
+        // before — a decoded 40 cannot size the island off the screen.
+        #expect(Self.height(count: 40, cap: 40) == Self.height(count: 5, cap: 5))
+    }
+
+    /// Nothing planned today used to reserve five rows of black. It now reserves
+    /// the caption's height — which is a *real* height, not zero and not a row:
+    /// 30pt measured, taller than one row (21) and shorter than two (44). The
+    /// island is therefore 9pt taller at zero tasks than at one, the single place
+    /// the height is not monotone in the count.
+    @Test("the empty state is materially shorter than a full list, and is not one row")
+    func emptyStateIsShortButNotARow() {
+        let empty = Self.height(count: 0)
+        let full = Self.height(count: 5)
+
+        // 207 vs 290: 83pt of dead black gone.
+        #expect(empty == 37 + 6 + 160 + NotchGeometry.bodySlack)
+        #expect(full - empty == 83)
+        // "Materially" shorter — not a rounding: more than a quarter of the tall
+        // island, and shorter than every list that has anything in it but one.
+        #expect(empty < full * 0.75)
+        #expect(empty < Self.height(count: 2))
+
+        // The caption is not a task row, and is not free either.
+        #expect(NotchGeometry.emptyTaskListHeight > NotchGeometry.taskRowHeight)
+        #expect(Self.height(count: 0) - Self.height(count: 1)
+                == NotchGeometry.emptyTaskListHeight - NotchGeometry.taskRowHeight)
+
+        // With the task list switched off entirely there is no caption to make
+        // room for, so *that* island is shorter still.
+        var off = Self.config(count: 0)
+        off.showTasks = false
+        #expect(NotchGeometry.expandedSize(off, cutout: Self.cutout).height < empty)
+    }
+
+    /// An island that was never told the count sizes for the cap — exactly what
+    /// the HUD did before. It is the only safe direction to be wrong in: the
+    /// island clips its content to its own silhouette, so over-reserving leaves
+    /// black, while under-reserving would crop a row the panel drew.
+    @Test("an unknown count reserves the cap")
+    func unknownCountReservesTheCap() {
+        #expect(Self.height(count: nil) == Self.height(count: 5))
+        #expect(Self.height(count: nil, cap: 3) == Self.height(count: 3, cap: 3))
+        #expect(NotchContentConfig.default.renderedTaskRows
+                == NotchContentConfig.default.clampedTaskRows)
+        // And the count is not a setting: dropping it gets the cap-sized config
+        // back, whatever was stamped on.
+        #expect(Self.config(count: 1).sizedForRowCap == NotchContentConfig.default)
+        #expect(NotchContentConfig.default.withTaskCount(2).renderedTaskRows == 2)
+    }
+
+    /// The load-bearing invariant. Whatever the count does to the island, the
+    /// hit-test mask is cut from that same island — anything the mask claims but
+    /// the panel does not draw is a click at the top of the screen the user
+    /// loses, and anything drawn outside it is black that cannot be clicked.
+    @Test("the mask follows the shortened island, and the panel still covers it")
+    func maskAndPanelFollowTheCount() {
+        for count in [0, 1, 2, 3, 4, 5] {
+            let c = Self.config(count: count)
+            let l = NotchGeometry.layout(Self.metrics, size: .expanded, config: c)
+            let expected = NotchGeometry.expandedSize(c, cutout: Self.cutout)
+
+            // Drawn == masked == computed.
+            #expect(l.island.size == expected)
+            #expect(NotchGeometry.hitTest(CGPoint(x: l.panelSize.width / 2,
+                                                  y: expected.height - 4),
+                                          metrics: Self.metrics, size: .expanded, config: c))
+            // A point just below is the desktop again, not HUD.
+            #expect(!NotchGeometry.hitTest(CGPoint(x: l.panelSize.width / 2,
+                                                   y: expected.height + 6),
+                                           metrics: Self.metrics, size: .expanded, config: c))
+            // And the island never leaves the panel, in any state.
+            for size in NotchHUDSize.allCases {
+                let l = NotchGeometry.layout(Self.metrics, size: size, config: c)
+                #expect(l.island.maxY <= l.panelSize.height + 0.01)
+                #expect(l.island.maxX <= l.panelSize.width + 0.01)
+                #expect(l.island.minX >= -0.01)
+            }
+        }
+
+        // The *window*, though, is deliberately pinned to the cap: it must not
+        // resize under an island that is still springing to its new height, and
+        // it costs nothing to leave at the maximum (the mask, not the window, is
+        // what gives the menu bar back).
+        let atCap = NotchGeometry.panelSize(Self.metrics, config: Self.config(count: nil))
+        for count in [0, 1, 2, 3, 4, 5] {
+            #expect(NotchGeometry.panelSize(Self.metrics,
+                                            config: Self.config(count: count)) == atCap)
+        }
+    }
+
+    /// The floor that keeps `growthRank` honest survives the smallest island the
+    /// count can produce: `.expanded` is still the biggest shape, or the motion
+    /// layer springs it *shut* as it opens.
+    @Test("an empty list still outranks every shorter state")
+    func emptyListStillOutranksTheOtherStates() {
+        var bare = Self.config(count: 0)
+        bare.showTimerControls = false
+        bare.showQuickActions = false
+        bare.showStatusStrip = false
+
+        var m = Self.metrics
+        for cfg in [Self.config(count: 0), Self.config(count: 1), bare] {
+            for cutoutHeight in [CGFloat(32), 37, 44] {
+                m.notchHeight = cutoutHeight
+                func area(_ s: NotchHUDSize) -> CGFloat {
+                    let r = NotchGeometry.layout(m, size: s, config: cfg).island
+                    return r.width * r.height
+                }
+                #expect(area(.expanded) > area(.activity))
+                #expect(area(.expanded) > area(.live))
+                #expect(area(.expanded) > area(.idle))
+            }
+        }
+    }
+}

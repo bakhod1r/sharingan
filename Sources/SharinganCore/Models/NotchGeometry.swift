@@ -69,8 +69,20 @@ public struct NotchContentConfig: Equatable, Sendable {
     public var showTasks: Bool
     public var showQuickActions: Bool
     public var showStatusStrip: Bool
-    /// Requested row count — trust it for nothing: read `clampedTaskRows`.
+    /// Requested row count — the *cap*, and the only part of this the user sets.
+    /// Trust it for nothing: read `clampedTaskRows`.
     public var taskRows: Int
+    /// How many task rows there actually are to draw right now — today's open
+    /// tasks, as `NotchTaskRows` orders them. `NotchWindowManager` writes it
+    /// from `TaskStore` (nothing else does; the geometry cannot see a store),
+    /// and `renderedTaskRows` is where the cap meets it.
+    ///
+    /// `nil` means *nobody has said yet*, and is deliberately the default: an
+    /// unknown count sizes the island for the cap, which is what the HUD did
+    /// before the count was fed in. Unknown therefore over-reserves and never
+    /// clips — the only direction of error that is safe, since the island clips
+    /// its content to its own silhouette.
+    public var taskCount: Int?
 
     /// The range the panel's height constants were *measured* over. Fewer than
     /// three rows is not worth a task list; more than five does not fit under
@@ -82,20 +94,54 @@ public struct NotchContentConfig: Equatable, Sendable {
                 showTasks: Bool = true,
                 showQuickActions: Bool = true,
                 showStatusStrip: Bool = true,
-                taskRows: Int = NotchTaskRows.defaultLimit) {
+                taskRows: Int = NotchTaskRows.defaultLimit,
+                taskCount: Int? = nil) {
         self.ears = ears
         self.showTimerControls = showTimerControls
         self.showTasks = showTasks
         self.showQuickActions = showQuickActions
         self.showStatusStrip = showStatusStrip
         self.taskRows = taskRows
+        self.taskCount = taskCount
     }
 
-    /// The row count the island is actually sized and filled for. A decoded blob
-    /// (or a future build's key) can carry anything; an unclamped 40 here would
-    /// size the island off the bottom of the screen.
+    /// The cap. A decoded blob (or a future build's key) can carry anything; an
+    /// unclamped 40 here would size the island off the bottom of the screen.
     public var clampedTaskRows: Int {
         min(max(taskRows, Self.taskRowRange.lowerBound), Self.taskRowRange.upperBound)
+    }
+
+    /// **The one number the island's height, its hit-test mask and the panel's
+    /// task list are all cut from**: how many rows the expanded panel will
+    /// actually draw. The user's cap bounds today's real count — reserving five
+    /// rows' worth of black for four tasks is dead space over the user's screen,
+    /// and reserving it for *none* is a slab of nothing.
+    ///
+    /// Zero is not "no section": the panel draws its "Nothing planned for today"
+    /// caption there, which has a height of its own (see
+    /// `NotchGeometry.emptyTaskListHeight`) and is not one row's worth.
+    public var renderedTaskRows: Int {
+        guard let taskCount else { return clampedTaskRows }
+        return min(clampedTaskRows, max(0, taskCount))
+    }
+
+    /// The same config with the count forgotten — i.e. sized for the *cap*, the
+    /// tallest task list this config could ever be asked to draw. `panelSize`
+    /// uses it so the window stays put while the task list churns: the panel is
+    /// invisible and click-through everywhere the mask says no, so leaving it at
+    /// the maximum costs nothing, while resizing the *window* under an island
+    /// that is still springing to its new height would clip the animation.
+    public var sizedForRowCap: NotchContentConfig {
+        var c = self
+        c.taskCount = nil
+        return c
+    }
+
+    /// The same config, told how many rows there are.
+    public func withTaskCount(_ count: Int) -> NotchContentConfig {
+        var c = self
+        c.taskCount = count
+        return c
     }
 
     /// Everything on, five rows, both ears — what the HUD did before it was
@@ -159,6 +205,16 @@ public enum NotchGeometry {
     /// … and 2pt of list spacing between rows, so a row *costs* 23pt — which is
     /// the 46pt over two rows the shipped 5-row/3-row measurement showed.
     public static let taskRowSpacing: CGFloat = 2
+    /// With nothing on today's list the panel draws neither rows nor nothing: it
+    /// draws a centered "Nothing planned for today" caption, and that caption
+    /// needs a height of its own — 30pt measured (an 11pt rounded line inside
+    /// 8pt of vertical padding).
+    ///
+    /// It is deliberately *not* `taskRowHeight`. It is taller than one row (21)
+    /// and shorter than two (44), so the island at zero tasks is 9pt taller than
+    /// at one — the one place the height is not monotone in the row count, and a
+    /// real measurement rather than a rounding.
+    public static let emptyTaskListHeight: CGFloat = 30
     /// The quick-actions row: 24pt buttons, measured.
     public static let quickActionsHeight: CGFloat = 24
     /// The blocker/streak strip: 13pt of 9pt labels, measured.
@@ -169,15 +225,28 @@ public enum NotchGeometry {
     /// clipping the last row.
     public static let bodySlack: CGFloat = 4
 
+    /// The task section's height for the number of rows the panel will actually
+    /// draw. Measured: 0 → 30 (the empty-state caption), 1 → 21, 2 → 44, 3 → 67,
+    /// 4 → 90, 5 → 113.
+    public static func taskSectionHeight(rows: Int) -> CGFloat {
+        guard rows > 0 else { return emptyTaskListHeight }
+        let n = CGFloat(rows)
+        return taskRowHeight * n + taskRowSpacing * (n - 1)
+    }
+
     /// Height of the panel's content — everything below the camera housing.
     /// The cutout gap is added by `expandedSize`, which knows the real cutout,
     /// rather than baked in at one machine's notch height.
+    ///
+    /// The task list is sized from `config.renderedTaskRows` — what the panel
+    /// *draws* — and not from `clampedTaskRows`, which is only the user's cap.
+    /// Sizing from the cap is how the island came to hang a strip of dead black
+    /// over the screen for rows that do not exist.
     public static func expandedBodyHeight(_ config: NotchContentConfig = .default) -> CGFloat {
         var sections: [CGFloat] = []
         if config.showTimerControls { sections.append(timerRowHeight) }
         if config.showTasks {
-            let rows = CGFloat(config.clampedTaskRows)
-            sections.append(taskRowHeight * rows + taskRowSpacing * (rows - 1))
+            sections.append(taskSectionHeight(rows: config.renderedTaskRows))
         }
         if config.showQuickActions { sections.append(quickActionsHeight) }
         if config.showStatusStrip { sections.append(statusStripHeight) }
@@ -242,10 +311,25 @@ public enum NotchGeometry {
     /// invisible and click-through everywhere the mask says no, so its only job
     /// is to be big enough. `.zero` without a hardware notch — there is no panel
     /// to size.
+    ///
+    /// "Can draw" includes a task list that is **full**, which is why this alone
+    /// reads `config.sizedForRowCap` while the island reads the real count. Two
+    /// reasons, both load-bearing:
+    ///
+    /// 1. A window whose height tracked the task count would have to be resized
+    ///    the instant a task is ticked off — *while the island is still springing
+    ///    down to its new height*. `NSWindow` clips its content view, so the
+    ///    animating island would be sliced off at the new, shorter window edge.
+    ///    Held at the cap, the window never moves and the island animates inside
+    ///    it.
+    /// 2. It costs nothing. The panel is invisible and click-through everywhere
+    ///    `hitTest` says no, and `hitTest` masks against the *island*, which
+    ///    follows the real count. The mask, not the window's frame, is what gives
+    ///    the menu bar back.
     public static func panelSize(_ m: NotchScreenMetrics,
                                  config: NotchContentConfig = .default) -> CGSize {
         guard let cutout = m.cutout else { return .zero }
-        let expanded = expandedSize(config, cutout: cutout)
+        let expanded = expandedSize(config.sizedForRowCap, cutout: cutout)
         // The panel is centered on the cutout, but a one-eared island is *not*
         // symmetric about it — so an ear must be reserved on both sides even
         // when only one is grown, or the trailing ear (island 278pt wide, panel

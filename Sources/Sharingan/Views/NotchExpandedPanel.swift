@@ -40,10 +40,23 @@ struct NotchExpandedPanel: View {
     /// than leaving a hole in it.
     private var config: NotchContentConfig { model.config }
 
+    /// The rows this panel draws — and, to the row, the ones the island's height
+    /// was computed from.
+    ///
+    /// The limit is `renderedTaskRows` (`min(cap, today's count)`), not the cap:
+    /// that is the number `NotchGeometry` sized `layout.island` from, and asking
+    /// the list for exactly it makes the two impossible to disagree. If the count
+    /// in the config is ever a beat stale — the store publishes, the manager
+    /// re-stamps it one runloop turn later — this panel under-draws for that one
+    /// turn rather than drawing a row into black the island has not grown yet.
+    ///
+    /// The list itself comes from `NotchWindowManager.taskRows`, which is also
+    /// what the manager counted. One list, one count, one height.
+    /// (`tasks` and `queue` are observed above so that a change to either
+    /// re-renders this panel — the queue reorders the rows without the store
+    /// changing at all. The read itself goes through the manager's one list.)
     private var rows: [TaskItem] {
-        NotchTaskRows.rows(today: tasks.grouped(filter: .today).flatMap(\.items),
-                           queue: queue.taskIDs,
-                           limit: config.clampedTaskRows)
+        NotchWindowManager.taskRows(limit: config.renderedTaskRows)
     }
 
     /// The camera housing sits in the cutout: the first pixel of content has to

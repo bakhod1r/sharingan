@@ -47,15 +47,21 @@ public final class TaskStore: ObservableObject {
 
     /// `fileURL`, when given (tests), is the SQLite database path. In the app it
     /// defaults to `Application Support/Sharingan/blink.sqlite`.
+    ///
+    /// The one exception is a **headless render** (`--render-dev-preview` /
+    /// `--render-site-assets`): those processes seed sample tasks into
+    /// `TaskStore.shared` to have something to photograph, and this is the
+    /// shared instance, so without a redirect every preview render permanently
+    /// injects fake tasks into the user's real list. `HeadlessRender` decides,
+    /// off the process's own argv, and says why it cannot fire in a normal
+    /// launch. Nothing else may redirect the shared store: no environment
+    /// variable, no preference, no UI.
     public init(fileURL: URL? = nil) {
         let dbURL: URL
         if let fileURL {
             dbURL = fileURL
-        } else if let override = ProcessInfo.processInfo.environment["BLINK_DB_PATH"] {
-            // Headless renders / tests: point the shared store at a throwaway
-            // database instead of the user's real one ($HOME overrides do NOT
-            // redirect FileManager.urls, learned the hard way).
-            dbURL = URL(fileURLWithPath: override)
+        } else if HeadlessRender.isActive {
+            dbURL = HeadlessRender.throwawayDatabaseURL()
         } else {
             let base = FileManager.default.urls(for: .applicationSupportDirectory,
                                                 in: .userDomainMask).first
