@@ -271,8 +271,8 @@ struct MenuBarWeekView: View {
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
             if timer.settings.showPomodoroBadges,
-               task.pomodorosDone > 0 || task.displayEstimate != nil {
-                Text(task.displayEstimate.map { "🍅\(task.pomodorosDone)/\($0)" }
+               task.pomodorosDone > 0 || task.effectiveEstimate != nil {
+                Text(task.effectiveEstimate.map { "🍅\(task.pomodorosDone)/\($0)" }
                      ?? "🍅\(task.pomodorosDone)")
                     .font(.system(size: 9, design: .rounded))
                     .foregroundStyle(.white.opacity(0.6))

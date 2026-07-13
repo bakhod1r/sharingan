@@ -334,7 +334,7 @@ struct WeeklyBoardView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             let showBadge = timer.settings.showPomodoroBadges
-                && (task.pomodorosDone > 0 || task.displayEstimate != nil)
+                && (task.pomodorosDone > 0 || task.effectiveEstimate != nil)
             let hasMeta = task.dueDate != nil || task.subtaskProgress.total > 0
                 || showBadge || !task.tags.isEmpty || task.priority != .none
             if hasMeta {
@@ -364,7 +364,7 @@ struct WeeklyBoardView: View {
                     }
                     Spacer(minLength: 0)
                     if showBadge {
-                        Text(task.displayEstimate.map { "🍅\(task.pomodorosDone)/\($0)" }
+                        Text(task.effectiveEstimate.map { "🍅\(task.pomodorosDone)/\($0)" }
                              ?? "🍅\(task.pomodorosDone)")
                             .font(.system(size: 10, design: .rounded))
                             .foregroundStyle(.white.opacity(0.6))

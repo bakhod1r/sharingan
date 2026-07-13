@@ -27,7 +27,7 @@
 
 - Full task system: title, priority (P1–P4), tags, projects, categories, due dates, notes, and estimates.
 - Per-task pomodoro type (Small/Normal/Big, or Auto to inherit the app default) — shown as a small icon+label badge in the task row's metadata line when set (nil/Auto shows nothing); subtasks can override it too, shown as an icon-only badge next to the subtask row.
-- Subtasks with their own estimates — reorder them, or promote a subtask into a full task.
+- Subtasks with their own estimates — reorder them, or promote a subtask into a full task. A task's displayed estimate (row badges, editor summary, menu-bar rows) is its own estimate when it has no subtasks, or the **sum of its subtasks' estimates** when it does (falling back to its own estimate if no subtask carries one); the stored per-task estimate is unchanged and still what the editor/composer/parser write.
 - Recurrence: none, daily, weekdays, weekly, every N days, or monthly (on a chosen day). Completing a recurring task spawns the next occurrence.
 - Natural-language quick add in the **world's 25 most-spoken languages** at once, e.g. `ertaga 15:00 p1 #ish @blink ~2 hisobot yozish` — with live parse chips while you type, in both the main composer and the menu-bar quick-add. Recognizes:
   - **Dates** — today / tomorrow / day-after-tomorrow / yesterday, weekday names, next week / next month / next year, this week, weekend, and month-name dates like `march 5` / `5 mart` (plus numeric `12.08`).

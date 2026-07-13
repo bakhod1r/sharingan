@@ -632,7 +632,7 @@ struct MenuBarView: View {
             }
             Menu {
                 // Subtask estimates outrank the task's own in every badge/ring
-                // (displayEstimate) — say so here instead of looking broken.
+                // (effectiveEstimate) — say so here instead of looking broken.
                 if let sum = task.subtaskEstimateTotal {
                     Text("Using subtask total: \(sum) 🍅").disabled(true)
                     Divider()
@@ -807,7 +807,7 @@ struct MenuBarView: View {
     @ViewBuilder
     private func pomodoroBadge(_ task: TaskItem) -> some View {
         if timer.settings.showPomodoroBadges {
-            if let est = task.displayEstimate {
+            if let est = task.effectiveEstimate {
                 Text("🍅\(task.pomodorosDone)/\(est)")
                     .font(.system(.caption2, design: .rounded).weight(.medium))
                     .foregroundStyle(task.pomodorosDone >= est ? Color.green : .secondary)

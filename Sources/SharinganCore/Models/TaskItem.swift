@@ -291,8 +291,10 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         return ests.isEmpty ? nil : ests.reduce(0, +)
     }
 
-    /// Estimate to display: subtask sum wins, else the task's own estimate.
-    public var displayEstimate: Int? { subtaskEstimateTotal ?? estimatedPomodoros }
+    /// Estimate shown for the task: its own when it has no subtasks;
+    /// otherwise the sum of subtask estimates (falling back to its own
+    /// when no subtask carries one).
+    public var effectiveEstimate: Int? { subtaskEstimateTotal ?? estimatedPomodoros }
 
     /// True when this task is on today's plan.
     public func isPlannedToday(now: Date = Date()) -> Bool {

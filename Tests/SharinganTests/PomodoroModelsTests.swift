@@ -75,20 +75,20 @@ struct PomodoroModelsTests {
         #expect(sub.pomodorosDone == 0)
     }
 
-    @Test("displayEstimate: subtask sum wins, else task estimate, else nil")
-    func displayEstimatePrecedence() {
+    @Test("effectiveEstimate: subtask sum wins, else task estimate, else nil")
+    func effectiveEstimatePrecedence() {
         var t = TaskItem(title: "t", estimatedPomodoros: 5)
-        #expect(t.displayEstimate == 5)
+        #expect(t.effectiveEstimate == 5)
         t.subtasks = [Subtask(title: "a", estimatedPomodoros: 2),
                       Subtask(title: "b", estimatedPomodoros: 3),
                       Subtask(title: "c")]                    // no estimate — excluded
         #expect(t.subtaskEstimateTotal == 5)
-        #expect(t.displayEstimate == 5)
+        #expect(t.effectiveEstimate == 5)
         t.subtasks[0].estimatedPomodoros = 4
-        #expect(t.displayEstimate == 7)                       // sum overrides task's own
+        #expect(t.effectiveEstimate == 7)                     // sum overrides task's own
         t.subtasks = [Subtask(title: "a")]
         t.estimatedPomodoros = nil
-        #expect(t.displayEstimate == nil)
+        #expect(t.effectiveEstimate == nil)
     }
 
     @Test("settings blob missing the planning keys decodes to defaults")
@@ -125,6 +125,34 @@ struct PomodoroModelsTests {
         s.weekStartsOnMonday = true
         let selfStart = s.weekStart(offset: 0, now: mon, calendar: cal)
         #expect(cal.isDate(selfStart, inSameDayAs: mon))
+    }
+}
+
+@Suite("Effective estimate")
+struct EffectiveEstimateTests {
+    @Test("no subtasks → own estimate")
+    func ownEstimate() {
+        var t = TaskItem(title: "t"); t.estimatedPomodoros = 3
+        #expect(t.effectiveEstimate == 3)
+    }
+    @Test("subtasks with estimates → their sum, own ignored")
+    func subtaskSum() {
+        var t = TaskItem(title: "t"); t.estimatedPomodoros = 3
+        t.subtasks = [Subtask(title: "a", estimatedPomodoros: 2),
+                      Subtask(title: "b", estimatedPomodoros: 4)]
+        #expect(t.effectiveEstimate == 6)
+    }
+    @Test("subtasks without estimates → falls back to own")
+    func fallbackToOwn() {
+        var t = TaskItem(title: "t"); t.estimatedPomodoros = 3
+        t.subtasks = [Subtask(title: "a")]
+        #expect(t.effectiveEstimate == 3)
+    }
+    @Test("nothing anywhere → nil")
+    func allNil() {
+        var t = TaskItem(title: "t")
+        t.subtasks = [Subtask(title: "a")]
+        #expect(t.effectiveEstimate == nil)
     }
 }
 @Suite("Menu bar countdown setting")

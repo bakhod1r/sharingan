@@ -249,7 +249,8 @@ public final class TaskStore: ObservableObject {
                     recurrence: Recurrence = .none,
                     project: String? = nil,
                     notes: String = "",
-                    priority: TaskPriority = .none) {
+                    priority: TaskPriority = .none,
+                    pomodoroKind: PomodoroKind? = nil) {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         // New tasks go to the bottom of the manual order.
@@ -259,7 +260,7 @@ public final class TaskStore: ObservableObject {
                             sortOrder: nextOrder, estimatedPomodoros: estimatedPomodoros,
                             notes: notes, recurrence: recurrence,
                             project: (cleanProject?.isEmpty ?? true) ? nil : cleanProject,
-                            priority: priority)
+                            priority: priority, pomodoroKind: pomodoroKind)
         tasks.append(task)
         syncDueNotifications(for: task)
         persist()

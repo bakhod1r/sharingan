@@ -309,7 +309,7 @@ struct TaskEditorView: View {
             HStack(spacing: 8) {
                 Text("Subtasks").dsSectionLabel()
                 Spacer()
-                if settings.showPomodoroBadges, let est = draft.displayEstimate {
+                if settings.showPomodoroBadges, let est = draft.effectiveEstimate {
                     Text("🍅 \(draft.pomodorosDone)/\(est)")
                         .font(.system(.caption2, design: .rounded).weight(.semibold))
                         .foregroundStyle(draft.pomodorosDone >= est ? Color.green : Color.dsSecondary)

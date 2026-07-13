@@ -753,7 +753,7 @@ struct TasksView: View {
                                 .frame(width: 26, height: 22)
                                 .background(
                                     Capsule().fill(newKind == kind
-                                        ? Color.accentColor.opacity(0.45)
+                                        ? Color.accentColor.opacity(0.22)
                                         : Color.white.opacity(0.06)))
                                 .contentShape(Capsule())
                         }
@@ -1490,7 +1490,7 @@ struct TasksView: View {
             // Estimate progress ring (or a plain count when no estimate).
             // Estimate is the subtask sum when subtasks carry estimates.
             if timer.settings.showPomodoroBadges {
-                if let est = task.displayEstimate {
+                if let est = task.effectiveEstimate {
                     estimateRing(done: task.pomodorosDone, total: est, color: accent)
                 } else if task.pomodorosDone > 0 {
                     Text("🍅\(task.pomodorosDone)")
@@ -1610,7 +1610,7 @@ struct TasksView: View {
             Divider()
             Menu {
                 // Subtask estimates outrank the task's own in every badge/ring
-                // (displayEstimate) — say so here instead of looking broken.
+                // (effectiveEstimate) — say so here instead of looking broken.
                 if let sum = task.subtaskEstimateTotal {
                     Text("Using subtask total: \(sum) 🍅").disabled(true)
                     Divider()
@@ -1711,7 +1711,6 @@ struct TasksView: View {
         let parsed = TaskInputParser.parse(newTitle, now: Date())
         var tags = newTagList
         for t in parsed.tags where !tags.contains(t) { tags.append(t) }
-        let countBefore = store.tasks.count
         store.add(title: parsed.title.isEmpty ? newTitle : parsed.title,
                   category: newCategory, tags: tags,
                   dueDate: hasDue ? newDue : parsed.dueDate,
@@ -1719,14 +1718,8 @@ struct TasksView: View {
                   recurrence: newRecurrence != .none ? newRecurrence : parsed.recurrence,
                   project: newProject.isEmpty ? parsed.project : newProject,
                   notes: newNotes,
-                  priority: newPriority != .none ? newPriority : parsed.priority)
-        // TaskStore.add doesn't take a pomodoroKind, and it no-ops on a blank
-        // title, so only thread the picked kind through when a task actually
-        // landed — then patch it onto the freshly appended task.
-        if let kind = newKind, store.tasks.count > countBefore, var added = store.tasks.last {
-            added.pomodoroKind = kind
-            store.update(added)
-        }
+                  priority: newPriority != .none ? newPriority : parsed.priority,
+                  pomodoroKind: newKind)
         newTitle = ""
         newTagList = []
         tagDraft = ""
