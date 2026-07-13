@@ -17,9 +17,9 @@ a **Simple** tier (most-used essentials, ~32 rows) and an **Advanced** tier
   the root list (visible on category pages too, or reachable via back).
 - The choice persists in `@AppStorage("settingsTier")` — it is UI state, not
   part of the `PomodoroSettings` JSON blob.
-- Every row keeps a single source of truth: the existing view code gains a
-  `.advancedOnly()` modifier (and `Section(_:tier:)` for whole sections)
-  that hides the row when the tier is Simple. No duplicated view code.
+- Every row keeps a single source of truth: advanced rows/sections are
+  wrapped in `if advanced { }` conditionals in place (see Code structure
+  for why a modifier doesn't work here). No duplicated view code.
 - **Hidden ≠ disabled.** Advanced values persist and stay in effect while
   hidden. Switching to Simple never resets or deactivates anything.
 
