@@ -1355,3 +1355,209 @@ git add Sources/Sharingan/Views/TaskPickerSheet.swift
 git commit -m "feat(tasks): pomodoro-size chip in the task picker"
 git push
 ```
+
+---
+
+### Task 10: Pomodoro sizes as a table, long break per size
+
+*(Added 2026-07-13, user decision: "buni tablik qil. pomidorolarga ham long
+break tasir qiladi" — render the Pomodoro sizes section as a compact grid,
+and give each size its own long-break length.)*
+
+**Files:**
+- Modify: `Sources/SharinganCore/Models/PomodoroSettings.swift` (`PomodoroKindConfig` + effective long break)
+- Modify: `Sources/Sharingan/Views/SettingsView.swift` (table UI in Timer's always-visible part; drop the global "Long break" stepper row)
+- Test: `Tests/SharinganTests/PomodoroModelsTests.swift` (append a new suite or tests)
+
+**Model design (backward compatible):**
+
+1. `PomodoroKindConfig` gains `public var longBreakMinutes: Int? = nil`
+   (nil = "no per-size override"). Update its `init` to
+   `init(focusMinutes: Int, breakMinutes: Int, longBreakMinutes: Int? = nil)`.
+   Synthesized Codable handles old JSON (missing key → nil) — do NOT write
+   a custom decoder for it.
+2. `PomodoroSettings.longBreakMinutes` (stored, default 15) STAYS — it is
+   the fallback when a kind has no override, so every existing blob keeps
+   its exact current behavior.
+3. Effective length: change `longBreakSeconds` to
+
+```swift
+    /// Long-break length of the ACTIVE kind: per-size override, else the
+    /// stored global value (pre-per-size blobs keep behaving identically).
+    public var longBreakSeconds: TimeInterval {
+        TimeInterval(config(for: activeKind).longBreakMinutes ?? longBreakMinutes) * 60
+    }
+```
+
+   `duration(for: .longBreak)` and every caller pick this up automatically.
+
+**Table UI (Timer page, always-visible "Pomodoro sizes" section):**
+
+Replace the explainer + 6 `StepperRow`s + the "Long break" section's global
+stepper with: the explainer Text (unchanged), then a `Grid`:
+
+```swift
+                    Grid(horizontalSpacing: 10, verticalSpacing: 8) {
+                        GridRow {
+                            Color.clear.frame(width: 1, height: 1)
+                            ForEach(["Focus", "Break", "Long break"], id: \.self) { h in
+                                Text(h)
+                                    .font(.system(.caption, design: .rounded).weight(.semibold))
+                                    .foregroundStyle(.white.opacity(0.55))
+                                    .frame(maxWidth: .infinity)
+                            }
+                        }
+                        ForEach(PomodoroKind.allCases) { kind in
+                            GridRow {
+                                Label(kind.label, systemImage: kind.systemImage)
+                                    .font(.system(.callout, design: .rounded).weight(.medium))
+                                    .foregroundStyle(.white)
+                                    .labelStyle(.titleAndIcon)
+                                    .gridColumnAlignment(.leading)
+                                kindCell(kind, \.focusMinutes)
+                                kindCell(kind, \.breakMinutes)
+                                longBreakCell(kind)
+                            }
+                        }
+                    }
+```
+
+with two small helpers next to the other private helpers in `SettingsView`:
+
+```swift
+    /// One table cell: minutes value + compact stepper for a kind's field.
+    private func kindCell(_ kind: PomodoroKind,
+                          _ field: WritableKeyPath<PomodoroKindConfig, Int>) -> some View {
+        let binding = Binding<Int>(
+            get: { settings.config(for: kind)[keyPath: field] },
+            set: { v in
+                var c = settings.config(for: kind)
+                c[keyPath: field] = v
+                settings.setConfig(c, for: kind)
+            })
+        return VStack(spacing: 3) {
+            Text("\(binding.wrappedValue) min")
+                .font(.system(.caption, design: .rounded).weight(.semibold).monospacedDigit())
+                .foregroundStyle(Color.dsSecondary)
+            DSStepper(value: binding)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// Long-break cell: per-size override, falling back to the global value.
+    private func longBreakCell(_ kind: PomodoroKind) -> some View {
+        let binding = Binding<Int>(
+            get: { settings.config(for: kind).longBreakMinutes ?? settings.longBreakMinutes },
+            set: { v in
+                var c = settings.config(for: kind)
+                c.longBreakMinutes = v
+                settings.setConfig(c, for: kind)
+            })
+        return VStack(spacing: 3) {
+            Text("\(binding.wrappedValue) min")
+                .font(.system(.caption, design: .rounded).weight(.semibold).monospacedDigit())
+                .foregroundStyle(Color.dsSecondary)
+            DSStepper(value: binding)
+        }
+        .frame(maxWidth: .infinity)
+    }
+```
+
+The old `Section("Long break")` keeps ONLY the "Long break every N
+pomodoros" stepper (rename its title to "Long break rhythm" is NOT needed —
+keep "Long break"). The global "Long break minutes" stepper row is deleted
+(the table's third column supersedes it; the stored global value silently
+remains as the fallback for kinds never edited).
+
+**Tests (append to `Tests/SharinganTests/PomodoroModelsTests.swift`):**
+
+```swift
+@Suite("Per-kind long break")
+struct PerKindLongBreakTests {
+    @Test("override wins over the global value")
+    func overrideWins() {
+        var s = PomodoroSettings()
+        s.activeKind = .big
+        s.setConfig(.init(focusMinutes: 90, breakMinutes: 15, longBreakMinutes: 30),
+                    for: .big)
+        #expect(s.longBreakSeconds == 30 * 60)
+    }
+
+    @Test("no override falls back to the global value")
+    func fallback() {
+        var s = PomodoroSettings()
+        s.activeKind = .small
+        s.longBreakMinutes = 21
+        #expect(s.longBreakSeconds == 21 * 60)
+    }
+
+    @Test("pre-per-size config JSON decodes with a nil override")
+    func legacyConfigDecodes() throws {
+        let json = Data(#"{"focusMinutes":25,"breakMinutes":5}"#.utf8)
+        let c = try JSONDecoder().decode(PomodoroKindConfig.self, from: json)
+        #expect(c.longBreakMinutes == nil)
+    }
+}
+```
+
+**Steps:** tests first (compile-fail on the new init/field), model change,
+table UI, `swift build && swift test` green, update `docs/TECHNICAL.md`
+(Timer bullet: per-size long break + table) and the spec's "Later
+decisions" (dated entry), commit
+`feat(timer): per-size long break; pomodoro sizes as a grid` and push.
+
+---
+
+### Task 11: Pomodoro-type icons in the Tasks composer
+
+*(Added 2026-07-13, user decision: "pomidoro typeni ham tanlash kerak
+sozla. 3 xil iconda" — the main-window Tasks composer should let you pick
+the new task's pomodoro type via three icons.)*
+
+**Files:**
+- Modify: `Sources/Sharingan/Views/TasksView.swift`
+
+**Design:**
+
+1. New state near the other composer `@State`s: `@State private var newKind: PomodoroKind? = nil`.
+2. In `detailsPanel`'s estimate+repeat `HStack` (currently `Est … 🍅` +
+   `DSStepper` + repeat `Menu`, ~line 722), append after the repeat menu a
+   three-icon selector — one tappable icon per `PomodoroKind`
+   (`hare.fill` / `timer` / `tortoise.fill` via `kind.systemImage`):
+
+```swift
+                HStack(spacing: 2) {
+                    ForEach(PomodoroKind.allCases) { kind in
+                        Button {
+                            newKind = (newKind == kind) ? nil : kind
+                        } label: {
+                            Image(systemName: kind.systemImage)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(newKind == kind ? Color.white : .white.opacity(0.45))
+                                .frame(width: 26, height: 22)
+                                .background(
+                                    Capsule().fill(newKind == kind
+                                        ? Color.dsAccent.opacity(0.45)
+                                        : Color.white.opacity(0.06)))
+                                .contentShape(Capsule())
+                        }
+                        .buttonStyle(.pressableSubtle)
+                        .help("\(kind.label) pomodoro — tap again for Auto")
+                    }
+                }
+```
+
+   (If `Color.dsAccent` doesn't exist, use the same accent the composer's
+   active chips use — read `chip(icon:text:active:)` and reuse its active
+   fill.) Tapping the selected icon again clears back to nil = Auto.
+3. Thread it into task creation: in the `TaskItem(...)` construction in
+   the add path (~line 1683), pass `pomodoroKind: newKind` (the initializer
+   already has the parameter). Reset `newKind = nil` wherever the other
+   composer fields reset after a successful add.
+4. No model/store changes; parser (`parsed`) untouched.
+
+**Verification:** `swift build && swift test` green; visual sanity via the
+existing dev-preview flag if it renders the task editor/composer, else
+reasoning + tests.
+
+**Commit:** `feat(tasks): pomodoro-type icons in the composer` and push.

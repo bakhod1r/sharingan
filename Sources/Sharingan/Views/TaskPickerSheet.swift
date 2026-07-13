@@ -133,6 +133,8 @@ struct TaskPickerSheet: View {
                 Image(systemName: "play.circle.fill")
                     .font(.system(size: 22))
                     .foregroundStyle(.white.opacity(0.9))
+                    .frame(width: 30, height: 30)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.pressableSubtle)
         }
