@@ -100,6 +100,33 @@
 
 ---
 
+## Settings tiers (Simple / Advanced)
+
+Settings has two surfaces controlled by one segmented switch on the root
+list: **Simple** (~30 most-used rows across 7 categories) and **Advanced**
+(all ~85 rows, 9 categories — adds Voice Guidance and Shortcuts).
+
+- `SettingsTier` (SharinganCore/Models) — `simple`/`advanced`; stored in
+  `UserDefaults` under `settingsTier` (never in the PomodoroSettings blob).
+  `seedIfNeeded()` runs at launch: fresh install → simple, existing
+  settings blob (`PomodoroSettings.defaultsKey`) → advanced.
+- `SettingsCategory` (SharinganCore/Models) — moved out of the view; owns
+  `tier`, `hasAdvancedRows`, `visible(in:)`, and search `matches(_:)`.
+  The `tint` color stays in a SettingsView extension.
+- Rows are gated in `SettingsView.categorySections` with `if advanced { }`.
+  Hidden ≠ disabled: advanced values persist and stay in effect.
+- Search always spans both tiers; an Advanced-only hit shows an "Advanced"
+  chip and opening it switches the tier. Simple category pages end with a
+  "More settings in Advanced →" link.
+- Simple Timer shows two steppers bound to the active pomodoro kind
+  (`settings.focusMinutes` / `shortBreakMinutes`); the Small/Normal/Big
+  grid is Advanced. The Spoken-instructions toggle appears in Eye Care in
+  Simple (same `ttsSettings.enabled` the Voice category edits).
+- Root-list order = `SettingsCategory` declaration order — General first.
+  The Theme picker lives in General → Appearance (both tiers).
+
+---
+
 ## Focus enforcement & integrations
 
 - **App blocking**: hide or force-quit distracting apps (presets include Chrome, Safari, VS Code, Slack, Telegram, Messages) — during breaks, during focus, or always.

@@ -30,34 +30,46 @@ a **Simple** tier (most-used essentials, ~32 rows) and an **Advanced** tier
   after update) → **Advanced**, so nothing they already saw disappears.
 - One-shot migration; after that the stored choice wins.
 
+## Later decisions
+
+- **2026-07-13:** General moved to the top of the root list; Theme moved
+  from Timer to General/Appearance (user decision).
+
 ## Category visibility
 
-Simple shows 7 of 9 categories. **Voice Guidance** and **Shortcuts** are
-Advanced-only (their one essential control — "Spoken instructions" on/off —
-is surfaced in Eye Care).
+Simple shows 7 of 9 categories (starting with **General**, which includes
+an "Appearance" section with the Theme picker—both tiers). **Voice
+Guidance** and **Shortcuts** are Advanced-only (their one essential
+control — "Spoken instructions" on/off — is surfaced in Eye Care).
 
 Row counts below are indicative (control groups counted as one row); the
 row-by-row split is the authority.
 
 | Category | Simple rows | Advanced adds |
 |---|---|---|
+| General | 6 | — |
 | Timer | 7 | +19 |
 | Tasks & Planning | 3 | +3 |
 | Breaks | 4 | +5 |
 | Focus & Blocking | 3 | +7 |
 | Eye Care | 6 | +4 |
 | Sharingan Eyes | 3 | +9 |
-| General | 6 | — |
 | Voice Guidance | — | 3 (whole category) |
 | Shortcuts | — | 7 (whole category) |
 
 ## Row-by-row split
 
+### General
+**Both tiers:** Appearance section with Theme picker (six themes: Liquid
+Glass, Frosted, Midnight, Cream, Neon, Mono).
+**Simple:** auto-start focus, auto-start break, launch at login, notify
+5 min left, alarm sound (toggle + picker).
+
 ### Timer
 **Simple:** focus length, break length (both for the *active* pomodoro kind
 — see below), long break minutes, long break every N, floating timer
 on/off, Today panel on/off, menu bar countdown.
-**Advanced:** timer mode, theme, time format, flash at 5 s, the full
+**Advanced:** timer mode, time format, flash at 5 s, the full
 Small/Normal/Big per-kind duration grid (6 steppers), repeat block
 (enabled/endless/count/delay), floating timer details (size preset,
 opacity, always-on-top, dots, task pill).
@@ -98,10 +110,6 @@ wallpaper toggle.
 **Advanced:** per-eye style, pattern animation speed, mixed patterns,
 pattern spin, wallpaper spin trigger/speed/idle delay/doze.
 
-### General
-All Simple: auto-start focus, auto-start break, launch at login, notify
-5 min left, alarm sound (toggle + picker).
-
 ### Voice Guidance (Advanced-only category)
 Voice rate, voice pitch, global kalib pool. (The master on/off lives in
 Eye Care for Simple users; it is the same underlying setting.)
@@ -114,10 +122,11 @@ Global shortcuts toggle + 6 recorder rows.
 1. **Search always spans both tiers.** In Simple mode a match on an
    Advanced-only category/row still appears, marked with an "Advanced"
    chip; opening it switches the tier to Advanced.
-2. **Footer link on each Simple category page:** "*N more settings in
-   Advanced →*". Tapping switches tier in place. N is computed
-   automatically via a PreferenceKey counting hidden rows — never
-   hand-maintained.
+2. **Footer link on each Simple category page:** "*More settings in
+   Advanced →*". Tapping switches tier in place. (No hidden-row count: the
+   variadic `SettingsCard` row layout would render a preference-carrying
+   placeholder as an empty row with a stray divider, so the link is
+   countless by design.)
 3. Hidden settings keep working (e.g. a wallpaper spin configured in
    Advanced continues after switching to Simple).
 
@@ -127,8 +136,11 @@ Global shortcuts toggle + 6 recorder rows.
   testable; UI persistence via `@AppStorage("settingsTier")`.
 - `SettingsCategory.tier` property → `.voice`/`.shortcuts` return
   `.advanced`.
-- `.advancedOnly()` view modifier + tier-aware `Section` helper in
-  `SettingsView.swift`; rows/sections tagged in place.
+- Rows/sections gated in place with `if advanced { }` conditionals in
+  `SettingsView.categorySections` — a modifier whose body conditionally
+  omits content still counts as a variadic child in `SettingsCard` and
+  would leave an empty padded row with a divider; a false `if` yields
+  zero children (the pattern the file already uses for conditional rows).
 - First-launch migration: if the settings blob file exists and no tier has
   been chosen yet → seed `advanced`; else `simple`.
 - Tests: Simple root shows exactly 7 categories; search in Simple finds
