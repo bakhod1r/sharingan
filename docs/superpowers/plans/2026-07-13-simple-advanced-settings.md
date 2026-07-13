@@ -551,15 +551,56 @@ git push
 
 All gating uses `if advanced { … }` / `if !advanced { … }` around **existing** rows — row code itself is unchanged unless shown below. `Section` here is the view's private helper (title + `SettingsCard`), so whole sections can be wrapped in conditionals safely.
 
+- [ ] **Step 0: General first + Theme lives in General** *(user decision 2026-07-13)*
+
+In `Sources/SharinganCore/Models/SettingsCategory.swift`:
+
+1. Reorder the case declaration so General leads the root list (order is
+   `allCases` order):
+
+```swift
+    case general, timer, tasks, breaks, focus, eyeCare, sharingan, voice, shortcuts
+```
+
+2. Update General's `subtitle` to `"Theme, auto-start, sound, notifications"`
+   and prepend `"theme", "appearance", "liquid", "glass"` to General's
+   `keywords` array. Remove nothing from Timer's keywords (search may still
+   route "mode"/"countdown" there).
+
+In `Tests/SharinganTests/SettingsCategoryTests.swift` add to the
+`simpleVisibility` test:
+
+```swift
+        #expect(visible.first == .general)
+```
+
+In `SettingsView.categorySections`, move the existing Theme `Picker` row
+out of `.timer`'s "Timer mode" section and into `.general` as the FIRST
+section of that case, visible in both tiers:
+
+```swift
+        case .general:
+                Section("Appearance") {
+                    Picker("Theme", selection: $settings.theme) {
+                        ForEach(SharinganTheme.allCases, id: \.self) { theme in
+                            Text(theme.label).tag(theme)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+                // existing sections below, unchanged: Auto-start,
+                // Notifications, Sound
+```
+
 - [ ] **Step 1: `.timer` case**
 
-Restructure the `case .timer:` body to (existing row code moved, not rewritten):
+Restructure the `case .timer:` body to (existing row code moved, not rewritten — note the Theme picker has moved to General in Step 0):
 
 ```swift
         case .timer:
                 if advanced {
                     Section("Timer mode") {
-                        // existing rows, unchanged: Mode picker, Theme picker,
+                        // existing rows, unchanged: Mode picker,
                         // Time format picker, "Flash at 5 seconds left" toggle
                     }
                 }
