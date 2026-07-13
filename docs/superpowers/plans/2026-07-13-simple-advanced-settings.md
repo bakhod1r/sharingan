@@ -1164,3 +1164,194 @@ git add -f docs/TECHNICAL.md
 git commit -m "feat(rebrand): Blink -> Sharingan storage identifiers with one-shot migration"
 git push
 ```
+
+---
+
+### Task 8: Per-page "Advanced settings" accordion replaces the global tier switch
+
+*(Added 2026-07-13, user decision after seeing the built UI: "ichiga kirib
+asosiylar ochiq ko'rinsin, pastda advanced settings accordionda chiqsin".
+The global Simple|Advanced switch goes away; every category page shows its
+essential rows always, with the advanced rows inside one collapsible
+"Advanced settings" disclosure at the bottom of the page.)*
+
+**Files:**
+- Modify: `Sources/Sharingan/Views/SettingsView.swift` (remove tier state/picker/chip/footer; restructure `categorySections`; add accordion)
+- Modify: `Sources/SharinganCore/Models/SettingsCategory.swift` (drop `tier` + `visible(in:)`; recompute `hasAdvancedRows`)
+- Delete: `Sources/SharinganCore/Models/SettingsTier.swift`
+- Modify: `Sources/Sharingan/AppDelegate.swift` (drop `SettingsTier.seedIfNeeded()`; keep `RebrandMigration.migrate()`)
+- Delete: `Tests/SharinganTests/SettingsTierTests.swift`
+- Modify: `Tests/SharinganTests/SettingsCategoryTests.swift`
+
+**Interfaces:**
+- Consumes: existing `categorySections` structure with `if advanced { }` gates (Tasks 4–5) — those gates become the accordion's content.
+- Produces: nothing new for later tasks (terminal UI task).
+
+**Design:**
+
+1. **Root list**: all 9 categories always visible (General first, as now).
+   No segmented picker in `rootHeader`, no "Advanced" chip, no tier
+   auto-switch in `categoryRow`, no "More settings in Advanced" footer.
+2. **Category page layout**: the previously-Simple rows render always, in
+   their existing sections. The previously-Advanced rows move into a
+   trailing accordion:
+
+```swift
+    @State private var advancedExpanded = false
+```
+
+   (reset to `false` whenever `openCategory` changes). At the bottom of
+   `categoryPage(_:)` (after `categorySections(cat)`), for categories where
+   `cat.hasAdvancedRows`:
+
+```swift
+                if cat.hasAdvancedRows {
+                    Button {
+                        withAnimation(DS.Motion.gentle) { advancedExpanded.toggle() }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .semibold))
+                                .rotationEffect(.degrees(advancedExpanded ? 90 : 0))
+                            Text("Advanced settings")
+                                .font(.system(.callout, design: .rounded).weight(.semibold))
+                            Spacer()
+                        }
+                        .foregroundStyle(.white.opacity(0.75))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.pressableSubtle)
+                    .padding(.top, 4)
+
+                    if advancedExpanded {
+                        advancedSections(cat)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                }
+```
+
+3. **Split `categorySections`** into two builders:
+   - `categorySections(_ cat:)` — the always-visible rows: exactly the
+     rows that were un-gated (Simple) after Tasks 4–5, with two deltas:
+     (a) the Eye Care "Spoken instructions" bridge toggle is REMOVED
+     (Voice Guidance is now always reachable from the root — the bridge
+     would duplicate it on two simultaneously-visible pages);
+     (b) *(user decision 2026-07-13: "settingsda pomidor tursin")* Timer's
+     always-visible part shows the FULL Section("Pomodoro sizes") —
+     explainer + 3×2 Small/Normal/Big grid — and the two-stepper
+     "Durations" simplification from Task 4 is DELETED (it was a
+     Simple-tier substitute; with tiers gone the real grid is the one
+     source of truth).
+   - `advancedSections(_ cat:)` — new `@ViewBuilder` containing what was
+     inside the `if advanced { }` gates, kept in their own sections, in
+     this order per category:
+     - **Timer**: Section("Timer mode") — mode/format/flash;
+       Section("Repeat"); Section("Floating timer details") —
+       size/always-on-top/dots/task/opacity/drag hint, still gated
+       `if settings.floatingTimerEnabled` (keep that inner conditional;
+       when the master toggle is off the section shows a short caption
+       "Enable the floating timer to configure it." instead).
+     - **Tasks**: Section("Planning"); Section("Estimates & badges").
+     - **Breaks**: Section("Screen brightness").
+     - **Focus**: Section("App blocking extras") — also-block-during-focus +
+       force-quit; Section("Do Not Disturb") — unchanged block;
+       Section("Reminder details") — during-focus-only + per-reminder rows +
+       add button.
+     - **Eye Care**: Section("Exercise tuning") — step-hold slider + caption,
+       instruction editor block (`if let selected…` + StepsInstructionEditor),
+       kalib slider; Section("Camera") — strict-validation toggle + caption,
+       gated `if settings.cameraEyeTrackingEnabled` (else a caption "Enable
+       camera eye tracking to configure validation.").
+     - **Sharingan**: Section("Iris details") — per-eye toggle + right-eye
+       picker; Section("Break screen effects") — pattern animation + mixed +
+       spin (Mixed still nested in `!= .off`); Section("Wallpaper motion") —
+       spin trigger/speed/idle/doze. NOTE: the `.onChange` chain currently
+       hangs off the "Desktop wallpaper" section in the always-visible part —
+       it must STAY on an always-visible view (it re-applies wallpaper
+       config); do not move it into the accordion, where it would stop
+       observing while collapsed.
+     - **General, Voice, Shortcuts**: no `advancedSections` (all content
+       always visible; `hasAdvancedRows == false`).
+4. **Core cleanup**: delete `SettingsTier.swift` and its tests; in
+   `SettingsCategory` delete `tier` and `visible(in:)`, recompute
+   `hasAdvancedRows` as `!(self == .general || self == .voice || self == .shortcuts)`;
+   in `SettingsView` delete `tierRaw`/`tier`/`advanced` and every use;
+   in `AppDelegate` delete the `SettingsTier.seedIfNeeded()` call and its
+   comment (keep `RebrandMigration.migrate()`). The stored `"settingsTier"`
+   defaults key becomes a harmless leftover — do not write cleanup code
+   for it.
+5. **Tests** (`SettingsCategoryTests`): replace tier-dependent tests with:
+   all 9 cases present, `allCases.first == .general`,
+   `hasAdvancedRows` false exactly for general/voice/shortcuts, search
+   keywords still find voice ("pitch") and shortcuts ("hotkey").
+6. Update `docs/TECHNICAL.md` "Settings tiers" subsection → rename to
+   "Settings layout (essentials + Advanced accordion)" and rewrite to match
+   (per-page accordion, no global switch, no seeding); add a dated line to
+   the spec's "Later decisions" section.
+
+- [ ] **Step 1: implement the view + Core + AppDelegate changes above**
+- [ ] **Step 2: update the tests; run `swift test --filter SettingsCategoryTests`**
+- [ ] **Step 3: full `swift build && swift test` — green (RebrandMigration
+      and all other suites untouched)**
+- [ ] **Step 4: docs updates (TECHNICAL.md + spec Later decisions)**
+- [ ] **Step 5: commit and push**
+
+```bash
+git add -A Sources Tests
+git add -f docs/TECHNICAL.md docs/superpowers/specs/2026-07-13-simple-advanced-settings-design.md
+git commit -m "feat(settings): per-page Advanced accordion replaces global tier switch"
+git push
+```
+
+---
+
+### Task 9: Pomodoro-kind chip in the task picker
+
+*(Added 2026-07-13, user decision: "task tanlashda pomidorini turini
+tanlasin" — when picking the task for a focus session, the user should be
+able to pick that task's pomodoro size right there.)*
+
+The model and editor already support per-task kinds: `TaskItem.pomodoroKind:
+PomodoroKind?` (nil = default), `TaskStore.resolvedActiveKind`, and
+`TaskEditorView` has a chip + `Menu` precedent (lines ~222–236: "Default" +
+`ForEach(PomodoroKind.allCases)` entries with checkmark). The timer already
+adopts the picked task's kind (verified by SelfTest "session adopts the
+task's kind"). The ONLY gap: `TaskPickerSheet` (the "Choose a task" /
+"What's next?" sheet) shows no kind control.
+
+**Files:**
+- Modify: `Sources/Sharingan/Views/TaskPickerSheet.swift`
+
+**Design:**
+
+1. In `row(_ task:)`, right-aligned before the chevron/affordances, add a
+   compact kind chip styled like the editor's: a `Menu` whose label is the
+   task's current kind (`task.pomodoroKind?.label ?? "Auto"` with
+   `task.pomodoroKind?.systemImage ?? "timer"` icon, caption font, subtle
+   capsule). Menu entries: "Default" (sets nil) + one per
+   `PomodoroKind.allCases` (Small/Normal/Big, checkmark on the current one).
+2. Selecting an entry PERSISTS to the task via the existing store update
+   path (mirror how `TaskEditorView` saves the draft's kind — reuse
+   `TaskStore`'s update API, do not add new store methods) — so the choice
+   sticks for future sessions, same semantics as the editor.
+3. Tapping the chip must NOT trigger the row's own Button action (picking
+   the task). Put the Menu outside the row Button's label or use
+   `.buttonStyle` isolation — verify a chip tap doesn't start a session.
+4. Row height/layout must not jump: chip is one-line, caption-sized,
+   `fixedSize()`.
+5. No behavior change in pick-mode vs start-mode beyond the chip being
+   available in both.
+
+**Verification:** `swift build && swift test` green; then
+`swift run Sharingan` manually (or ask the controller/user) to confirm:
+chip shows per-row, changing it updates the task (visible in the editor
+afterwards), tapping the chip does not start the session, picking the row
+starts with the chosen kind.
+
+**Commit:**
+
+```bash
+git add Sources/Sharingan/Views/TaskPickerSheet.swift
+git commit -m "feat(tasks): pomodoro-size chip in the task picker"
+git push
+```
