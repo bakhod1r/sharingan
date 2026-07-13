@@ -240,6 +240,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
 
+        // Fresh install → Simple settings; updating user (existing settings
+        // blob) → Advanced, so nothing they already saw disappears.
+        SettingsTier.seedIfNeeded()
+
         // Sharingan's entire UI is a dark-glass design: every surface hardcodes white
         // text and `Color.white.opacity(...)` chrome over dark gradients and
         // `.regularMaterial`. Under the system Light appearance the popover and

@@ -13,6 +13,12 @@ struct SettingsView: View {
     /// "Due soon" pre-reminder offset in minutes (0 = off); read by TaskStore
     /// when it schedules deadline notifications.
     @AppStorage(TaskStore.preReminderDefaultsKey) private var preReminderMinutes = 10
+    /// Simple | Advanced surface tier. UI state only — hidden advanced
+    /// values keep persisting and keep taking effect.
+    @AppStorage(SettingsTier.defaultsKey) private var tierRaw =
+        SettingsTier.simple.rawValue
+    private var tier: SettingsTier { SettingsTier.from(tierRaw) }
+    private var advanced: Bool { tier == .advanced }
 
     var body: some View {
         ZStack {
@@ -57,10 +63,11 @@ struct SettingsView: View {
         }
     }
 
-    /// Categories matching the search query (all when the query is empty).
+    /// Root-list categories: the tier's visible set normally; when searching,
+    /// ALL categories — an Advanced-only match shows an "Advanced" chip.
     private var filteredCategories: [SettingsCategory] {
         let q = searchText.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !q.isEmpty else { return SettingsCategory.allCases }
+        guard !q.isEmpty else { return SettingsCategory.visible(in: tier) }
         return SettingsCategory.allCases.filter { $0.matches(q) }
     }
 
@@ -97,6 +104,14 @@ struct SettingsView: View {
                 .font(.system(.callout, design: .rounded))
                 .foregroundStyle(.white.opacity(0.6))
                 .multilineTextAlignment(.center)
+            Picker("", selection: $tierRaw) {
+                Text("Simple").tag(SettingsTier.simple.rawValue)
+                Text("Advanced").tag(SettingsTier.advanced.rawValue)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 220)
+            .padding(.top, 4)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 8).padding(.bottom, 6)
@@ -109,6 +124,22 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 20) {
                 categoryHeader(cat)
                 categorySections(cat)
+                if !advanced && cat.hasAdvancedRows {
+                    Button {
+                        tierRaw = SettingsTier.advanced.rawValue
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text("More settings in Advanced")
+                            Image(systemName: "arrow.right")
+                        }
+                        .font(.system(.callout, design: .rounded).weight(.medium))
+                        .foregroundStyle(.white.opacity(0.75))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.pressableSubtle)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 2)
+                }
             }
             .frame(maxWidth: 600)
             .frame(maxWidth: .infinity)
@@ -144,7 +175,12 @@ struct SettingsView: View {
     }
 
     private func categoryRow(_ cat: SettingsCategory) -> some View {
-        Button { openCategory = cat } label: {
+        Button {
+            // Opening an Advanced-only category from a Simple search result
+            // switches the tier so its page isn't empty.
+            if cat.tier == .advanced { tierRaw = SettingsTier.advanced.rawValue }
+            openCategory = cat
+        } label: {
             HStack(spacing: 12) {
                 Image(systemName: cat.icon)
                     .font(.system(size: 14, weight: .semibold))
@@ -161,6 +197,13 @@ struct SettingsView: View {
                         .foregroundStyle(.white.opacity(0.5))
                 }
                 Spacer(minLength: 8)
+                if cat.tier == .advanced && !advanced {
+                    Text("Advanced")
+                        .font(.system(.caption2, design: .rounded).weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.7))
+                        .padding(.horizontal, 7).padding(.vertical, 2)
+                        .background(Capsule().fill(.white.opacity(0.12)))
+                }
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.35))
