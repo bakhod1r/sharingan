@@ -352,7 +352,10 @@ struct MainWindowView: View {
         let counts: [String: Int] = open.reduce(into: [:]) { acc, t in
             for tag in t.tags { acc[tag, default: 0] += 1 }
         }
-        let names = tasks.allTags.prefix(8)
+        // Cap the busy frequency-ordered list, but never hide precreated
+        // custom tags (they sit at the tail of allTags and a plain cap
+        // would swallow a tag the user just added via "+").
+        let names = tasks.allTags.prefix(8 + tasks.customTags.count)
         sectionHeader("Tags", collapsed: $tagsCollapsed,
                       addHelp: "New tag") {
             showAddTag = true
