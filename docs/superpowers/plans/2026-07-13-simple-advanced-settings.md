@@ -912,3 +912,255 @@ git add -f docs/TECHNICAL.md docs/superpowers/specs/2026-07-13-simple-advanced-s
 git commit -m "docs: settings tier concept in TECHNICAL.md; spec footer amendment"
 git push
 ```
+
+---
+
+### Task 7: Blink → Sharingan internal rebrand + one-shot data migration
+
+*(Added 2026-07-13 by user decision: "hammasi + migratsiya". The app is
+already branded Sharingan in the UI; this renames the internal storage
+identifiers and demo strings, migrating existing users' data.)*
+
+**Files:**
+- Create: `Sources/SharinganCore/Services/RebrandMigration.swift`
+- Modify: `Sources/SharinganCore/Models/PomodoroSettings.swift` (defaultsKey, DND defaults),
+  `Sources/SharinganCore/Services/PomodoroTimer.swift` (statsKey),
+  `Sources/SharinganCore/Services/CLIBridge.swift` (snapshotKey, darwin names, shared dir),
+  `Sources/SharinganCore/Services/TaskStore.swift` + `TemplateStore.swift` (dir name),
+  `Sources/Sharingan/Views/FloatingTimerView.swift` / wherever `blink.floating.*` and
+  `blink.todayPanel.origin` keys live (grep for `"blink.` to find them),
+  `Sources/Sharingan/AppDelegate.swift` (call migration BEFORE `SettingsTier.seedIfNeeded()`),
+  `Sources/tired/main.swift` (call migration at startup; fix `@blink` help example),
+  `Sources/Sharingan/main.swift` + `Sources/SelfTest/main.swift` (demo `project: "Blink"` strings)
+- Test: `Tests/SharinganTests/RebrandMigrationTests.swift`
+
+**Interfaces:**
+- Consumes: `PomodoroSettings.defaultsKey` (changes value), `SettingsTier.seedIfNeeded` ordering.
+- Produces: `RebrandMigration.migrate(defaults:fileManager:)` — called at app AND CLI startup.
+
+**Key renames (old → new):**
+
+| Old | New |
+|---|---|
+| `com.blink.settings` | `com.sharingan.settings` |
+| `com.blink.stats` | `com.sharingan.stats` |
+| `com.blink.cliSnapshot` | `com.sharingan.cliSnapshot` |
+| `com.blink.cli.*` (darwin notification names) | `com.sharingan.cli.*` |
+| `blink.floating.x/y/w/h` | `sharingan.floating.x/y/w/h` |
+| `blink.todayPanel.origin` | `sharingan.todayPanel.origin` |
+| App Support dir `Blink/` (incl. `Blink/cli`) | `Sharingan/` |
+| Demo/task strings `project: "Blink"`, help `@blink` | `"Sharingan"`, `@sharingan` |
+| DND shortcut DEFAULTS `"Blink Focus On/Off"` | `"Sharingan Focus On/Off"` |
+
+**NOT migrated (deliberate):** stored `dndShortcutOn/Off` values inside a
+user's settings blob — they name the user's real Shortcuts in Shortcuts.app;
+rewriting them would silently break the user's automation. Only the code
+defaults change (fresh installs). Old defaults-keys are copied, not deleted
+(cheap rollback safety); the App Support dir is MOVED (renamed), not copied,
+so task/template data isn't forked.
+
+- [ ] **Step 1: Write failing tests**
+
+`Tests/SharinganTests/RebrandMigrationTests.swift`:
+
+```swift
+import Testing
+import Foundation
+@testable import SharinganCore
+
+@Suite("Rebrand migration")
+struct RebrandMigrationTests {
+
+    private func freshDefaults() -> UserDefaults {
+        let name = "rebrand-tests-\(UUID().uuidString)"
+        let d = UserDefaults(suiteName: name)!
+        d.removePersistentDomain(forName: name)
+        return d
+    }
+
+    private func tempBase() throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("rebrand-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    @Test("old defaults values are copied to new keys, old kept")
+    func defaultsCopied() {
+        let d = freshDefaults()
+        d.set(Data([0x7b]), forKey: "com.blink.settings")
+        d.set(Data([0x5b]), forKey: "com.blink.stats")
+        d.set(120.0, forKey: "blink.floating.x")
+        RebrandMigration.migrateDefaults(d)
+        #expect(d.data(forKey: PomodoroSettings.defaultsKey) == Data([0x7b]))
+        #expect(d.data(forKey: "com.sharingan.stats") == Data([0x5b]))
+        #expect(d.double(forKey: "sharingan.floating.x") == 120.0)
+        #expect(d.data(forKey: "com.blink.settings") != nil)  // kept
+    }
+
+    @Test("existing new-key values are never overwritten")
+    func newKeyWins() {
+        let d = freshDefaults()
+        d.set(Data([0x01]), forKey: "com.sharingan.settings")
+        d.set(Data([0x02]), forKey: "com.blink.settings")
+        RebrandMigration.migrateDefaults(d)
+        #expect(d.data(forKey: "com.sharingan.settings") == Data([0x01]))
+    }
+
+    @Test("no-op on a fresh install")
+    func freshNoop() {
+        let d = freshDefaults()
+        RebrandMigration.migrateDefaults(d)
+        #expect(d.data(forKey: PomodoroSettings.defaultsKey) == nil)
+    }
+
+    @Test("Blink app-support dir is renamed to Sharingan")
+    func dirMoved() throws {
+        let base = try tempBase()
+        let old = base.appendingPathComponent("Blink", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: old.appendingPathComponent("cli"), withIntermediateDirectories: true)
+        try Data("x".utf8).write(to: old.appendingPathComponent("tasks.json"))
+        RebrandMigration.migrateAppSupport(base: base)
+        let new = base.appendingPathComponent("Sharingan", isDirectory: true)
+        #expect(FileManager.default.fileExists(atPath: new.appendingPathComponent("tasks.json").path))
+        #expect(!FileManager.default.fileExists(atPath: old.path))
+    }
+
+    @Test("dir move never clobbers an existing Sharingan dir")
+    func dirMoveNoClobber() throws {
+        let base = try tempBase()
+        let old = base.appendingPathComponent("Blink", isDirectory: true)
+        let new = base.appendingPathComponent("Sharingan", isDirectory: true)
+        try FileManager.default.createDirectory(at: old, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: new, withIntermediateDirectories: true)
+        try Data("new".utf8).write(to: new.appendingPathComponent("tasks.json"))
+        RebrandMigration.migrateAppSupport(base: base)
+        let kept = try Data(contentsOf: new.appendingPathComponent("tasks.json"))
+        #expect(String(decoding: kept, as: UTF8.self) == "new")
+    }
+
+    @Test("fresh DND defaults say Sharingan")
+    func dndDefaults() {
+        let s = PomodoroSettings()
+        #expect(s.dndShortcutOn == "Sharingan Focus On")
+        #expect(s.dndShortcutOff == "Sharingan Focus Off")
+    }
+}
+```
+
+Run: `swift test --filter RebrandMigrationTests` — expect compile failure.
+
+- [ ] **Step 2: Implement `RebrandMigration`**
+
+`Sources/SharinganCore/Services/RebrandMigration.swift`:
+
+```swift
+import Foundation
+
+/// One-shot Blink → Sharingan storage rename. The app was renamed in the UI
+/// long ago; this migrates the on-disk identifiers so existing users keep
+/// their settings, stats, tasks and templates. Old defaults keys are copied
+/// (kept for rollback); the App Support directory is moved. Safe to call on
+/// every launch — copies and moves only happen when the new location is
+/// still empty. Called by the app (AppDelegate) and the `tired` CLI before
+/// anything reads storage.
+public enum RebrandMigration {
+
+    /// Old→new UserDefaults keys (values copied verbatim, old kept).
+    static let keyMap: [(old: String, new: String)] = [
+        ("com.blink.settings", "com.sharingan.settings"),
+        ("com.blink.stats", "com.sharingan.stats"),
+        ("com.blink.cliSnapshot", "com.sharingan.cliSnapshot"),
+        ("blink.floating.x", "sharingan.floating.x"),
+        ("blink.floating.y", "sharingan.floating.y"),
+        ("blink.floating.w", "sharingan.floating.w"),
+        ("blink.floating.h", "sharingan.floating.h"),
+        ("blink.todayPanel.origin", "sharingan.todayPanel.origin"),
+    ]
+
+    public static func migrate(defaults: UserDefaults = .standard,
+                               fileManager: FileManager = .default) {
+        migrateDefaults(defaults)
+        if let base = fileManager.urls(for: .applicationSupportDirectory,
+                                       in: .userDomainMask).first {
+            migrateAppSupport(base: base, fileManager: fileManager)
+        }
+    }
+
+    public static func migrateDefaults(_ defaults: UserDefaults) {
+        for (old, new) in keyMap
+        where defaults.object(forKey: new) == nil {
+            if let value = defaults.object(forKey: old) {
+                defaults.set(value, forKey: new)
+            }
+        }
+    }
+
+    public static func migrateAppSupport(base: URL,
+                                         fileManager: FileManager = .default) {
+        let old = base.appendingPathComponent("Blink", isDirectory: true)
+        let new = base.appendingPathComponent("Sharingan", isDirectory: true)
+        guard fileManager.fileExists(atPath: old.path),
+              !fileManager.fileExists(atPath: new.path) else { return }
+        try? fileManager.moveItem(at: old, to: new)
+    }
+}
+```
+
+- [ ] **Step 3: Rename the constants**
+
+Apply the key-rename table above. Every rename is a constant-value change —
+grep `"com.blink\|\"blink\.\|\"Blink\b\|Blink Focus\|@blink"` across
+`Sources/` to find them all. Specifics:
+
+1. `PomodoroSettings.defaultsKey` → `"com.sharingan.settings"`; DND defaults
+   → `"Sharingan Focus On"` / `"Sharingan Focus Off"` (both the stored-property
+   defaults AND the `d.dndShortcutOn/Off` decode fallbacks pick this up
+   automatically since they read the defaults instance).
+2. `PomodoroTimer.statsKey` → `"com.sharingan.stats"`.
+3. `CLIBridge`: `snapshotKey`, all `darwinCommand*` names (`com.blink.cli.*`
+   → `com.sharingan.cli.*`), and `sharedDir` path component `"Blink/cli"` →
+   `"Sharingan/cli"`.
+4. `TaskStore` and `TemplateStore` dir `"Blink"` → `"Sharingan"`.
+5. Floating/today-panel keys per the table (app target).
+6. Demo strings: `project: "Blink"` → `project: "Sharingan"` in
+   `Sources/Sharingan/main.swift` (2 sites) and `Sources/SelfTest/main.swift`
+   (incl. its `t.project == "Blink"` assertion); `@blink` → `@sharingan` in
+   the `tired` help text.
+
+- [ ] **Step 4: Wire the calls**
+
+In `AppDelegate.applicationDidFinishLaunching`, immediately BEFORE
+`SettingsTier.seedIfNeeded()` (order matters — seeding checks the NEW
+settings key, so the blob must be copied first):
+
+```swift
+        RebrandMigration.migrate()
+```
+
+In `Sources/tired/main.swift`, at the top of the entry point before any
+CLIBridge/TaskStore access, add the same `RebrandMigration.migrate()` call.
+
+- [ ] **Step 5: Run tests**
+
+Run: `swift test --filter RebrandMigrationTests` → 6 tests PASS, then the
+full `swift test` and `swift build`. Watch for existing tests that assert the
+old literals (e.g. SelfTest-style fixtures) and update them per Step 3.6.
+
+- [ ] **Step 6: Update docs**
+
+Add to `docs/TECHNICAL.md` (near the storage/persistence notes): a short
+"Storage identifiers" note listing the new `com.sharingan.*` keys, the
+`~/Library/Application Support/Sharingan/` directory, and that
+`RebrandMigration` performs the one-shot Blink→Sharingan copy/move at
+launch (defaults copied, dir moved, DND stored values deliberately kept).
+
+- [ ] **Step 7: Commit and push**
+
+```bash
+git add -A Sources Tests
+git add -f docs/TECHNICAL.md
+git commit -m "feat(rebrand): Blink -> Sharingan storage identifiers with one-shot migration"
+git push
+```
