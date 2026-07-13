@@ -273,6 +273,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainWindowManager.shared.content = { AnyView(MainWindowView(timer: timer)) }
 
         MenuBarController.shared.install(timer: timer, coordinator: coord)
+        NotchWindowManager.shared.install(timer: timer, coordinator: coord)
 
         // Without this, notify()/schedule() silently no-op on a fresh install:
         // UNUserNotificationCenter.add fails while status is .notDetermined.

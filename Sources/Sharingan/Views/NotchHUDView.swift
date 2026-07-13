@@ -1,0 +1,79 @@
+import SwiftUI
+import SharinganCore
+
+/// The observable the panel and the SwiftUI island share. The manager writes,
+/// the view reads.
+@MainActor
+final class NotchHUDModel: ObservableObject {
+    @Published var state = NotchHUDState()
+    @Published var metrics = NotchScreenMetrics(screenWidth: 1512, menuBarHeight: 37,
+                                                notchWidth: 200, notchHeight: 37,
+                                                isBuiltIn: true)
+    @Published var earsMode: NotchEarsMode = .both
+    @Published var progress: Double = 0
+    @Published var remaining: TimeInterval = 0
+    @Published var phase: PomodoroPhase = .focus
+}
+
+/// The island: one black shape that morphs between states. It draws the notch's
+/// own bottom corner radius so it reads as an extension of the hardware rather
+/// than a window that appeared.
+struct NotchHUDView: View {
+    @ObservedObject var model: NotchHUDModel
+    @ObservedObject var timer: PomodoroTimer
+
+    private var layout: NotchLayout {
+        NotchGeometry.layout(model.metrics, size: model.state.size)
+    }
+
+    var body: some View {
+        let l = layout
+        ZStack(alignment: .top) {
+            Color.clear
+            island(l)
+                .frame(width: l.island.width, height: l.island.height)
+                .offset(y: l.island.minY)
+        }
+        .frame(width: l.panelSize.width, height: l.panelSize.height, alignment: .top)
+        .animation(.spring(response: 0.32, dampingFraction: 0.82),
+                   value: model.state.size)
+    }
+
+    @ViewBuilder
+    private func island(_ l: NotchLayout) -> some View {
+        if model.state.size == .hidden {
+            EmptyView()
+        } else {
+            IslandShape(cornerRadius: l.cornerRadius)
+                .fill(.black)
+                .overlay(alignment: .top) { content(l) }
+        }
+    }
+
+    /// Filled in by later tasks: ears (Task 5), expanded panel (Task 6),
+    /// activity (Task 7). Idle draws nothing but the shape itself.
+    @ViewBuilder
+    private func content(_ l: NotchLayout) -> some View {
+        EmptyView()
+    }
+}
+
+/// A rectangle whose *bottom* corners are rounded — the notch's silhouette.
+struct IslandShape: Shape {
+    var cornerRadius: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let r = min(cornerRadius, rect.height / 2, rect.width / 2)
+        var p = Path()
+        p.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - r))
+        p.addQuadCurve(to: CGPoint(x: rect.maxX - r, y: rect.maxY),
+                       control: CGPoint(x: rect.maxX, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.minX + r, y: rect.maxY))
+        p.addQuadCurve(to: CGPoint(x: rect.minX, y: rect.maxY - r),
+                       control: CGPoint(x: rect.minX, y: rect.maxY))
+        p.closeSubpath()
+        return p
+    }
+}
