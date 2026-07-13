@@ -73,55 +73,110 @@ struct TaskPickerSheet: View {
     // MARK: - Task row
 
     private func row(_ task: TaskItem) -> some View {
-        Button {
-            choose(task)
-        } label: {
-            HStack(spacing: 10) {
-                Circle()
-                    .fill(Color(hex: store.color(for: task.category)))
-                    .frame(width: 10, height: 10)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(task.title)
-                        .font(.system(.callout, design: .rounded).weight(.semibold))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                    Text(task.category)
-                        .font(.system(size: 10, weight: .medium, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.55))
-                }
-                Spacer()
-                if timer.settings.showPomodoroBadges, task.pomodorosDone > 0 {
-                    Text("🍅\(task.pomodorosDone)")
-                        .font(.system(.caption2, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.7))
-                }
-                // Disclosure for tasks with open steps — lets the user aim the
-                // session at one step instead of the whole task.
-                if task.subtasks.contains(where: { !$0.isDone }) {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.18)) {
-                            if expanded.contains(task.id) { expanded.remove(task.id) }
-                            else { expanded.insert(task.id) }
-                        }
-                    } label: {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.6))
-                            .rotationEffect(.degrees(expanded.contains(task.id) ? 180 : 0))
-                            .frame(width: 24, height: 24)
-                            .contentShape(Rectangle())
+        // The kind chip is a `Menu`, which doesn't play well nested inside a
+        // `Button`'s label (its taps don't route through reliably). So the
+        // pick action lives on its own leading/trailing `Button`s and the
+        // chip sits as a plain sibling between them — a tap on the chip hits
+        // the Menu directly and never reaches either Button's action.
+        HStack(spacing: 10) {
+            Button {
+                choose(task)
+            } label: {
+                HStack(spacing: 10) {
+                    Circle()
+                        .fill(Color(hex: store.color(for: task.category)))
+                        .frame(width: 10, height: 10)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(task.title)
+                            .font(.system(.callout, design: .rounded).weight(.semibold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                        Text(task.category)
+                            .font(.system(size: 10, weight: .medium, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.55))
                     }
-                    .buttonStyle(.pressableSubtle)
-                    .help("Pick a step to focus on")
+                    Spacer(minLength: 4)
+                    if timer.settings.showPomodoroBadges, task.pomodorosDone > 0 {
+                        Text("🍅\(task.pomodorosDone)")
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
                 }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.pressableSubtle)
+
+            kindChip(for: task)
+
+            // Disclosure for tasks with open steps — lets the user aim the
+            // session at one step instead of the whole task.
+            if task.subtasks.contains(where: { !$0.isDone }) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        if expanded.contains(task.id) { expanded.remove(task.id) }
+                        else { expanded.insert(task.id) }
+                    }
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.6))
+                        .rotationEffect(.degrees(expanded.contains(task.id) ? 180 : 0))
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.pressableSubtle)
+                .help("Pick a step to focus on")
+            }
+            Button {
+                choose(task)
+            } label: {
                 Image(systemName: "play.circle.fill")
                     .font(.system(size: 22))
                     .foregroundStyle(.white.opacity(0.9))
             }
-            .padding(.horizontal, 14).padding(.vertical, 10)
-            .glassRounded(12, material: .regular)
+            .buttonStyle(.pressableSubtle)
         }
-        .buttonStyle(.pressableSubtle)
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .glassRounded(12, material: .regular)
+    }
+
+    /// Compact pomodoro-size chip, styled like `TaskEditorView`'s: a `Menu`
+    /// showing the task's current kind (or "Auto" for the default), with a
+    /// "Default" entry plus one per `PomodoroKind`. Selecting an entry
+    /// persists immediately via `TaskStore.update` — same save path the
+    /// editor uses — so the choice sticks for future sessions.
+    private func kindChip(for task: TaskItem) -> some View {
+        Menu {
+            Button("Default") { setKind(nil, for: task) }
+            Divider()
+            ForEach(PomodoroKind.allCases) { kind in
+                Button {
+                    setKind(kind, for: task)
+                } label: {
+                    Label(kind.label,
+                          systemImage: task.pomodoroKind == kind ? "checkmark" : kind.systemImage)
+                }
+            }
+        } label: {
+            HStack(spacing: 3) {
+                Image(systemName: task.pomodoroKind?.systemImage ?? "timer")
+                    .font(.system(size: 9, weight: .semibold))
+                Text(task.pomodoroKind?.label ?? "Auto")
+                    .font(.system(.caption2, design: .rounded).weight(.medium))
+            }
+            .foregroundStyle(.white.opacity(0.65))
+            .padding(.horizontal, 8).padding(.vertical, 4)
+            .background(Capsule().fill(Color.white.opacity(0.08)))
+        }
+        .menuStyle(.borderlessButton).menuIndicator(.hidden)
+        .fixedSize()
+        .help("Pomodoro size for this task")
+    }
+
+    private func setKind(_ kind: PomodoroKind?, for task: TaskItem) {
+        var updated = task
+        updated.pomodoroKind = kind
+        store.update(updated)
     }
 
     /// Open steps of an expanded task; choosing one starts the session with
