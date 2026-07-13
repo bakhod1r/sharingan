@@ -28,8 +28,11 @@ final class NotchWindowManager {
     /// does.
     private var lastPhase: PomodoroPhase?
     /// Last settings we reacted to, so a settings edit re-places the panel while
-    /// a plain countdown tick does not.
-    private var appliedSettings: (enabled: Bool, ears: NotchEarsMode, activity: Bool)?
+    /// a plain countdown tick does not. `content` carries the ears *and* the
+    /// section switches, because both resize the island — and the panel's frame
+    /// is cut from that size.
+    private var appliedSettings: (enabled: Bool, content: NotchContentConfig,
+                                  activity: Bool)?
     let model = NotchHUDModel()
 
     func install(timer: PomodoroTimer, coordinator: SharinganCoordinator) {
@@ -78,11 +81,13 @@ final class NotchWindowManager {
     func refresh() {
         guard let timer else { return }
         let settings = timer.settings
-        appliedSettings = (settings.notchHUDEnabled, settings.notchEars,
+        appliedSettings = (settings.notchHUDEnabled, settings.notchContent,
                            settings.notchLiveActivity)
         model.state.enabled = settings.notchHUDEnabled
         model.state.liveActivityEnabled = settings.notchLiveActivity
-        model.earsMode = settings.notchEars
+        // The one write of the config: the view's layout, the panel's sections
+        // and the hosting view's hit-test mask all read it back off the model.
+        model.config = settings.notchContent
 
         guard settings.notchHUDEnabled, let screen = Self.hudScreen() else {
             teardown()
@@ -93,9 +98,14 @@ final class NotchWindowManager {
     }
 
     /// The timer publishes on every tick; only a *settings* edit needs the panel
-    /// rebuilt, so filter the firehose down to the three keys we care about.
+    /// re-placed, so filter the firehose down to the notch keys. The content
+    /// switches are in here and not merely cosmetic: each one resizes the
+    /// island, and the panel's frame is cut from that size, so a flipped
+    /// checkbox that never reached `place(on:)` would leave the panel sized for
+    /// the old island and clip the new one.
     private func refreshIfSettingsChanged(_ settings: PomodoroSettings) {
-        let now = (settings.notchHUDEnabled, settings.notchEars, settings.notchLiveActivity)
+        let now = (settings.notchHUDEnabled, settings.notchContent,
+                   settings.notchLiveActivity)
         guard let applied = appliedSettings else { refresh(); return }
         guard applied != now else { return }
         refresh()
@@ -170,7 +180,7 @@ final class NotchWindowManager {
         // Before anything is built: a panel with no timer to host has nothing
         // to show, and constructing one first would just leak it.
         guard let timer else { return }
-        let size = NotchGeometry.panelSize(model.metrics)
+        let size = NotchGeometry.panelSize(model.metrics, config: model.config)
         let frame = NSRect(
             x: screen.frame.midX - size.width / 2,
             y: screen.frame.maxY - size.height,   // top-anchored (AppKit y-up)
@@ -339,8 +349,12 @@ private final class NotchHostingView<Content: View>: NSHostingView<Content> {
     override func hitTest(_ point: NSPoint) -> NSView? {
         guard let model else { return nil }
         let local = convert(point, from: superview)
+        // `model.config` — the same value the view drew the island from. Masking
+        // with anything else (the default, say) would keep swallowing clicks in
+        // a strip of menu bar the user's ears setting has already given back.
         guard NotchGeometry.hitTest(geometryPoint(local), metrics: model.metrics,
-                                    size: model.state.size) else { return nil }
+                                    size: model.state.size,
+                                    config: model.config) else { return nil }
         return super.hitTest(point)
     }
 
@@ -360,7 +374,8 @@ private final class NotchHostingView<Content: View>: NSHostingView<Content> {
         let local = convert(event.locationInWindow, from: nil)
         // Hovering the *island* opens it; hovering the expanded body keeps it open.
         let inside = NotchGeometry.hitTest(geometryPoint(local), metrics: model.metrics,
-                                           size: model.state.size)
+                                           size: model.state.size,
+                                           config: model.config)
         NotchWindowManager.shared.pointerMoved(inside: inside)
     }
 

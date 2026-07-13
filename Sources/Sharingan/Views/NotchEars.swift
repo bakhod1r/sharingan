@@ -30,8 +30,12 @@ struct NotchEars: View {
         // Reduce Motion drops the slide entirely and leaves the cross-fade.
         let settled = emerged || reduceMotion
 
+        // Which ears exist is the *layout's* answer, not a second reading of the
+        // setting: the island is only as wide as the ears it grew, and a label
+        // drawn where no ear was made would be clipped by the silhouette — and
+        // would sit over menu bar the hit-test mask has already given back.
         return ZStack(alignment: .topLeading) {
-            if let left = layout.leftEar, model.earsMode == .both {
+            if let left = layout.leftEar {
                 timeLabel
                     .frame(width: left.width, height: left.height)
                     // Emerges leftward, out from under the cutout.
@@ -41,7 +45,7 @@ struct NotchEars: View {
                                value: emerged)
                     .offset(x: left.minX - layout.island.minX, y: left.minY)
             }
-            if let right = layout.rightEar, model.earsMode != .none {
+            if let right = layout.rightEar {
                 taskLabel
                     .frame(width: right.width, height: right.height)
                     // … and this one rightward.

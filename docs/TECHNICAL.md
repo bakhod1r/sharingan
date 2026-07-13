@@ -96,6 +96,7 @@
 - Main window sections: Timer, Tasks, Week, Progress, and Settings.
 - Menu-bar popover with timer, tasks, and week tabs plus today's goal.
 - Floating timer: an always-on-top panel that joins all Spaces, is draggable, has size presets, and auto shows/hides around breaks.
+- Notch HUD: an island over the MacBook camera housing — live ears while a session runs, today's tasks and quick actions on hover. Configurable (see below); absent, and disabled in Settings, on a Mac without a notch.
 - Confirmation prompt before quitting while a focus session is running.
 - Searchable settings, grouped into: Timer, Tasks & Planning, Breaks, Focus & Blocking, Eye Care, Sharingan Eyes, General, Voice Guidance, and Shortcuts.
 
@@ -128,8 +129,56 @@ Simple/Advanced switch and nothing to seed at launch.
   re-applies `WallpaperConfig`) stays in `categorySections` — always
   visible — so it keeps observing even while the Advanced accordion
   (which holds the wallpaper spin/idle/doze rows) is collapsed.
+- Timer's Advanced tier also holds "Notch HUD details" (after the floating
+  timer's, matching the essentials order): the ears picker, the live-activity
+  toggle, and the four "what the panel shows" switches plus the 3–5 task-row
+  stepper. The master "Show the notch HUD" toggle is an essential row.
+  Everything but the master toggle greys out while the HUD is off — and on a
+  Mac with **no camera housing the whole section renders disabled** (visible,
+  greyed, inert) with a note saying so, rather than being hidden.
 - The old `settingsTier` UserDefaults key is a harmless leftover on
   upgraded installs; nothing reads or writes it anymore.
+
+---
+
+## Notch HUD
+
+A black island over the MacBook camera housing (`NotchWindowManager`, an
+`NSPanel` above the menu-bar window level). It exists **only** on a display with
+a real hardware notch: `hudScreen()` (a top safe-area inset *and* both auxiliary
+top areas) is the single source of truth, and there is deliberately no synthetic
+pill and no simulate flag. Settings asks the same function, so it can never
+disagree with the HUD about whether the Mac has a notch; it re-asks on
+`didChangeScreenParametersNotification`.
+
+- **Configurable content.** `PomodoroSettings.notchShow{TimerControls,Tasks,
+  QuickActions,StatusStrip}` + `notchTaskRows` (3–5), projected through
+  `settings.notchContent` into `NotchContentConfig` (SharinganCore) — the one
+  value the layout, the drawn shape, the panel's sections and the hit-test mask
+  all read, off `NotchHUDModel.config`.
+- **The island is sized from that config**, not from a constant:
+  `NotchGeometry.expandedSize(_:cutout:)` = `cutout + 6 + body`, where
+  `body = 10 + Σ(sections) + 8 × count + 4`. Every constant
+  (`timerRowHeight` 51, `taskRowHeight` 21 + 2 spacing, `quickActionsHeight` 24,
+  `statusStripHeight` 13) was **measured** off a structural SwiftUI replica of
+  `NotchExpandedPanel` at the island's 340pt width via `fittingSize` — full
+  panel, five rows = 286pt over a 37pt cutout. Guessing here clips the content at
+  the `.clipShape` or hangs dead black over the screen. Changing the panel's
+  stack, fonts, spacing or width means re-measuring.
+  Floored at `activitySize.height`, so `NotchHUDSize.growthRank`'s promise that
+  `.expanded` is the biggest shape survives an all-sections-off config.
+- **`notchEars` changes the silhouette, not just the labels.** `.both` → cutout +
+  2 ears, `.trailingOnly` → cutout + 1 (the island is anchored to the cutout's
+  left edge, never centred), `.none` → the cutout alone with the progress line.
+  `hitTest` masks against that same island path, so a dropped ear gives its
+  menu-bar pixels back — clicks included. The panel still reserves an ear's width
+  on both sides (it is centred on the cutout, and a one-eared island is not
+  symmetric about it); the mask, not the panel's width, is what frees the menu
+  bar.
+- Settings changes reach the panel through the existing filter on
+  `PomodoroTimer.objectWillChange` (`refreshIfSettingsChanged`), whose snapshot
+  includes the whole `notchContent` — every switch resizes the island, and the
+  panel's frame is cut from that size.
 
 ---
 

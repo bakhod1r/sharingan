@@ -112,6 +112,24 @@ public enum NotchEarsMode: String, Codable, CaseIterable, Identifiable, Sendable
         case .none:         return "Progress bar only"
         }
     }
+
+    /// The mode is not a label switch: an ear the user dropped is an ear the
+    /// island does not *grow*, so the black — and the hit-test mask cut from it
+    /// — stops covering that stretch of the menu bar. `NotchGeometry` sizes the
+    /// live island off exactly these three counts.
+    public var earCount: Int {
+        switch self {
+        case .both:         return 2
+        case .trailingOnly: return 1
+        case .none:         return 0
+        }
+    }
+
+    /// The countdown's ear — the one that overlaps the app's *menu titles*, so
+    /// it is the first one people give up.
+    public var showsLeadingEar: Bool { self == .both }
+    /// The task/phase ear, over the status items.
+    public var showsTrailingEar: Bool { self != .none }
 }
 
 public struct PomodoroSettings: Codable, Equatable, Sendable {
@@ -234,6 +252,29 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var notchHUDEnabled: Bool = true
     public var notchEars: NotchEarsMode = .both
     public var notchLiveActivity: Bool = true
+    /// What the *expanded* island shows. These are not cosmetic: the island's
+    /// height is computed from them (`NotchGeometry.expandedSize`), so a section
+    /// switched off is black the HUD stops hanging over the screen. They default
+    /// to the always-on behavior the HUD shipped with.
+    public var notchShowTimerControls: Bool = true
+    public var notchShowTasks: Bool = true
+    public var notchShowQuickActions: Bool = true
+    public var notchShowStatusStrip: Bool = true
+    /// How many of today's tasks the island lists. Clamped to
+    /// `NotchContentConfig.taskRowRange` — the range the panel was measured for.
+    public var notchTaskRows: Int = NotchTaskRows.defaultLimit
+
+    /// The notch settings, projected into what the geometry actually needs. One
+    /// projection, so the layout, the drawn shape and the hit-test mask cannot
+    /// be reading three different ideas of what the island shows.
+    public var notchContent: NotchContentConfig {
+        NotchContentConfig(ears: notchEars,
+                           showTimerControls: notchShowTimerControls,
+                           showTasks: notchShowTasks,
+                           showQuickActions: notchShowQuickActions,
+                           showStatusStrip: notchShowStatusStrip,
+                           taskRows: notchTaskRows)
+    }
 
     /// UserDefaults key of the persisted settings JSON blob (owned by
     /// PomodoroTimer; exposed so tier seeding can detect an existing user).
@@ -368,8 +409,16 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
         dndShortcutOn = try c.decodeIfPresent(String.self, forKey: .dndShortcutOn) ?? d.dndShortcutOn
         dndShortcutOff = try c.decodeIfPresent(String.self, forKey: .dndShortcutOff) ?? d.dndShortcutOff
         notchHUDEnabled = try c.decodeIfPresent(Bool.self, forKey: .notchHUDEnabled) ?? d.notchHUDEnabled
-        notchEars = try c.decodeIfPresent(NotchEarsMode.self, forKey: .notchEars) ?? d.notchEars
+        // An unknown raw value (a mode a newer build wrote) falls back to the
+        // default rather than throwing the whole blob away, like `floatingSize`.
+        notchEars = ((try? c.decodeIfPresent(NotchEarsMode.self, forKey: .notchEars)) ?? nil)
+            ?? d.notchEars
         notchLiveActivity = try c.decodeIfPresent(Bool.self, forKey: .notchLiveActivity) ?? d.notchLiveActivity
+        notchShowTimerControls = try c.decodeIfPresent(Bool.self, forKey: .notchShowTimerControls) ?? d.notchShowTimerControls
+        notchShowTasks = try c.decodeIfPresent(Bool.self, forKey: .notchShowTasks) ?? d.notchShowTasks
+        notchShowQuickActions = try c.decodeIfPresent(Bool.self, forKey: .notchShowQuickActions) ?? d.notchShowQuickActions
+        notchShowStatusStrip = try c.decodeIfPresent(Bool.self, forKey: .notchShowStatusStrip) ?? d.notchShowStatusStrip
+        notchTaskRows = try c.decodeIfPresent(Int.self, forKey: .notchTaskRows) ?? d.notchTaskRows
     }
 
     /// Custom flag color (hex) for a tag, nil when the default should apply.

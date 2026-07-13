@@ -34,9 +34,16 @@ struct NotchExpandedPanel: View {
     /// transition of the outermost inserted view only, and that is this panel.
     @State private var assembled = false
 
+    /// What the island was configured to show. The same value `NotchGeometry`
+    /// sized `layout.island` from — so a section rendered here has room here by
+    /// construction, and one switched off took its height off the island rather
+    /// than leaving a hole in it.
+    private var config: NotchContentConfig { model.config }
+
     private var rows: [TaskItem] {
         NotchTaskRows.rows(today: tasks.grouped(filter: .today).flatMap(\.items),
-                           queue: queue.taskIDs)
+                           queue: queue.taskIDs,
+                           limit: config.clampedTaskRows)
     }
 
     /// The camera housing sits in the cutout: the first pixel of content has to
@@ -52,24 +59,59 @@ struct NotchExpandedPanel: View {
         timer.settings.timeFormat.string(max(0, seconds))
     }
 
+    /// The panel's sections, in reading order — which is also the order they
+    /// arrive in.
+    private enum Section: Int, CaseIterable {
+        case timer, tasks, quickActions, statusStrip
+    }
+
+    private func shows(_ section: Section) -> Bool {
+        switch section {
+        case .timer:        return config.showTimerControls
+        case .tasks:        return config.showTasks
+        case .quickActions: return config.showQuickActions
+        case .statusStrip:  return config.showStatusStrip
+        }
+    }
+
+    /// The stagger counts *visible* sections: with the task list switched off,
+    /// the quick actions must not wait out an empty beat where it used to be.
+    private func arrival(_ section: Section) -> Int {
+        Section.allCases.prefix(section.rawValue).filter(shows).count
+    }
+
+    /// This stack is the one the height constants were measured from (a
+    /// structural replica of it, at 340pt — see `NotchGeometry`). Changing the
+    /// spacing, the padding or a section's content here without re-measuring is
+    /// how the island starts clipping again.
     var body: some View {
         VStack(spacing: 8) {
-            VStack(spacing: 8) {
-                timerRow
-                Divider().overlay(Color.white.opacity(0.10))
+            if shows(.timer) {
+                VStack(spacing: 8) {
+                    timerRow
+                    Divider().overlay(Color.white.opacity(0.10))
+                }
+                .notchArrival(assembled, section: arrival(.timer), reduceMotion: reduceMotion)
             }
-            .notchArrival(assembled, section: 0, reduceMotion: reduceMotion)
 
-            taskList
-                .notchArrival(assembled, section: 1, reduceMotion: reduceMotion)
+            if shows(.tasks) {
+                taskList
+                    .notchArrival(assembled, section: arrival(.tasks), reduceMotion: reduceMotion)
+            }
 
             Spacer(minLength: 0)
 
-            quickActions
-                .notchArrival(assembled, section: 2, reduceMotion: reduceMotion)
+            if shows(.quickActions) {
+                quickActions
+                    .notchArrival(assembled, section: arrival(.quickActions),
+                                  reduceMotion: reduceMotion)
+            }
 
-            statusStrip
-                .notchArrival(assembled, section: 3, reduceMotion: reduceMotion)
+            if shows(.statusStrip) {
+                statusStrip
+                    .notchArrival(assembled, section: arrival(.statusStrip),
+                                  reduceMotion: reduceMotion)
+            }
         }
         .padding(.top, contentTop)
         .padding(.horizontal, 14)

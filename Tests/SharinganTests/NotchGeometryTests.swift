@@ -12,6 +12,7 @@ struct NotchGeometryTests {
     /// External / notchless display: no cutout, and therefore no HUD at all.
     static let plain = NotchScreenMetrics(screenWidth: 1920, menuBarHeight: 24,
                                           notchWidth: 0, notchHeight: 0)
+    static let cutout = CGSize(width: 200, height: 37)
 
     @Test("hardware notch is detected from a non-zero cutout")
     func detectsHardwareNotch() {
@@ -56,23 +57,27 @@ struct NotchGeometryTests {
     @Test("the bottom radius grows with the island's height, and stays bounded")
     func cornerRadiusFollowsHeight() {
         let base = Self.notched.notchHeight + NotchGeometry.idleExtraHeight
+        let tallest = NotchGeometry.expandedSize(cutout: Self.cutout).height
 
         // Short states: the notch's own corner, exactly.
-        #expect(NotchGeometry.cornerRadius(forHeight: base, baseHeight: base)
+        #expect(NotchGeometry.cornerRadius(forHeight: base, baseHeight: base,
+                                           maxHeight: tallest)
                 == NotchGeometry.cornerRadius)
         // Shorter than the baseline (a metric we never produce, but the mask
         // must not be asked for a negative interpolation) clamps to the base.
-        #expect(NotchGeometry.cornerRadius(forHeight: base - 10, baseHeight: base)
+        #expect(NotchGeometry.cornerRadius(forHeight: base - 10, baseHeight: base,
+                                           maxHeight: tallest)
                 == NotchGeometry.cornerRadius)
         // The tallest state we draw reaches the top of the ramp.
-        #expect(NotchGeometry.cornerRadius(forHeight: NotchGeometry.expandedSize.height,
-                                           baseHeight: base)
+        #expect(NotchGeometry.cornerRadius(forHeight: tallest, baseHeight: base,
+                                           maxHeight: tallest)
                 == NotchGeometry.maxCornerRadius)
 
         // Monotone, and never outside [base, max] however tall the island gets.
         var previous = NotchGeometry.cornerRadius
         for h in stride(from: base, through: base + 600, by: 7) {
-            let r = NotchGeometry.cornerRadius(forHeight: h, baseHeight: base)
+            let r = NotchGeometry.cornerRadius(forHeight: h, baseHeight: base,
+                                               maxHeight: tallest)
             #expect(r >= previous)
             #expect(r >= NotchGeometry.cornerRadius)
             #expect(r <= NotchGeometry.maxCornerRadius)
@@ -94,10 +99,11 @@ struct NotchGeometryTests {
 
     @Test("the panel is always big enough for the largest state")
     func panelCoversExpanded() {
+        let expanded = NotchGeometry.expandedSize(cutout: Self.cutout)
         for size in NotchHUDSize.allCases {
             let l = NotchGeometry.layout(Self.notched, size: size)
-            #expect(l.panelSize.width >= NotchGeometry.expandedSize.width)
-            #expect(l.panelSize.height >= NotchGeometry.expandedSize.height)
+            #expect(l.panelSize.width >= expanded.width)
+            #expect(l.panelSize.height >= expanded.height)
             // and every drawn rect stays inside the panel
             #expect(l.island.maxX <= l.panelSize.width + 0.01)
             #expect(l.island.maxY <= l.panelSize.height + 0.01)
@@ -263,9 +269,285 @@ struct NotchGeometryTests {
     /// report); the island must not be shorter than that.
     @Test("the expanded island fits the panel's full content")
     func expandedIslandFitsItsContent() {
-        #expect(NotchGeometry.expandedSize.height >= 286)
+        #expect(NotchGeometry.expandedSize(cutout: Self.cutout).height >= 286)
         let expanded = NotchGeometry.layout(Self.notched, size: .expanded)
-        #expect(expanded.island.height == NotchGeometry.expandedSize.height)
+        #expect(expanded.island.height
+                == NotchGeometry.expandedSize(cutout: Self.cutout).height)
         #expect(expanded.panelSize.height >= expanded.island.height)
+    }
+}
+
+/// The expanded island is sized from the config, not from a constant: a panel
+/// with sections switched off must not hang the same slab of black over the
+/// screen as a full one.
+///
+/// Every number these tests pin comes from measuring a structural SwiftUI
+/// replica of `NotchExpandedPanel` at the island's real 340pt width and reading
+/// `fittingSize` — see the notch settings report for the table. They are the
+/// contract: too small clips the content at the `.clipShape` (the bug this
+/// feature already shipped once), too large paints dead black over the desktop.
+@Suite("Notch expanded sizing")
+struct NotchExpandedSizingTests {
+    static let cutout = CGSize(width: 200, height: 37)
+    static let metrics = NotchScreenMetrics(screenWidth: 1512, menuBarHeight: 37,
+                                            notchWidth: 200, notchHeight: 37)
+
+    /// The measured body heights (top padding excluded), from the replica.
+    @Test("the body height matches the measured replica for the shipped config")
+    func bodyMatchesMeasurement() {
+        // Replica: five rows, every section on → 243pt of body, 286pt of island
+        // over a 37pt cutout. The geometry adds `bodySlack` on top, and nothing
+        // else.
+        let full = NotchContentConfig.default
+        #expect(NotchGeometry.expandedBodyHeight(full)
+                == 243 + NotchGeometry.bodySlack)
+        #expect(NotchGeometry.expandedSize(full, cutout: Self.cutout).height
+                == 286 + NotchGeometry.bodySlack)
+
+        // Replica: three rows, every section on → 197pt of body.
+        var three = full
+        three.taskRows = 3
+        #expect(NotchGeometry.expandedBodyHeight(three) == 197 + NotchGeometry.bodySlack)
+
+        // Replica: tasks only, five rows → 131pt of body.
+        let tasksOnly = NotchContentConfig(showTimerControls: false, showTasks: true,
+                                           showQuickActions: false,
+                                           showStatusStrip: false, taskRows: 5)
+        #expect(NotchGeometry.expandedBodyHeight(tasksOnly) == 131 + NotchGeometry.bodySlack)
+
+        // Replica: timer row only → 69pt of body.
+        let timerOnly = NotchContentConfig(showTimerControls: true, showTasks: false,
+                                           showQuickActions: false, showStatusStrip: false)
+        #expect(NotchGeometry.expandedBodyHeight(timerOnly) == 69 + NotchGeometry.bodySlack)
+
+        // Replica: timer + quick actions, no tasks, no strip → 101pt of body.
+        let noTasks = NotchContentConfig(showTimerControls: true, showTasks: false,
+                                         showQuickActions: true, showStatusStrip: false)
+        #expect(NotchGeometry.expandedBodyHeight(noTasks) == 101 + NotchGeometry.bodySlack)
+    }
+
+    @Test("switching a section off makes the island materially shorter")
+    func sectionsShrinkTheIsland() {
+        let full = NotchContentConfig.default
+        let fullH = NotchGeometry.expandedSize(full, cutout: Self.cutout).height
+
+        for keyPath: WritableKeyPath<NotchContentConfig, Bool> in [
+            \.showTimerControls, \.showTasks, \.showQuickActions, \.showStatusStrip
+        ] {
+            var c = full
+            c[keyPath: keyPath] = false
+            let h = NotchGeometry.expandedSize(c, cutout: Self.cutout).height
+            // Every section costs at least its own height plus the stack gap it
+            // takes: nothing here is free, so nothing may shrink by nothing.
+            #expect(h < fullH)
+        }
+
+        var bare = full
+        bare.showTimerControls = false
+        bare.showTasks = false
+        bare.showQuickActions = false
+        bare.showStatusStrip = false
+        let bareH = NotchGeometry.expandedSize(bare, cutout: Self.cutout).height
+        // Every section off is not "a bit shorter", it is a different island:
+        // less than half the full one, i.e. no 300pt slab over an empty panel.
+        #expect(bareH < fullH / 2)
+    }
+
+    @Test("more task rows make a taller island, monotonically")
+    func rowsGrowTheIsland() {
+        var heights: [CGFloat] = []
+        for rows in NotchContentConfig.taskRowRange {
+            var c = NotchContentConfig.default
+            c.taskRows = rows
+            heights.append(NotchGeometry.expandedSize(c, cutout: Self.cutout).height)
+        }
+        for (a, b) in zip(heights, heights.dropFirst()) {
+            #expect(b > a)
+            // One row is the measured 23pt (a 21pt row plus the list's 2pt gap).
+            #expect(b - a == NotchGeometry.taskRowHeight + NotchGeometry.taskRowSpacing)
+        }
+        // Five rows against three: the 46pt the brief's measurement predicted.
+        #expect(heights.last! - heights.first! == 46)
+        // …and rows cost nothing at all when the task list is off.
+        var off = NotchContentConfig.default
+        off.showTasks = false
+        var off3 = off
+        off3.taskRows = 3
+        #expect(NotchGeometry.expandedSize(off, cutout: Self.cutout)
+                == NotchGeometry.expandedSize(off3, cutout: Self.cutout))
+    }
+
+    /// The floor is not arbitrary: the motion layer springs a morph on
+    /// `growthRank`, which claims `.expanded` is bigger than `.activity`. An
+    /// island sized from an all-off config would be 57pt tall and make that a
+    /// lie, so the expanded island never goes under the announcement's height.
+    @Test("the island never shrinks below the cutout plus a minimum")
+    func heightHasAFloor() {
+        let bare = NotchContentConfig(showTimerControls: false, showTasks: false,
+                                      showQuickActions: false, showStatusStrip: false)
+        let h = NotchGeometry.expandedSize(bare, cutout: Self.cutout).height
+        #expect(h >= NotchGeometry.activitySize.height)
+        #expect(h > Self.cutout.height + NotchGeometry.idleExtraHeight)
+
+        // …and it is still an ordered morph for every config: the expanded
+        // island outranks every shorter state, whatever the user switched off.
+        var m = Self.metrics
+        for cfg in [bare, .default] {
+            for cutoutHeight in [CGFloat(32), 37, 44] {
+                m.notchHeight = cutoutHeight
+                let expanded = NotchGeometry.layout(m, size: .expanded, config: cfg).island
+                let idle = NotchGeometry.layout(m, size: .idle, config: cfg).island
+                let activity = NotchGeometry.layout(m, size: .activity, config: cfg).island
+                #expect(expanded.width * expanded.height > activity.width * activity.height)
+                #expect(expanded.width * expanded.height > idle.width * idle.height)
+            }
+        }
+    }
+
+    /// The panel is the union of every state, so it has to grow with whatever
+    /// the config made the expanded island — and the island has to stay inside
+    /// it, or the `.clipShape` crops the panel's own content.
+    @Test("the panel still covers the island for every config")
+    func panelCoversEveryConfig() {
+        for ears in NotchEarsMode.allCases {
+            for rows in NotchContentConfig.taskRowRange {
+                for tasks in [true, false] {
+                    let c = NotchContentConfig(ears: ears, showTimerControls: true,
+                                               showTasks: tasks, showQuickActions: true,
+                                               showStatusStrip: true, taskRows: rows)
+                    for size in NotchHUDSize.allCases {
+                        let l = NotchGeometry.layout(Self.metrics, size: size, config: c)
+                        #expect(l.island.maxX <= l.panelSize.width + 0.01)
+                        #expect(l.island.maxY <= l.panelSize.height + 0.01)
+                        #expect(l.island.minX >= -0.01)
+                    }
+                }
+            }
+        }
+    }
+
+    /// The island is the panel's frame, and the panel's content is laid out to
+    /// it — so if `.expanded` is drawn at a height the settings did not ask for,
+    /// the content is either clipped or floating in black. It must be exactly
+    /// the configured size.
+    @Test("the expanded layout is cut from the configured size")
+    func layoutUsesTheConfiguredSize() {
+        var c = NotchContentConfig.default
+        c.showTasks = false
+        c.showStatusStrip = false
+        let expected = NotchGeometry.expandedSize(c, cutout: Self.cutout)
+        let l = NotchGeometry.layout(Self.metrics, size: .expanded, config: c)
+        #expect(l.island.size == expected)
+        // …and the mask follows it: a point just under the shortened island is
+        // menu bar / desktop again, not HUD.
+        let below = CGPoint(x: l.panelSize.width / 2, y: expected.height + 6)
+        #expect(!NotchGeometry.hitTest(below, metrics: Self.metrics, size: .expanded, config: c))
+        // With everything on, the same point is inside the taller island.
+        #expect(NotchGeometry.hitTest(below, metrics: Self.metrics, size: .expanded,
+                                      config: .default))
+    }
+}
+
+/// The ears mode is not a label switch: it changes the island's silhouette, and
+/// therefore how much of the menu bar the HUD can swallow. The drawn shape and
+/// the hit-test mask are cut from one layout, so these tests pin both at once.
+@Suite("Notch ears")
+struct NotchEarsGeometryTests {
+    static let m = NotchScreenMetrics(screenWidth: 1512, menuBarHeight: 37,
+                                      notchWidth: 200, notchHeight: 37)
+
+    private static func config(_ ears: NotchEarsMode) -> NotchContentConfig {
+        var c = NotchContentConfig.default
+        c.ears = ears
+        return c
+    }
+
+    @Test("the live island is exactly as wide as the ears it grows")
+    func islandWidthFollowsEars() throws {
+        let ear = NotchGeometry.earWidth
+        let cutoutW = Self.m.notchWidth
+
+        let both = NotchGeometry.layout(Self.m, size: .live, config: Self.config(.both))
+        #expect(both.island.width == cutoutW + 2 * ear)
+        #expect(both.leftEar != nil)
+        #expect(both.rightEar != nil)
+
+        let right = NotchGeometry.layout(Self.m, size: .live, config: Self.config(.trailingOnly))
+        #expect(right.island.width == cutoutW + ear)
+        #expect(right.leftEar == nil)
+        #expect(right.rightEar != nil)
+
+        let none = NotchGeometry.layout(Self.m, size: .live, config: Self.config(.none))
+        #expect(none.island.width == cutoutW)
+        #expect(none.leftEar == nil)
+        #expect(none.rightEar == nil)
+        // The progress line survives every mode — it is the one thing "Progress
+        // bar only" still shows.
+        for mode in NotchEarsMode.allCases {
+            let l = NotchGeometry.layout(Self.m, size: .live, config: Self.config(mode))
+            let track = try #require(l.progressTrack)
+            #expect(track.width == l.island.width)
+            #expect(track.maxY <= l.island.maxY + 0.01)
+        }
+    }
+
+    /// Whatever the mode, the black has to stay glued to the hardware cutout —
+    /// a one-eared island *centered* on the panel would slide the cutout off
+    /// centre and paint the island half a notch away from the camera housing.
+    @Test("the island always covers the cutout, whichever ears are dropped")
+    func islandStaysOnTheCutout() {
+        for mode in NotchEarsMode.allCases {
+            let l = NotchGeometry.layout(Self.m, size: .live, config: Self.config(mode))
+            let cutoutMinX = l.panelSize.width / 2 - Self.m.notchWidth / 2
+            let cutoutMaxX = l.panelSize.width / 2 + Self.m.notchWidth / 2
+            #expect(l.island.minX <= cutoutMinX + 0.01)
+            #expect(l.island.maxX >= cutoutMaxX - 0.01)
+            #expect(l.island.minY == 0)
+        }
+    }
+
+    /// The whole point of the setting: dropping an ear must stop the HUD
+    /// covering that menu-bar real estate, not merely hide the label on top of
+    /// it. The mask is cut from the same layout the shape is drawn from, so a
+    /// point in the suppressed ear falls through to the menu bar.
+    @Test("a suppressed ear is no longer hittable")
+    func suppressedEarsFallThrough() {
+        let panelW = NotchGeometry.panelSize(Self.m, config: Self.config(.both)).width
+        let cutoutMinX = panelW / 2 - Self.m.notchWidth / 2
+        let cutoutMaxX = panelW / 2 + Self.m.notchWidth / 2
+        // Dead centre of each ear, in the menu bar row.
+        let leftEar = CGPoint(x: cutoutMinX - NotchGeometry.earWidth / 2, y: 10)
+        let rightEar = CGPoint(x: cutoutMaxX + NotchGeometry.earWidth / 2, y: 10)
+        let overCutout = CGPoint(x: panelW / 2, y: 10)
+
+        func hit(_ p: CGPoint, _ mode: NotchEarsMode) -> Bool {
+            NotchGeometry.hitTest(p, metrics: Self.m, size: .live, config: Self.config(mode))
+        }
+
+        // Both: the documented cost — both ears are live HUD.
+        #expect(hit(leftEar, .both))
+        #expect(hit(rightEar, .both))
+
+        // Right only: the left ear's pixels are the menu bar's again.
+        #expect(!hit(leftEar, .trailingOnly))
+        #expect(hit(rightEar, .trailingOnly))
+
+        // Progress bar only: both ears fall through; only the cutout is HUD,
+        // and the cutout is not menu-bar real estate anyone can click anyway.
+        #expect(!hit(leftEar, .none))
+        #expect(!hit(rightEar, .none))
+        #expect(hit(overCutout, .none))
+    }
+
+    /// The ears mode narrows the mask; it must narrow the *panel* no further
+    /// than the island, and the expanded state must not be affected by it at all
+    /// (the panel body has no ears).
+    @Test("the ears do not resize the expanded panel")
+    func earsDoNotTouchTheExpandedPanel() {
+        let sizes = NotchEarsMode.allCases.map {
+            NotchGeometry.layout(Self.m, size: .expanded, config: Self.config($0)).island.size
+        }
+        #expect(Set(sizes.map(\.width)).count == 1)
+        #expect(Set(sizes.map(\.height)).count == 1)
     }
 }

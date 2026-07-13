@@ -5,6 +5,20 @@ import SharinganCore
 struct SettingsView: View {
     @ObservedObject var timer: PomodoroTimer
     @Binding var settings: PomodoroSettings
+
+    /// Normally the view opens on the category list. `--render-dev-preview`
+    /// deep-links straight to a category page (with its Advanced accordion
+    /// already down) so the headless renderer can photograph a page a user would
+    /// otherwise have to click into.
+    init(timer: PomodoroTimer, settings: Binding<PomodoroSettings>,
+         initialCategory: SettingsCategory? = nil,
+         initialAdvancedExpanded: Bool = false) {
+        self.timer = timer
+        self._settings = settings
+        self._openCategory = State(initialValue: initialCategory)
+        self._advancedExpanded = State(initialValue: initialAdvancedExpanded)
+    }
+
     @ObservedObject private var dndService = DNDShortcutService.shared
     @ObservedObject private var router = AppRouter.shared
     @State private var editingInstructionDirection: String?
@@ -16,6 +30,16 @@ struct SettingsView: View {
     /// Whether the trailing "Advanced settings" accordion is expanded on the
     /// currently-open category page. Resets to collapsed on every page switch.
     @State private var advancedExpanded = false
+    /// Is there a display with a real camera housing attached? The notch
+    /// section is rendered *disabled* rather than hidden when there isn't —
+    /// a greyed "Notch" with a reason tells the user something true about their
+    /// Mac; a section that simply isn't there reads as a broken app.
+    ///
+    /// `NotchWindowManager.hudScreen()` is the single source of truth (a top
+    /// safe-area inset *and* both auxiliary top areas). Settings asks the same
+    /// question the window manager places the panel from, so the two can never
+    /// disagree about whether this Mac has a notch.
+    @State private var hasNotch = false
 
     var body: some View {
         ZStack {
@@ -33,6 +57,13 @@ struct SettingsView: View {
         // sub-page is open → pop back to the category list.
         .onChange(of: router.settingsPopToRoot) { openCategory = nil }
         .onChange(of: openCategory) { advancedExpanded = false }
+        .onAppear { hasNotch = NotchWindowManager.hudScreen() != nil }
+        // Plugging in a notched display, or booting with the lid shut and then
+        // opening it, changes the answer while this window is up.
+        .onReceive(NotificationCenter.default.publisher(
+            for: NSApplication.didChangeScreenParametersNotification)) { _ in
+            hasNotch = NotchWindowManager.hudScreen() != nil
+        }
     }
 
     // MARK: - Root: category list (macOS System Settings style)
@@ -200,6 +231,47 @@ struct SettingsView: View {
         .buttonStyle(.pressableSubtle)
     }
 
+    // MARK: - Notch
+
+    /// Every notch control, greyed and inert as one block.
+    ///
+    /// Two reasons they go dead, and the copy distinguishes them: this Mac has
+    /// no camera housing (there is deliberately no synthetic pill — see
+    /// `NotchScreenMetrics.cutout` — so there is nothing to configure), or the
+    /// HUD is simply switched off. The master toggle passes `requiresHUD: false`
+    /// so it survives the second case; nothing survives the first.
+    @ViewBuilder
+    private func notchControls<C: View>(requiresHUD: Bool = true,
+                                        @ViewBuilder content: () -> C) -> some View {
+        let live = hasNotch && (!requiresHUD || settings.notchHUDEnabled)
+        VStack(alignment: .leading, spacing: 7) { content() }
+            .disabled(!live)
+            .opacity(live ? 1 : 0.45)
+    }
+
+    /// Why the section above is grey. Rendered at full strength — the controls
+    /// are the part that is disabled, the reason has to stay readable.
+    @ViewBuilder
+    private var notchUnavailableNote: some View {
+        if !hasNotch {
+            HStack(alignment: .top, spacing: 7) {
+                Image(systemName: "macbook")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.55))
+                Text("This Mac has no notch. The HUD needs a MacBook with a camera housing.")
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.75))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 8).padding(.horizontal, 10)
+            .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(.white.opacity(0.06)))
+            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(.white.opacity(0.10), lineWidth: 1))
+        }
+    }
+
     /// One DND shortcut: editable name + Test button + last-run status.
     @ViewBuilder
     private func dndShortcutRow(label: String, name: Binding<String>) -> some View {
@@ -284,6 +356,20 @@ struct SettingsView: View {
                 Section("Menu bar") {
                     ToggleRow(title: "Show countdown in menu bar",
                               isOn: $settings.showMenuBarCountdown)
+                }
+
+                Section("Notch HUD") {
+                    // The master switch is the only control that stays live
+                    // when the HUD is off — but not when the Mac has no notch,
+                    // where there is nothing to switch on.
+                    notchControls(requiresHUD: false) {
+                        ToggleRow(title: "Show the notch HUD",
+                                  isOn: $settings.notchHUDEnabled)
+                    }
+                    Text("A black island around the camera housing: the countdown and progress while a session runs, today's tasks and quick actions when you hover it.")
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.6))
+                    notchUnavailableNote
                 }
 
         case .tasks:
@@ -700,6 +786,66 @@ struct SettingsView: View {
                             .foregroundStyle(.white.opacity(0.6))
                     } else {
                         Text("Enable the floating timer to configure it.")
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
+                }
+
+                // Same order as the Simple tier above, where "Notch HUD" follows
+                // the floating timer and the menu bar: the surfaces the timer can
+                // paint itself on, from the desktop upwards.
+                Section("Notch HUD details") {
+                    notchUnavailableNote
+                    if hasNotch && !settings.notchHUDEnabled {
+                        Text("Turn the notch HUD on to configure it.")
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
+                    notchControls {
+                        HStack {
+                            Text("Ears")
+                                .font(.system(.body, design: .rounded))
+                                .foregroundStyle(.white)
+                            Spacer()
+                            Picker("", selection: $settings.notchEars) {
+                                ForEach(NotchEarsMode.allCases) { mode in
+                                    Text(mode.label).tag(mode)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+                            .fixedSize()
+                        }
+                        Text("The ears are the strips beside the notch: the countdown on the left, the task on the right. They sit in the menu bar row, so they can cover your app's menus and status items — dropping one gives those pixels back, clicks included. The progress line stays either way.")
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.6))
+
+                        ToggleRow(title: "Announce session and break changes",
+                                  isOn: $settings.notchLiveActivity)
+                        Text("A two-second banner in the island when a session finishes or a break begins.")
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.6))
+
+                        Divider().overlay(Color.dsHairline)
+
+                        Text("What the panel shows")
+                            .font(.system(.callout, design: .rounded).weight(.semibold))
+                            .foregroundStyle(.white)
+                        ToggleRow(title: "Timer and controls",
+                                  isOn: $settings.notchShowTimerControls)
+                        ToggleRow(title: "Today's tasks",
+                                  isOn: $settings.notchShowTasks)
+                        StepperRow(title: "Task rows",
+                                   value: $settings.notchTaskRows,
+                                   unit: "rows",
+                                   range: NotchContentConfig.taskRowRange)
+                            .disabled(!settings.notchShowTasks)
+                            .opacity(settings.notchShowTasks ? 1 : 0.5)
+                        ToggleRow(title: "Quick actions",
+                                  isOn: $settings.notchShowQuickActions)
+                        ToggleRow(title: "Blocking and streak strip",
+                                  isOn: $settings.notchShowStatusStrip)
+                        Text("The island is sized to fit exactly what you leave on, so switching a section off gives that black back to your screen rather than emptying it.")
                             .font(.system(.caption2, design: .rounded))
                             .foregroundStyle(.white.opacity(0.6))
                     }

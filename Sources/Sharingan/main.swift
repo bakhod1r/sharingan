@@ -429,6 +429,28 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-dev-preview"),
             }
         }
 
+        /// `ImageRenderer` cannot photograph a `ScrollView` — it rasterizes the
+        /// container and none of its content (see the Today-panel note above).
+        /// Every Settings page is a `ScrollView`, so host it in a real (offscreen,
+        /// never fronted) window and cache its display instead. A hosted view also
+        /// runs `onAppear`, which is where the Settings page asks whether this Mac
+        /// has a notch.
+        @MainActor func writeHosted(_ view: some View, to path: String, size: NSSize) {
+            let host = NSHostingView(rootView: view.frame(width: size.width,
+                                                          height: size.height))
+            host.frame = NSRect(origin: .zero, size: size)
+            let window = NSWindow(contentRect: host.frame, styleMask: [.borderless],
+                                  backing: .buffered, defer: false)
+            window.contentView = host
+            host.layoutSubtreeIfNeeded()
+            // A turn of the run loop, so `onAppear` has fired before the shot.
+            RunLoop.current.run(until: Date().addingTimeInterval(0.35))
+            guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { return }
+            host.cacheDisplay(in: host.bounds, to: rep)
+            try? rep.representation(using: .png, properties: [:])?
+                .write(to: URL(fileURLWithPath: path))
+        }
+
         let store = TaskStore.shared
         store.add(title: "Ship landing page v1", category: "Work", tags: ["launch"],
                   dueDate: Date(), estimatedPomodoros: 3, project: "Sharingan", priority: .high)
@@ -456,6 +478,21 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-dev-preview"),
                 .frame(width: 460, height: 640)
                 .environment(\.colorScheme, .dark),
               to: "\(outDir)/editor.png")
+        // The Timer page, Advanced accordion down: the notch section, and on a
+        // Mac with no camera housing its disabled state — the one part of the
+        // HUD that is visible without a notch, so the one part that can be
+        // reviewed on any machine.
+        //
+        // Hosted, not `ImageRenderer`-ed: the renderer does not rasterize a
+        // `ScrollView`'s content (it comes out an empty rectangle), and every
+        // Settings page is one. A real hosting view in a real window also runs
+        // `onAppear`, which is where the page asks whether this Mac has a notch.
+        writeHosted(SettingsView(timer: timer, settings: .constant(timer.settings),
+                                 initialCategory: .timer, initialAdvancedExpanded: true)
+                        .background(Color(white: 0.12))
+                        .environment(\.colorScheme, .dark),
+                    to: "\(outDir)/settings-timer.png",
+                    size: NSSize(width: 640, height: 2000))
         print("dev previews rendered to \(outDir)")
     }
     exit(0)

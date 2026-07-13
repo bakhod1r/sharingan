@@ -18,7 +18,12 @@ final class NotchHUDModel: ObservableObject {
     @Published private(set) var previousSize: NotchHUDSize = .hidden
     @Published var metrics = NotchScreenMetrics(screenWidth: 1512, menuBarHeight: 37,
                                                 notchWidth: 200, notchHeight: 37)
-    @Published var earsMode: NotchEarsMode = .both
+    /// What the island is configured to show — the ears it grows and the
+    /// sections the expanded panel renders. The manager writes it from the
+    /// settings, and *everything* geometric reads it from here: the view's
+    /// layout, the panel's sections, and the hosting view's hit-test mask. One
+    /// source, so the drawn shape and the clickable shape cannot drift apart.
+    @Published var config: NotchContentConfig = .default
     @Published var progress: Double = 0
     @Published var remaining: TimeInterval = 0
     @Published var phase: PomodoroPhase = .focus
@@ -42,7 +47,7 @@ struct NotchHUDView: View {
     @ObservedObject private var motion = ReduceMotionMonitor.shared
 
     private var layout: NotchLayout {
-        NotchGeometry.layout(model.metrics, size: model.state.size)
+        NotchGeometry.layout(model.metrics, size: model.state.size, config: model.config)
     }
 
     /// Growing or shrinking — the whole input to the asymmetric morph.
