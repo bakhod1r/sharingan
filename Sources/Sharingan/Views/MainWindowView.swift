@@ -20,6 +20,9 @@ struct MainWindowView: View {
     @State private var editCatName = ""
     /// Tag whose icon/color editor popover is open.
     @State private var editingTag: String?
+    /// Inline "new tag" popover state (sidebar Tags +).
+    @State private var showAddTag = false
+    @State private var newTagName = ""
     /// Sidebar filter row under the pointer — reveals its edit pencil.
     @State private var hoveredRowKey: String?
     /// Accordion state of the sidebar groups, persisted across launches.
@@ -193,6 +196,27 @@ struct MainWindowView: View {
         showAddCategory = false
     }
 
+    /// Precreate a tag with no color UI — per-tag icon/color live on the
+    /// row's own editor popover (`tagEditorPopover`) once the tag exists.
+    private var addTagPopover: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("New tag").dsSectionLabel()
+            TextField("Name", text: $newTagName)
+                .textFieldStyle(DarkGlassFieldStyle())
+                .frame(width: 180)
+                .onSubmit(commitNewTag)
+            Button("Add", action: commitNewTag)
+                .disabled(newTagName.trimmingCharacters(in: .whitespaces).isEmpty)
+        }
+        .padding(14)
+    }
+
+    private func commitNewTag() {
+        guard tasks.addCustomTag(newTagName) else { return }
+        newTagName = ""
+        showAddTag = false
+    }
+
     /// Todoist-style shortcut row: not a section of its own, just a deep-link
     /// into Tasks (search focus / smart filter). Count badge optional.
     private func shortcutRow(icon: String, title: String, count: Int = 0,
@@ -325,7 +349,13 @@ struct MainWindowView: View {
             for tag in t.tags { acc[tag, default: 0] += 1 }
         }
         let names = tasks.allTags.prefix(8)
-        sectionHeader("Tags", collapsed: $tagsCollapsed)
+        sectionHeader("Tags", collapsed: $tagsCollapsed,
+                      addHelp: "New tag") {
+            showAddTag = true
+        }
+        .popover(isPresented: $showAddTag, arrowEdge: .trailing) {
+            addTagPopover
+        }
         if !tagsCollapsed {
             if names.isEmpty {
                 Text("Type #tag when adding a task")
@@ -381,8 +411,14 @@ struct MainWindowView: View {
     }
 
     /// Icon + color editor for a tag, with delete-everywhere at the bottom.
+    /// A precreated custom tag with 0 uses also gets a separate, non-
+    /// destructive "Remove tag" — unlike "Delete label" (which strips the tag
+    /// off every task), it only drops the precreated placeholder itself.
     private func tagEditorPopover(_ tag: String) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let totalUses = tasks.tasks.reduce(0) { $0 + ($1.tags.contains(tag) ? 1 : 0) }
+        let isRemovableCustom = totalUses == 0
+            && tasks.customTags.contains { $0.caseInsensitiveCompare(tag) == .orderedSame }
+        return VStack(alignment: .leading, spacing: 10) {
             Text("@\(tag)").dsSectionLabel()
             HStack(spacing: 5) {
                 ForEach(TagStyle.iconChoices, id: \.self) { icon in
@@ -435,6 +471,19 @@ struct MainWindowView: View {
                 }
             }
             .font(.system(.caption, design: .rounded))
+            if isRemovableCustom {
+                HStack {
+                    Button {
+                        tasks.removeCustomTag(tag)
+                        editingTag = nil
+                    } label: {
+                        Text("Remove tag")
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
+                    Spacer()
+                }
+                .font(.system(.caption2, design: .rounded))
+            }
         }
         .padding(14)
     }
