@@ -148,6 +148,12 @@ list: **Simple** (~30 most-used rows across 7 categories) and **Advanced**
   values inside a user's settings blob are deliberately NOT rewritten (they
   name real user-created Shortcuts.app shortcuts); only the code defaults for
   fresh installs changed, to "Sharingan Focus On/Off".
+- `TaskStore.sweepLegacyNotificationsIfNeeded()` (run once post-upgrade from
+  `AppDelegate`, flag `sharingan.migration.notificationsSwept`) removes
+  pending `blink.task.*` due/pre-reminder notification requests — their IDs
+  were renamed to `sharingan.task.*`, so the old ones had become
+  uncancelable — then reschedules open due-dated tasks through the normal
+  `syncDueNotifications` path.
 
 ---
 
