@@ -118,7 +118,11 @@ struct NotchHUDView: View {
             EmptyView()
         } else {
             IslandShape(silhouette: l.silhouette)
+                // The stem stays pure black — it is imitating the camera housing.
+                // The body is dressed in Blink's dark glass on top of it, so only
+                // the part below the menu bar reads as material; the stem does not.
                 .fill(.black)
+                .overlay(alignment: .topLeading) { bodyGlass(l) }
                 .overlay(alignment: .top) {
                     content(l, reduce: reduce)
                         // Content runs on its own clock, deliberately behind the
@@ -154,6 +158,55 @@ struct NotchHUDView: View {
                 // silhouette is eaten here.
                 .clipShape(IslandShape(silhouette: l.silhouette))
                 .transition(.opacity)
+        }
+    }
+
+    /// The body's glass — Blink's dark-glass material, a phase-tinted accent and
+    /// a hairline, painted over the black base for the part of the island below
+    /// the menu bar. Same recipe as the menu-bar popover and the Today panel
+    /// (`.regularMaterial` + a low-opacity phase gradient + a `Color.dsHairline`
+    /// ring), so the island reads as the same family, seen through the notch.
+    ///
+    /// Only the wide states have a body worth glazing. The flat states (`idle`,
+    /// `live`) live entirely in the menu-bar row — their `layout.body` is a few
+    /// points tall — so they are left as the pure-black hardware lip they always
+    /// were. The gradient is an *accent*, not a wash: a faint diagonal tie for
+    /// cohesion, and a glow concentrated behind the timer that has faded out
+    /// before it reaches the task rows.
+    @ViewBuilder
+    private func bodyGlass(_ l: NotchLayout) -> some View {
+        let body = l.body
+        if body.height > 8 {
+            let s = l.silhouette
+            let shape = UnevenRoundedRectangle(
+                topLeadingRadius: s.bodyTopRadius,
+                bottomLeadingRadius: s.cornerRadius,
+                bottomTrailingRadius: s.cornerRadius,
+                topTrailingRadius: s.bodyTopRadius,
+                style: .continuous)
+            let phase = model.phase.gradient
+            shape
+                .fill(.regularMaterial)
+                .overlay {
+                    // A faint diagonal phase tie — the cohesion the popover and
+                    // the Today panel get from their theme wash, kept subtle.
+                    LinearGradient(colors: phase,
+                                   startPoint: .topLeading, endPoint: .bottomTrailing)
+                        .opacity(0.13)
+                }
+                .overlay {
+                    // The accent proper: a phase glow behind the timer, gone
+                    // before it reaches the tasks.
+                    LinearGradient(
+                        colors: [(phase.first ?? .clear).opacity(0.32), .clear],
+                        startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.55))
+                }
+                .clipShape(shape)
+                .overlay { shape.stroke(Color.dsHairline, lineWidth: 1) }
+                .animation(NotchMotion.phaseFade(reduceMotion: motion.isOn),
+                           value: model.phase)
+                .frame(width: body.width, height: body.height)
+                .offset(x: body.minX - l.island.minX, y: body.minY - l.island.minY)
         }
     }
 
@@ -221,7 +274,9 @@ struct NotchActivityView: View {
         return HStack(spacing: 8) {
             Image(systemName: activity.systemImage)
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.white)
+                // The phase color the body glow already carries — the icon reads
+                // as the same accent instead of a bare white glyph.
+                .foregroundStyle(model.phase.glow)
                 .scaleEffect(settled ? 1 : NotchMotion.announceIconScale)
                 .rotationEffect(.degrees(settled ? 0 : NotchMotion.announceIconTilt))
                 .opacity(landed ? 1 : 0)
@@ -229,8 +284,8 @@ struct NotchActivityView: View {
                            value: landed)
 
             Text(activity.message)
-                .font(.system(size: 12, weight: .medium, design: .rounded))
-                .foregroundStyle(.white.opacity(0.9))
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .foregroundStyle(Color.dsPrimary)
                 .lineLimit(1)
                 .opacity(landed ? 1 : 0)
                 .offset(y: settled ? 0 : NotchMotion.announceTextDrift)

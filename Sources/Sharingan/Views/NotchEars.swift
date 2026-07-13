@@ -81,10 +81,14 @@ struct NotchEars: View {
     }
 
     private var timeLabel: some View {
+        // The one countdown-numeral face the whole app uses (`Font.dsTimer`),
+        // so the ear's clock reads as the same element as the menu-bar strip and
+        // the floating pill. Bumped a step to 13pt: the light rounded face needs
+        // it to stay crisp against the menu bar at ear size, and the ear (78pt)
+        // has the room. Still monospaced, so the digits don't shimmy as they tick.
         Text(timer.settings.timeFormat.string(max(0, model.remaining)))
-            .font(.system(size: 12, weight: .semibold, design: .rounded))
-            .monospacedDigit()
-            .foregroundStyle(.white)
+            .font(.dsTimer(13))
+            .foregroundStyle(Color.dsPrimary)
             .padding(.trailing, 6)
             .frame(maxWidth: .infinity, alignment: .trailing)
     }
@@ -99,8 +103,8 @@ struct NotchEars: View {
                            value: model.phase)
                 .frame(width: 6, height: 6)
             Text(tasks.activeTask?.title ?? model.phase.label)
-                .font(.system(size: 11, weight: .medium, design: .rounded))
-                .foregroundStyle(.white.opacity(0.85))
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundStyle(Color.dsSecondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
         }

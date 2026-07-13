@@ -109,7 +109,7 @@ struct NotchExpandedPanel: View {
             if shows(.timer) {
                 VStack(spacing: 8) {
                     timerRow
-                    Divider().overlay(Color.white.opacity(0.10))
+                    Divider().overlay(Color.dsHairline)
                 }
                 .notchArrival(assembled, section: arrival(.timer), reduceMotion: reduceMotion)
             }
@@ -153,15 +153,17 @@ struct NotchExpandedPanel: View {
         HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(clock(timer.remainingSeconds))
-                    .font(.system(size: 26, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(.white)
+                    // The app's one countdown face (`Font.dsTimer`), light and
+                    // rounded, so the island's clock is the same element as the
+                    // menu bar's and the floating pill's.
+                    .font(.dsTimer(26))
+                    .foregroundStyle(Color.dsPrimary)
                     .contentTransition(.numericText())
-                    .animation(.snappy(duration: 0.3), value: timer.remainingSeconds)
+                    .animation(DS.Motion.snappy, value: timer.remainingSeconds)
                 Text(timer.phase.label.uppercased())
                     .font(.system(size: 9, weight: .heavy, design: .rounded))
-                    .tracking(1.1)
-                    .foregroundStyle(.white.opacity(0.55))
+                    .tracking(1.2)
+                    .foregroundStyle(Color.dsSecondary)
             }
             Spacer(minLength: 0)
             // Same start path as the menu bar and the today panel, so the
@@ -180,16 +182,22 @@ struct NotchExpandedPanel: View {
         }
     }
 
+    /// A 26pt round glass control — the app's glass surface (`.glass` material +
+    /// hairline) rather than a symbol in a grey disc. The 26pt frame is the
+    /// island's measured footprint and is applied before the material, so the
+    /// glass dresses the control without resizing it; `.pressableSubtle` is the
+    /// app's press interaction.
     private func control(_ symbol: String, _ help: String,
                          action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.9))
+                .foregroundStyle(Color.dsSecondary)
                 .frame(width: 26, height: 26)
-                .background(Circle().fill(.white.opacity(0.10)))
+                .glass(Circle(), material: .regular)
+                .contentShape(Circle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressableSubtle)
         .help(help)
     }
 
@@ -199,9 +207,13 @@ struct NotchExpandedPanel: View {
     private var taskList: some View {
         let shown = rows
         if shown.isEmpty {
-            Text("Nothing planned for today")
+            // Shown only when there is genuinely no open work at all: the list is
+            // the active task, the focus queue, today's tasks, then a fallback to
+            // the rest of the open tasks (see `NotchWindowManager.taskRows`), so
+            // an empty result means every task is done or there are none.
+            Text("No open tasks")
                 .font(.system(size: 11, design: .rounded))
-                .foregroundStyle(.white.opacity(0.45))
+                .foregroundStyle(Color.dsTertiary)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.vertical, 8)
         } else {
@@ -245,15 +257,15 @@ struct NotchExpandedPanel: View {
             Button { tasks.toggleDone(task.id) } label: {
                 Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(task.isDone ? Color.green : .white.opacity(0.45))
+                    .foregroundStyle(task.isDone ? Color.green : Color.dsTertiary)
             }
             .buttonStyle(.plain)
             .help(task.isDone ? "Mark as not done" : "Mark as done")
 
             Text(task.title)
                 .font(.system(size: 12, design: .rounded).weight(isActive ? .semibold : .regular))
-                .strikethrough(task.isDone, color: .white.opacity(0.5))
-                .foregroundStyle(.white.opacity(isActive ? 1 : 0.78))
+                .strikethrough(task.isDone, color: Color.dsTertiary)
+                .foregroundStyle(isActive ? Color.dsPrimary : Color.dsSecondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
 
@@ -278,7 +290,9 @@ struct NotchExpandedPanel: View {
             Button { focus(on: task) } label: {
                 Image(systemName: isRunning ? "pause.circle.fill" : "play.circle.fill")
                     .font(.system(size: 13))
-                    .foregroundStyle(.white.opacity(isRunning ? 0.95 : 0.55))
+                    // The running row's control takes the phase color — it is the
+                    // task the timer is counting down, tied to the clock above it.
+                    .foregroundStyle(isRunning ? model.phase.glow : Color.dsSecondary)
             }
             .buttonStyle(.plain)
             .help(isRunning ? "Pause “\(task.title)”" : "Focus on “\(task.title)”")
@@ -287,10 +301,17 @@ struct NotchExpandedPanel: View {
         .frame(height: NotchGeometry.taskRowContentHeight)
         .padding(.vertical, NotchGeometry.taskRowPadding)
         .padding(.horizontal, 6)
+        // The active row is the phase accent the app puts on a live row — a
+        // phase-tinted fill and a hairline of the same, the way the rest of Blink
+        // marks the row that is running.
         .background {
             if isActive {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(Color.white.opacity(0.09))
+                let phase = model.phase.gradient
+                RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
+                    .fill((phase.first ?? .white).opacity(0.18))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
+                            .stroke((phase.first ?? .white).opacity(0.4), lineWidth: 1))
             }
         }
     }
@@ -342,18 +363,22 @@ struct NotchExpandedPanel: View {
         }
     }
 
+    /// A glass quick-action chip — the app's glass surface at the island's
+    /// measured 24pt height (applied before the material, so the glass does not
+    /// change the row's footprint).
     private func action(_ symbol: String, _ help: String,
                         _ run: @escaping () -> Void) -> some View {
         Button(action: run) {
             Image(systemName: symbol)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.white.opacity(0.75))
+                .foregroundStyle(Color.dsSecondary)
                 .frame(maxWidth: .infinity)
                 .frame(height: 24)
-                .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(.white.opacity(0.08)))
+                .glass(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous),
+                       material: .regular)
+                .contentShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressableSubtle)
         .help(help)
     }
 
@@ -367,7 +392,7 @@ struct NotchExpandedPanel: View {
             Spacer(minLength: 0)
             Label("\(timer.stats.streak.currentStreak)", systemImage: "flame.fill")
                 .font(.system(size: 9, weight: .medium, design: .rounded))
-                .foregroundStyle(.white.opacity(0.55))
+                .foregroundStyle(Color.dsSecondary)
                 .help("\(timer.stats.streak.currentStreak)-day streak")
         }
     }
