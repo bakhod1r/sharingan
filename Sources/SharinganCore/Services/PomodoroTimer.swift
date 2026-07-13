@@ -386,7 +386,7 @@ public final class PomodoroTimer: ObservableObject {
 
     // MARK: - Persistence
 
-    private static let settingsKey = "com.blink.settings"
+    private static let settingsKey = PomodoroSettings.defaultsKey
     private static let statsKey = "com.blink.stats"
 
     private static func loadSettings() -> PomodoroSettings {

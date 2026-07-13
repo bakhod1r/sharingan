@@ -210,6 +210,10 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var dndShortcutOn: String = "Blink Focus On"
     public var dndShortcutOff: String = "Blink Focus Off"
 
+    /// UserDefaults key of the persisted settings JSON blob (owned by
+    /// PomodoroTimer; exposed so tier seeding can detect an existing user).
+    public static let defaultsKey = "com.blink.settings"
+
     public init() {}
 
     /// Durations for a kind — the user's override, else the factory default.
