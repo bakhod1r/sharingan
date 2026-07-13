@@ -98,6 +98,7 @@
 - Main window sections: Timer, Tasks, Week, Progress, and Settings.
 - Menu-bar popover with timer, tasks, and week tabs plus today's goal.
 - Floating timer: an always-on-top panel that joins all Spaces, is draggable, has size presets, and auto shows/hides around breaks.
+- Notch HUD: an island over the MacBook camera housing — live ears while a session runs, today's tasks and quick actions on hover. Configurable (see below); absent, and disabled in Settings, on a Mac without a notch.
 - Confirmation prompt before quitting while a focus session is running.
 - Searchable settings, grouped into: Timer, Tasks & Planning, Breaks, Focus & Blocking, Eye Care, Sharingan Eyes, General, Voice Guidance, and Shortcuts.
 
@@ -130,8 +131,69 @@ Simple/Advanced switch and nothing to seed at launch.
   re-applies `WallpaperConfig`) stays in `categorySections` — always
   visible — so it keeps observing even while the Advanced accordion
   (which holds the wallpaper spin/idle/doze rows) is collapsed.
+- Timer's Advanced tier also holds "Notch HUD details" (after the floating
+  timer's, matching the essentials order): the ears picker, the live-activity
+  toggle, and the four "what the panel shows" switches plus the 3–5 task-row
+  stepper. The master "Show the notch HUD" toggle is an essential row.
+  Everything but the master toggle greys out while the HUD is off — and on a
+  Mac with **no camera housing the whole section renders disabled** (visible,
+  greyed, inert) with a note saying so, rather than being hidden.
 - The old `settingsTier` UserDefaults key is a harmless leftover on
   upgraded installs; nothing reads or writes it anymore.
+
+---
+
+## Notch HUD
+
+A black island over the MacBook camera housing (`NotchWindowManager`, an
+`NSPanel` above the menu-bar window level). It exists **only** on a display with
+a real hardware notch: `hudScreen()` (a top safe-area inset *and* both auxiliary
+top areas) is the single source of truth, and there is deliberately no synthetic
+pill and no simulate flag. Settings asks the same function, so it can never
+disagree with the HUD about whether the Mac has a notch; it re-asks on
+`didChangeScreenParametersNotification`.
+
+- **Configurable content.** `PomodoroSettings.notchShow{TimerControls,Tasks,
+  QuickActions,StatusStrip}` + `notchTaskRows` (3–5), projected through
+  `settings.notchContent` into `NotchContentConfig` (SharinganCore) — the one
+  value the layout, the drawn shape, the panel's sections and the hit-test mask
+  all read, off `NotchHUDModel.config`.
+- **The island is sized from that config**, not from a constant:
+  `NotchGeometry.expandedSize(_:cutout:)` = `cutout + 6 + body`, where
+  `body = 10 + Σ(sections) + 8 × count + 4`. Every constant
+  (`timerRowHeight` 51, `taskRowHeight` 21 + 2 spacing, `quickActionsHeight` 24,
+  `statusStripHeight` 13) was **measured** off a structural SwiftUI replica of
+  `NotchExpandedPanel` at the island's 340pt width via `fittingSize` — full
+  panel, five rows = 286pt over a 37pt cutout. Guessing here clips the content at
+  the `.clipShape` or hangs dead black over the screen. Changing the panel's
+  stack, fonts, spacing or width means re-measuring.
+  Floored at `activitySize.height`, so `NotchHUDSize.growthRank`'s promise that
+  `.expanded` is the biggest shape survives an all-sections-off config.
+- **The task list is sized from the rows that exist, not from the cap.**
+  `notchTaskRows` (3–5) is only a *bound*; `NotchWindowManager` counts today's
+  rows off the same `NotchTaskRows` call the panel renders from and stamps it
+  into `NotchContentConfig.taskCount`, and the island follows
+  `min(cap, count)` — so four tasks no longer sit in an island built for five.
+  Zero tasks is not zero height: the panel draws its "Nothing planned for today"
+  caption, measured at 30pt (taller than one 21pt row, shorter than two), so the
+  island is 207pt at an empty list against 290pt at five rows. The island resizes
+  live as tasks are ticked off (`NotchMotion.resize`, critically damped like every
+  other spring on the frame). The panel *window* stays pinned to the cap
+  (`panelSize` reads `config.sizedForRowCap`): it is invisible and click-through
+  everywhere the mask says no, and resizing the window under an island that is
+  still springing would clip it.
+- **`notchEars` changes the silhouette, not just the labels.** `.both` → cutout +
+  2 ears, `.trailingOnly` → cutout + 1 (the island is anchored to the cutout's
+  left edge, never centred), `.none` → the cutout alone with the progress line.
+  `hitTest` masks against that same island path, so a dropped ear gives its
+  menu-bar pixels back — clicks included. The panel still reserves an ear's width
+  on both sides (it is centred on the cutout, and a one-eared island is not
+  symmetric about it); the mask, not the panel's width, is what frees the menu
+  bar.
+- Settings changes reach the panel through the existing filter on
+  `PomodoroTimer.objectWillChange` (`refreshIfSettingsChanged`), whose snapshot
+  includes the whole `notchContent` — every switch resizes the island, and the
+  panel's frame is cut from that size.
 
 ---
 
@@ -144,6 +206,15 @@ Simple/Advanced switch and nothing to seed at launch.
   queue, and the task pre-reminder-minutes setting). Task/template data lives
   in `~/Library/Application Support/Sharingan/` (SQLite db + the `tired` CLI's
   shared `cli/` snapshot files).
+- **A headless render never touches that database.** `--render-dev-preview` and
+  `--render-site-assets` seed sample tasks into `TaskStore.shared` to have
+  something to photograph, and `TaskStore.shared` persists — so `HeadlessRender`
+  (SharinganCore/Services) redirects the *shared* store to a throwaway SQLite
+  under the temp dir whenever the process was launched with one of those flags.
+  The seam is the process's own argv and nothing else — no environment variable,
+  no preference, no UI — and `main.swift` parses the flag through the same call
+  that redirects the store, so a process cannot redirect its database and then go
+  on to run as the app. A normal launch passes no arguments and is unaffected.
 - `RebrandMigration` (SharinganCore/Services) performs a one-shot Blink →
   Sharingan copy/move at launch — called by both `AppDelegate` and the
   `tired` CLI entry point. Old `UserDefaults` keys are copied to the new keys (old

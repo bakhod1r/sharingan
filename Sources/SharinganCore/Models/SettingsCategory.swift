@@ -65,7 +65,9 @@ public enum SettingsCategory: String, CaseIterable, Identifiable, Hashable, Send
                     "float", "opacity", "always on top", "compact",
                     "size", "small", "medium", "large", "preset",
                     "dots", "cycle dots", "active task", "task pill",
-                    "today panel", "panel", "desktop", "widget"]
+                    "today panel", "panel", "desktop", "widget",
+                    "notch", "island", "hud", "ears", "camera housing",
+                    "menu bar", "countdown"]
         case .tasks:
             return ["task", "subtask", "estimate", "goal", "week", "weekly",
                     "monday", "sunday", "badge", "plan", "planner", "🍅"]

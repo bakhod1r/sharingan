@@ -231,11 +231,18 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-break-preview"),
    i + 1 < CommandLine.arguments.count {
     let out = CommandLine.arguments[i + 1]
     MainActor.assumeIsolated {
-        let timer = PomodoroTimer()
+        // The style is applied to the settings *value*, and the timer is built
+        // from it. Never `timer.settings.breakBackgroundStyle = style`:
+        // `PomodoroTimer.settings` persists to `UserDefaults` in `didSet`, so
+        // photographing a preview would rewrite the user's real break
+        // background. `didSet` does not run for an assignment inside `init`,
+        // which is the whole reason `PomodoroTimer(settings:)` exists.
+        var settings = PomodoroTimer.savedSettings()
         if i + 2 < CommandLine.arguments.count,
            let style = BreakBackgroundStyle(rawValue: CommandLine.arguments[i + 2]) {
-            timer.settings.breakBackgroundStyle = style
+            settings.breakBackgroundStyle = style
         }
+        let timer = PomodoroTimer(settings: settings)
         let preview = BreakView(timer: timer, onTapSkip: {}, forceExit: true)
             .frame(width: 1440, height: 900)
         let renderer = ImageRenderer(content: preview)
@@ -296,13 +303,17 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-gaze-grid"),
 }
 
 // Headless renders for the marketing site (debug utility):
-// `HOME=<throwaway> Sharingan --render-site-assets <outdir>` writes per-style
-// iris PNGs (transparent, for the animated carousel) and real UI views seeded
-// with sample tasks. Run with an overridden HOME so TaskStore.shared writes
-// its SQLite into the throwaway, never the real user database.
-if let i = CommandLine.arguments.firstIndex(of: "--render-site-assets"),
-   i + 1 < CommandLine.arguments.count {
-    let outDir = CommandLine.arguments[i + 1]
+// `Sharingan --render-site-assets <outdir>` writes per-style iris PNGs
+// (transparent, for the animated carousel) and real UI views seeded with sample
+// tasks. The seeding is safe: the flag itself is what makes `TaskStore.shared`
+// resolve to a throwaway SQLite under the temp dir (`HeadlessRender`), so the
+// user's real database is never opened. The `HOME=` override this used to rely
+// on never worked — `FileManager.urls(for:in:)` does not read `$HOME`.
+// The flag is parsed by `HeadlessRender` and not here, because the same call is
+// what redirected `TaskStore.shared` to a throwaway database before this line
+// ran. Two copies of the rule could disagree, and the disagreement that matters
+// is a process that redirected its store and then went on to run as the app.
+if let outDir = HeadlessRender.outputDirectory(for: "--render-site-assets") {
     MainActor.assumeIsolated {
         let fm = FileManager.default
         for sub in ["iris", "anim-timer", "anim-tasks"] {
@@ -325,7 +336,7 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-site-assets"),
                   to: "\(outDir)/iris/\(style.rawValue).png")
         }
 
-        // 2) Seed sample tasks (isolated store — see HOME note above).
+        // 2) Seed sample tasks (isolated store — see the note above).
         let store = TaskStore.shared
         store.add(title: "Ship landing page v1", category: "Work", tags: ["launch"],
                   dueDate: Date(), estimatedPomodoros: 3, project: "Sharingan", priority: .high)
@@ -342,9 +353,11 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-site-assets"),
             store.addSubtask(first.id, title: "Verify Lighthouse 100")
             store.activeTaskID = first.id
         }
-        // cfprefsd leaks the REAL user's defaults through the HOME override —
-        // clear the bits that show up in renders (focus queue, stale actives).
-        AppServices.focusQueue.clear()
+        // (The focus queue is *read* here, never written: `NotchTaskRows.rows`
+        // only keeps queued ids that resolve to a task in the store, and this
+        // render's store is the throwaway — so the user's queued ids name nothing
+        // and simply do not appear. Nothing has to be cleared, and clearing it
+        // would empty the user's real, planned queue: `FocusQueue` persists.)
         print("store:", store.tasks.map(\.title))
         print("active:", store.activeTask?.title ?? "nil")
 
@@ -413,9 +426,8 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-site-assets"),
 // Headless dev previews: renders the menu-bar popover, the custom calendar and
 // the task editor to PNGs so UI changes can be eyeballed without launching the
 // app (same idea as --render-site-assets, but for development).
-if let i = CommandLine.arguments.firstIndex(of: "--render-dev-preview"),
-   i + 1 < CommandLine.arguments.count {
-    let outDir = CommandLine.arguments[i + 1]
+// Same rule, same place — see the site-assets block above.
+if let outDir = HeadlessRender.outputDirectory(for: "--render-dev-preview") {
     MainActor.assumeIsolated {
         try? FileManager.default.createDirectory(atPath: outDir,
                                                  withIntermediateDirectories: true)
@@ -429,6 +441,34 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-dev-preview"),
             }
         }
 
+        /// `ImageRenderer` cannot photograph a `ScrollView` — it rasterizes the
+        /// container and none of its content (see the Today-panel note above).
+        /// Every Settings page is a `ScrollView`, so host it in a real (offscreen,
+        /// never fronted) window and cache its display instead. A hosted view also
+        /// runs `onAppear`, which is where the Settings page asks whether this Mac
+        /// has a notch.
+        @MainActor func writeHosted(_ view: some View, to path: String, size: NSSize) {
+            let host = NSHostingView(rootView: view.frame(width: size.width,
+                                                          height: size.height))
+            host.frame = NSRect(origin: .zero, size: size)
+            let window = NSWindow(contentRect: host.frame, styleMask: [.borderless],
+                                  backing: .buffered, defer: false)
+            window.contentView = host
+            host.layoutSubtreeIfNeeded()
+            // A turn of the run loop, so `onAppear` has fired before the shot.
+            RunLoop.current.run(until: Date().addingTimeInterval(0.35))
+            guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { return }
+            host.cacheDisplay(in: host.bounds, to: rep)
+            try? rep.representation(using: .png, properties: [:])?
+                .write(to: URL(fileURLWithPath: path))
+        }
+
+        // Sample tasks for the shots. `TaskStore.shared` persists — but not
+        // here: the process was launched with a render flag, so `HeadlessRender`
+        // has already pointed the shared store at a throwaway SQLite under the
+        // temp dir, and the user's real database in Application Support is not
+        // opened at all. (It was, once, and every render of these previews left
+        // a copy of both tasks in the user's list.)
         let store = TaskStore.shared
         store.add(title: "Ship landing page v1", category: "Work", tags: ["launch"],
                   dueDate: Date(), estimatedPomodoros: 3, project: "Sharingan", priority: .high)
@@ -456,6 +496,88 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-dev-preview"),
                 .frame(width: 460, height: 640)
                 .environment(\.colorScheme, .dark),
               to: "\(outDir)/editor.png")
+        // The Timer page, Advanced accordion down: the notch section, and on a
+        // Mac with no camera housing its disabled state — the one part of the
+        // HUD that is visible without a notch, so the one part that can be
+        // reviewed on any machine.
+        //
+        // Hosted, not `ImageRenderer`-ed: the renderer does not rasterize a
+        // `ScrollView`'s content (it comes out an empty rectangle), and every
+        // Settings page is one. A real hosting view in a real window also runs
+        // `onAppear`, which is where the page asks whether this Mac has a notch.
+        writeHosted(SettingsView(timer: timer, settings: .constant(timer.settings),
+                                 initialCategory: .timer, initialAdvancedExpanded: true)
+                        .background(Color(white: 0.12))
+                        .environment(\.colorScheme, .dark),
+                    to: "\(outDir)/settings-timer.png",
+                    size: NSSize(width: 640, height: 2000))
+        // The notch island, in each shape it takes. This machine has no camera
+        // housing, so the HUD never instantiates at runtime here — but the view
+        // is driven entirely by `NotchHUDModel`, so handing it 14"-MacBook-Pro
+        // metrics photographs exactly what a notched Mac would draw. The grey
+        // plate underneath stands in for the menu bar the island sits over.
+        let notchModel = NotchHUDModel()
+        notchModel.metrics = NotchScreenMetrics(screenWidth: 1512, menuBarHeight: 37,
+                                                notchWidth: 200, notchHeight: 37)
+        notchModel.progress = 0.62
+        notchModel.remaining = 14 * 60 + 13
+        notchModel.phase = .focus
+        store.activeTaskID = store.tasks[0].id
+        // What `NotchWindowManager` does at runtime, which the preview has no
+        // manager to do for it: tell the island how many task rows there really
+        // are. Without it the model carries no count, the geometry falls back to
+        // the row *cap*, and the preview would photograph the very strip of dead
+        // black this change removes.
+        notchModel.config.taskCount = NotchWindowManager
+            .taskRows(limit: notchModel.config.clampedTaskRows).count
+
+        @MainActor func writeIsland(_ name: String) {
+            // The panel is the window's size (pinned to the row cap); the island
+            // inside it is sized to the rows that exist. The grey shows through
+            // wherever the island is not — which is the whole thing being checked.
+            let panel = NotchGeometry.panelSize(notchModel.metrics, config: notchModel.config)
+            write(NotchHUDView(model: notchModel, timer: timer)
+                    .environmentObject(timer)
+                    .frame(width: panel.width, height: panel.height)
+                    .background(Color(white: 0.32))
+                    .environment(\.colorScheme, .dark),
+                  to: "\(outDir)/\(name).png")
+        }
+
+        for (name, mutate) in [
+            ("notch-idle", { (s: inout NotchHUDState) in }),
+            ("notch-live", { s in s.engaged = true }),
+            ("notch-activity", { s in s.engaged = true; s.activity = .breakStarted }),
+            ("notch-expanded", { s in s.engaged = true; s.hovering = true }),
+        ] as [(String, (inout NotchHUDState) -> Void)] {
+            var state = NotchHUDState()
+            mutate(&state)
+            notchModel.state = state
+            writeIsland(name)
+        }
+
+        // The two ends of the island's height, which is the only way to *see*
+        // that it follows the task list: a full list against an empty one. The
+        // store is the render's throwaway (see above), so seeding and completing
+        // tasks here costs the user nothing.
+        var open = NotchHUDState()
+        open.engaged = true
+        open.hovering = true
+        notchModel.state = open
+
+        for i in 1...4 {
+            store.add(title: "Today's task \(i)", category: "Work", dueDate: Date(),
+                      priority: .medium)
+        }
+        notchModel.config.taskCount = NotchWindowManager
+            .taskRows(limit: notchModel.config.clampedTaskRows).count   // 5, the cap
+        writeIsland("notch-expanded-full")
+
+        for task in store.tasks where !task.isDone { store.toggleDone(task.id) }
+        notchModel.config.taskCount = NotchWindowManager
+            .taskRows(limit: notchModel.config.clampedTaskRows).count   // 0
+        writeIsland("notch-expanded-empty")
+
         print("dev previews rendered to \(outDir)")
     }
     exit(0)
