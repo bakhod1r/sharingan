@@ -229,6 +229,9 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
     public var isDone: Bool
     public var pomodorosDone: Int
     public var createdAt: Date
+    /// Last edit, for sync's last-writer-wins. Defaults to `createdAt` so
+    /// pre-1.3.0 tasks (SQLite rows and exported JSON alike) decode unchanged.
+    public var modifiedAt: Date
     public var dueDate: Date?
     /// Manual ordering position within the list (lower = higher up).
     public var sortOrder: Int
@@ -258,6 +261,7 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
                 isDone: Bool = false,
                 pomodorosDone: Int = 0,
                 createdAt: Date = Date(),
+                modifiedAt: Date? = nil,
                 dueDate: Date? = nil,
                 sortOrder: Int = 0,
                 estimatedPomodoros: Int? = nil,
@@ -276,6 +280,7 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         self.isDone = isDone
         self.pomodorosDone = pomodorosDone
         self.createdAt = createdAt
+        self.modifiedAt = modifiedAt ?? createdAt
         self.dueDate = dueDate
         self.sortOrder = sortOrder
         self.estimatedPomodoros = estimatedPomodoros
@@ -303,6 +308,7 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         isDone = try c.decodeIfPresent(Bool.self, forKey: .isDone) ?? false
         pomodorosDone = try c.decodeIfPresent(Int.self, forKey: .pomodorosDone) ?? 0
         createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        modifiedAt = try c.decodeIfPresent(Date.self, forKey: .modifiedAt) ?? createdAt
         dueDate = try c.decodeIfPresent(Date.self, forKey: .dueDate)
         sortOrder = try c.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
         estimatedPomodoros = try c.decodeIfPresent(Int.self, forKey: .estimatedPomodoros)

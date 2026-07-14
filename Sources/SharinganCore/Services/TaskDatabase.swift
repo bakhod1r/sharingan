@@ -49,7 +49,8 @@ final class TaskDatabase {
             project TEXT,
             priority INTEGER NOT NULL DEFAULT 0,
             completedAt REAL,
-            pomodoroKind TEXT
+            pomodoroKind TEXT,
+            modifiedAt REAL
         );
         """)
         exec("""
@@ -111,6 +112,13 @@ final class TaskDatabase {
         if !tableHasColumn("tasks", "pomodoroKind") {
             exec("ALTER TABLE tasks ADD COLUMN pomodoroKind TEXT;")
         }
+        // Databases created before 1.3.0 need the sync timestamp added in
+        // place; backfilling it from createdAt keeps every existing task's
+        // first sync a clean create rather than a spurious conflict.
+        if !tableHasColumn("tasks", "modifiedAt") {
+            exec("ALTER TABLE tasks ADD COLUMN modifiedAt REAL;")
+            exec("UPDATE tasks SET modifiedAt = createdAt WHERE modifiedAt IS NULL;")
+        }
     }
 
     /// True when `PRAGMA table_info` lists the column — guards ALTER TABLE,
@@ -133,7 +141,7 @@ final class TaskDatabase {
         let sql = """
         SELECT id,title,category,tags,isDone,pomodorosDone,createdAt,dueDate,\
         sortOrder,estimatedPomodoros,plannedDate,notes,subtasks,recurrence,project,priority,\
-        completedAt,pomodoroKind \
+        completedAt,pomodoroKind,modifiedAt \
         FROM tasks;
         """
         var stmt: OpaquePointer?
@@ -158,6 +166,7 @@ final class TaskDatabase {
             t.priority = TaskPriority(rawValue: Int(int(stmt, 15)))
             t.completedAt = date(stmt, 16)
             t.pomodoroKind = text(stmt, 17).flatMap(PomodoroKind.init(rawValue:))
+            t.modifiedAt = date(stmt, 18) ?? t.createdAt
             out.append(t)
         }
         return out
@@ -169,8 +178,8 @@ final class TaskDatabase {
             let sql = """
             INSERT INTO tasks (id,title,category,tags,isDone,pomodorosDone,createdAt,dueDate,\
             sortOrder,estimatedPomodoros,plannedDate,notes,subtasks,recurrence,project,priority,\
-            completedAt,pomodoroKind) \
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);
+            completedAt,pomodoroKind,modifiedAt) \
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);
             """
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
@@ -197,6 +206,7 @@ final class TaskDatabase {
                 bindDate(stmt, 17, t.completedAt)
                 if let k = t.pomodoroKind { bindText(stmt, 18, k.rawValue) }
                 else { sqlite3_bind_null(stmt, 18) }
+                bindDate(stmt, 19, t.modifiedAt)
                 guard sqlite3_step(stmt) == SQLITE_DONE else { return false }
             }
             return true
