@@ -82,6 +82,24 @@ final class TaskDatabase {
             PRIMARY KEY (day, task_id, subtask_id)
         );
         """)
+        // Sync bookkeeping. sync_shadow is what the whole-collection saves
+        // above are diffed against — without it a DELETE-all + re-INSERT is
+        // indistinguishable from "the user deleted everything".
+        exec("""
+        CREATE TABLE IF NOT EXISTS sync_shadow (
+            record_type TEXT NOT NULL,
+            record_name TEXT NOT NULL,
+            content_hash TEXT NOT NULL,
+            system_fields BLOB,
+            PRIMARY KEY (record_type, record_name)
+        );
+        """)
+        exec("""
+        CREATE TABLE IF NOT EXISTS sync_state (
+            key TEXT PRIMARY KEY,
+            value BLOB NOT NULL
+        );
+        """)
         // Databases created before the column shipped need it added in place
         // (CREATE IF NOT EXISTS won't touch an existing table).
         if !tableHasColumn("tasks", "completedAt") {
@@ -333,6 +351,93 @@ final class TaskDatabase {
             }
             return true
         }
+    }
+
+    // MARK: - Sync bookkeeping
+
+    func loadShadow(recordType: String) -> [String: ShadowEntry] {
+        var out: [String: ShadowEntry] = [:]
+        var stmt: OpaquePointer?
+        let sql = "SELECT record_name, content_hash, system_fields FROM sync_shadow WHERE record_type = ?;"
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return out }
+        defer { sqlite3_finalize(stmt) }
+        bindText(stmt, 1, recordType)
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            guard let name = text(stmt, 0), let hash = text(stmt, 1) else { continue }
+            var fields: Data?
+            if let blob = sqlite3_column_blob(stmt, 2) {
+                fields = Data(bytes: blob, count: Int(sqlite3_column_bytes(stmt, 2)))
+            }
+            out[name] = ShadowEntry(recordName: name, contentHash: hash, systemFields: fields)
+        }
+        return out
+    }
+
+    /// Written only after CloudKit confirms a save/fetch — never speculatively,
+    /// or an interrupted sync would forget changes it never actually pushed.
+    func upsertShadow(recordType: String, entry: ShadowEntry) {
+        let sql = """
+        INSERT INTO sync_shadow (record_type, record_name, content_hash, system_fields)
+        VALUES (?,?,?,?)
+        ON CONFLICT(record_type, record_name) DO UPDATE SET
+            content_hash = excluded.content_hash,
+            system_fields = excluded.system_fields;
+        """
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+        defer { sqlite3_finalize(stmt) }
+        bindText(stmt, 1, recordType)
+        bindText(stmt, 2, entry.recordName)
+        bindText(stmt, 3, entry.contentHash)
+        if let fields = entry.systemFields {
+            _ = fields.withUnsafeBytes {
+                sqlite3_bind_blob(stmt, 4, $0.baseAddress, Int32(fields.count), Self.transient)
+            }
+        } else {
+            sqlite3_bind_null(stmt, 4)
+        }
+        _ = sqlite3_step(stmt)
+    }
+
+    func deleteShadow(recordType: String, recordName: String) {
+        var stmt: OpaquePointer?
+        let sql = "DELETE FROM sync_shadow WHERE record_type = ? AND record_name = ?;"
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+        defer { sqlite3_finalize(stmt) }
+        bindText(stmt, 1, recordType)
+        bindText(stmt, 2, recordName)
+        _ = sqlite3_step(stmt)
+    }
+
+    /// Wipes all sync bookkeeping — used when the iCloud account changes, so
+    /// the next sync re-establishes state from scratch instead of merging one
+    /// person's records into another's.
+    func resetSyncState() {
+        transaction {
+            exec("DELETE FROM sync_shadow;") && exec("DELETE FROM sync_state;")
+        }
+    }
+
+    func syncStateValue(_ key: String) -> Data? {
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, "SELECT value FROM sync_state WHERE key = ?;", -1, &stmt, nil) == SQLITE_OK
+        else { return nil }
+        defer { sqlite3_finalize(stmt) }
+        bindText(stmt, 1, key)
+        guard sqlite3_step(stmt) == SQLITE_ROW, let blob = sqlite3_column_blob(stmt, 0) else { return nil }
+        return Data(bytes: blob, count: Int(sqlite3_column_bytes(stmt, 0)))
+    }
+
+    func setSyncStateValue(_ key: String, _ value: Data) {
+        var stmt: OpaquePointer?
+        let sql = "INSERT INTO sync_state (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value = excluded.value;"
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+        defer { sqlite3_finalize(stmt) }
+        bindText(stmt, 1, key)
+        _ = value.withUnsafeBytes {
+            sqlite3_bind_blob(stmt, 2, $0.baseAddress, Int32(value.count), Self.transient)
+        }
+        _ = sqlite3_step(stmt)
     }
 
     // MARK: - Low-level helpers
