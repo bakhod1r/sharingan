@@ -4,7 +4,7 @@
 > whenever a feature is added, changed, or removed, update this document in the
 > same change.**
 
-- Version: 1.5.2
+- Version: 1.6.0
 - Platform: macOS 14+, lives in the menu bar
 
 ---
@@ -42,6 +42,8 @@
 - Smart views: Today, Upcoming, All, Completed — each with counts. Free-text search over title, tags, project, and notes.
 - **Sort menu** (↑↓ in the view bar): Manual / Priority / Due date / A–Z / Newest, applied inside each category group (`TaskSortMode` in SharinganCore, threaded through `TaskStore.grouped(filter:search:sort:)`). Every mode keeps open tasks above done ones and tiebreaks with the manual order, so equal keys never shuffle; priority ranks most-urgent first (custom levels sit above P1), due date puts dateless tasks last, titles compare case-insensitively. Persisted across launches (`tasks.sortMode` default) and **shared by every sorted surface** — the Tasks list, the focus-task picker, and the weekly board follow one ordering (`TaskSortMenuItems` in TaskComponents supplies the menu entries everywhere). Drag-to-reorder and Move up/down keep editing the *manual* order underneath a non-manual sort; the Done view's day grouping and the Eisenhower matrix are unaffected.
 - **Filter menu** (funnel in the view bar): narrow the list to one category, tag, or priority — the same narrowing dimension the sidebar deep-links set, so the pick shows the existing "Filtered by …" chip (its ✕ clears). One dimension at a time; picking the active entry again toggles it off. The same menu (`TaskFilterMenuItems` + `narrowTasks`) also lives in the focus-task picker (chip bar under the header, with a "No tasks match the filter" state) and the weekly board (circle button by the week nav — narrows cards across all columns, and the header’s planned-count follows).
+- **Subtask sort & filter**: expanded step panels (main window and popover) carry a slim header — step progress plus two quiet menus. Sort steps by Priority / A–Z / Estimate (biggest first, unestimated last) or the manual drag order (`SubtaskSortMode.apply`, done steps always sink, manual position as the stable tiebreak); filter by status (All / Open / Done) or one priority level (`[Subtask].narrowed(status:priority:)`). The step ordering is one shared preference (`tasks.subtaskSortMode`) that the focus picker's step rows follow too; the task editor has the same filter but deliberately **no sort** — it is where the manual order is edited (drag to reorder).
+- **Report sort & filter** (circles in the day pager, main window and popover Report tab): order rows by Focus time (the canonical most-focus-first), Pomodoros, or A–Z (`ReportSortMode`, time order as tiebreak; persisted as `report.sortMode`), and narrow to one category — deleted-task rows carry no category so any pick hides them, and the Total footer then sums exactly the rows on screen.
 - Snooze a task to tomorrow, next week, or a picked date; overdue badges.
 - Due reminders with a configurable pre-reminder (default 10 minutes before, or off).
 - Templates: save any task as a reusable template and instantiate it later. Duplicate tasks too.
@@ -52,7 +54,7 @@
 - CSV export.
 - **Focus queue**: line up several tasks — each finished pomodoro advances to the next one, the break screen shows "Next: …", and after a break a picker asks what to work on next.
 - **Eisenhower matrix** view: tasks sorted into do-first / schedule / delegate / eliminate by urgency and importance.
-- **Weekly board**: drag tasks between days to reschedule; sort & filter controls in the header order every column and narrow the whole board.
+- **Weekly board**: drag tasks between days to reschedule; sort & filter controls in the header order every column and narrow the whole board. The menu-bar popover’s Week tab carries the same two controls.
 - **Today panel**: a floating desktop card showing today's tasks and the timer.
 - Optional guard that requires an active task before focus can start.
 

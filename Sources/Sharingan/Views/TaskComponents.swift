@@ -261,3 +261,61 @@ func narrowTasks(_ items: [TaskItem], category: String?, tag: String?,
     if let p = priority { out = out.filter { $0.priority == p } }
     return out
 }
+
+/// The subtask sort menu's entries — one per `SubtaskSortMode`, checkmarked
+/// on the active mode. Shared by the expanded subtask panel and the focus
+/// picker's step rows; the binding is the raw value behind the shared
+/// `@AppStorage("tasks.subtaskSortMode")`.
+struct SubtaskSortMenuItems: View {
+    @Binding var sortModeRaw: String
+    var body: some View {
+        let current = SubtaskSortMode(rawValue: sortModeRaw) ?? .manual
+        ForEach(SubtaskSortMode.allCases) { mode in
+            Button {
+                withAnimation(DS.Motion.gentle) { sortModeRaw = mode.rawValue }
+            } label: {
+                Label(mode.label, systemImage: current == mode ? "checkmark" : mode.icon)
+            }
+        }
+    }
+}
+
+/// The subtask filter menu's entries — a status section (All / Open / Done)
+/// plus a Priority submenu, and a "Clear filter" row once something narrows.
+/// Shared by the subtask panel and the task editor.
+struct SubtaskFilterMenuItems: View {
+    /// Priority names and custom levels for the Priority submenu.
+    let settings: PomodoroSettings
+    @Binding var status: SubtaskStatusFilter
+    @Binding var priorityFilter: SharinganCore.TaskPriority?
+
+    var body: some View {
+        ForEach(SubtaskStatusFilter.allCases) { s in
+            Button {
+                withAnimation(DS.Motion.gentle) { status = s }
+            } label: {
+                Label(s.label, systemImage: status == s ? "checkmark" : s.icon)
+            }
+        }
+        Menu("Priority") {
+            ForEach(SharinganCore.TaskPriority.levels(custom: settings.customPriorityLevels)) { p in
+                Button {
+                    withAnimation(DS.Motion.gentle) {
+                        priorityFilter = priorityFilter == p ? nil : p
+                    }
+                } label: {
+                    Label(settings.priorityName(p),
+                          systemImage: priorityFilter == p ? "checkmark" : "flag.fill")
+                }
+            }
+        }
+        if status != .all || priorityFilter != nil {
+            Divider()
+            Button(role: .destructive) {
+                withAnimation(DS.Motion.gentle) { status = .all; priorityFilter = nil }
+            } label: {
+                Label("Clear filter", systemImage: "xmark.circle")
+            }
+        }
+    }
+}

@@ -23,6 +23,9 @@ struct TaskPickerSheet: View {
     /// Same ordering the Tasks list uses — one shared preference.
     @AppStorage("tasks.sortMode") private var sortModeRaw = TaskSortMode.manual.rawValue
     private var sortMode: TaskSortMode { TaskSortMode(rawValue: sortModeRaw) ?? .manual }
+    /// Step ordering, shared with the expanded subtask panels.
+    @AppStorage("tasks.subtaskSortMode") private var subSortRaw = SubtaskSortMode.manual.rawValue
+    private var subSort: SubtaskSortMode { SubtaskSortMode(rawValue: subSortRaw) ?? .manual }
     /// One-dimension narrowing (category / tag / priority) — transient, the
     /// sheet is short-lived.
     @State private var categoryFilter: String?
@@ -275,7 +278,7 @@ struct TaskPickerSheet: View {
     /// that step as the pomodoro-credit target.
     private func subtaskRows(_ task: TaskItem) -> some View {
         VStack(spacing: 4) {
-            ForEach(task.subtasks.filter { !$0.isDone }) { sub in
+            ForEach(subSort.apply(task.subtasks.filter { !$0.isDone })) { sub in
                 Button {
                     choose(task, subtask: sub.id)
                 } label: {

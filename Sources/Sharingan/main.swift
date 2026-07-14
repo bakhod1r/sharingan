@@ -599,12 +599,14 @@ if let outDir = HeadlessRender.outputDirectory(for: "--render-dev-preview") {
         store.update(bigAgain)
         store.setActive(nil)
 
-        write(ReportView(timer: timer)
-                .frame(width: 560)
+        // Hosted: `ImageRenderer` draws the report's sort/filter `Menu`
+        // labels as missing-image placeholders; a real window renders them.
+        writeHosted(ReportView(timer: timer)
                 .padding(20)
                 .background(Color(white: 0.12))
                 .environment(\.colorScheme, .dark),
-              to: "\(outDir)/report.png")
+              to: "\(outDir)/report.png",
+              size: NSSize(width: 600, height: 560))
         write(StatsExtrasView(stats: timer.stats)
                 .frame(width: 640)
                 .padding(20)
@@ -613,12 +615,12 @@ if let outDir = HeadlessRender.outputDirectory(for: "--render-dev-preview") {
               to: "\(outDir)/stats-extras.png")
         // The report at the popover's content width (360 minus 2×18 outer
         // padding): checks the day pager and the metric column survive 324pt.
-        write(ReportView(timer: timer)
-                .frame(width: 324)
+        writeHosted(ReportView(timer: timer)
                 .padding(18)
                 .background(Color(white: 0.12))
                 .environment(\.colorScheme, .dark),
-              to: "\(outDir)/report-popover.png")
+              to: "\(outDir)/report-popover.png",
+              size: NSSize(width: 360, height: 560))
 
         // Hosted, not `ImageRenderer`-ed: the renderer skips the segmented
         // Picker (and the tab area's ScrollView content), and the segment row

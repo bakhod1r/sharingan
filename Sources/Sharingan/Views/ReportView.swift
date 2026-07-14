@@ -10,19 +10,34 @@ struct ReportView: View {
     @ObservedObject private var store = TaskStore.shared
     @State private var day = Calendar.current.startOfDay(for: Date())
     @State private var expanded: Set<String> = []
+    /// Row ordering — persisted; its own key, the report is a different list.
+    @AppStorage("report.sortMode") private var sortModeRaw = ReportSortMode.time.rawValue
+    private var sortMode: ReportSortMode { ReportSortMode(rawValue: sortModeRaw) ?? .time }
+    /// Category narrowing — transient. Deleted-task rows carry no category,
+    /// so any pick hides them too.
+    @State private var categoryFilter: String?
 
     private var accent: Color { timer.settings.theme.accent }
     private var cal: Calendar { Calendar.current }
     private var isToday: Bool { cal.isDateInToday(day) }
-    private var rows: [FocusReportRow] {
+    /// Every row the day logged — the filter decides what shows, but this is
+    /// what "day is empty" means.
+    private var allRows: [FocusReportRow] {
         FocusReport.rows(entries: store.focusEntries(on: day), tasks: store.tasks)
+    }
+    private var rows: [FocusReportRow] {
+        let narrowed = categoryFilter.map { c in allRows.filter { $0.category == c } }
+            ?? allRows
+        return sortMode.apply(narrowed)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             pager
-            if rows.isEmpty {
+            if allRows.isEmpty {
                 emptyState
+            } else if rows.isEmpty {
+                noMatchState
             } else {
                 VStack(spacing: 2) {
                     ForEach(rows) { row in reportRow(row) }
@@ -54,7 +69,67 @@ struct ReportView: View {
                     .font(.system(.caption, design: .rounded).weight(.semibold))
                     .foregroundStyle(accent)
             }
+            sortMenu
+            filterMenu
         }
+    }
+
+    /// Sort + category filter for the day's rows — the same quiet circle
+    /// style as the pager buttons.
+    private var sortMenu: some View {
+        Menu {
+            ForEach(ReportSortMode.allCases) { mode in
+                Button {
+                    withAnimation(DS.Motion.gentle) { sortModeRaw = mode.rawValue }
+                } label: {
+                    Label(mode.label, systemImage: sortMode == mode ? "checkmark" : mode.icon)
+                }
+            }
+        } label: {
+            reportCircle("arrow.up.arrow.down", active: sortMode != .time)
+        }
+        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+        .help(sortMode == .time ? "Sort rows" : "Sorted by \(sortMode.label)")
+        .accessibilityLabel("Sort report rows")
+    }
+
+    private var filterMenu: some View {
+        Menu {
+            ForEach(store.allCategories) { c in
+                Button {
+                    withAnimation(DS.Motion.gentle) {
+                        categoryFilter = categoryFilter == c.name ? nil : c.name
+                    }
+                } label: {
+                    Label(c.name, systemImage: categoryFilter == c.name ? "checkmark" : c.icon)
+                }
+            }
+            if categoryFilter != nil {
+                Divider()
+                Button(role: .destructive) {
+                    withAnimation(DS.Motion.gentle) { categoryFilter = nil }
+                } label: {
+                    Label("Clear filter", systemImage: "xmark.circle")
+                }
+            }
+        } label: {
+            reportCircle(categoryFilter == nil ? "line.3.horizontal.decrease.circle"
+                                               : "line.3.horizontal.decrease.circle.fill",
+                         active: categoryFilter != nil)
+        }
+        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+        .help("Filter by category")
+        .accessibilityLabel("Filter report rows")
+    }
+
+    private func reportCircle(_ icon: String, active: Bool) -> some View {
+        Image(systemName: icon)
+            .font(.system(size: 11, weight: .bold))
+            .foregroundStyle(active ? accent : .white)
+            .frame(width: 26, height: 26)
+            .background(Circle().fill(active ? accent.opacity(0.18)
+                                             : Color.white.opacity(0.06)))
+            .contentShape(Circle())
     }
 
     private func pagerButton(_ symbol: String, enabled: Bool,
@@ -157,8 +232,32 @@ struct ReportView: View {
         }
     }
 
+    /// Shown when the day has rows but the category filter hides them all.
+    private var noMatchState: some View {
+        HStack {
+            Spacer()
+            VStack(spacing: 6) {
+                Image(systemName: "line.3.horizontal.decrease.circle")
+                    .font(.system(size: 26, weight: .light))
+                    .foregroundStyle(.white.opacity(0.25))
+                Text("No focus in this category.")
+                    .font(.system(.callout, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.5))
+            }
+            Spacer()
+        }
+        .padding(.vertical, 60)
+    }
+
     private var totalsFooter: some View {
-        let totals = store.focusDayTotals(on: day)
+        // Filtered days total what is on screen (task-level entries already
+        // include subtask credits); an unfiltered day keeps the store's total.
+        let totals = categoryFilter == nil
+            ? store.focusDayTotals(on: day)
+            : rows.reduce(into: (count: 0, seconds: TimeInterval(0))) {
+                $0.count += $1.entry.count
+                $0.seconds += $1.entry.seconds
+            }
         return HStack {
             Text("Total")
                 .font(.system(.caption, design: .rounded).weight(.heavy))

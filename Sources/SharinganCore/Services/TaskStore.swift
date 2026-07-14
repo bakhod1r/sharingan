@@ -79,6 +79,102 @@ public enum TaskSortMode: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// How a task's steps are ordered wherever they are listed (the expanded
+/// subtask panel, the focus picker's step rows). `manual` is the editor's
+/// drag order; every other mode sinks done steps last and keeps the manual
+/// position as the tiebreak, so the sort is stable. The editor itself always
+/// shows manual order — it is where that order is edited.
+public enum SubtaskSortMode: String, CaseIterable, Identifiable, Sendable {
+    case manual, priority, title, estimate
+
+    public var id: String { rawValue }
+
+    public var label: String {
+        switch self {
+        case .manual:   return "Manual"
+        case .priority: return "Priority"
+        case .title:    return "A–Z"
+        case .estimate: return "Estimate"
+        }
+    }
+
+    public var icon: String {
+        switch self {
+        case .manual:   return "hand.draw"
+        case .priority: return "flag"
+        case .title:    return "textformat.abc"
+        case .estimate: return "target"
+        }
+    }
+
+    /// Steps in this mode's order. Priority ranks most-urgent first (custom
+    /// levels above P1); estimate ranks biggest first, unestimated last;
+    /// titles compare case-insensitively.
+    public func apply(_ subs: [Subtask]) -> [Subtask] {
+        guard self != .manual else { return subs }
+        return subs.enumerated().sorted { a, b in
+            if a.element.isDone != b.element.isDone { return !a.element.isDone }
+            switch self {
+            case .manual:
+                break
+            case .priority:
+                if a.element.priority != b.element.priority {
+                    return a.element.priority.rawValue > b.element.priority.rawValue
+                }
+            case .title:
+                let c = a.element.title.localizedCaseInsensitiveCompare(b.element.title)
+                if c != .orderedSame { return c == .orderedAscending }
+            case .estimate:
+                switch (a.element.estimatedPomodoros, b.element.estimatedPomodoros) {
+                case let (x?, y?): if x != y { return x > y }
+                case (.some, nil): return true
+                case (nil, .some): return false
+                case (nil, nil):   break
+                }
+            }
+            return a.offset < b.offset
+        }.map(\.element)
+    }
+}
+
+/// Which steps a subtask list shows: everything, open only, or done only.
+public enum SubtaskStatusFilter: String, CaseIterable, Identifiable, Sendable {
+    case all, open, done
+
+    public var id: String { rawValue }
+
+    public var label: String {
+        switch self {
+        case .all:  return "All steps"
+        case .open: return "Open steps"
+        case .done: return "Done steps"
+        }
+    }
+
+    public var icon: String {
+        switch self {
+        case .all:  return "circle.grid.2x2"
+        case .open: return "circle"
+        case .done: return "checkmark.circle"
+        }
+    }
+}
+
+public extension Array where Element == Subtask {
+    /// Steps narrowed by the subtask filter menu (status + optional priority).
+    func narrowed(status: SubtaskStatusFilter,
+                  priority: TaskPriority?) -> [Subtask] {
+        var out = self
+        switch status {
+        case .all:  break
+        case .open: out = out.filter { !$0.isDone }
+        case .done: out = out.filter(\.isDone)
+        }
+        if let p = priority { out = out.filter { $0.priority == p } }
+        return out
+    }
+}
+
 /// Persists the user's task list to a local SQLite database in Application
 /// Support (via `TaskDatabase`) and tracks which task the active focus session
 /// is running against.

@@ -15,6 +15,11 @@ struct TaskEditorView: View {
     @State private var subtaskDraft = ""
     @State private var showCustomDue = false
     @FocusState private var titleFocused: Bool
+    /// Step narrowing for the Subtasks section. The editor deliberately has
+    /// no step *sort* — rows stay in manual order because this sheet is where
+    /// that order is edited (drag to reorder).
+    @State private var subStatus: SubtaskStatusFilter = .all
+    @State private var subPriority: SharinganCore.TaskPriority?
 
     var accent: Color = .paletteFocusStart
     /// Snapshot of app settings for defaults & badge visibility (value copy is
@@ -315,8 +320,26 @@ struct TaskEditorView: View {
                         .font(.system(.caption2, design: .rounded).weight(.semibold))
                         .foregroundStyle(draft.pomodorosDone >= est ? Color.green : Color.dsSecondary)
                 }
+                if draft.subtasks.count > 1 {
+                    Menu {
+                        SubtaskFilterMenuItems(settings: settings,
+                                               status: $subStatus,
+                                               priorityFilter: $subPriority)
+                    } label: {
+                        let active = subStatus != .all || subPriority != nil
+                        Image(systemName: active ? "line.3.horizontal.decrease.circle.fill"
+                                                 : "line.3.horizontal.decrease.circle")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(active ? accent : Color.dsTertiary)
+                            .frame(width: 20, height: 20)
+                            .contentShape(Rectangle())
+                    }
+                    .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                    .help("Filter steps — status or priority")
+                }
             }
             ForEach($draft.subtasks) { $sub in
+                if subtaskShown(sub) {
                 HStack(spacing: 8) {
                     Button { sub.isDone.toggle() } label: {
                         Image(systemName: sub.isDone ? "checkmark.circle.fill" : "circle")
@@ -418,6 +441,7 @@ struct TaskEditorView: View {
                     } label: {
                         Label("Make a task", systemImage: "arrow.up.right.square")
                     }
+                }
                 }
             }
             HStack(spacing: 6) {
@@ -581,6 +605,17 @@ struct TaskEditorView: View {
         }
         tagDraft = ""
     }
+    /// Whether a step passes the section's filter menu.
+    private func subtaskShown(_ sub: Subtask) -> Bool {
+        switch subStatus {
+        case .all:  break
+        case .open: if sub.isDone { return false }
+        case .done: if !sub.isDone { return false }
+        }
+        if let p = subPriority, sub.priority != p { return false }
+        return true
+    }
+
     /// Applies a subtask drag: reorders the draft (what the sheet shows) and
     /// mirrors it into the store so the new order sticks even without Save.
     private func moveSubtask(_ id: UUID, before targetID: UUID) -> Bool {

@@ -5,6 +5,13 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.6.0] — 2026-07-14
+
+### Added
+- Subtask sort & filter: expanded step panels get a slim header (step progress + two quiet menus) — order steps by Priority / A–Z / Estimate (biggest first) or the manual drag order, and narrow to open / done steps or one priority level. The step ordering is one shared preference; the picker's step rows follow it too. The task editor gets the same filter but deliberately no sort — it's where the manual order is edited
+- Report sort & filter: order a day's rows by Focus time (the classic), Pomodoros, or A–Z, and narrow to one category — the total then counts what's on screen. Same controls in the menu-bar popover's Report tab
+- The menu-bar popover's Week tab gets the same board sort & filter as the main window's weekly board
+
 ## [1.5.2] — 2026-07-14
 
 ### Fixed

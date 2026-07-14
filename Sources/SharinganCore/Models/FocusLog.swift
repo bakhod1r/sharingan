@@ -51,6 +51,51 @@ public struct FocusReportRow: Identifiable, Equatable, Sendable {
     }
 }
 
+/// How the day report's task rows are ordered — the Report view's sort menu.
+/// `time` is the original most-focus-first order `FocusReport.rows` produces;
+/// the other modes re-rank on their key and keep the time order as a stable
+/// tiebreak.
+public enum ReportSortMode: String, CaseIterable, Identifiable, Sendable {
+    case time, pomodoros, title
+
+    public var id: String { rawValue }
+
+    public var label: String {
+        switch self {
+        case .time:      return "Focus time"
+        case .pomodoros: return "Pomodoros"
+        case .title:     return "A–Z"
+        }
+    }
+
+    public var icon: String {
+        switch self {
+        case .time:      return "clock"
+        case .pomodoros: return "circle.circle"
+        case .title:     return "textformat.abc"
+        }
+    }
+
+    public func apply(_ rows: [FocusReportRow]) -> [FocusReportRow] {
+        guard self != .time else { return rows }
+        return rows.enumerated().sorted { a, b in
+            switch self {
+            case .time:
+                break
+            case .pomodoros:
+                if a.element.entry.count != b.element.entry.count {
+                    return a.element.entry.count > b.element.entry.count
+                }
+            case .title:
+                let c = a.element.entry.title
+                    .localizedCaseInsensitiveCompare(b.element.entry.title)
+                if c != .orderedSame { return c == .orderedAscending }
+            }
+            return a.offset < b.offset
+        }.map(\.element)
+    }
+}
+
 public enum FocusReport {
     /// Task-level rows for one day's entries, minutes-descending, each with
     /// its subtask entries attached. `tasks` is the live list used to resolve

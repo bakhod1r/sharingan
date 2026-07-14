@@ -16,6 +16,25 @@ struct MenuBarWeekView: View {
     @State private var targetedColumn: String?
     /// Draft for the quick-add field in the Unscheduled column.
     @State private var backlogDraft = ""
+    /// Same ordering the Tasks list and main-window board use — one shared
+    /// preference; applies within every column.
+    @AppStorage("tasks.sortMode") private var sortModeRaw = TaskSortMode.manual.rawValue
+    private var sortMode: TaskSortMode { TaskSortMode(rawValue: sortModeRaw) ?? .manual }
+    /// One-dimension narrowing (category / tag / priority) across the board.
+    @State private var categoryFilter: String?
+    @State private var tagFilter: String?
+    @State private var priorityFilter: TaskPriority?
+    private var isNarrowed: Bool {
+        categoryFilter != nil || tagFilter != nil || priorityFilter != nil
+    }
+
+    /// A column's cards as shown: narrowed by the filter, in the shared sort
+    /// order — the popover board mirrors the main window's.
+    private func boardItems(_ items: [TaskItem]) -> [TaskItem] {
+        narrowTasks(items, category: categoryFilter, tag: tagFilter,
+                    priority: priorityFilter)
+            .sorted(by: sortMode.inOrder)
+    }
 
     /// Column geometry, shared with `MenuBarView` so the popover can widen to
     /// fit the full board (backlog + 7 days) when this tab is selected.
@@ -92,8 +111,39 @@ struct MenuBarWeekView: View {
                 }
                 .buttonStyle(.pressableSubtle)
             }
+
+            Menu {
+                TaskSortMenuItems(sortModeRaw: $sortModeRaw)
+            } label: {
+                headerIcon("arrow.up.arrow.down", active: sortMode != .manual)
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .help(sortMode == .manual ? "Sort tasks" : "Sorted by \(sortMode.label)")
+
+            Menu {
+                TaskFilterMenuItems(store: store, settings: timer.settings,
+                                    categoryFilter: $categoryFilter,
+                                    tagFilter: $tagFilter,
+                                    priorityFilter: $priorityFilter)
+            } label: {
+                headerIcon(isNarrowed ? "line.3.horizontal.decrease.circle.fill"
+                                      : "line.3.horizontal.decrease.circle",
+                           active: isNarrowed)
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .help("Filter by category, tag, or priority")
         }
         .padding(.horizontal, 4)
+    }
+
+    private func headerIcon(_ icon: String, active: Bool) -> some View {
+        Image(systemName: icon)
+            .font(.system(size: 11, weight: .bold))
+            .foregroundStyle(active ? accent : .white.opacity(0.85))
+            .frame(width: 24, height: 24)
+            .background(Circle().fill(active ? accent.opacity(0.18)
+                                             : Color.white.opacity(0.06)))
+            .contentShape(Circle())
     }
 
     private var weekRangeLabel: String {
@@ -107,7 +157,7 @@ struct MenuBarWeekView: View {
     // MARK: - Columns
 
     private var backlogColumn: some View {
-        let items = store.unscheduledTasks
+        let items = boardItems(store.unscheduledTasks)
         return columnContainer(
             id: "unscheduled", isToday: false,
             header: AnyView(backlogHeader(count: items.count)),
@@ -116,7 +166,7 @@ struct MenuBarWeekView: View {
     }
 
     private func dayColumn(_ day: Date) -> some View {
-        let items = store.tasksPlanned(on: day)
+        let items = boardItems(store.tasksPlanned(on: day))
         let isToday = cal.isDateInToday(day)
         return columnContainer(
             id: dayKey(day), isToday: isToday,

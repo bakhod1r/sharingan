@@ -75,6 +75,13 @@ struct TasksView: View {
     /// List ordering inside each category group — persisted across launches.
     @AppStorage("tasks.sortMode") private var sortModeRaw = TaskSortMode.manual.rawValue
     private var sortMode: TaskSortMode { TaskSortMode(rawValue: sortModeRaw) ?? .manual }
+    /// Step ordering inside expanded subtask panels — persisted, shared with
+    /// the focus picker's step rows.
+    @AppStorage("tasks.subtaskSortMode") private var subSortRaw = SubtaskSortMode.manual.rawValue
+    private var subSort: SubtaskSortMode { SubtaskSortMode(rawValue: subSortRaw) ?? .manual }
+    /// Step narrowing for expanded panels — one setting for every panel.
+    @State private var subStatus: SubtaskStatusFilter = .all
+    @State private var subPriority: TaskPriority?
     /// Eisenhower matrix mode — replaces the grouped list with the 2×2 grid.
     @State private var showEisenhower = false
     @FocusState private var searchFocused: Bool
@@ -1458,10 +1465,59 @@ struct TasksView: View {
         }
     }
 
+    /// Slim controls row atop an expanded panel (only for multi-step tasks):
+    /// step progress, then quiet sort / filter menus. The sort preference is
+    /// shared with the picker's step rows; the filter applies to every panel.
+    private func subtaskPanelBar(_ task: TaskItem) -> some View {
+        HStack(spacing: 8) {
+            let p = task.subtaskProgress
+            Text("\(p.done)/\(p.total) steps")
+                .font(.system(size: 9, weight: .semibold, design: .rounded).monospacedDigit())
+                .foregroundStyle(Color.dsTertiary)
+            Spacer()
+            Menu {
+                SubtaskSortMenuItems(sortModeRaw: $subSortRaw)
+            } label: {
+                Image(systemName: "arrow.up.arrow.down")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(subSort != .manual ? Color.accentColor : Color.dsTertiary)
+                    .frame(width: 18, height: 18)
+                    .contentShape(Rectangle())
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .help(subSort == .manual ? "Sort steps" : "Steps sorted by \(subSort.label)")
+            Menu {
+                SubtaskFilterMenuItems(settings: timer.settings,
+                                       status: $subStatus,
+                                       priorityFilter: $subPriority)
+            } label: {
+                let active = subStatus != .all || subPriority != nil
+                Image(systemName: active ? "line.3.horizontal.decrease.circle.fill"
+                                         : "line.3.horizontal.decrease.circle")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(active ? Color.accentColor : Color.dsTertiary)
+                    .frame(width: 18, height: 18)
+                    .contentShape(Rectangle())
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .help("Filter steps — status or priority")
+        }
+    }
+
     /// Expanded subtasks + notes for a task in the main window.
     private func subtaskPanel(_ task: TaskItem) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            ForEach(task.subtasks) { sub in
+        let shown = subSort.apply(task.subtasks.narrowed(status: subStatus,
+                                                         priority: subPriority))
+        return VStack(alignment: .leading, spacing: 5) {
+            if task.subtasks.count > 1 {
+                subtaskPanelBar(task)
+            }
+            if shown.isEmpty, !task.subtasks.isEmpty {
+                Text("No steps match the filter")
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(Color.dsTertiary)
+            }
+            ForEach(shown) { sub in
                 let isTarget = store.activeSubtaskID == sub.id
                 HStack(spacing: 8) {
                     Button { store.toggleSubtask(task.id, sub.id) } label: {

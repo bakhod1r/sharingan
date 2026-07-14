@@ -83,3 +83,81 @@ struct TaskSortTests {
         #expect(titles(s, .priority) == ["A", "B", "C"])
     }
 }
+
+/// Step ordering for the expanded panels and the picker's step rows.
+@Suite("Subtask sorting & filtering")
+struct SubtaskSortTests {
+    private func steps() -> [Subtask] {
+        [Subtask(title: "banana", estimatedPomodoros: 2, priority: .low),
+         Subtask(title: "apple", isDone: true, priority: .high),
+         Subtask(title: "Cherry", estimatedPomodoros: 5),
+         Subtask(title: "date", priority: .high)]
+    }
+
+    @Test func manualKeepsArrayOrder() {
+        #expect(SubtaskSortMode.manual.apply(steps()).map(\.title)
+                == ["banana", "apple", "Cherry", "date"])
+    }
+
+    @Test func prioritySinksDoneAndRanksUrgentFirst() {
+        // "apple" is P1 but done — it still lands last.
+        #expect(SubtaskSortMode.priority.apply(steps()).map(\.title)
+                == ["date", "banana", "Cherry", "apple"])
+    }
+
+    @Test func titleSortsCaseInsensitivelyDoneLast() {
+        #expect(SubtaskSortMode.title.apply(steps()).map(\.title)
+                == ["banana", "Cherry", "date", "apple"])
+    }
+
+    @Test func estimateSortsBiggestFirstUnestimatedLast() {
+        #expect(SubtaskSortMode.estimate.apply(steps()).map(\.title)
+                == ["Cherry", "banana", "date", "apple"])
+    }
+
+    @Test func equalKeysKeepManualOrder() {
+        let same = [Subtask(title: "a", priority: .high),
+                    Subtask(title: "b", priority: .high),
+                    Subtask(title: "c", priority: .high)]
+        #expect(SubtaskSortMode.priority.apply(same).map(\.title) == ["a", "b", "c"])
+    }
+
+    @Test func statusAndPriorityNarrowing() {
+        let s = steps()
+        #expect(s.narrowed(status: .open, priority: nil).map(\.title)
+                == ["banana", "Cherry", "date"])
+        #expect(s.narrowed(status: .done, priority: nil).map(\.title) == ["apple"])
+        #expect(s.narrowed(status: .all, priority: .high).map(\.title)
+                == ["apple", "date"])
+        #expect(s.narrowed(status: .open, priority: .high).map(\.title) == ["date"])
+    }
+}
+
+/// Report row ordering — time stays the canonical order; other keys re-rank
+/// with the time order as tiebreak.
+@Suite("Report sorting")
+struct ReportSortTests {
+    private func row(_ title: String, count: Int, seconds: TimeInterval) -> FocusReportRow {
+        FocusReportRow(entry: FocusLogEntry(day: Calendar.current.startOfDay(for: Date()),
+                                            taskID: UUID(), subtaskID: nil, title: title,
+                                            count: count, seconds: seconds),
+                       subrows: [], isDone: false, isDeleted: false, category: nil)
+    }
+
+    @Test func timeKeepsGivenOrder() {
+        let rows = [row("b", count: 1, seconds: 900), row("a", count: 4, seconds: 300)]
+        #expect(ReportSortMode.time.apply(rows).map(\.entry.title) == ["b", "a"])
+    }
+
+    @Test func pomodorosRanksByCount() {
+        let rows = [row("b", count: 1, seconds: 900), row("a", count: 4, seconds: 300),
+                    row("c", count: 4, seconds: 100)]
+        // a and c tie on count — time order (a before c) breaks it.
+        #expect(ReportSortMode.pomodoros.apply(rows).map(\.entry.title) == ["a", "c", "b"])
+    }
+
+    @Test func titleSortsCaseInsensitively() {
+        let rows = [row("beta", count: 1, seconds: 900), row("Alpha", count: 2, seconds: 300)]
+        #expect(ReportSortMode.title.apply(rows).map(\.entry.title) == ["Alpha", "beta"])
+    }
+}
