@@ -247,6 +247,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
 
+        // Accessory apps start with no main menu, and macOS dispatches the
+        // standard editing key equivalents (⌘V/⌘C/⌘X/⌘A/⌘Z) through the Edit
+        // menu — without one, paste is dead in every text field of the app.
+        // The menu is never shown for an accessory app; it exists purely so
+        // those key equivalents route to the first responder.
+        installEditMenu()
+
         // One-shot Blink → Sharingan storage rename.
         RebrandMigration.migrate()
 
@@ -304,6 +311,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.async {
             MainWindowManager.shared.show()
         }
+    }
+
+    /// Minimal main menu: an App menu (Quit) and an Edit menu wired to the
+    /// standard first-responder selectors. Undo/Redo use string selectors —
+    /// they live on NSResponder informally, not in a protocol AppKit exports.
+    private func installEditMenu() {
+        let main = NSMenu()
+
+        let appItem = NSMenuItem()
+        let appMenu = NSMenu()
+        appMenu.addItem(withTitle: "Quit Sharingan",
+                        action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appItem.submenu = appMenu
+        main.addItem(appItem)
+
+        let editItem = NSMenuItem()
+        let edit = NSMenu(title: "Edit")
+        edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
+        edit.addItem(.separator())
+        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "Select All",
+                     action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editItem.submenu = edit
+        main.addItem(editItem)
+
+        NSApp.mainMenu = main
     }
 
     // sharingan:// URL scheme (Shortcuts/Raycast/browser automation). AppKit

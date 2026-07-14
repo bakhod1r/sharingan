@@ -95,7 +95,11 @@
   backfill before the feature shipped. Surfaced in the main window's
   **Report** section (day pager, expandable subtask rows, day totals), a
   "By task — today" Progress card, and a 14-day history block in the task
-  editor.
+  editor. `--render-dev-preview` seeds credits through `incrementPomodoro`
+  (the timer's own writer) and shoots all three surfaces:
+  `report{,-empty}.png`, `stats-extras.png`, and `editor.png` — the editor
+  hosted in a real window, since `ImageRenderer` photographs its `ScrollView`
+  as an empty rectangle.
 - A configurable daily pomodoro goal with progress and a "goal reached" notification.
 
 ---

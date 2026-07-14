@@ -494,6 +494,67 @@ if let outDir = HeadlessRender.outputDirectory(for: "--render-dev-preview") {
         store.update(counted)
 
         let timer = PomodoroTimer()
+
+        // The Report section before any focus is logged: the empty state.
+        write(ReportView(timer: timer)
+                .frame(width: 560)
+                .padding(20)
+                .background(Color(white: 0.12))
+                .environment(\.colorScheme, .dark),
+              to: "\(outDir)/report-empty.png")
+
+        // Focus-log seeds. Driven through `incrementPomodoro` — the same call
+        // the timer's completion handler makes — so the Report section, the
+        // Stats "By task — today" card and the editor's history section
+        // photograph rows the real writer produced, not hand-built entries.
+        // The extra tasks carry no due date so the notch island's today-rows
+        // shots further down keep photographing exactly the three seeded ones.
+        let bigID = store.tasks[0].id
+        let lighthouseID = store.tasks[0].subtasks[1].id
+        store.setActiveSubtask(taskID: bigID, subtaskID: lighthouseID)
+        store.incrementPomodoro(bigID, seconds: 1500)          // task + subtask rows
+        store.setActiveSubtask(taskID: bigID, subtaskID: nil)
+        store.incrementPomodoro(bigID, seconds: 1500)          // task row only
+        if let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Date()) {
+            store.incrementPomodoro(bigID, seconds: 3000, on: yesterday)
+        }
+        for (title, seconds) in [("Deep work: RFC draft", 3000.0),
+                                 ("Inbox zero pass", 300.0),
+                                 ("Standup prep", 300.0)] {
+            store.add(title: title, category: "Work")
+            let id = store.tasks.first { $0.title == title }!.id
+            store.incrementPomodoro(id, seconds: seconds)
+        }
+        store.add(title: "Fix flaky CI test", category: "Work")
+        var ciFix = store.tasks.first { $0.title == "Fix flaky CI test" }!
+        store.incrementPomodoro(ciFix.id, seconds: 1500)
+        ciFix = store.tasks.first { $0.id == ciFix.id }!
+        ciFix.isDone = true
+        store.update(ciFix)                                    // done → strikethrough row
+        store.add(title: "Refactor spike (old)", category: "Work")
+        let spikeID = store.tasks.first { $0.title == "Refactor spike (old)" }!.id
+        store.incrementPomodoro(spikeID, seconds: 600)
+        store.delete(spikeID)                                  // survives as a "deleted" row
+        // The credits above also bumped the counters the earlier seeds pinned
+        // for the notch/editor shots; put them back and clear the activation.
+        var bigAgain = store.tasks.first { $0.id == bigID }!
+        bigAgain.pomodorosDone = 2
+        store.update(bigAgain)
+        store.setActive(nil)
+
+        write(ReportView(timer: timer)
+                .frame(width: 560)
+                .padding(20)
+                .background(Color(white: 0.12))
+                .environment(\.colorScheme, .dark),
+              to: "\(outDir)/report.png")
+        write(StatsExtrasView(stats: timer.stats)
+                .frame(width: 640)
+                .padding(20)
+                .background(Color(white: 0.12))
+                .environment(\.colorScheme, .dark),
+              to: "\(outDir)/stats-extras.png")
+
         write(MenuBarView(timer: timer)
                 .frame(width: 360, height: 700)
                 .background(Color.black.opacity(0.85))
@@ -504,10 +565,14 @@ if let outDir = HeadlessRender.outputDirectory(for: "--render-dev-preview") {
                 .background(Color.black.opacity(0.85))
                 .environment(\.colorScheme, .dark),
               to: "\(outDir)/calendar.png")
-        write(TaskEditorView(task: store.tasks[0], settings: timer.settings)
-                .frame(width: 460, height: 640)
-                .environment(\.colorScheme, .dark),
-              to: "\(outDir)/editor.png")
+        // Hosted, not `ImageRenderer`-ed: the editor's fields live in a
+        // `ScrollView`, which the renderer photographs as an empty rectangle
+        // (same rule as the Settings pages below). Tall enough that the focus
+        // history section at the bottom is in frame.
+        writeHosted(TaskEditorView(task: store.tasks[0], settings: timer.settings)
+                        .environment(\.colorScheme, .dark),
+                    to: "\(outDir)/editor.png",
+                    size: NSSize(width: 460, height: 980))
         // The Notch HUD page, Advanced accordion down: the whole category, and
         // on a Mac with no camera housing its disabled state — the one part of
         // the HUD that is visible without a notch, so the one part that can be

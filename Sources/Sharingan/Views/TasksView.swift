@@ -52,6 +52,9 @@ struct TasksView: View {
     @State private var templateRenameText = ""
     /// Done view "Clear" asks before deleting permanently.
     @State private var confirmClearCompleted = false
+    /// Bulk import sheet — paste Markdown/JSON, or a dropped file's contents.
+    @State private var showImportSheet = false
+    @State private var importText = ""
 
     // Inline "add category" form state.
     @State private var showNewCategory = false
@@ -117,6 +120,8 @@ struct TasksView: View {
         }
         .sheet(item: $snoozeTask) { task in snoozeSheet(task) }
         .sheet(isPresented: $showTemplateManager) { templateManager }
+        .sheet(isPresented: $showImportSheet) { importSheet }
+        .onDrop(of: [.fileURL], isTargeted: nil, perform: handleFileDrop)
         .alert("Save as Template", isPresented: Binding(
             get: { templateNamingTask != nil },
             set: { if !$0 { templateNamingTask = nil } })) {
@@ -303,6 +308,7 @@ struct TasksView: View {
             HStack(spacing: 8) {
                 searchField
                 matrixToggle
+                importButton
                 queueChip
                 if filter == .completed, store.count(.completed) > 0 {
                     Button { confirmClearCompleted = true } label: {
