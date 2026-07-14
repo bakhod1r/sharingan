@@ -36,6 +36,7 @@ struct FloatingTimerSettingsTests {
         #expect(s.floatingSize == .medium)
         #expect(s.floatingShowDots == true)
         #expect(s.floatingShowTask == true)
+        #expect(s.floatingShowControls == true)
     }
 
     @Test("floating fields survive a settings codable round trip")
@@ -44,11 +45,13 @@ struct FloatingTimerSettingsTests {
         s.floatingSize = .large
         s.floatingShowDots = false
         s.floatingShowTask = false
+        s.floatingShowControls = false
         let decoded = try JSONDecoder().decode(PomodoroSettings.self,
                                                from: JSONEncoder().encode(s))
         #expect(decoded.floatingSize == .large)
         #expect(decoded.floatingShowDots == false)
         #expect(decoded.floatingShowTask == false)
+        #expect(decoded.floatingShowControls == false)
         #expect(decoded == s)
     }
 
@@ -61,6 +64,7 @@ struct FloatingTimerSettingsTests {
         #expect(decoded.floatingSize == .medium)
         #expect(decoded.floatingShowDots == true)
         #expect(decoded.floatingShowTask == true)
+        #expect(decoded.floatingShowControls == true)
     }
 
     @Test("legacy compact flag maps to the small preset when no preset stored")

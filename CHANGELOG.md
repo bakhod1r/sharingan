@@ -5,6 +5,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.16.0] — 2026-07-14
+
+### Added
+- Floating timer transport buttons: the Dock widget's Start / Stop / Reset strip now also lives on the floating card — at the trailing edge when the pill is wide, as a bottom row otherwise. Buttons disable rather than hide so the card keeps its shape. Toggle in Settings → Timer → Advanced, next to the dots/task rows (on by default)
+
 ## [1.15.0] — 2026-07-14
 
 ### Fixed

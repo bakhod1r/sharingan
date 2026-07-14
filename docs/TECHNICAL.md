@@ -4,7 +4,7 @@
 > whenever a feature is added, changed, or removed, update this document in the
 > same change.**
 
-- Version: 1.15.0
+- Version: 1.16.0
 - Platform: macOS 14+, lives in the menu bar
 
 ---
@@ -180,7 +180,7 @@
   Sharingan", default on); the spinner also idles under macOS Reduce Motion
   and while screens sleep. Preview frames:
   `--render-menubar-icon <path> [rotationDegrees]`.
-- Floating timer: an always-on-top panel that joins all Spaces, is draggable, has size presets, and auto shows/hides around breaks.
+- Floating timer: an always-on-top panel that joins all Spaces, is draggable, has size presets, and auto shows/hides around breaks. Carries the Dock widget's Start / Stop / Reset transport strip (`floatingShowControls`, on by default) — same disabled-not-hidden buttons, trailing edge on a wide pill, bottom row otherwise; the clock takes layout priority so a narrow pill crushes the task pill, not the time.
 - Notch HUD: an island over the MacBook camera housing — live ears while a session runs, the user's open tasks and quick actions on hover. Configurable (see below); absent, and disabled in Settings, on a Mac without a notch.
 - Confirmation prompt before quitting while a focus session is running.
 - Searchable settings, grouped into: Pomodoro, Tasks & Planning, Breaks, Focus & Blocking, Eye Care, Sharingan Eyes, General, Voice Guidance, and Shortcuts.
@@ -205,8 +205,8 @@ Simple/Advanced switch and nothing to seed at launch.
   `advancedExpanded` resets to `false` whenever the open category changes.
 - Timer's always-visible part shows the full "Pomodoro sizes" section (the
   Small/Normal/Big grid) — there's no simplified two-stepper substitute.
-  The floating-timer detail rows (size, always-on-top, dots, task, opacity,
-  drag hint) are Advanced, still gated on `settings.floatingTimerEnabled`,
+  The floating-timer detail rows (size, always-on-top, dots, task, transport
+  buttons, opacity, drag hint) are Advanced, still gated on `settings.floatingTimerEnabled`,
   with a caption ("Enable the floating timer to configure it.") when it's
   off. Eye Care's Advanced "Camera" section is gated on
   `settings.cameraEyeTrackingEnabled` the same way.

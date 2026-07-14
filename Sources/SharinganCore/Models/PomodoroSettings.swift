@@ -235,6 +235,9 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var floatingShowDots: Bool = true
     /// Show the active-task pill on the floating card (when tall enough).
     public var floatingShowTask: Bool = true
+    /// Show the Dock-widget-style transport buttons (Start / Stop / Reset)
+    /// on the floating card.
+    public var floatingShowControls: Bool = true
     /// Dock widget: a control pill anchored near the Trash end of the Dock —
     /// active task, remaining time, Start / Stop / Reset.
     public var dockWidgetEnabled: Bool = true
@@ -445,6 +448,7 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
             ?? (floatingCompact ? .small : d.floatingSize)
         floatingShowDots = try c.decodeIfPresent(Bool.self, forKey: .floatingShowDots) ?? d.floatingShowDots
         floatingShowTask = try c.decodeIfPresent(Bool.self, forKey: .floatingShowTask) ?? d.floatingShowTask
+        floatingShowControls = try c.decodeIfPresent(Bool.self, forKey: .floatingShowControls) ?? d.floatingShowControls
         dockWidgetEnabled = try c.decodeIfPresent(Bool.self, forKey: .dockWidgetEnabled) ?? d.dockWidgetEnabled
         // Unknown raw values (a preset/side written by a newer build) fall back
         // to the default rather than throwing the whole blob away, like `floatingSize`.

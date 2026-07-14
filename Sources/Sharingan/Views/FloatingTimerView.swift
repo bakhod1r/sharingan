@@ -178,22 +178,32 @@ struct FloatingTimerView: View {
         let timeSize = wide
             ? min(max(height * 0.52, 20), 110)
             : min(max(min(height * 0.38, width * 0.24), 20), 110)
-        // Content is user-configurable: the time is always shown, dots and the
-        // task pill follow their Settings toggles (task also needs the room).
+        // Content is user-configurable: the time is always shown; dots, the
+        // task pill and the transport buttons follow their Settings toggles
+        // (task also needs the room).
         let showDots = timer.settings.floatingShowDots
         let showTodo = timer.settings.floatingShowTask
             && (wide ? height >= 64 : height >= 104)
+        let showControls = timer.settings.floatingShowControls
         let corner = min(DS.Radius.xl, height * 0.22)
 
         Group {
             if wide {
                 HStack(spacing: max(14, width * 0.05)) {
+                    // The clock wins the width fight: with the transport strip
+                    // on, a narrow pill would otherwise crush it to "…" while
+                    // the task pill kept its full title.
                     clock(timeSize)
+                        .layoutPriority(2)
                     if showDots || showTodo {
                         VStack(alignment: .leading, spacing: max(6, height * 0.08)) {
                             if showDots { cycleDots(size: max(5, timeSize * 0.16)) }
                             if showTodo { activeTaskRow(scale: timeSize / 54) }
                         }
+                    }
+                    if showControls {
+                        Spacer(minLength: 8)
+                        controls(scale: timeSize / 54)
                     }
                 }
             } else {
@@ -201,6 +211,7 @@ struct FloatingTimerView: View {
                     clock(timeSize)
                     if showDots { cycleDots(size: max(5, timeSize * 0.14)) }
                     if showTodo { activeTaskRow(scale: timeSize / 54).padding(.top, 3) }
+                    if showControls { controls(scale: timeSize / 54).padding(.top, 4) }
                 }
             }
         }
@@ -298,6 +309,40 @@ struct FloatingTimerView: View {
         }
         .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
         .onAppear { animateDot = true }
+    }
+
+    /// Dock-widget-style transport strip: ▶︎ start (resumes a paused session),
+    /// ⏸ stop (pause), ⟲ reset (the engine's stop()). Buttons disable rather
+    /// than hide so the card never changes shape under the pointer; the styling
+    /// mirrors DockWidgetView so the two surfaces read as one family.
+    private func controls(scale: CGFloat) -> some View {
+        let s = max(0.8, min(scale, 1.8))
+        return HStack(spacing: 8 * s) {
+            control("play.fill", scale: s, enabled: !timer.isRunning, help: "Start") {
+                timer.start()
+            }
+            control("pause.fill", scale: s, enabled: timer.isRunning, help: "Stop") {
+                timer.pause()
+            }
+            control("arrow.counterclockwise", scale: s, enabled: true, help: "Reset") {
+                timer.stop()
+            }
+        }
+    }
+
+    private func control(_ symbol: String, scale s: CGFloat, enabled: Bool, help: String,
+                         action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 12 * s, weight: .bold))
+                .foregroundStyle(.white.opacity(enabled ? 0.9 : 0.3))
+                .frame(width: 26 * s, height: 26 * s)
+                .background(Circle().fill(.white.opacity(0.12)))
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .help(help)
+        .accessibilityLabel(help)
     }
 
     /// The active task (or a hint), shown only when the panel is enlarged.

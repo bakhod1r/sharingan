@@ -662,6 +662,22 @@ if let outDir = HeadlessRender.outputDirectory(for: "--render-dev-preview") {
                 .background(Color.black.opacity(0.85))
                 .environment(\.colorScheme, .dark),
               to: "\(outDir)/calendar.png")
+        // The floating card at its three preset sizes plus the wide pill a
+        // manual resize can produce: dots, task pill and the transport strip
+        // all have to fit — the small preset is where crowding shows first,
+        // and the wide shape is where the clock must not lose to the strip.
+        store.setActive(store.tasks[0].id)
+        for size in FloatingTimerSize.allCases {
+            write(FloatingTimerView(timer: timer)
+                    .frame(width: size.width, height: size.height)
+                    .environment(\.colorScheme, .dark),
+                  to: "\(outDir)/floating-\(size.rawValue).png")
+        }
+        write(FloatingTimerView(timer: timer)
+                .frame(width: 300, height: 88)
+                .environment(\.colorScheme, .dark),
+              to: "\(outDir)/floating-wide.png")
+        store.setActive(nil)
         // Hosted, not `ImageRenderer`-ed: the editor's fields live in a
         // `ScrollView`, which the renderer photographs as an empty rectangle
         // (same rule as the Settings pages below). Tall enough that the focus

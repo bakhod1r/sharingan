@@ -905,6 +905,8 @@ struct SettingsView: View {
                                   isOn: $settings.floatingShowDots)
                         ToggleRow(title: "Active task on floating timer",
                                   isOn: $settings.floatingShowTask)
+                        ToggleRow(title: "Start / Stop / Reset buttons on floating timer",
+                                  isOn: $settings.floatingShowControls)
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Opacity: \(Int(settings.floatingOpacity * 100))%")
                                 .font(.system(.caption, design: .rounded).weight(.medium))
