@@ -26,6 +26,12 @@ final class WidgetSnapshotPublisher {
             .debounce(for: .milliseconds(400), scheduler: DispatchQueue.main)
             .sink { [weak self] in self?.publish() }
             .store(in: &bag)
+        // A widget placed while the app sits idle materializes its container
+        // with no snapshot in it, and no timer/task event follows to write
+        // one — this slow tick notices (`needsSeed`) and seeds the file.
+        Timer.publish(every: 30, on: .main, in: .common).autoconnect()
+            .sink { [weak self] _ in self?.publish() }
+            .store(in: &bag)
         publish()
     }
 
@@ -45,7 +51,10 @@ final class WidgetSnapshotPublisher {
         guard let timer else { return }
         let snap = snapshot(from: timer, now: Date())
         let key = fingerprint(snap)
-        guard key != lastFingerprint else { return }
+        // `needsSeed` overrides the fingerprint: the widget's container can
+        // appear between publishes (first widget placement) and its copy of
+        // the snapshot must be written even though nothing changed.
+        guard key != lastFingerprint || WidgetSnapshotStore.needsSeed else { return }
         lastFingerprint = key
         WidgetSnapshotStore.write(snap)
         WidgetCenter.shared.reloadAllTimelines()

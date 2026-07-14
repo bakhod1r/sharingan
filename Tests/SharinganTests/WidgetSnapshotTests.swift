@@ -62,6 +62,37 @@ struct WidgetSnapshotTests {
         #expect(WidgetSnapshotStore.read(from: url) == nil)
     }
 
+    // MARK: - Snapshot location (widget's own container, not the app group)
+
+    @Test("inside the appex sandbox the snapshot lives under its own home")
+    func sandboxedPathIsHomeRelative() {
+        let home = "/Users/x/Library/Containers/com.sharingan.app.widget/Data"
+        let url = WidgetSnapshotStore.containerFileURL(home: home) { _ in
+            Issue.record("sandboxed path must not probe the filesystem")
+            return false
+        }
+        #expect(url?.path ==
+            home + "/Library/Application Support/widget-snapshot.json")
+    }
+
+    @Test("the app targets the widget's container once it exists")
+    func appPathRequiresMaterializedContainer() {
+        var probed: String?
+        let url = WidgetSnapshotStore.containerFileURL(home: "/Users/x") {
+            probed = $0.path
+            return true
+        }
+        #expect(probed == "/Users/x/Library/Containers/com.sharingan.app.widget/Data")
+        #expect(url?.path == "/Users/x/Library/Containers/com.sharingan.app.widget"
+            + "/Data/Library/Application Support/widget-snapshot.json")
+    }
+
+    @Test("the app never fabricates a container that doesn't exist yet")
+    func appPathNilWithoutContainer() {
+        let url = WidgetSnapshotStore.containerFileURL(home: "/Users/x") { _ in false }
+        #expect(url == nil)
+    }
+
     // MARK: - Reading-side repair
 
     @Test("a 'running' session whose end has passed renders as idle")

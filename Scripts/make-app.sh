@@ -92,8 +92,17 @@ echo "▸ Building widget extension…"
 WIDGET="SharinganWidget"
 APPEX="$APP/Contents/PlugIns/$WIDGET.appex"
 mkdir -p "$APPEX/Contents/MacOS"
+# Entry point MUST be _NSExtensionMain (what Xcode links appex targets
+# with): the extension runtime has to own the process from the first
+# instruction — check in with launchd, publish the XPC listener — before any
+# widget code runs. Entering through @main's `main` instead leaves chronod's
+# connection dangling: the process logs as far as "Extension Type:" and then
+# exit(0)s, chronod records "query failed", and the widget never reaches the
+# gallery. @main stays for swiftc to emit the WidgetBundle metadata that
+# WidgetKit's host locates at runtime.
 xcrun swiftc -O -parse-as-library -module-name "$WIDGET" \
   -target "$(uname -m)-apple-macos14.0" \
+  -Xlinker -e -Xlinker _NSExtensionMain \
   "$ROOT/Sources/SharinganWidget"/*.swift \
   "$ROOT/Sources/SharinganCore/Models/WidgetSnapshot.swift" \
   "$ROOT/Sources/SharinganCore/Services/WidgetSnapshotStore.swift" \

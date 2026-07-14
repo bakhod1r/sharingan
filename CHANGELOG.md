@@ -5,6 +5,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.19.0] — 2026-07-14
+
+### Fixed
+- Desktop widget finally appears in the macOS widget gallery. Two independent faults, found via chronod's own logs/database: (1) the appex entered through Swift `@main` instead of `_NSExtensionMain`, so the extension runtime never checked in with launchd — chronod's descriptor query died instantly ("connection invalidated") and the widget sat in `extensionsPendingDescriptorRefetch` forever; `make-app.sh` now links the appex with `-e _NSExtensionMain`, exactly like Xcode does. (2) macOS 26 refuses a team-ID-less (ad-hoc) signature access to the TCC-protected app-group container, so even a running widget read no data; the snapshot now lives in the widget's **own** container (`~/Library/Containers/com.sharingan.app.widget/Data/…`) which the appex can always read and the unsandboxed app can write, with the app-group kept as a secondary location for properly signed builds. A widget placed while the app idles seeds itself within ~30 s (`needsSeed` bypasses the change fingerprint once)
+
 ## [1.18.1] — 2026-07-14
 
 ### Fixed
