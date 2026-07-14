@@ -126,6 +126,18 @@
   field editor's stale text re-synced into the binding, which double-added
   every quick-add task; some fields even had the same handler wired through
   both `onCommit:` and `.onSubmit`.
+- Spinning Sharingan icon: the menu-bar tomoe and (while the main window is
+  open) the Dock icon rotate slowly — one `IconSpinner` clock (12 fps, 60°/s
+  clockwise; the mark's 3-fold symmetry makes the visible cycle 2 s) drives
+  both so they stay in phase. `menuBarIcon(rotationDegrees:)` spins only the
+  tomoe (the progress ring keeps its 12-o'clock anchor); `DockIconAnimator`
+  redraws the bundled icon bitmap rotated into `NSApp.applicationIconImage`
+  only under the `.regular` activation policy and restores the shipped
+  artwork when the tile disappears or the spinner idles. Controlled by
+  `settings.animateIcon` (Settings → Timer → Menu bar → "Spin the
+  Sharingan", default on); the spinner also idles under macOS Reduce Motion
+  and while screens sleep. Preview frames:
+  `--render-menubar-icon <path> [rotationDegrees]`.
 - Floating timer: an always-on-top panel that joins all Spaces, is draggable, has size presets, and auto shows/hides around breaks.
 - Notch HUD: an island over the MacBook camera housing — live ears while a session runs, the user's open tasks and quick actions on hover. Configurable (see below); absent, and disabled in Settings, on a Mac without a notch.
 - Confirmation prompt before quitting while a focus session is running.
