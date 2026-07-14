@@ -960,10 +960,15 @@ private struct TimerDetailView: View {
                     Text(timer.settings.timeFormat.string(remaining))
                         .font(.dsTimer(76))
                         .foregroundStyle(.white)
-                    Label(timer.phase.label, systemImage: timer.phase.systemImage)
-                        .font(.system(.subheadline, design: .rounded).weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.7))
+                    if timer.isIdleAtFocus {
+                        ringKindPicker
+                    } else {
+                        Label(timer.phase.label, systemImage: timer.phase.systemImage)
+                            .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
                 }
+                .animation(DS.Motion.snappy, value: timer.isIdleAtFocus)
             }
 
             // Tappable task selector — pick a task before focusing. Sized to
@@ -1005,6 +1010,45 @@ private struct TimerDetailView: View {
         .sheet(isPresented: $showTaskPicker) {
             TaskPickerSheet(timer: timer)
         }
+    }
+
+    /// Small / Normal / Big switch inside the ring — idle only. Mirrors the
+    /// sidebar selector (same applyKind semantics); while idle a tap also
+    /// refreshes the countdown to the new focus length.
+    private var ringKindPicker: some View {
+        let accent = timer.settings.theme.accent
+        let active = timer.settings.config(for: timer.settings.activeKind)
+        return VStack(spacing: 6) {
+            HStack(spacing: 5) {
+                ForEach(PomodoroKind.allCases) { kind in
+                    let selected = timer.settings.activeKind == kind
+                    let cfg = timer.settings.config(for: kind)
+                    Button {
+                        timer.applyKind(kind)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: kind.systemImage)
+                                .font(.system(size: 10, weight: .semibold))
+                            Text(kind.label)
+                                .font(.system(.caption, design: .rounded).weight(.bold))
+                        }
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(Capsule().fill(selected ? accent.opacity(0.26)
+                                                            : Color.white.opacity(0.07)))
+                        .overlay(Capsule().stroke(selected ? accent.opacity(0.65) : Color.clear,
+                                                  lineWidth: 1))
+                        .foregroundStyle(selected ? accent : Color.white.opacity(0.7))
+                        .contentShape(Capsule())
+                    }
+                    .buttonStyle(.pressableSubtle)
+                    .help("\(kind.label): \(cfg.focusMinutes) min focus, \(cfg.breakMinutes) min break")
+                }
+            }
+            Text("\(active.focusMinutes)′ + \(active.breakMinutes)′")
+                .font(.system(size: 11, design: .rounded).weight(.medium))
+                .foregroundStyle(.white.opacity(0.55))
+        }
+        .animation(DS.Motion.snappy, value: timer.settings.activeKind)
     }
 
     /// Big run button: if a task is already active, just toggle the timer.
