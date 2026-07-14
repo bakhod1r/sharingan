@@ -9,9 +9,15 @@ permissions:
 
 jobs:
   release:
-    runs-on: macos-14
+    # macos-15 ships a far newer Swift than macos-14's 5.10, whose older
+    # type-checker rejected code the local toolchain accepts (ambiguous
+    # cos/sin overloads, expression type-check timeouts). Keep this runner in
+    # step with the dev toolchain or CI-only build breaks come back.
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      - name: Show toolchain
+        run: swift --version
       - name: Build Sharingan.dmg
         run: Scripts/make-dmg.sh
       - name: Extract release notes from CHANGELOG

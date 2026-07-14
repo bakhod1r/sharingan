@@ -339,12 +339,16 @@ final class MenuBarController: NSObject {
             ctx.setFillColor(CGColor(gray: 0, alpha: 1))
             let pupilR = 0.16 * r
             ctx.fillEllipse(in: CGRect(x: c.x - pupilR, y: c.y - pupilR, width: pupilR * 2, height: pupilR * 2))
-            let ringR = 0.52 * r
-            let tomoeR = 0.19 * r
-            let sweep = 100.0 * .pi / 180.0
+            // Every term below is CGFloat: mixing Double and CGFloat here makes
+            // cos/sin ambiguous under the CI toolchain (two overloads, one per
+            // type) even though it resolves locally.
+            let ringR: CGFloat = 0.52 * r
+            let tomoeR: CGFloat = 0.19 * r
+            let sweep: CGFloat = 100.0 * .pi / 180.0
             let steps = 14
             for i in 0..<3 {
-                let head = (-80.0 + Double(i) * 120.0 - rotationDegrees) * .pi / 180.0
+                let head: CGFloat = (-80.0 + CGFloat(i) * 120.0 - CGFloat(rotationDegrees))
+                    * .pi / 180.0
                 let p = CGPoint(x: c.x + ringR * cos(head), y: c.y + ringR * sin(head))
                 ctx.fillEllipse(in: CGRect(x: p.x - tomoeR, y: p.y - tomoeR,
                                            width: tomoeR * 2, height: tomoeR * 2))
@@ -353,9 +357,9 @@ final class MenuBarController: NSObject {
                 var edge: [CGPoint] = []
                 var back: [CGPoint] = []
                 for s in 0...steps {
-                    let t = Double(s) / Double(steps)
-                    let a = head + sweep * t
-                    let w = Double(tomoeR) * (1 - t)
+                    let t: CGFloat = CGFloat(s) / CGFloat(steps)
+                    let a: CGFloat = head + sweep * t
+                    let w: CGFloat = tomoeR * (1 - t)
                     edge.append(CGPoint(x: c.x + (ringR + w) * cos(a),
                                         y: c.y + (ringR + w) * sin(a)))
                     back.append(CGPoint(x: c.x + (ringR - w) * cos(a),
