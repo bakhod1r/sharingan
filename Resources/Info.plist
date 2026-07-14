@@ -15,7 +15,7 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.1.0</string>
+	<string>1.2.0</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -45,9 +45,6 @@
 	<true/>
 	<key>SUFeedURL</key>
 	<string>https://bakhod1r.github.io/sharingan/appcast.xml</string>
-	<!-- EdDSA public key: Sparkle refuses any update whose signature this key
-	     doesn't verify. The private half lives in the login keychain / the
-	     SPARKLE_ED_PRIVATE_KEY secret and never in the repo. -->
 	<key>SUPublicEDKey</key>
 	<string>nnyuPcGCNUzJTCCT/hNHd2x4YNPoAqNhTXSypBPT91M=</string>
 </dict>
