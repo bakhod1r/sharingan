@@ -4,7 +4,7 @@
 > whenever a feature is added, changed, or removed, update this document in the
 > same change.**
 
-- Version: 1.0.0
+- Version: 1.1.0
 - Platform: macOS 14+, lives in the menu bar
 
 ---
@@ -43,9 +43,9 @@
 - Snooze a task to tomorrow, next week, or a picked date; overdue badges.
 - Due reminders with a configurable pre-reminder (default 10 minutes before, or off).
 - Templates: save any task as a reusable template and instantiate it later. Duplicate tasks too.
-- **Bulk import (Markdown + JSON)** — paste a document into Tasks → import (the ↓ button in the view bar, or the link in the empty state), or drop a `.md`/`.json`/`.txt` file on the task list. Format auto-detected (`{`/`[` ⇒ JSON); `TaskImportParser` (SharinganCore) is pure and unit-tested. Copyable templates for both flavors live in Settings → Tasks & Planning → "Import template" (`TaskImportParser.markdownTemplate/.jsonTemplate`).
+- **Bulk import (Markdown + JSON)** — paste a document into Tasks → import (the ↓ button in the view bar, or the link in the empty state), drop a `.md`/`.json`/`.txt` file on the task list, or paste it straight into **any add-a-task field** (main composer, menu-bar quick add, quick-add hotkey window, weekly-board backlog, task picker): `TaskStore.importIfDocument` routes multi-line / fenced / JSON submissions through the importer and single lines fall through to the normal quick add (in the task picker, focus starts on the first imported task). Format auto-detected (`{`/`[` ⇒ JSON) after stripping a UTF-8 BOM and one surrounding ```` ```lang ```` code-fence pair, so LLM answers paste as-is; `TaskImportParser` (SharinganCore) is pure and unit-tested. Copyable templates for both flavors live in Settings → Tasks & Planning → "Import template" (`TaskImportParser.markdownTemplate/.jsonTemplate`).
   - **Markdown**: every `#`/`##` heading starts a task; the heading line goes through `TaskInputParser`, so quick-add tokens (`p1 #tag @proj ~4 ertaga 15:00`) work in all 25 languages. Under a heading: `key: value` lines refine the task (keys case-insensitive, English + Uzbek aliases — category/kategoriya, project/proyekt/loyiha, tags/teglar, priority/muhimlik, due/muddat, planned/reja, estimate/baho, repeat/takror, pomodoro, notes/eslatma, done); `- [ ] Step ~2 (big)` lines are subtasks (trailing `~N` = step estimate, `(small|normal|big)` = step pomodoro size); any other text becomes notes. Date values accept `YYYY-MM-DD [HH:mm]`, ISO-8601, or any natural-language phrase the quick-add parser knows. A document with **no headings** imports as a flat checklist — top-level `- …` lines are tasks, indented ones their subtasks; no bullets at all ⇒ one task per non-empty line.
-  - **JSON**: an array of task objects (single object and `{"tasks": [...]}` also parse), decoded leniently via `JSONSerialization` — `tags` may be an array or comma string, `priority` accepts "P1"…"P4"/high/medium/low/none or an int P-number, `subtasks` entries are strings or `{title, estimate, done, pomodoro}`.
+  - **JSON**: an array of task objects (single object and `{"tasks": [...]}` also parse), decoded leniently via `JSONSerialization` — `tags` may be an array or comma string, `priority` accepts "P1"…"P4"/high/medium/low/none or an int P-number, `subtasks` entries are strings or `{title, estimate, done, pomodoro}`. Pasted-JSON damage is tolerated: smart/curly quotes (Notes/TextEdit) and trailing commas (LLM output) are normalized on a retry that runs only when the strict parse fails, so valid documents are never rewritten.
 - Completed history grouped by day, with restore.
 - CSV export.
 - **Focus queue**: line up several tasks — each finished pomodoro advances to the next one, the break screen shows "Next: …", and after a break a picker asks what to work on next.

@@ -5,11 +5,15 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-07-14
+
 ### Added
 - Bulk task import from Markdown or JSON: paste a document into Tasks → import (or drop a `.md`/`.json` file on the list) and every task feature parses — priority, category, project, tags, due, planned day, estimate, repeat, pomodoro size, subtasks with estimates, notes. Copyable templates for both formats live in Settings → Tasks & Planning; markdown headings understand the quick-add syntax in all 25 languages, and a plain checklist works too
+- Import works from every add-a-task field: paste a whole document into the main composer, menu-bar quick add, the quick-add hotkey window, the weekly-board backlog, or the task picker and it bulk-imports right there — single lines still quick-add as before. Pasted-document damage is tolerated: ```json fences, smart/curly quotes, trailing commas, and a UTF-8 BOM are all normalized
 - Report section: day-by-day per-task focus statistics — pomodoros and real minutes per task and subtask, with day totals; plus a "By task — today" card in Progress, a 14-day history block in the task editor, and a Report tab in the menu-bar popover
 
 ### Fixed
+- Per-task pomodoro size (Small/Normal/Big) now survives an app relaunch: the SQLite `tasks` table never had a `pomodoroKind` column, so the setting silently dropped on every save/reload (subtask-level sizes were unaffected). Caught by the new import end-to-end round-trip test
 - ⌘V / ⌘C / ⌘X / ⌘A / ⌘Z now work in every text field: the app never installed a main menu (accessory apps don't get one by default), so the standard Edit-menu key equivalents had nothing to route through — a minimal hidden Edit menu now carries them
 - Closed notch island no longer shows a black lip under the notch on light menu bars (light wallpapers): idle is now exactly the hardware cutout — nothing painted beyond the housing; the 4pt lip lives only in the running state, where it carries the progress line
 - Adding a task no longer creates it twice: every text field submits through a single `.onSubmit` — the legacy `TextField(onCommit:)` fired a second time on end-editing with the field's stale text (`SubmitWiringTests` now lints the pattern out)
