@@ -405,6 +405,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         coord.breakPresenter = BreakWindowManager.shared
         coord.floatingController = FloatingWindowManager.shared
         coord.todayPanelController = TodayPanelWindowManager.shared
+        coord.dockWidgetController = DockWidgetWindowManager.shared
         coord.quickAddController = QuickAddWindowManager.shared
         self.timer = timer
         self.coordinator = coord
