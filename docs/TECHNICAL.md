@@ -4,7 +4,7 @@
 > whenever a feature is added, changed, or removed, update this document in the
 > same change.**
 
-- Version: 1.3.1
+- Version: 1.4.0
 - Platform: macOS 14+, lives in the menu bar
 
 ---
@@ -40,6 +40,8 @@
   - **Priority words** — `urgent` / `muhim` → P1.
   Works across Latin, Cyrillic, Arabic, Indic, and space-less CJK scripts (Chinese/Japanese matched by substring). All languages are live simultaneously, so a line may mix them. Compositional offsets and month-name dates are fullest in the Latin/Cyrillic set; every language still accepts numeric dates.
 - Smart views: Today, Upcoming, All, Completed — each with counts. Free-text search over title, tags, project, and notes.
+- **Sort menu** (↑↓ in the view bar): Manual / Priority / Due date / A–Z / Newest, applied inside each category group (`TaskSortMode` in SharinganCore, threaded through `TaskStore.grouped(filter:search:sort:)`). Every mode keeps open tasks above done ones and tiebreaks with the manual order, so equal keys never shuffle; priority ranks most-urgent first (custom levels sit above P1), due date puts dateless tasks last, titles compare case-insensitively. Persisted across launches (`tasks.sortMode` default). Drag-to-reorder and Move up/down keep editing the *manual* order underneath a non-manual sort; the Done view's day grouping and the Eisenhower matrix are unaffected.
+- **Filter menu** (funnel in the view bar): narrow the list to one category, tag, or priority — the same narrowing dimension the sidebar deep-links set, so the pick shows the existing "Filtered by …" chip (its ✕ clears). One dimension at a time; picking the active entry again toggles it off.
 - Snooze a task to tomorrow, next week, or a picked date; overdue badges.
 - Due reminders with a configurable pre-reminder (default 10 minutes before, or off).
 - Templates: save any task as a reusable template and instantiate it later. Duplicate tasks too.

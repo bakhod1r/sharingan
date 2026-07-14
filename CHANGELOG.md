@@ -5,6 +5,12 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-07-14
+
+### Added
+- Sort menu in the Tasks view bar (↑↓): order each category's rows by Priority (most urgent first, custom levels above P1), Due date (dateless last), A–Z, Newest, or the default Manual drag order. The choice sticks across launches; open tasks always stay above done ones, and ties keep the manual order so nothing shuffles
+- Filter menu in the Tasks view bar (funnel): narrow the list to one category, tag, or priority right from the list — the same narrowing the sidebar offers, shown in the "Filtered by …" chip with its ✕ to clear. Picking the active entry again toggles it off
+
 ## [1.3.1] — 2026-07-14
 
 ### Fixed

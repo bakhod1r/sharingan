@@ -23,6 +23,62 @@ public enum TaskFilter: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// How the task list orders rows inside each category group — the view-bar
+/// sort menu. `manual` is the drag order; every other mode still floats open
+/// tasks above done ones and falls back to the manual order as a stable
+/// tiebreak, so equal keys never shuffle.
+public enum TaskSortMode: String, CaseIterable, Identifiable, Sendable {
+    case manual, priority, dueDate, title, newest
+
+    public var id: String { rawValue }
+
+    public var label: String {
+        switch self {
+        case .manual:   return "Manual"
+        case .priority: return "Priority"
+        case .dueDate:  return "Due date"
+        case .title:    return "A–Z"
+        case .newest:   return "Newest"
+        }
+    }
+
+    public var icon: String {
+        switch self {
+        case .manual:   return "hand.draw"
+        case .priority: return "flag"
+        case .dueDate:  return "calendar"
+        case .title:    return "textformat.abc"
+        case .newest:   return "clock"
+        }
+    }
+
+    /// Comparator for this mode. Priority ranks most-urgent first (higher
+    /// rawValue — custom levels sit above P1); due date puts dateless tasks
+    /// last; titles compare case-insensitively.
+    public func inOrder(_ a: TaskItem, _ b: TaskItem) -> Bool {
+        if a.isDone != b.isDone { return !a.isDone }
+        switch self {
+        case .manual:
+            break
+        case .priority:
+            if a.priority != b.priority { return a.priority.rawValue > b.priority.rawValue }
+        case .dueDate:
+            switch (a.dueDate, b.dueDate) {
+            case let (x?, y?): if x != y { return x < y }
+            case (.some, nil): return true
+            case (nil, .some): return false
+            case (nil, nil):   break
+            }
+        case .title:
+            let c = a.title.localizedCaseInsensitiveCompare(b.title)
+            if c != .orderedSame { return c == .orderedAscending }
+        case .newest:
+            if a.createdAt != b.createdAt { return a.createdAt > b.createdAt }
+        }
+        return TaskStore.inListOrder(a, b)
+    }
+}
+
 /// Persists the user's task list to a local SQLite database in Application
 /// Support (via `TaskDatabase`) and tracks which task the active focus session
 /// is running against.
@@ -183,8 +239,9 @@ public final class TaskStore: ObservableObject {
     }
 
     /// Canonical ordering: open tasks before done, then manual `sortOrder`, then
-    /// creation time as a stable tiebreak.
-    public static func inListOrder(_ a: TaskItem, _ b: TaskItem) -> Bool {
+    /// creation time as a stable tiebreak. Pure — `nonisolated` so the
+    /// `TaskSortMode` comparators can tiebreak with it off the main actor.
+    public nonisolated static func inListOrder(_ a: TaskItem, _ b: TaskItem) -> Bool {
         if a.isDone != b.isDone { return !a.isDone }
         if a.sortOrder != b.sortOrder { return a.sortOrder < b.sortOrder }
         return a.createdAt < b.createdAt
@@ -225,8 +282,10 @@ public final class TaskStore: ObservableObject {
     }
 
     /// Tasks for a smart view, narrowed by a free-text query (title / tags /
-    /// project / notes), grouped by category in the usual order.
-    public func grouped(filter: TaskFilter, search: String = "") -> [(category: String, items: [TaskItem])] {
+    /// project / notes), grouped by category in the usual order and sorted
+    /// within each group by `sort`.
+    public func grouped(filter: TaskFilter, search: String = "",
+                        sort: TaskSortMode = .manual) -> [(category: String, items: [TaskItem])] {
         let q = search.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let filtered = tasks.filter { task in
             guard matches(task, filter) else { return false }
@@ -240,7 +299,7 @@ public final class TaskStore: ObservableObject {
         let names = Array(Set(filtered.map(\.category)))
             .sorted { (order.firstIndex(of: $0) ?? .max, $0) < (order.firstIndex(of: $1) ?? .max, $1) }
         return names.map { name in
-            (name, filtered.filter { $0.category == name }.sorted(by: Self.inListOrder))
+            (name, filtered.filter { $0.category == name }.sorted(by: sort.inOrder))
         }
     }
 

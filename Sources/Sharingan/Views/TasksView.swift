@@ -72,6 +72,9 @@ struct TasksView: View {
     /// Smart-view filter + free-text search over the list.
     @State private var filter: TaskFilter = .all
     @State private var search = ""
+    /// List ordering inside each category group — persisted across launches.
+    @AppStorage("tasks.sortMode") private var sortModeRaw = TaskSortMode.manual.rawValue
+    private var sortMode: TaskSortMode { TaskSortMode(rawValue: sortModeRaw) ?? .manual }
     /// Eisenhower matrix mode — replaces the grouped list with the 2×2 grid.
     @State private var showEisenhower = false
     @FocusState private var searchFocused: Bool
@@ -104,7 +107,8 @@ struct TasksView: View {
                     }
                 } else {
                     narrowFilterChip
-                    let groups = narrowed(store.grouped(filter: filter, search: search))
+                    let groups = narrowed(store.grouped(filter: filter, search: search,
+                                                        sort: sortMode))
                     if groups.isEmpty {
                         noResults
                     } else if embeddedInScroll {
@@ -346,6 +350,8 @@ struct TasksView: View {
             }
             HStack(spacing: 8) {
                 searchField
+                sortMenu
+                filterMenu
                 matrixToggle
                 importButton
                 queueChip
@@ -388,6 +394,111 @@ struct TasksView: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.pressableSubtle)
+    }
+
+    /// Sort menu — reorders rows inside each category group. The icon tints
+    /// while a non-manual sort applies; drag-to-reorder keeps editing the
+    /// manual order underneath, which every mode uses as its tiebreak.
+    private var sortMenu: some View {
+        Menu {
+            ForEach(TaskSortMode.allCases) { mode in
+                Button {
+                    withAnimation(DS.Motion.gentle) { sortModeRaw = mode.rawValue }
+                } label: {
+                    Label(mode.label, systemImage: sortMode == mode ? "checkmark" : mode.icon)
+                }
+            }
+        } label: {
+            Image(systemName: "arrow.up.arrow.down")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(sortMode != .manual ? Color.accentColor : Color.dsSecondary)
+                .frame(width: 27, height: 27)
+                .background(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
+                    .fill(sortMode != .manual ? Color.accentColor.opacity(0.16) : Color.dsFill))
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+        .help(sortMode == .manual ? "Sort tasks" : "Sorted by \(sortMode.label)")
+        .accessibilityLabel("Sort tasks")
+    }
+
+    /// True while a sidebar/menu narrowing dimension is active.
+    private var isNarrowed: Bool {
+        categoryFilter != nil || tagFilter != nil || priorityFilter != nil
+    }
+
+    /// Filter menu — the same category / tag / priority narrowing the sidebar
+    /// deep-links set, reachable from the list itself. One dimension at a
+    /// time (matching the sidebar); the pick shows up as the "Filtered by …"
+    /// chip, whose ✕ clears it. Picking the active entry toggles it off.
+    private var filterMenu: some View {
+        Menu {
+            Menu("Category") {
+                ForEach(store.allCategories) { c in
+                    Button {
+                        withAnimation(DS.Motion.gentle) {
+                            let on = categoryFilter == c.name
+                            categoryFilter = on ? nil : c.name
+                            tagFilter = nil; priorityFilter = nil
+                        }
+                    } label: {
+                        Label(c.name, systemImage: categoryFilter == c.name ? "checkmark" : c.icon)
+                    }
+                }
+            }
+            if !store.allTags.isEmpty {
+                Menu("Tag") {
+                    ForEach(store.allTags, id: \.self) { t in
+                        Button {
+                            withAnimation(DS.Motion.gentle) {
+                                let on = tagFilter == t
+                                tagFilter = on ? nil : t
+                                categoryFilter = nil; priorityFilter = nil
+                            }
+                        } label: {
+                            Label("#\(t)", systemImage: tagFilter == t ? "checkmark" : "number")
+                        }
+                    }
+                }
+            }
+            Menu("Priority") {
+                ForEach(TaskPriority.levels(custom: timer.settings.customPriorityLevels)) { p in
+                    Button {
+                        withAnimation(DS.Motion.gentle) {
+                            let on = priorityFilter == p
+                            priorityFilter = on ? nil : p
+                            categoryFilter = nil; tagFilter = nil
+                        }
+                    } label: {
+                        Label(timer.settings.priorityName(p),
+                              systemImage: priorityFilter == p ? "checkmark" : "flag.fill")
+                    }
+                }
+            }
+            if isNarrowed {
+                Divider()
+                Button(role: .destructive) {
+                    withAnimation(DS.Motion.gentle) {
+                        categoryFilter = nil; tagFilter = nil; priorityFilter = nil
+                    }
+                } label: {
+                    Label("Clear filter", systemImage: "xmark.circle")
+                }
+            }
+        } label: {
+            Image(systemName: isNarrowed
+                  ? "line.3.horizontal.decrease.circle.fill"
+                  : "line.3.horizontal.decrease.circle")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(isNarrowed ? Color.accentColor : Color.dsSecondary)
+                .frame(width: 27, height: 27)
+                .background(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
+                    .fill(isNarrowed ? Color.accentColor.opacity(0.16) : Color.dsFill))
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+        .help("Filter by category, tag, or priority")
+        .accessibilityLabel("Filter tasks")
     }
 
     /// Compact grid icon that flips the list into the Eisenhower 2×2 matrix.
