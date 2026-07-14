@@ -21,6 +21,7 @@ final class MenuBarController: NSObject {
         var percent: Int?
         var phase: PomodoroPhase
         var rotationStep: Int
+        var style: SharinganStyle
     }
     private var lastIconKey: IconKey?
     private let spinner = IconSpinner()
@@ -81,8 +82,14 @@ final class MenuBarController: NSObject {
 
         // The button's window has a real menu-bar frame only after this
         // run-loop turn settles; check for the invisible-slot state then.
+        // Also re-render the icon once: a styled (non-classic) iris rendered
+        // during applicationDidFinishLaunching can come out as an empty
+        // bitmap (the ImageRenderer quirk `menuBarIcon` documents), so one
+        // settled re-render repairs the first frame.
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
             self?.rescueFromNotchIfHidden()
+            self?.lastIconKey = nil
+            self?.updateTitle()
         }
     }
 
@@ -161,6 +168,9 @@ final class MenuBarController: NSObject {
 
     private func updateTitle() {
         guard let timer, let button = statusItem?.button else { return }
+        // Keep the Dock artwork on the user's Sharingan style (no-op unless
+        // the style actually changed).
+        dockAnimator?.syncStyle(timer.settings.sharinganStyle)
         // Todoist-style minimal menu bar: just the stopwatch icon at rest, and
         // the icon + countdown only while a session is actually engaged
         // (running or paused mid-way). A fresh/reset timer shows the icon alone.
@@ -175,15 +185,21 @@ final class MenuBarController: NSObject {
         // rotation step quantises the spinner angle to the 5° frame grid
         // within the mark's 120° symmetry, so the bitmap is re-rendered
         // only when something visible changed.
+        // The classic mark repeats every 120° (three tomoe); other styles
+        // aren't 3-fold symmetric, so their frames only repeat per full turn.
+        let style = timer.settings.sharinganStyle
+        let symmetry: Double = style == .classic ? 120 : 360
         let key = IconKey(percent: engaged ? Int(timer.progress * 100) : nil,
                           phase: timer.phase,
-                          rotationStep: Int(spinner.angle.truncatingRemainder(dividingBy: 120) / 5))
+                          rotationStep: Int(spinner.angle.truncatingRemainder(dividingBy: symmetry) / 5),
+                          style: style)
         if key != lastIconKey {
             lastIconKey = key
             button.image = Self.menuBarIcon(
                 progress: key.percent.map { Double($0) / 100 },
                 phase: key.phase,
-                rotationDegrees: spinner.angle)
+                rotationDegrees: spinner.angle,
+                style: key.style)
         }
     }
 
@@ -200,11 +216,27 @@ final class MenuBarController: NSObject {
     /// breaks, dimmed while paused.
     ///
     /// `rotationDegrees` spins the tomoe (clockwise) — the animated menu bar.
+    ///
+    /// `style` follows the user's Sharingan-eye pick: `.classic` keeps this
+    /// hand-drawn CG mark (safe to render during launch), every other style
+    /// rasterizes the same `MoveIrisView` the eyes/wallpaper/app icon use and
+    /// composites it inside the CG ring — with the CG classic mark as the
+    /// fallback if the rasterizer returns nothing.
     @MainActor
     static func menuBarIcon(progress: Double? = nil,
                             phase: PomodoroPhase = .focus,
-                            rotationDegrees: Double = 0) -> NSImage? {
+                            rotationDegrees: Double = 0,
+                            style: SharinganStyle = .classic) -> NSImage? {
         let side: CGFloat = 18
+        // Rasterize the styled iris up front (not inside the NSImage drawing
+        // closure — ImageRenderer is main-actor and the closure draws lazily).
+        var styledIris: CGImage?
+        if style != .classic {
+            let renderer = ImageRenderer(content:
+                MoveIrisView(diameter: side, spin: rotationDegrees, style: style))
+            renderer.scale = 8 // 144px bitmap; crisp at 18pt on any backing scale
+            styledIris = renderer.cgImage
+        }
         let img = NSImage(size: NSSize(width: side, height: side), flipped: false) { fullRect in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
             let c = CGPoint(x: fullRect.midX, y: fullRect.midY)
@@ -242,6 +274,12 @@ final class MenuBarController: NSObject {
                 }
                 // Iris sits inside the ring with a small gap.
                 rect = fullRect.insetBy(dx: 3.2, dy: 3.2)
+            }
+
+            // Styled (non-classic) iris: the pre-rendered MoveIrisView disc.
+            if let styledIris {
+                ctx.draw(styledIris, in: rect)
+                return true
             }
             let r = rect.width / 2
 

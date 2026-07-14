@@ -4,12 +4,15 @@ import SharinganCore
 
 /// App-icon artwork: the bare red Sharingan disc — the exact same
 /// `MoveIrisView` the menu bar shows, full-bleed on a transparent canvas, so
-/// the Dock icon and the menu bar icon are one and the same mark.
+/// the Dock icon and the menu bar icon are one and the same mark. `style`
+/// follows the user's Sharingan-eye pick at runtime (the .icns on disk stays
+/// the classic mark).
 struct AppIconArtwork: View {
+    var style: SharinganStyle = .classic
     var body: some View {
         ZStack {
             Color.clear
-            MoveIrisView(diameter: 920)
+            MoveIrisView(diameter: 920, style: style)
                 .shadow(color: .black.opacity(0.35), radius: 28, y: 12)
         }
         .frame(width: 1024, height: 1024)

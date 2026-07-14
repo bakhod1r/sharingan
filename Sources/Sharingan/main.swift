@@ -15,16 +15,20 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-icon"),
 }
 
 // Headless preview of the 18pt menu-bar icon, upscaled for inspection:
-// `Sharingan --render-menubar-icon <path> [rotationDegrees]` (debug utility;
-// the optional angle previews the spinning-tomoe animation frames).
+// `Sharingan --render-menubar-icon <path> [rotationDegrees] [styleRawValue]`
+// (debug utility; the optional angle previews the spinning-tomoe animation
+// frames, the optional style previews a non-classic Sharingan mark).
 if let i = CommandLine.arguments.firstIndex(of: "--render-menubar-icon"),
    i + 1 < CommandLine.arguments.count {
     let out = CommandLine.arguments[i + 1]
     let rotation = i + 2 < CommandLine.arguments.count
         ? Double(CommandLine.arguments[i + 2]) ?? 0 : 0
+    let style = i + 3 < CommandLine.arguments.count
+        ? SharinganStyle(rawValue: CommandLine.arguments[i + 3]) ?? .classic : .classic
     MainActor.assumeIsolated {
         if let img = MenuBarController.menuBarIcon(progress: 0.4, phase: .focus,
-                                                   rotationDegrees: rotation),
+                                                   rotationDegrees: rotation,
+                                                   style: style),
            let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 144, pixelsHigh: 144,
                                       bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
                                       isPlanar: false, colorSpaceName: .deviceRGB,

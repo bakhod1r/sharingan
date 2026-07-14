@@ -623,7 +623,7 @@ struct SettingsView: View {
                         .pickerStyle(.menu)
                         .fixedSize()
                     }
-                    Text("Used everywhere the eyes appear: break screen and desktop wallpaper.")
+                    Text("Used everywhere the mark appears: break screen, desktop wallpaper, the menu-bar icon and the Dock icon.")
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(.white.opacity(0.65))
                 }

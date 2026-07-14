@@ -4,7 +4,7 @@
 > whenever a feature is added, changed, or removed, update this document in the
 > same change.**
 
-- Version: 1.8.0
+- Version: 1.9.0
 - Platform: macOS 14+, lives in the menu bar
 
 ---
@@ -155,6 +155,19 @@
   field editor's stale text re-synced into the binding, which double-added
   every quick-add task; some fields even had the same handler wired through
   both `onCommit:` and `.onSubmit`.
+- The menu-bar and Dock marks follow `settings.sharinganStyle` (Settings →
+  Sharingan): `.classic` keeps the launch-safe hand-drawn CG mark;
+  every other style rasterizes `MoveIrisView` (the same view the eyes,
+  wallpaper and `AppIconArtwork` use) via `ImageRenderer` and composites it
+  inside the CG progress ring (`MenuBarController.menuBarIcon(style:)`,
+  scale 8 at 18 pt). A styled render during `applicationDidFinishLaunching`
+  can come out empty (long-standing ImageRenderer quirk), so `install`
+  forces one settled re-render 2 s in; a nil render falls back to the CG
+  classic mark. The Dock side is `DockIconAnimator.syncStyle` — styled
+  512 px re-render of `AppIconArtwork`, shipped .icns for classic (Finder
+  always keeps the classic mark), synced from `updateTitle`'s 1 s tick. The
+  spin quantisation is 120° only for the classic mark's 3-fold symmetry —
+  other styles quantise per full turn.
 - Spinning Sharingan icon: the menu-bar tomoe and (while the main window is
   open) the Dock icon rotate slowly — one `IconSpinner` clock (12 fps, 60°/s
   clockwise; the mark's 3-fold symmetry makes the visible cycle 2 s) drives

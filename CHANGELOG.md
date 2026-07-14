@@ -5,6 +5,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.9.0] — 2026-07-14
+
+### Added
+- The menu-bar icon and the Dock icon now follow the Sharingan eye style picked in Settings → Sharingan (Mangekyō, Rinnegan, Itachi, …), like the break-screen eyes and the wallpaper already did. Classic keeps the shipped hand-drawn mark; the progress ring, countdown and spin animation work on every style. The app icon on disk (Finder) stays the classic mark
+
 ## [1.8.0] — 2026-07-14
 
 ### Added
