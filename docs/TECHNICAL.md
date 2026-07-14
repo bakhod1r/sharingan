@@ -4,7 +4,7 @@
 > whenever a feature is added, changed, or removed, update this document in the
 > same change.**
 
-- Version: 1.17.0
+- Version: 1.18.0
 - Platform: macOS 14+, lives in the menu bar
 
 ---
@@ -396,72 +396,92 @@ disagree with the HUD about whether the Mac has a notch; it re-asks on
 
 ---
 
-## Dock widget
+## Floating widget
 
-A "now playing"-style pill flush against the Dock's inner edge — active
-task, remaining time, and always-standing ▶︎ Start / ⏸ Stop / ⟲ Reset
-buttons. Same philosophy as the today panel: it shows the controls, not a
-status light, so a session can be started without opening the app. Settings
-adds four knobs — preset size, which end of the Dock it hugs, opacity, and
-an "expand on hover" dynamic mode — that mirror the floating timer's own
-size/opacity controls.
+A "now playing"-style pill — active task, remaining time, and
+always-standing ▶︎ Start / ⏸ Stop / ⟲ Reset buttons — that docks flush
+against the Dock's inner edge by default and can be dragged anywhere on
+screen. It is the app's **one** timer window: an earlier "floating timer"
+card existed alongside it, but that card was deleted outright and this
+widget absorbed every one of its jobs (transport controls, size presets,
+opacity, drag-anywhere placement). Same philosophy as the today panel: it
+shows the controls, not a status light, so a session can be started without
+opening the app. Settings adds four appearance knobs — preset size, which
+end of the Dock it hugs while docked, opacity, and an "expand on hover"
+dynamic mode.
 
+- **Naming.** The feature is user-facing "Floating widget" (Settings
+  section, shortcut label, category subtitle) and its Swift types follow:
+  `FloatingWidgetView`/`FloatingWidgetTaskPickerView`
+  (Sources/Sharingan/Views), `FloatingWidgetWindowManager`
+  (Sources/Sharingan/Services), `FloatingWidgetController` (protocol,
+  SharinganCore/Services/SharinganCoordinator.swift),
+  `FloatingWidgetGeometry`/`FloatingWidgetStartAction`
+  (SharinganCore/Models). `PomodoroSettings`' five stored properties
+  (`dockWidgetEnabled`/`dockWidgetSize`/`dockWidgetAlignment`/
+  `dockWidgetOpacity`/`dockWidgetExpandOnHover`) and the
+  `sharingan.dockwidget.x`/`.y` UserDefaults position keys deliberately KEEP
+  their historical `dockWidget`/`dockwidget` prefix, so existing settings
+  JSON blobs and dragged-in positions decode unchanged across the rename —
+  only the types and user-facing copy moved to "Floating widget".
 - **The square-tile limitation and the flush-panel trick.** The Dock itself
   cannot be widened or grow a custom tile — every Dock icon is a fixed square
   slot the system owns. The widget is therefore not a Dock tile at all: it is
-  an ordinary borderless `NSPanel` (`DockWidgetWindowManager`) positioned
-  immediately above the Dock's own rectangle so it *reads* as part of it
-  without the Dock ever knowing it exists.
-- **Three code units.** `DockWidgetWindowManager` (Sources/Sharingan/Services)
-  owns the panel's lifecycle and placement; `DockWidgetView`
-  (Sources/Sharingan/Views) is the SwiftUI pill itself — a mini progress ring,
-  the active task title (or "No task selected"), the remaining time, and the
-  three transport buttons, which disable rather than hide so the pill never
-  changes shape under the pointer. `DockWidgetController` (protocol,
+  an ordinary borderless `NSPanel` (`FloatingWidgetWindowManager`) positioned
+  immediately above the Dock's own rectangle, by default, so it *reads* as
+  part of it without the Dock ever knowing it exists.
+- **Three code units.** `FloatingWidgetWindowManager`
+  (Sources/Sharingan/Services) owns the panel's lifecycle and placement;
+  `FloatingWidgetView` (Sources/Sharingan/Views) is the SwiftUI pill itself —
+  a mini progress ring, the active task title (or "No task selected"), the
+  remaining time, and the three transport buttons, which disable rather than
+  hide so the pill never changes shape under the pointer.
+  `FloatingWidgetController` (protocol,
   SharinganCore/Services/SharinganCoordinator.swift) is the seam
-  `SharinganCoordinator` calls through (`showDockWidget(timer:)` /
-  `hideDockWidget()`), same pattern as `TodayPanelController` and
-  `FloatingTimerController` — `AppDelegate` wires
-  `coord.dockWidgetController = DockWidgetWindowManager.shared`, and tests
-  swap in a spy instead of touching AppKit.
+  `SharinganCoordinator` calls through (`showFloatingWidget(timer:)` /
+  `hideFloatingWidget()`), same pattern as `TodayPanelController` —
+  `AppDelegate` wires
+  `coord.floatingWidgetController = FloatingWidgetWindowManager.shared`, and
+  tests swap in a spy instead of touching AppKit.
 - **`dockWidgetEnabled` is a settings-flag-only switch, on by default.**
   `PomodoroSettings.dockWidgetEnabled` (default `true`) is read by
-  `SharinganCoordinator.syncDockWidget()` alone — like the today panel, the
-  pill's visibility follows the flag, never `timer.isRunning`, so Start stays
-  reachable even when nothing is counting down. `syncDockWidget()` runs once
-  from `syncAll()` at launch and again from `syncChanged(_:)` whenever
-  `dockWidgetEnabled`, `dockWidgetSize`, `dockWidgetAlignment`,
+  `SharinganCoordinator.syncFloatingWidget()` alone — like the today panel,
+  the pill's visibility follows the flag, never `timer.isRunning`, so Start
+  stays reachable even when nothing is counting down. `syncFloatingWidget()`
+  runs once from `syncAll()` at launch and again from `syncChanged(_:)`
+  whenever `dockWidgetEnabled`, `dockWidgetSize`, `dockWidgetAlignment`,
   `dockWidgetOpacity`, or `dockWidgetExpandOnHover` changes; the Settings
-  toggle and its controls sit in their own "Dock widget" section right under
-  "Floating timer".
+  toggle and its controls sit in their own "Floating widget" section.
 - **Four appearance fields on `PomodoroSettings`, decoded defensively.**
-  `dockWidgetSize: DockWidgetSize` (`.small`/`.medium`/`.large`, default
+  `dockWidgetSize: FloatingWidgetSize` (`.small`/`.medium`/`.large`, default
   `.medium`; width/height 280×48, 320×56, 380×68) and
-  `dockWidgetAlignment: DockWidgetAlignment` (`.leading`/`.center`/`.trailing`,
-  default `.trailing`) decode with the same double-optional idiom as
-  `floatingSize`/`notchEars` — an unknown raw value (an older or newer
-  build's blob) falls back to the default instead of throwing the whole
-  settings object away. `dockWidgetOpacity: Double` (0.3…1.0, default `1.0`)
-  and `dockWidgetExpandOnHover: Bool` (default `true`) decode with plain
-  `decodeIfPresent ?? default`.
-- **Placement is `visibleFrame` vs. `frame` math, extracted into a pure,
-  unit-testable model** — `DockWidgetGeometry` (SharinganCore/Models), the
-  same precedent as `NotchGeometry`. `NSScreen.main`'s `frame` is the full
-  display; `visibleFrame` excludes the Dock (and the menu bar).
-  `DockWidgetGeometry.side(visibleFrame:fullFrame:)` compares the two on each
-  edge (`visibleFrame.minX > frame.minX` → `.left`, `visibleFrame.maxX <
-  frame.maxX` → `.right`, else `.bottom`) to tell
-  `DockWidgetWindowManager.reposition()` where the Dock actually is, and
-  `DockWidgetGeometry.origin(size:alignment:visibleFrame:fullFrame:)` turns
-  that into a window origin. The window is always sized to the FULL preset
-  (`dockWidgetSize.width/height`) regardless of the hover state — only the
-  pill drawn inside it resizes — so `reposition()` never has to reconcile a
-  resizing window with its anchor:
+  `dockWidgetAlignment: FloatingWidgetAlignment`
+  (`.leading`/`.center`/`.trailing`, default `.trailing`) decode with the
+  same double-optional idiom as `notchEars` — an unknown raw value (an older
+  or newer build's blob) falls back to the default instead of throwing the
+  whole settings object away. `dockWidgetOpacity: Double` (0.3…1.0, default
+  `1.0`) and `dockWidgetExpandOnHover: Bool` (default `true`) decode with
+  plain `decodeIfPresent ?? default`.
+- **Docked placement is `visibleFrame` vs. `frame` math, extracted into a
+  pure, unit-testable model** — `FloatingWidgetGeometry`
+  (SharinganCore/Models), the same precedent as `NotchGeometry`.
+  `NSScreen.main`'s `frame` is the full display; `visibleFrame` excludes the
+  Dock (and the menu bar). `FloatingWidgetGeometry.side(visibleFrame:fullFrame:)`
+  compares the two on each edge (`visibleFrame.minX > frame.minX` → `.left`,
+  `visibleFrame.maxX < frame.maxX` → `.right`, else `.bottom`, returned as
+  the top-level `DockSide` type — it names the real Dock's edge, not the
+  widget) to tell `FloatingWidgetWindowManager.reposition()` where the Dock
+  actually is, and
+  `FloatingWidgetGeometry.origin(size:alignment:visibleFrame:fullFrame:)`
+  turns that into a window origin. The window is always sized to the FULL
+  preset (`dockWidgetSize.width/height`) regardless of the hover state — only
+  the pill drawn inside it resizes — so `reposition()` never has to reconcile
+  a resizing window with its anchor:
   - Dock on the bottom (the common case): the x position follows
     `dockWidgetAlignment` — `.leading` → `visibleFrame.minX + 16`, `.center`
     → `visibleFrame.midX − width / 2`, `.trailing` (default) →
-    `visibleFrame.maxX − width − 16`, i.e. near the Trash. Either way the
-    pill sits at `visibleFrame.minY + 4`.
+    `visibleFrame.maxX − width − 16`. Either way the pill sits at
+    `visibleFrame.minY + 4`.
   - Dock on the left (`visibleFrame.minX > frame.minX`): pill sits flush
     beside the Dock's inner edge, **vertically centered** —
     `visibleFrame.minX + 8, visibleFrame.midY − height / 2` — instead of
@@ -475,56 +495,92 @@ size/opacity controls.
     stops reserving Dock space, so `side()` reads `.bottom` and the pill's
     computed origin lands at the screen edge instead of hovering over empty
     space where the Dock used to be — no separate auto-hide detection needed.
-  - **Hover expansion opens away from the Dock.** The pill hugs the
-    container edge nearest the Dock, not always the Position setting:
-    `DockWidgetGeometry.expandAnchor(alignment:visibleFrame:fullFrame:)`
-    returns `.leading` on a left Dock, `.trailing` on a right Dock, and the
-    `dockWidgetAlignment` setting unchanged on the bottom. `reposition()`
-    feeds the result into `DockWidgetView`'s `anchor` parameter (default
-    `.trailing`), which drives `containerAlignment` instead of reading
-    `dockWidgetAlignment` directly — so the pill on a left Dock always grows
-    rightward, away from the Dock, however Position is set.
   - `reposition()` re-runs on `NSApplication.didChangeScreenParametersNotification`,
     so moving the Dock, resizing a display, or toggling auto-hide re-anchors
-    the pill live. `DockWidgetWindowManager` keeps a `weak var timer` (set in
-    `showDockWidget`) and a `NSHostingView<DockWidgetView>` reference
-    (`hosting`, nilled in `hideDockWidget()`) so `reposition()` and
-    `applySettings()` always read the live settings rather than a snapshot
-    from when the panel was created, and can push a fresh `anchor` into the
-    hosted view without recreating the panel.
-  - `showDockWidget(timer:)` on an already-showing panel live-applies
+    a docked pill live. `FloatingWidgetWindowManager` keeps a `weak var timer`
+    (set in `showFloatingWidget`) and a `NSHostingView<FloatingWidgetView>`
+    reference (`hosting`, nilled in `hideFloatingWidget()`) so `reposition()`
+    and `applySettings()` always read the live settings rather than a
+    snapshot from when the panel was created, and can push a fresh `anchor`
+    into the hosted view without recreating the panel.
+  - `showFloatingWidget(timer:)` on an already-showing panel live-applies
     settings instead of a no-op: `applySettings()` (resizes to the current
     preset, reclamps opacity) then `reposition()` — so flipping size,
-    position, or opacity in Settings updates the on-screen pill immediately,
-    same as the floating timer.
-  - Opacity clamps to `0.3…1.0` the same way `FloatingWindowManager` does:
+    position, or opacity in Settings updates the on-screen pill immediately.
+  - Opacity clamps to `0.3…1.0`:
     `panel.alphaValue = CGFloat(min(max(opacity, 0.3), 1.0))`.
-  - The panel is `isMovable = false` (pinned to the Dock, not user-draggable),
-    `hasShadow = false` (the pill draws its own material; an OS shadow would
-    frame the transparent window in a visible rectangle — the floating
-    timer's same reasoning), and `canBecomeKey`/`canBecomeMain` both `false`
-    (`DockWidgetPanel`) so clicking its buttons never steals focus from
-    whatever app is in front.
-- **Hover-expand ("dynamic") pill.** `DockWidgetView` scales every metric
+  - `hasShadow = false` (the pill draws its own material; an OS shadow would
+    frame the transparent window in a visible rectangle), and
+    `canBecomeKey`/`canBecomeMain` both `false` (`FloatingWidgetPanel`) so
+    clicking its buttons never steals focus from whatever app is in front.
+- **Draggable pill + "Return to Dock".** The panel is `isMovable = true` /
+  `isMovableByWindowBackground = true` (borderless panels only drag from
+  their body with the latter set), so dragging it anywhere sets a CUSTOM
+  position. `FloatingWidgetWindowManager` registers an
+  `NSWindow.didMoveNotification` observer on the panel — AFTER
+  `WindowAnimator.present(panel:)`, so the initial placement and its
+  0.97→1 settle animation aren't mistaken for a drag — that persists the
+  panel's origin to `UserDefaults` (`sharingan.dockwidget.x`/`.y`, plain
+  `Double`s, checked for presence via `object(forKey:) != nil` since `0` is a
+  valid dragged-to coordinate) whenever the panel moves. Every
+  *programmatic* `setFrame` (dock-anchored placement in `reposition()`,
+  settings-driven resize in `applySettings()`) brackets itself with a private
+  `isRepositioning` flag the move observer checks first, so only real user
+  drags get persisted. With a custom position stored: `reposition()` skips
+  dock-anchored placement entirely and instead reads the stored origin,
+  clamps it into the current `visibleFrame` with
+  `FloatingWidgetGeometry.clamp(origin:size:visibleFrame:)` (keeps a
+  dragged-off-screen pill on screen after a display change — same
+  min/max-per-axis idiom as `FloatingWindowManager`), and picks a hover-expand
+  anchor with `FloatingWidgetGeometry.expandAnchor(customOrigin:size:visibleFrame:)`:
+  whichever half of the screen the pill's midX falls in — left half →
+  `.leading` (expands rightward), right half → `.trailing` — since there's no
+  Dock edge to hug once the pill is off on its own. The pill's context menu
+  gains a **"Return to Dock"** item (`FloatingWidgetWindowManager.returnToDock()`)
+  that removes both `UserDefaults` keys and calls `reposition()`, snapping it
+  straight back to the Dock-anchored placement above; while docked (no custom
+  position saved) the menu item is a harmless no-op re-deriving the same spot.
+- **Start → mini task picker.** ▶︎ no longer always starts immediately.
+  `FloatingWidgetView.handleStart()` asks
+  `FloatingWidgetStartAction.decide(isPaused:todayTaskCount:)` (SharinganCore,
+  pure and unit-tested) what to do: a **paused** session always resumes in
+  place (`.startImmediately`, `timer.startFocusSession()`) — never re-routed
+  through task selection — and an **idle** session with today's open-task
+  list empty also starts immediately, since a picker with nothing to choose
+  from is just a dialog in the way. Only when idle AND today has open tasks
+  does it show `.showPicker`, which pops `FloatingWidgetTaskPickerView` as a
+  `.popover` anchored off the ▶︎ button. The picker lists the exact same set
+  `TodayPanelView` shows (`TaskStore.grouped(filter: .today)` — planned
+  today OR due today OR overdue, always open — so "today" never drifts
+  between the two surfaces), each row a category dot + title + optional
+  🍅-done count, active task highlighted, capped at 8 rows with a "+N more"
+  footer. A top "Start without task" row calls plain `startFocusSession()`
+  with the active task left untouched. Choosing a task row activates it
+  (`TaskStore.setActive(id)`) then starts with its resolved pomodoro size
+  (`timer.startFocusSession(kind: tasks.resolvedActiveKind)`) — the same
+  entry point every task-row play button uses. The popover may take key
+  focus while open (a deliberate exception); the widget panel itself stays
+  non-activating, and Esc / click-away dismisses it without starting
+  anything — Start is never blocked by the picker.
+- **Hover-expand ("dynamic") pill.** `FloatingWidgetView` scales every metric
   (ring, stroke width, timer/title font sizes, dot, button circle, icon,
   padding, spacing) by `k = dockWidgetSize.height / 56`, so the whole layout
   is a linear scale off the medium preset rather than three hand-tuned
   layouts. The view sits inside a full-preset-size transparent container,
   `.frame(width:height:alignment:)`-anchored per its `anchor` parameter
-  (`.leading`/`.center`/`.trailing`, default `.trailing`) — the
-  Dock-nearest edge `DockWidgetWindowManager` computes via
-  `DockWidgetGeometry.expandAnchor`, not the raw `dockWidgetAlignment`
-  setting; the pill itself carries the `.onHover` (not the container), so
-  empty container space neither expands the pill nor swallows Dock clicks.
-  When `dockWidgetExpandOnHover` is on,
-  the pill rests compact — progress ring + remaining time only, width
-  `height * 2.6` — and springs to the full task-title-and-transport-buttons
-  layout (`.spring(response: 0.32, dampingFraction: 0.78)`, width only —
-  height stays pinned to the preset so the pill never bobs) while the
-  pointer is over it; off, the pill is always fully open, matching v1.
-  `accessibilityReduceMotion` suppresses the spring — the pill flips
-  instantly, same guard idiom `FloatingTimerView` uses for its looping
-  effects.
+  (`.leading`/`.center`/`.trailing`, default `.trailing`) — the edge
+  `FloatingWidgetWindowManager` computes (Dock-nearest edge while docked via
+  `FloatingWidgetGeometry.expandAnchor(alignment:...)`, screen-half while
+  custom-positioned via `expandAnchor(customOrigin:...)`), not the raw
+  `dockWidgetAlignment` setting; the pill itself carries the `.onHover` (not
+  the container), so empty container space neither expands the pill nor
+  swallows clicks. When `dockWidgetExpandOnHover` is on, the pill rests
+  compact — progress ring + remaining time only, width `height * 2.6` — and
+  springs to the full task-title-and-transport-buttons layout
+  (`.spring(response: 0.32, dampingFraction: 0.78)`, width only — height
+  stays pinned to the preset so the pill never bobs) while the pointer is
+  over it; off, the pill is always fully open. `accessibilityReduceMotion`
+  suppresses the spring — the pill flips instantly.
 
 ---
 

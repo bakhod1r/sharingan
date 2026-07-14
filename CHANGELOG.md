@@ -5,8 +5,20 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.18.0] — 2026-07-14
+
+### Added
+- Floating widget: the pill is now draggable to anywhere on screen — drag it and it stays put; a "Return to Dock" item on its context menu clears the custom position and re-docks it against the Dock's edge
+- Floating widget ▶︎ opens a mini picker of today's open tasks when there's an actual choice to make (category dot + title + 🍅 count, active task highlighted, top row "Start without task"); a paused session always resumes in place and an empty today list starts immediately, so Start is never blocked by the picker
+
+### Changed
+- "Dock widget" renamed to "Floating widget" throughout Settings, menus, and shortcuts, now that it's the app's one timer window and can float free of the Dock
+
+### Removed
+- The floating timer card — the Floating widget now covers every one of its jobs (transport controls, size presets, opacity, drag-anywhere placement)
+
 ### Fixed
-- Dock widget: the pill now appears on a fresh launch — the coordinator's initial sync ran before the widget's window controller was wired (same launch-order gap the today panel already guards against), so it only showed after a settings change.
+- Floating widget: the pill now appears on a fresh launch — the coordinator's initial sync ran before the widget's window controller was wired (same launch-order gap the today panel already guards against), so it only showed after a settings change
 
 ## [1.17.0] — 2026-07-14
 
