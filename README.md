@@ -142,6 +142,8 @@ hotkeys. Pure SwiftPM.
 
 ## Contact
 
+<img src="site/assets/app/iris/classic.png" width="24" alt="Sharingan eye" align="left" style="margin-right: 6px;">
+
 Bakhodir Yashin Mansur — bakhodiryashinmansur@gmail.com
 
 ## License
