@@ -206,10 +206,23 @@ disagree with the HUD about whether the Mac has a notch; it re-asks on
   the geometry's canvas (all x-coordinates) and the dev preview's frame.
 - **The live ears are dark glass; the cutout span stays black.** `earGlass`
   (`NotchHUDView`) paints the two slabs either side of the cutout with the
-  expanded body's recipe — `.regularMaterial`, the faint diagonal phase wash,
-  a `dsHairline` ring — driven off the layout's ear rects, so a dropped ear
-  drops its glass. The cutout column and the idle lip stay pure black: they
-  imitate hardware. Visual only — no rect the mask is cut from changes.
+  expanded body's recipe — `.regularMaterial`, the theme wash, the hairline —
+  driven off the layout's ear rects, so a dropped ear drops its glass. The
+  cutout column and the idle lip stay pure black: they imitate hardware.
+  Visual only — no rect the mask is cut from changes.
+- **The island dresses for the theme.** The body's and ears' surface wash is
+  `timer.settings.theme.gradient` at 0.20 over the dark material (the Today
+  panel's recipe, so light themes tint rather than lighten), read in `body` so
+  a Settings change restyles it live. Phase-*semantic* marks stay
+  phase-colored — the progress line, the phase dot, the clock glow, the
+  active-row tint — except on Mono, where `SharinganTheme.notchPhaseAccent`
+  (`NotchHUDView`) desaturates the glow/row/running-control/announcement-icon
+  to the near-white accent (line and dot stay phase-colored as the two pinned
+  phase reads). Interactive accents (hover hairline, streak flame, a 0.22
+  stroke on the quick-action chips) take `theme.accent`; Neon alone trades the
+  neutral `dsHairline` rim for its own gradient (`islandHairline`). Paint
+  only — no geometry changes; `--render-dev-preview` shoots
+  `notch-{expanded,live}-<theme>.png` for all six themes.
 - **Quick actions are ＋ and ⚙ only** (quick add, open Blink). The blocker
   toggle and the Today-panel toggle were cut on user feedback; blocking state
   still shows in the status strip. The row keeps its measured

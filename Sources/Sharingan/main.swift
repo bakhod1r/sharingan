@@ -585,6 +585,25 @@ if let outDir = HeadlessRender.outputDirectory(for: "--render-dev-preview") {
             .taskRows(limit: notchModel.config.clampedTaskRows).count   // 5, the cap
         writeIsland("notch-expanded-full")
 
+        // Every theme, in both dressed states — the expanded panel (full list,
+        // active row lit) and the live ears. The wash, the accents and Neon's rim
+        // all read off `timer.settings.theme`, so setting it and re-shooting is
+        // the whole check: twelve frames, one pair per theme. Restores the theme
+        // and the open state afterwards so the empty-list shot below is unchanged.
+        do {
+            var live = NotchHUDState()
+            live.engaged = true
+            for theme in SharinganTheme.allCases {
+                timer.settings.theme = theme
+                notchModel.state = open
+                writeIsland("notch-expanded-\(theme.rawValue)")
+                notchModel.state = live
+                writeIsland("notch-live-\(theme.rawValue)")
+            }
+            timer.settings.theme = .liquidGlass
+            notchModel.state = open
+        }
+
         for task in store.tasks where !task.isDone { store.toggleDone(task.id) }
         notchModel.config.taskCount = NotchWindowManager
             .taskRows(limit: notchModel.config.clampedTaskRows).count   // 0
