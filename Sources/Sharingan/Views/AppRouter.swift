@@ -45,6 +45,9 @@ final class AppRouter: ObservableObject {
     /// One-shot "scroll to and flash this task" — set by task rows outside the
     /// main window (the notch island), consumed by TasksView like the filters.
     @Published var pendingRevealTaskID: UUID?
+    /// One-shot "open the bulk-import sheet" — set by File ▸ Import Tasks…,
+    /// consumed by TasksView like the filters.
+    @Published var openTaskImport = false
 
     /// Bumped whenever Settings is (re)opened from outside — the sidebar row,
     /// the menu-bar gear — so SettingsView pops any open sub-page back to the

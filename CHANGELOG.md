@@ -5,6 +5,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.7.0] — 2026-07-14
+
+### Added
+- A real menu bar while the main window is open: File (New Task ⌘N via the quick-add panel, Import Tasks… ⇧⌘I straight into the bulk-import sheet, Export Tasks as CSV…), View (Pomodoro/Tasks/Week/Progress/Report on ⌘1–⌘5, Search Tasks ⌘F), Timer (Start/Pause Focus ⌘⏎, Skip Phase ⇧⌘⏎, ±5 minutes ⌘+/⌘−), Window (Minimize, Zoom, the open-windows list), Help (website, what's new), plus About and Settings… ⌘, in the app menu — replacing the two-item Edit-only shim
+
 ## [1.6.0] — 2026-07-14
 
 ### Added

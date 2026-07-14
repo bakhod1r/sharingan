@@ -166,6 +166,7 @@ struct TasksView: View {
         .onChange(of: router.pendingTaskPriority) { consumeDeepLink() }
         .onChange(of: router.focusTaskSearch) { consumeDeepLink() }
         .onChange(of: router.pendingRevealTaskID) { consumeDeepLink() }
+        .onChange(of: router.openTaskImport) { consumeDeepLink() }
     }
 
     /// Applies (and clears) one-shot sidebar deep-links: smart filter, one
@@ -188,6 +189,10 @@ struct TasksView: View {
         if router.focusTaskSearch {
             searchFocused = true
             router.focusTaskSearch = false
+        }
+        if router.openTaskImport {
+            showImportSheet = true
+            router.openTaskImport = false
         }
         if let id = router.pendingRevealTaskID {
             // A reveal outranks whatever the list happens to be showing: drop
