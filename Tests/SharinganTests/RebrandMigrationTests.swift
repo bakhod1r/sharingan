@@ -41,6 +41,14 @@ struct RebrandMigrationTests {
         #expect(d.data(forKey: "com.sharingan.settings") == Data([0x01]))
     }
 
+    @Test("status-item menu-bar slot follows the autosave rename")
+    func statusItemSlotCopied() {
+        let d = freshDefaults()
+        d.set(400.0, forKey: "NSStatusItem Preferred Position blink.menubar")
+        RebrandMigration.migrateDefaults(d)
+        #expect(d.double(forKey: "NSStatusItem Preferred Position sharingan.menubar") == 400.0)
+    }
+
     @Test("no-op on a fresh install")
     func freshNoop() {
         let d = freshDefaults()

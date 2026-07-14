@@ -21,6 +21,15 @@ public enum RebrandMigration {
         ("blink.todayPanel.origin", "sharingan.todayPanel.origin"),
         ("blink.focusQueue", "sharingan.focusQueue"),
         ("blink.task.preReminderMinutes", "sharingan.task.preReminderMinutes"),
+        // The status item's menu-bar slot. macOS stores it under the item's
+        // autosaveName (AppDelegate renamed it blink.menubar → sharingan.menubar);
+        // without the copy the item is re-created in the leftmost status slot,
+        // which a crowded notched menu bar pushes under the camera housing —
+        // the icon silently vanishes.
+        ("NSStatusItem Preferred Position blink.menubar",
+         "NSStatusItem Preferred Position sharingan.menubar"),
+        ("NSStatusItem Visible blink.menubar",
+         "NSStatusItem Visible sharingan.menubar"),
     ]
 
     public static func migrate(defaults: UserDefaults = .standard,
