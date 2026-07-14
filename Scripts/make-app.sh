@@ -76,6 +76,24 @@ for b in "$BINDIR/${PRODUCT_NAME}_"*.bundle; do
   [[ -e "$b" ]] && cp -R "$b" "$APP/Contents/Resources/"
 done
 
+# Sparkle auto-update framework. SwiftPM links the app against the binary
+# xcframework but leaves an rpath pointing into .build — useless the moment the
+# bundle moves to another Mac. Embed the framework and point an
+# @executable_path rpath at it. The copy comes from the artifacts xcframework
+# (its macos slice is arm64+x86_64, so it stays universal) rather than a
+# per-config build directory.
+echo "▸ Embedding Sparkle.framework…"
+SPARKLE_FW="$(find "$ROOT/.build/artifacts" -type d -name "Sparkle.framework" -path "*macos*" 2>/dev/null | head -1)"
+if [[ -z "$SPARKLE_FW" ]]; then
+  echo "  ✗ Sparkle.framework not found under .build — did swift build run?" >&2
+  exit 1
+fi
+mkdir -p "$APP/Contents/Frameworks"
+cp -R "$SPARKLE_FW" "$APP/Contents/Frameworks/"
+install_name_tool -add_rpath "@executable_path/../Frameworks" \
+  "$APP/Contents/MacOS/$APP_NAME" 2>/dev/null || true
+echo "  ✓ Sparkle.framework embedded ($(lipo -archs "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle"))"
+
 # App icon: build AppIcon.icns from the .appiconset PNGs
 ICONSET_SRC="$ROOT/Resources/AppIcon.appiconset"
 if [[ -f "$ICONSET_SRC/icon_1024.png" ]]; then
@@ -158,8 +176,34 @@ xattr -cr "$APP" 2>/dev/null || true
 # real signing with hardened runtime + secure timestamp — both notarization
 # requirements. Failures are fatal there: a half-signed release must not ship.
 # Without it, ad-hoc signing keeps local dev exactly as before.
+
+# Sparkle ships its own nested code — two XPC services and the Autoupdate /
+# Updater.app helpers that outlive the app during an install. Each is a
+# separate code object and needs its own signature, innermost first, before the
+# framework that contains them and long before the app that contains that.
+# $@ is the identity plus whichever flags the branch below signs everything
+# else with — the helpers must carry the same hardened-runtime signature as the
+# app or notarization rejects the bundle.
+sign_sparkle() {
+  local fw="$APP/Contents/Frameworks/Sparkle.framework"
+  [[ -d "$fw" ]] || return 0
+  local helper
+  for helper in \
+    "$fw/Versions/B/XPCServices/Downloader.xpc" \
+    "$fw/Versions/B/XPCServices/Installer.xpc" \
+    "$fw/Versions/B/Autoupdate" \
+    "$fw/Versions/B/Updater.app"; do
+    if [[ -e "$helper" ]]; then
+      codesign --force --sign "$@" "$helper"
+    fi
+  done
+  codesign --force --sign "$@" "$fw"
+}
+
 if [[ -n "${SIGN_IDENTITY:-}" ]]; then
   echo "▸ Signing with: $SIGN_IDENTITY"
+  sign_sparkle "$SIGN_IDENTITY" --options runtime --timestamp
+  echo "  ✓ Sparkle.framework signed"
   codesign --force --sign "$SIGN_IDENTITY" --options runtime --timestamp \
     --entitlements "$ROOT/Resources/Widget.entitlements" "$APPEX"
   echo "  ✓ appex signed"
@@ -167,6 +211,8 @@ if [[ -n "${SIGN_IDENTITY:-}" ]]; then
     --entitlements "$ROOT/Resources/App.entitlements" "$APP"
   echo "  ✓ app signed (Developer ID)"
 else
+  sign_sparkle - 2>/dev/null \
+    && echo "  ✓ Sparkle.framework ad-hoc signed" || echo "  ! Sparkle codesign skipped"
   codesign --force --sign - \
     --entitlements "$ROOT/Resources/Widget.entitlements" \
     "$APPEX" 2>/dev/null && echo "  ✓ appex ad-hoc signed" || echo "  ! appex codesign skipped"
