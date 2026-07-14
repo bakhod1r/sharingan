@@ -65,6 +65,17 @@ jobs:
         env:
           SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
         run: |
+          # The feed, the Pages site, the release asset and this appcast commit
+          # must all live in ONE repo. Cut a release from a fork or a mirror and
+          # the appcast lands somewhere Pages never serves — every installed
+          # copy then silently 404s on update, and nobody finds out for months.
+          FEED="$(plutil -extract SUFeedURL raw Resources/Info.plist)"
+          FEED_REPO="$(sed -nE 's|https://([^.]+)\.github\.io/([^/]+)/.*|\1/\2|p' <<<"$FEED")"
+          if [[ "$FEED_REPO" != "$GITHUB_REPOSITORY" ]]; then
+            echo "✗ SUFeedURL ($FEED) is served by '$FEED_REPO', but this release is being cut in '$GITHUB_REPOSITORY'." >&2
+            echo "  Publishing here would leave the appcast where Pages never serves it. Tag the release in $FEED_REPO instead." >&2
+            exit 1
+          fi
           VERSION="${GITHUB_REF_NAME#v}"
           BUILD="$(plutil -extract CFBundleVersion raw dist/Sharingan.app/Contents/Info.plist)"
           URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/Sharingan.dmg"
