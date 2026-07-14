@@ -4,7 +4,7 @@
 > whenever a feature is added, changed, or removed, update this document in the
 > same change.**
 
-- Version: 1.13.0
+- Version: 1.14.0
 - Platform: macOS 14+, lives in the menu bar
 
 ---
@@ -394,10 +394,13 @@ disagree with the HUD about whether the Mac has a notch; it re-asks on
 
 ## Dock widget
 
-A "now playing"-style pill flush against the Dock's inner edge near the
-Trash — active task, remaining time, and always-standing ▶︎ Start / ⏸ Stop /
-⟲ Reset buttons. Same philosophy as the today panel: it shows the controls,
-not a status light, so a session can be started without opening the app.
+A "now playing"-style pill flush against the Dock's inner edge — active
+task, remaining time, and always-standing ▶︎ Start / ⏸ Stop / ⟲ Reset
+buttons. Same philosophy as the today panel: it shows the controls, not a
+status light, so a session can be started without opening the app. Settings
+adds four knobs — preset size, which end of the Dock it hugs, opacity, and
+an "expand on hover" dynamic mode — that mirror the floating timer's own
+size/opacity controls.
 
 - **The square-tile limitation and the flush-panel trick.** The Dock itself
   cannot be widened or grow a custom tile — every Dock icon is a fixed square
@@ -423,20 +426,39 @@ not a status light, so a session can be started without opening the app.
   pill's visibility follows the flag, never `timer.isRunning`, so Start stays
   reachable even when nothing is counting down. `syncDockWidget()` runs once
   from `syncAll()` at launch and again from `syncChanged(_:)` whenever
-  `dockWidgetEnabled` flips; the Settings toggle sits in its own "Dock widget"
-  section right under "Floating timer".
+  `dockWidgetEnabled`, `dockWidgetSize`, `dockWidgetAlignment`,
+  `dockWidgetOpacity`, or `dockWidgetExpandOnHover` changes; the Settings
+  toggle and its controls sit in their own "Dock widget" section right under
+  "Floating timer".
+- **Four appearance fields on `PomodoroSettings`, decoded defensively.**
+  `dockWidgetSize: DockWidgetSize` (`.small`/`.medium`/`.large`, default
+  `.medium`; width/height 280×48, 320×56, 380×68) and
+  `dockWidgetAlignment: DockWidgetAlignment` (`.leading`/`.center`/`.trailing`,
+  default `.trailing`) decode with the same double-optional idiom as
+  `floatingSize`/`notchEars` — an unknown raw value (an older or newer
+  build's blob) falls back to the default instead of throwing the whole
+  settings object away. `dockWidgetOpacity: Double` (0.3…1.0, default `1.0`)
+  and `dockWidgetExpandOnHover: Bool` (default `true`) decode with plain
+  `decodeIfPresent ?? default`.
 - **Placement is `visibleFrame` vs. `frame` math, not a hardcoded corner.**
   `NSScreen.main`'s `frame` is the full display; `visibleFrame` excludes the
   Dock (and the menu bar). Comparing the two on each edge tells
-  `DockWidgetWindowManager.reposition()` where the Dock actually is:
-  - Default (Dock on the bottom, the common case): pill sits at
-    `visibleFrame.maxX − width − 16, visibleFrame.minY + 4` — flush against
-    the Dock's top-right corner, near the Trash.
+  `DockWidgetWindowManager.reposition()` where the Dock actually is. The
+  window is always sized to the FULL preset (`dockWidgetSize.width/height`)
+  regardless of the hover state — only the pill drawn inside it resizes — so
+  `reposition()` never has to reconcile a resizing window with its anchor:
+  - Dock on the bottom (the common case): the x position follows
+    `dockWidgetAlignment` — `.leading` → `visibleFrame.minX + 16`, `.center`
+    → `visibleFrame.midX − width / 2`, `.trailing` (default) →
+    `visibleFrame.maxX − width − 16`, i.e. near the Trash. Either way the
+    pill sits at `visibleFrame.minY + 4`.
   - Dock on the left (`visibleFrame.minX > frame.minX`): pill moves to
     `visibleFrame.minX + 4, visibleFrame.minY + 16`, flush against the Dock's
-    right edge instead.
+    right edge instead. Alignment is ignored on a vertical Dock — the pill
+    stays at its bottom end regardless of the setting.
   - Dock on the right (`visibleFrame.maxX < frame.maxX`): pill sits at
-    `visibleFrame.maxX − width − 4, visibleFrame.minY + 16`.
+    `visibleFrame.maxX − width − 4, visibleFrame.minY + 16` (alignment
+    ignored, same as the left case).
   - **Auto-hide** falls out of the same comparison for free: when the Dock is
     set to auto-hide, `visibleFrame` and `frame` (nearly) coincide since macOS
     stops reserving Dock space, so the pill's computed origin lands at the
@@ -444,13 +466,39 @@ not a status light, so a session can be started without opening the app.
     be — no separate auto-hide detection needed.
   - `reposition()` re-runs on `NSApplication.didChangeScreenParametersNotification`,
     so moving the Dock, resizing a display, or toggling auto-hide re-anchors
-    the pill live.
+    the pill live. `DockWidgetWindowManager` keeps a `weak var timer` (set in
+    `showDockWidget`) so `reposition()` and `applySettings()` always read the
+    live settings rather than a snapshot from when the panel was created.
+  - `showDockWidget(timer:)` on an already-showing panel live-applies
+    settings instead of a no-op: `applySettings()` (resizes to the current
+    preset, reclamps opacity) then `reposition()` — so flipping size,
+    position, or opacity in Settings updates the on-screen pill immediately,
+    same as the floating timer.
+  - Opacity clamps to `0.3…1.0` the same way `FloatingWindowManager` does:
+    `panel.alphaValue = CGFloat(min(max(opacity, 0.3), 1.0))`.
   - The panel is `isMovable = false` (pinned to the Dock, not user-draggable),
     `hasShadow = false` (the pill draws its own material; an OS shadow would
     frame the transparent window in a visible rectangle — the floating
     timer's same reasoning), and `canBecomeKey`/`canBecomeMain` both `false`
     (`DockWidgetPanel`) so clicking its buttons never steals focus from
     whatever app is in front.
+- **Hover-expand ("dynamic") pill.** `DockWidgetView` scales every metric
+  (ring, stroke width, timer/title font sizes, dot, button circle, icon,
+  padding, spacing) by `k = dockWidgetSize.height / 56`, so the whole layout
+  is a linear scale off the medium preset rather than three hand-tuned
+  layouts. The view sits inside a full-preset-size transparent container,
+  `.frame(width:height:alignment:)`-anchored per `dockWidgetAlignment`
+  (`.leading`/`.center`/`.trailing`); the pill itself carries the
+  `.onHover` (not the container), so empty container space neither expands
+  the pill nor swallows Dock clicks. When `dockWidgetExpandOnHover` is on,
+  the pill rests compact — progress ring + remaining time only, width
+  `height * 2.6` — and springs to the full task-title-and-transport-buttons
+  layout (`.spring(response: 0.32, dampingFraction: 0.78)`, width only —
+  height stays pinned to the preset so the pill never bobs) while the
+  pointer is over it; off, the pill is always fully open, matching v1.
+  `accessibilityReduceMotion` suppresses the spring — the pill flips
+  instantly, same guard idiom `FloatingTimerView` uses for its looping
+  effects.
 
 ---
 

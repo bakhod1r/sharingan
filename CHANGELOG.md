@@ -5,6 +5,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.14.0] — 2026-07-14
+
+### Added
+- Dock widget size presets, position, opacity, and expand-on-hover: Settings gains Small/Medium/Large sizing, Left/Center/Right placement, an opacity slider, and a toggle for the compact-at-rest/full-on-hover "dynamic" pill — mirroring the floating timer's controls
+
 ## [1.13.0] — 2026-07-14
 
 ### Changed
