@@ -171,7 +171,7 @@ extension AppDelegate {
     }
 
     @MainActor @objc private func menuOpenReleases() {
-        NSWorkspace.shared.open(URL(string: "https://github.com/bakhod1r/Blink/releases")!)
+        NSWorkspace.shared.open(URL(string: "https://github.com/bakhod1r/sharingan/releases")!)
     }
 
     // MARK: - Helpers
