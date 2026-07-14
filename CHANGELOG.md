@@ -5,6 +5,14 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.20.0] — 2026-07-14
+
+### Added
+- Timer page: while the timer is idle, the ring now hosts the Small / Normal /
+  Big pomodoro switch (with the selected size's `focus′ + break′` caption) in
+  place of the phase label — switch sizes without reaching for the sidebar.
+  Once a session runs (or pauses, or waits at a break) the phase label returns.
+
 ## [1.19.2] — 2026-07-14
 
 ### Fixed

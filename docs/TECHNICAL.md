@@ -4,7 +4,7 @@
 > whenever a feature is added, changed, or removed, update this document in the
 > same change.**
 
-- Version: 1.19.2
+- Version: 1.20.0
 - Platform: macOS 14+, lives in the menu bar
 
 ---
@@ -21,6 +21,7 @@
 - Sleep-aware: closing the lid during focus doesn't wrongly credit hours; a break still completes when you wake the Mac.
 - Custom one-off session length that survives mode changes.
 - Skip kills the tick loop before transitioning (like pause/stop/complete) — a live in-flight tick used to overwrite the fresh phase's countdown with the skipped phase's leftover time.
+- Main-window timer page: while idle, the ring hosts the Small/Normal/Big size switch (accent-tinted active chip + the selected size's lengths caption) instead of the phase label; a live/paused/pending-break session shows the label. Chips call the same `applyKind` as the sidebar selector, so both stay in sync and an idle tap refreshes the countdown instantly.
 
 ---
 
