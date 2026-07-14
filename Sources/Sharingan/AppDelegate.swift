@@ -20,8 +20,10 @@ final class MenuBarController: NSObject {
     private struct IconKey: Equatable {
         var percent: Int?
         var phase: PomodoroPhase
+        var rotationStep: Int
     }
     private var lastIconKey: IconKey?
+    private let spinner = IconSpinner()
 
     func install(timer: PomodoroTimer, coordinator: SharinganCoordinator) {
         self.timer = timer
@@ -60,6 +62,9 @@ final class MenuBarController: NSObject {
         }
         updateTitle() // seeds both the title and the initial icon
 
+        spinner.onFrame = { [weak self] _, _ in self?.updateTitle() }
+        syncSpinner()
+
         // Sync coordinator services now that the menu bar is live.
         coordinator.syncAlarm()
         coordinator.installShortcuts()
@@ -71,8 +76,16 @@ final class MenuBarController: NSObject {
 
         // Refresh title every second.
         Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.updateTitle() }
+            Task { @MainActor in
+                self?.syncSpinner()
+                self?.updateTitle()
+            }
         }
+    }
+
+    /// Pushes the settings switch into the spinner (1 s latency at most).
+    private func syncSpinner() {
+        spinner.enabled = timer?.settings.animateIcon ?? false
     }
 
     private func updateTitle() {
@@ -84,16 +97,22 @@ final class MenuBarController: NSObject {
         let engaged = timer.isRunning
             || (timer.remainingSeconds > 0 && timer.remainingSeconds < timer.totalSeconds)
         let show = engaged && timer.settings.showMenuBarCountdown
-        button.title = show ? String(format: " %02d:%02d", Int(s) / 60, Int(s) % 60) : ""
+        let title = show ? String(format: " %02d:%02d", Int(s) / 60, Int(s) % 60) : ""
+        if button.title != title { button.title = title }
 
-        // Progress ring around the iris while a session is engaged.
+        // Progress ring around the iris while a session is engaged; the
+        // rotation step quantises the spinner angle to the 5° frame grid
+        // within the mark's 120° symmetry, so the bitmap is re-rendered
+        // only when something visible changed.
         let key = IconKey(percent: engaged ? Int(timer.progress * 100) : nil,
-                          phase: timer.phase)
+                          phase: timer.phase,
+                          rotationStep: Int(spinner.angle.truncatingRemainder(dividingBy: 120) / 5))
         if key != lastIconKey {
             lastIconKey = key
             button.image = Self.menuBarIcon(
                 progress: key.percent.map { Double($0) / 100 },
-                phase: key.phase)
+                phase: key.phase,
+                rotationDegrees: spinner.angle)
         }
     }
 
