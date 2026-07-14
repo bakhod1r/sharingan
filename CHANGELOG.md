@@ -5,6 +5,12 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-07-14
+
+First public release, tagged on the `1.20.0` codebase — everything above this
+line already shipped internally; `v1.0.0` is where the public GitHub release
+history starts.
+
 ## [1.20.0] — 2026-07-14
 
 ### Added
