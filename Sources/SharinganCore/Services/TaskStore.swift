@@ -627,7 +627,10 @@ public final class TaskStore: ObservableObject {
                                 sortOrder: parent.sortOrder + 1,
                                 estimatedPomodoros: sub.estimatedPomodoros,
                                 project: parent.project,
-                                priority: parent.priority)
+                                // A step's own flag beats the inherited one.
+                                priority: sub.priority != .none ? sub.priority
+                                                                : parent.priority,
+                                pomodoroKind: sub.pomodoroKind)
         tasks[i].subtasks.remove(at: j)
         tasks.append(promoted)
         if subID == activeSubtaskID { activeSubtaskID = nil }

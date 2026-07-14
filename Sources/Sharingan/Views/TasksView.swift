@@ -1434,6 +1434,13 @@ struct TasksView: View {
                             .foregroundStyle(.secondary)
                             .help(kind.label)
                     }
+                    if sub.priority != .none {
+                        Text(timer.settings.priorityShortLabel(sub.priority))
+                            .font(.system(size: 9, weight: .bold, design: .rounded))
+                            .foregroundStyle(timer.settings.priorityColorHex(sub.priority)
+                                .map { Color(hex: $0) } ?? Color.dsSecondary)
+                            .help("Step priority")
+                    }
                     if !sub.isDone {
                         Button {
                             store.setActiveSubtask(taskID: task.id,

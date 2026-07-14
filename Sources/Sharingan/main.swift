@@ -487,7 +487,7 @@ if let outDir = HeadlessRender.outputDirectory(for: "--render-dev-preview") {
         big.pomodorosDone = 2
         big.subtasks = [Subtask(title: "Write the hero copy", isDone: true,
                                 pomodoroKind: .small),
-                        Subtask(title: "Verify Lighthouse 100")]
+                        Subtask(title: "Verify Lighthouse 100", priority: .high)]
         store.update(big)
         // Two more due *today*, so the notch's task list (which draws today's
         // open tasks) photographs all three shapes a row can take: an estimate to

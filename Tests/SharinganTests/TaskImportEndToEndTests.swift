@@ -39,7 +39,10 @@ struct TaskImportEndToEndTests {
         #expect(report.notes.contains("notes"))
         #expect(report.subtasks.count == 3)
         #expect(report.subtasks[0].estimatedPomodoros == 1)
+        // Per-step priorities from the template survive the SQLite round-trip.
+        #expect(report.subtasks[0].priority == .high)
         #expect(report.subtasks[1].pomodoroKind == .big)
+        #expect(report.subtasks[1].priority == .medium)
         #expect(report.subtasks[2].isDone)
 
         let reading = try #require(reloaded.tasks.first { $0.title == "Read 20 pages" })

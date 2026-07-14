@@ -11,20 +11,25 @@ public struct Subtask: Identifiable, Codable, Equatable, Sendable {
     public var pomodorosDone: Int
     /// Pomodoro size for this step (nil = inherit the task's, then the app's).
     public var pomodoroKind: PomodoroKind?
+    /// Per-step priority flag (`.none` = unflagged, the default).
+    public var priority: TaskPriority
 
     public init(id: UUID = UUID(), title: String, isDone: Bool = false,
                 estimatedPomodoros: Int? = nil, pomodorosDone: Int = 0,
-                pomodoroKind: PomodoroKind? = nil) {
+                pomodoroKind: PomodoroKind? = nil,
+                priority: TaskPriority = .none) {
         self.id = id
         self.title = title
         self.isDone = isDone
         self.estimatedPomodoros = estimatedPomodoros
         self.pomodorosDone = pomodorosDone
         self.pomodoroKind = pomodoroKind
+        self.priority = priority
     }
 
-    // Pomodoro fields were added after subtasks first shipped — decode them
-    // as optional so older persisted rows (subtasks JSON column) still load.
+    // Pomodoro/priority fields were added after subtasks first shipped —
+    // decode them as optional so older persisted rows (subtasks JSON column)
+    // still load.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
@@ -33,6 +38,7 @@ public struct Subtask: Identifiable, Codable, Equatable, Sendable {
         estimatedPomodoros = try c.decodeIfPresent(Int.self, forKey: .estimatedPomodoros)
         pomodorosDone = try c.decodeIfPresent(Int.self, forKey: .pomodorosDone) ?? 0
         pomodoroKind = ((try? c.decodeIfPresent(PomodoroKind.self, forKey: .pomodoroKind)) ?? nil)
+        priority = try c.decodeIfPresent(TaskPriority.self, forKey: .priority) ?? .none
     }
 }
 

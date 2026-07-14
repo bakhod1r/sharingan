@@ -142,19 +142,26 @@ public enum TaskImportParser {
         return (indent, checked, s)
     }
 
-    /// A list line as a subtask: a trailing `~N` is the step estimate, a
-    /// trailing `(small|normal|big)` its pomodoro size.
+    /// A list line as a subtask. Tokens anywhere in the line: `~N` = step
+    /// estimate, `(small|normal|big)` = step pomodoro size, `p1`…`p4` = step
+    /// priority (exact tokens only, so a title word like "high" is never
+    /// eaten). Everything else stays in the title.
     private static func subtaskLine(_ line: String) -> Subtask? {
         guard let (_, checked, rest) = listItem(line) else { return nil }
         var estimate: Int?
         var kind: PomodoroKind?
+        var stepPriority = TaskPriority.none
         var kept: [String] = []
         for word in rest.split(separator: " ").map(String.init) {
+            let lower = word.lowercased()
             if word.hasPrefix("~"), let n = Int(word.dropFirst()), n > 0 {
                 estimate = n
             } else if word.hasPrefix("("), word.hasSuffix(")"),
                       let k = pomodoroKind(String(word.dropFirst().dropLast())) {
                 kind = k
+            } else if lower.count == 2, lower.hasPrefix("p"),
+                      let n = Int(lower.dropFirst()), (1...4).contains(n) {
+                stepPriority = TaskPriority(rawValue: 4 - n)
             } else {
                 kept.append(word)
             }
@@ -162,7 +169,8 @@ public enum TaskImportParser {
         let title = kept.joined(separator: " ")
         guard !title.isEmpty else { return nil }
         return Subtask(title: title, isDone: checked,
-                       estimatedPomodoros: estimate, pomodoroKind: kind)
+                       estimatedPomodoros: estimate, pomodoroKind: kind,
+                       priority: stepPriority)
     }
 
     /// Splits `key: value` when the key is one we know (English or Uzbek);
@@ -392,9 +400,16 @@ public enum TaskImportParser {
         let estimate = (d["estimate"] as? Int) ?? (d["estimatedPomodoros"] as? Int)
         let done = (d["done"] as? Bool) ?? false
         let kind = (d["pomodoro"] as? String).flatMap(pomodoroKind)
+        // Same lenient priority forms as the task level: "P1"/"high"/int.
+        var stepPriority = TaskPriority.none
+        if let n = d["priority"] as? Int, (1...4).contains(n) {
+            stepPriority = TaskPriority(rawValue: 4 - n)
+        } else if let s = d["priority"] as? String, let p = priority(s) {
+            stepPriority = p
+        }
         return Subtask(title: title, isDone: done,
                        estimatedPomodoros: (estimate.map { $0 > 0 ? $0 : nil }) ?? nil,
-                       pomodoroKind: kind)
+                       pomodoroKind: kind, priority: stepPriority)
     }
 
     // MARK: - Templates (shown in Settings, copied to the clipboard)
@@ -410,8 +425,8 @@ public enum TaskImportParser {
 
     Any free line under a heading becomes the task's notes.
 
-    - [ ] Outline ~1
-    - [ ] Draft ~2 (big)
+    - [ ] Outline ~1 p1
+    - [ ] Draft ~2 (big) p2
     - [x] Gather data
 
     # Read 20 pages p3 #reading every day ~1
@@ -434,8 +449,8 @@ public enum TaskImportParser {
         "pomodoro": "big",
         "notes": "Optional free-form notes.",
         "subtasks": [
-          { "title": "Outline", "estimate": 1 },
-          { "title": "Draft", "estimate": 2, "pomodoro": "big" },
+          { "title": "Outline", "estimate": 1, "priority": "P1" },
+          { "title": "Draft", "estimate": 2, "pomodoro": "big", "priority": "P2" },
           { "title": "Gather data", "done": true }
         ]
       },

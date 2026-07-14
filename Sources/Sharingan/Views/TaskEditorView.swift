@@ -333,6 +333,32 @@ struct TaskEditorView: View {
                             .font(.system(size: 10, design: .rounded))
                             .foregroundStyle(Color.dsSecondary)
                     }
+                    // Per-step priority flag — imported from templates (`p1`
+                    // tokens) and editable here; promote carries it over.
+                    Menu {
+                        ForEach(SharinganCore.TaskPriority.levels(custom: settings.customPriorityLevels)) { p in
+                            Button { sub.priority = p } label: {
+                                Label(settings.priorityName(p),
+                                      systemImage: sub.priority == p ? "checkmark"
+                                                   : (p == .none ? "flag.slash" : "flag.fill"))
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: sub.priority == .none ? "flag" : "flag.fill")
+                                .font(.system(size: 9, weight: .semibold))
+                            if sub.priority != .none {
+                                Text(settings.priorityShortLabel(sub.priority))
+                                    .font(.system(size: 10, design: .rounded).weight(.semibold))
+                            }
+                        }
+                        .foregroundStyle(settings.priorityColorHex(sub.priority)
+                            .map { Color(hex: $0) } ?? Color.dsTertiary)
+                        .padding(.horizontal, 7).padding(.vertical, 3)
+                        .background(Capsule().fill(Color.white.opacity(0.06)))
+                    }
+                    .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                    .help("Priority for this step")
                     // Estimate stepper stays visible even with badges hidden —
                     // the editor is the only place estimates can be set.
                     // Per-step pomodoro size: overrides the task's kind when

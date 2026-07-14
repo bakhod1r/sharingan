@@ -96,21 +96,31 @@ struct TaskImportTests {
         #expect(tasks[0].dueDate == date(2026, 7, 9, 15, 0))
     }
 
-    @Test func subtasksWithEstimatesAndKinds() {
+    @Test func subtasksWithEstimatesKindsAndPriorities() {
         let tasks = parse("""
         # Big feature
-        - [ ] Plan it ~1
+        - [ ] Plan it ~1 p1
         - [x] Research
-        - [ ] Build ~3 (big)
+        - [ ] Build ~3 (big) p2
         """)
         let subs = tasks[0].subtasks
         #expect(subs.count == 3)
         #expect(subs[0].title == "Plan it")
         #expect(subs[0].estimatedPomodoros == 1)
+        #expect(subs[0].priority == .high)
         #expect(subs[1].isDone)
+        #expect(subs[1].priority == TaskPriority.none)
         #expect(subs[2].title == "Build")
         #expect(subs[2].estimatedPomodoros == 3)
         #expect(subs[2].pomodoroKind == .big)
+        #expect(subs[2].priority == .medium)
+    }
+
+    @Test func subtaskTitleWordsAreNotEatenByPriorityTokens() {
+        // "p10"/"high" are title words, not priority tokens.
+        let tasks = parse("# T\n- [ ] upgrade p10 board high")
+        #expect(tasks[0].subtasks[0].title == "upgrade p10 board high")
+        #expect(tasks[0].subtasks[0].priority == TaskPriority.none)
     }
 
     @Test func freeTextBecomesNotes() {
@@ -206,8 +216,8 @@ struct TaskImportTests {
             "pomodoro": "big",
             "notes": "multi\\nline",
             "subtasks": [
-              {"title": "Plan", "estimate": 1},
-              {"title": "Old", "done": true, "pomodoro": "small"},
+              {"title": "Plan", "estimate": 1, "priority": "P1"},
+              {"title": "Old", "done": true, "pomodoro": "small", "priority": 2},
               "Just a string step"
             ]
           },
@@ -229,8 +239,10 @@ struct TaskImportTests {
         #expect(t.notes == "multi\nline")
         #expect(t.subtasks.count == 3)
         #expect(t.subtasks[0].estimatedPomodoros == 1)
+        #expect(t.subtasks[0].priority == .high)
         #expect(t.subtasks[1].isDone)
         #expect(t.subtasks[1].pomodoroKind == .small)
+        #expect(t.subtasks[1].priority == .medium)
         #expect(t.subtasks[2].title == "Just a string step")
     }
 
