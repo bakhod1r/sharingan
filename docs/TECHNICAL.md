@@ -4,7 +4,7 @@
 > whenever a feature is added, changed, or removed, update this document in the
 > same change.**
 
-- Version: 1.9.0
+- Version: 1.10.0
 - Platform: macOS 14+, lives in the menu bar
 
 ---
@@ -431,7 +431,7 @@ disagree with the HUD about whether the Mac has a notch; it re-asks on
 
 ## Focus enforcement & integrations
 
-- **App blocking**: hide or force-quit distracting apps (presets include Chrome, Safari, VS Code, Slack, Telegram, Messages) — during breaks, during focus, or always.
+- **App blocking**: hide or force-quit distracting apps (presets include Chrome, Safari, VS Code, Slack, Telegram, Messages) — during breaks, during focus, or always. The "Add apps…" picker (`BlockAppPickerSheet` + `InstalledAppsCatalog`, Settings → Focus) lists every installed app — /Applications top level + one folder deep, /System/Applications, ~/Applications, plus running `.regular` apps — deduped by bundle id with icons and search; Block adds an enabled `BlockedApp`, tapping again removes it. Names come from `CFBundleDisplayName`/`CFBundleName` (the filename fallback strips ".app"). The dev-preview shot `block-app-picker.png` checks the layout (its rows vary per machine).
 - **Do Not Disturb**: toggles a macOS Focus mode automatically at the start and end of sessions.
 - **Global keyboard shortcuts** (rebindable): start/pause, skip, reset, +5 minutes, toggle floating timer, and quick-add task.
 - **`tired` CLI** — control the app from Terminal: start (with natural-language input), pause, resume, skip, reset, add/remove/set time, check live status, and manage tasks (add, list, mark done, start, queue).

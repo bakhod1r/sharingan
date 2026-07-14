@@ -685,6 +685,15 @@ if let outDir = HeadlessRender.outputDirectory(for: "--render-dev-preview") {
                         .environment(\.colorScheme, .dark),
                     to: "\(outDir)/settings-notch.png",
                     size: NSSize(width: 640, height: 2000))
+        // The blocker's installed-app picker — scans this machine's real
+        // /Applications, so the row set varies per machine; the shot checks
+        // the layout (search field, Block/Blocked buttons), not the content.
+        writeHosted(BlockAppPickerSheet(blocker: .constant(AppBlockerSettings()))
+                        .background(Color(white: 0.12))
+                        .environment(\.colorScheme, .dark),
+                    to: "\(outDir)/block-app-picker.png",
+                    size: NSSize(width: 460, height: 560),
+                    settle: 1.0)
         // The Tasks & Planning page — where the import-template block lives
         // (segmented MD/JSON preview + copy button).
         writeHosted(SettingsView(timer: timer, settings: .constant(timer.settings),

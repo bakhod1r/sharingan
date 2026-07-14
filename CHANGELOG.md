@@ -5,6 +5,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.10.0] — 2026-07-14
+
+### Added
+- App blocking gets an "Add apps…" picker listing every installed application (/Applications incl. one folder deep, /System/Applications, ~/Applications, plus running Dock apps) with icons and search — tap Block to add one to the blocked list, tap again to take it out. No more hand-maintained preset-only list; works for break blocking and, with "Block apps during focus" on, for focus sessions too
+
 ## [1.9.0] — 2026-07-14
 
 ### Added

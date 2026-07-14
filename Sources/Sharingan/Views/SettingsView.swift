@@ -42,6 +42,8 @@ struct SettingsView: View {
     @State private var hasNotch = false
     /// Which import-template flavor the Tasks page previews (0 = MD, 1 = JSON).
     @State private var importTemplateFormat = 0
+    /// The full installed-app catalog sheet for the blocker.
+    @State private var showBlockAppPicker = false
     /// Brief "Copied!" feedback after the template copy button.
     @State private var templateCopied = false
 
@@ -542,18 +544,32 @@ struct SettingsView: View {
                         }
                         .padding(.vertical, 4)
                     }
-                    Button {
-                        // Re-seed any preset apps that were removed, without
-                        // touching the user's other entries or their enabled state.
-                        for preset in BlockedApp.presets
-                        where !settings.appBlockerSettings.blockedApps.contains(where: { $0.bundleID == preset.bundleID }) {
-                            settings.appBlockerSettings.blockedApps.append(preset)
+                    HStack(spacing: 14) {
+                        // The whole installed-app catalog, not just presets.
+                        Button {
+                            showBlockAppPicker = true
+                        } label: {
+                            Label("Add apps…", systemImage: "plus.circle.fill")
+                                .font(.system(.caption, design: .rounded).weight(.semibold))
                         }
-                    } label: {
-                        Label("Restore default apps", systemImage: "arrow.counterclockwise.circle.fill")
-                            .font(.system(.caption, design: .rounded).weight(.semibold))
+                        .buttonStyle(.pressableSubtle)
+                        Button {
+                            // Re-seed any preset apps that were removed, without
+                            // touching the user's other entries or their enabled state.
+                            for preset in BlockedApp.presets
+                            where !settings.appBlockerSettings.blockedApps.contains(where: { $0.bundleID == preset.bundleID }) {
+                                settings.appBlockerSettings.blockedApps.append(preset)
+                            }
+                        } label: {
+                            Label("Restore default apps", systemImage: "arrow.counterclockwise.circle.fill")
+                                .font(.system(.caption, design: .rounded).weight(.semibold))
+                        }
+                        .buttonStyle(.pressableSubtle)
                     }
-                    .buttonStyle(.pressableSubtle)
+                    .sheet(isPresented: $showBlockAppPicker) {
+                        BlockAppPickerSheet(blocker: $settings.appBlockerSettings)
+                            .environment(\.colorScheme, .dark)
+                    }
                 }
 
                 Section("Reminders (posture / water / custom)") {
