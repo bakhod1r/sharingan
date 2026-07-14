@@ -134,17 +134,27 @@ struct NotchHUDView: View {
                     // hardware is dressed in Blink's dark glass on top of it:
                     // the expanded body below the menu bar (`bodyGlass`) and
                     // the live ears either side of the cutout (`earGlass`).
-                    // Idle — exactly the cutout, nothing added — stays all
-                    // black, and every pixel of it sits behind the housing.
                     //
-                    // In `.live` the black ALSO stops at the cutout: the 4pt
-                    // lip below it belongs to the progress line alone (drawn
-                    // by `NotchEars`), so a running island paints no black a
+                    // Idle — exactly the cutout, nothing added — paints NO
+                    // black at all. On glass those pixels sit behind the
+                    // housing, but the framebuffer under the housing is real:
+                    // screenshots capture it (a phantom black notch on a light
+                    // menu bar) and the Spaces-swipe animation slides it
+                    // sideways (a black cutout gliding across the menu bar).
+                    // A closed HUD must leave the framebuffer exactly as a Mac
+                    // without the app would. The silhouette still exists —
+                    // hover hit-testing is geometry-based — so the fill fades
+                    // back in with the opening morph.
+                    //
+                    // In `.live` the black stops at the cutout: the 4pt lip
+                    // below it belongs to the progress line alone (drawn by
+                    // `NotchEars`), so a running island paints no black a
                     // light menu bar could show as a droplet under the notch.
                     // The silhouette (and with it the clip, the hover stroke
                     // and the hit mask) still spans the lip — only the black
                     // fill is held back.
                     .fill(.black)
+                    .opacity(model.state.size == .idle ? 0 : 1)
                     .frame(height: blackFillHeight(l))
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

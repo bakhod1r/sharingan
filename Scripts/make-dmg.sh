@@ -33,6 +33,17 @@ ln -s /Applications "$STAGE/Applications"
 # survives GitHub release downloads, unlike xattrs on the .dmg file.
 echo "▸ Creating $DMG …"
 rm -f "$DMG"
+
+# Stale "Sharingan" volumes (an old install image open in Finder, or a
+# read-write image leaked by an aborted run) collide with the fresh mount two
+# ways: the new volume lands at "/Volumes/Sharingan 2" instead of the bare
+# name, and the Finder-styling `tell disk` below becomes ambiguous. Detach
+# them all first; every volume with this name is disk-image install media,
+# never real storage.
+while IFS= read -r vol; do
+  echo "  ⚠ detaching stale volume: $vol"
+  hdiutil detach "$vol" >/dev/null 2>&1 || true
+done < <(mount | sed -nE "s|^/dev/[^ ]+ on (/Volumes/$VOL_NAME( [0-9]+)?) \(.*|\1|p")
 ICNS="$APP/Contents/Resources/AppIcon.icns"
 RW_DIR="$(mktemp -d)"
 RW_DMG="$RW_DIR/rw.dmg"
@@ -43,7 +54,12 @@ hdiutil create \
   "$RW_DMG" >/dev/null
 
 if [[ -f "$ICNS" ]]; then
-  MOUNT_POINT="$(hdiutil attach "$RW_DMG" -nobrowse | awk 'END {print $3}')"
+  # The mount point is the last column but may contain spaces ("/Volumes/
+  # Sharingan 2" when the bare name is taken), so take everything from
+  # "/Volumes/" to end of line — a field-based awk would truncate at the
+  # space and hand back somebody else's (read-only) volume.
+  MOUNT_POINT="$(hdiutil attach "$RW_DMG" -nobrowse \
+    | sed -nE 's|^.*[[:space:]](/Volumes/.+)$|\1|p' | tail -n 1)"
   if [[ -d "$MOUNT_POINT" ]]; then
     cp "$ICNS" "$MOUNT_POINT/.VolumeIcon.icns"
     SetFile -a C "$MOUNT_POINT" 2>/dev/null || true

@@ -60,7 +60,11 @@ fi
 # bundle root") breaks codesign, so a copy that arrives quarantined on another
 # Mac is rejected by Gatekeeper and won't open. Keeping everything under
 # Contents/ keeps the signature valid on every Mac.
-for b in "$BINDIR"/*.bundle; do
+# Only this package's bundles ("Sharingan_<target>.bundle"): the bin dir can
+# still hold stale "Blink_*.bundle" artifacts from before the rename, and the
+# app resolves its bundles by the new name only (ResourceBundle.swift) — the
+# old ones would just ship as dead weight.
+for b in "$BINDIR/${PRODUCT_NAME}_"*.bundle; do
   [[ -e "$b" ]] && cp -R "$b" "$APP/Contents/Resources/"
 done
 
@@ -98,6 +102,15 @@ else
   echo "  ✗ signature NOT strict-valid — the app will be rejected on other Macs" >&2
   exit 1
 fi
+
+# Finder registers the bundle the moment `mkdir` creates it — half-built and
+# icon-less (a generic grid icon if the dist window is open) — and keys its
+# icon cache off the bundle root's mtime, which nothing above ever bumps
+# (only Contents/* changes after that first mkdir). Bump it and re-register
+# so the finished bundle's real icon wins.
+touch "$APP"
+LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+[[ -x "$LSREGISTER" ]] && "$LSREGISTER" -f "$APP" >/dev/null 2>&1 || true
 
 echo "✅ Done → $APP"
 echo "   Install:  Scripts/install.sh   (build + install to /Applications)"
