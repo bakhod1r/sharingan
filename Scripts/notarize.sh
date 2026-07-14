@@ -21,10 +21,20 @@ trap 'rm -f "$KEYFILE"' EXIT
 printf '%s\n' "$ASC_KEY_P8" > "$KEYFILE"
 AUTH=(--key "$KEYFILE" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID")
 
+# notarytool only accepts archives (.zip/.dmg/.pkg), while stapler only
+# accepts the thing the ticket belongs to — a bundle or an image, never a
+# zip. So an .app is zipped for submission and stapled in place afterwards;
+# a .dmg is both submitted and stapled directly.
+SUBMIT="$TARGET"
+if [[ "$TARGET" == *.app ]]; then
+  SUBMIT="$(mktemp -d)/$(basename "$TARGET").zip"
+  ditto -c -k --keepParent "$TARGET" "$SUBMIT"
+fi
+
 # notarytool can exit 0 even when the verdict is Invalid, so the status line
 # is checked explicitly and the per-file log is fetched on any non-Accepted.
 echo "▸ Notarizing $TARGET (this can take a few minutes)…"
-OUT="$(xcrun notarytool submit "$TARGET" "${AUTH[@]}" --wait 2>&1 | tee /dev/stderr)"
+OUT="$(xcrun notarytool submit "$SUBMIT" "${AUTH[@]}" --wait 2>&1 | tee /dev/stderr)"
 SUBMISSION_ID="$(sed -nE 's/^[[:space:]]*id: ([0-9a-f-]+)$/\1/p' <<<"$OUT" | head -n 1)"
 if ! grep -q "status: Accepted" <<<"$OUT"; then
   echo "✗ notarization not accepted — notary log:" >&2

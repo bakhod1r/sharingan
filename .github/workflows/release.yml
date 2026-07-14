@@ -38,15 +38,15 @@ jobs:
             | sed -nE 's/.*"(Developer ID Application[^"]+)".*/\1/p' | head -1)"
           [ -n "$IDENTITY" ] || { echo "no Developer ID identity found"; exit 1; }
           echo "SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
-      - name: Prepare notary key
-        env:
-          NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
-        run: |
-          echo "$NOTARY_KEY_P8" | base64 --decode > "$RUNNER_TEMP/notary.p8"
-          echo "NOTARY_KEY_FILE=$RUNNER_TEMP/notary.p8" >> "$GITHUB_ENV"
-          echo "NOTARY_KEY_ID=${{ secrets.NOTARY_KEY_ID }}" >> "$GITHUB_ENV"
-          echo "NOTARY_ISSUER_ID=${{ secrets.NOTARY_ISSUER_ID }}" >> "$GITHUB_ENV"
+      # Notarization credentials go straight to the build as env — Scripts/
+      # notarize.sh writes the key to a temp file itself and shreds it on
+      # exit, so the .p8 never lands anywhere the workspace can leak it.
+      # ASC_KEY_P8 is the key's raw contents (a multi-line secret), not base64.
       - name: Build Sharingan.dmg
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
         run: Scripts/make-dmg.sh
       - name: Extract release notes from CHANGELOG
         run: |

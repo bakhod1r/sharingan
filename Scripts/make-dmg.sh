@@ -27,30 +27,18 @@ DMG_BUILD_FLAG="${1:---universal}"
 
 # 1b) Notarize the app BEFORE it is staged into the image, and staple the
 # ticket onto the bundle — a stapled app clears Gatekeeper even on a Mac
-# that is offline when it first launches. Env-gated: without notary
-# credentials this whole section is skipped and `make dmg` behaves exactly
-# as it did before (ad-hoc, unnotarized, dev-only).
+# that is offline when it first launches. Submission itself lives in
+# Scripts/notarize.sh (one implementation: it also catches notarytool
+# exiting 0 on an Invalid verdict, and prints the notary log when it does).
+# Env-gated: without ASC credentials this is skipped entirely and `make dmg`
+# behaves exactly as before — ad-hoc, unnotarized, dev-only.
 NOTARIZE=0
-if [[ -n "${NOTARY_KEY_FILE:-}" && -n "${NOTARY_KEY_ID:-}" && -n "${NOTARY_ISSUER_ID:-}" ]]; then
+if [[ -n "${ASC_KEY_ID:-}" && -n "${ASC_ISSUER_ID:-}" && -n "${ASC_KEY_P8:-}" ]]; then
   NOTARIZE=1
 fi
 
-notarize() { # $1 = path to a .zip or .dmg to submit
-  echo "▸ Notarizing $(basename "$1") …"
-  xcrun notarytool submit "$1" \
-    --key "$NOTARY_KEY_FILE" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" \
-    --wait --timeout 30m
-}
-
 if (( NOTARIZE )); then
-  # notarytool takes archives, not bundles: zip the app, submit, then staple
-  # the ticket back onto the ORIGINAL bundle (the zip is throwaway).
-  APP_ZIP="$DIST/$APP_NAME-notarize.zip"
-  ditto -c -k --keepParent "$APP" "$APP_ZIP"
-  notarize "$APP_ZIP"
-  rm -f "$APP_ZIP"
-  xcrun stapler staple "$APP"
-  echo "  ✓ app notarized + stapled"
+  "$ROOT/Scripts/notarize.sh" "$APP"
 fi
 
 # 2) Stage a clean folder with the app + an Applications shortcut.
@@ -157,18 +145,32 @@ if [[ -f "$ROOT/Resources/AppIcon.appiconset/icon_1024.png" ]] \
   echo "  ✓ dmg file icon"
 fi
 
-# 5) Sign, notarize and staple the finished image — strictly AFTER the Rez
-# icon step above, which rewrites the .dmg file and would invalidate a
-# signature applied any earlier.
-if (( NOTARIZE )); then
-  codesign --force --sign "${SIGN_IDENTITY:--}" --timestamp "$DMG"
-  notarize "$DMG"
-  xcrun stapler staple "$DMG"
-  # spctl is the verdict Gatekeeper will reach on somebody else's Mac. Fail
-  # the build here rather than ship a DMG that "can't be opened" there.
+# 5) Release signing. SIGN_IDENTITY promotes this from a local build to a
+# distributable: the DMG itself is signed, then notarized + stapled — the
+# staple on the DMG covers offline Gatekeeper checks; the app inside carries
+# its own Developer ID signature from make-app.sh (env is inherited there).
+# Partial credentials fail hard: a signed-but-unnotarized DMG looks shippable
+# but still trips Gatekeeper on first download.
+if [[ -n "${SIGN_IDENTITY:-}" ]]; then
+  MISSING=()
+  [[ -z "${ASC_KEY_ID:-}"    ]] && MISSING+=(ASC_KEY_ID)
+  [[ -z "${ASC_ISSUER_ID:-}" ]] && MISSING+=(ASC_ISSUER_ID)
+  [[ -z "${ASC_KEY_P8:-}"    ]] && MISSING+=(ASC_KEY_P8)
+  if (( ${#MISSING[@]} )); then
+    echo "✗ SIGN_IDENTITY is set but notarization credentials are missing: ${MISSING[*]}" >&2
+    exit 1
+  fi
+  echo "▸ Signing $DMG …"
+  codesign --force --sign "$SIGN_IDENTITY" --timestamp "$DMG"
+  "$ROOT/Scripts/notarize.sh" "$DMG"
+  # spctl is the verdict Gatekeeper reaches on somebody else's Mac. Assert it
+  # here, or a DMG that "can't be opened" ships and nobody finds out until a
+  # user does.
   spctl --assess --type open --context context:primary-signature -v "$DMG"
   spctl --assess --type execute -v "$APP"
-  echo "  ✓ DMG notarized, stapled, Gatekeeper-accepted"
+  echo "  ✓ Gatekeeper-accepted (app + image)"
+else
+  echo "⚠ unsigned build (SIGN_IDENTITY not set) — fine locally; Gatekeeper warns elsewhere"
 fi
 
 SIZE="$(du -h "$DMG" | cut -f1)"
