@@ -448,11 +448,16 @@ public enum NotchGeometry {
     public static let hoverCloseDelay: TimeInterval = 0.15
     public static let activityDuration: TimeInterval = 2.0
 
-    /// The panel covers the union of every state the *current config* can draw,
-    /// so the tracking area can see the pointer before the island grows. It is
-    /// invisible and click-through everywhere the mask says no, so its only job
-    /// is to be big enough. `.zero` without a hardware notch — there is no panel
-    /// to size.
+    /// The union of every state the *current config* can draw — the geometry's
+    /// **canvas**: every layout rect is placed inside it and every x-coordinate
+    /// is measured against its centered width. `.zero` without a hardware
+    /// notch — there is no panel to size.
+    ///
+    /// The *window* is no longer this size at all times. It keeps this union
+    /// **width** in every state, but its height hugs the current state
+    /// (`panelHeight(_:size:config:)` — see there for why). This union height
+    /// remains what the dev preview photographs, so the grey plate shows
+    /// exactly where each state's island is not.
     ///
     /// "Can draw" includes a task list that is **full**, which is why this alone
     /// reads `config.sizedForRowCap` while the island reads the real count. Two
@@ -485,6 +490,40 @@ public enum NotchGeometry {
                         activityWidth)
         let height = max(expanded.height, cutout.height + idleExtraHeight)
         return CGSize(width: width, height: height)
+    }
+
+    /// The panel *window*'s height while the island is in `size` — the island's
+    /// own depth, `layout.island.maxY`, and **not** `panelSize.height`.
+    ///
+    /// The window used to be the union of every state at all times, and gave
+    /// everything the island wasn't drawing back to the desktop through two
+    /// fragile things: the content view's `hitTest` returning nil, and the
+    /// window server's alpha-based click-through. The server *caches* a
+    /// transparent window's clickable shape and refreshes it lazily — after one
+    /// expand-and-collapse the stale cache could keep the entire expanded
+    /// region click-opaque, a dead zone over the browser tabs below the menu
+    /// bar while the island was nothing but the live ears. The robust fix is
+    /// for the window to only ever be as big as the current silhouette: when
+    /// the island is closed there is **no window** over that region, and no
+    /// cache to go stale.
+    ///
+    /// Height only. The window keeps `panelSize`'s union **width** in every
+    /// state: the live ears legitimately span it, and its side margins sit in
+    /// the menu-bar row, where the silhouette mask already hands the pixels
+    /// back — horizontal never had the dead zone, because no state hangs window
+    /// below the menu bar without also being exactly this tall.
+    ///
+    /// Reads `config.sizedForRowCap`, like `panelSize` and for the same reason:
+    /// tick a task off the *open* island and the island springs shorter, but
+    /// the window must not move under the spring (`NSWindow` clips its content
+    /// view mid-animation). The cap is the tallest list this config can draw,
+    /// so the expanded height is one number for the whole churn.
+    ///
+    /// `0` for `.hidden` and for a display with no notch: no island, no
+    /// window — the manager orders the panel out rather than framing nothing.
+    public static func panelHeight(_ m: NotchScreenMetrics, size: NotchHUDSize,
+                                   config: NotchContentConfig = .default) -> CGFloat {
+        layout(m, size: size, config: config.sizedForRowCap).island.maxY
     }
 
     /// Nothing drawn, nothing hittable — the layout of a display with no notch,
