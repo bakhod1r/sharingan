@@ -150,6 +150,13 @@ public final class PomodoroTimer: ObservableObject {
         // into transitionToNext's `.paused: break` arm changed nothing yet
         // still wiped durationOverride and repeatIndex.
         if phase == .paused { phase = previousPhase }
+        // Kill the tick loop BEFORE transitioning (pause/stop/phaseComplete all
+        // do). A live in-flight tick wakes ≤200 ms later and writes the dead
+        // phase's preciseRemaining over the fresh duration — skipping a break
+        // left an idle "focus" showing the break's leftover countdown, and the
+        // next start() ran focus with that leftover as its whole session.
+        isRunning = false
+        cancelLoop()
         transitionToNext()
     }
 

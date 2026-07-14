@@ -20,6 +20,7 @@
 - Screen flash warning in the last 5 seconds; a "5 minutes left" notification.
 - Sleep-aware: closing the lid during focus doesn't wrongly credit hours; a break still completes when you wake the Mac.
 - Custom one-off session length that survives mode changes.
+- Skip kills the tick loop before transitioning (like pause/stop/complete) — a live in-flight tick used to overwrite the fresh phase's countdown with the skipped phase's leftover time.
 
 ---
 
