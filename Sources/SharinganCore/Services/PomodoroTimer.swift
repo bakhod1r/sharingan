@@ -177,6 +177,12 @@ public final class PomodoroTimer: ObservableObject {
         start()
     }
 
+    /// True while nothing is in flight and the pending phase is a focus — the
+    /// fresh/reset state. The main window shows the in-ring size picker exactly
+    /// then; any live state (running, paused, or waiting at a break) keeps the
+    /// phase label instead.
+    public var isIdleAtFocus: Bool { !isRunning && phase == .focus }
+
     /// Switches the pomodoro size (Small/Normal/Big). While idle, the pending
     /// phase duration refreshes immediately so the countdown shows the new
     /// length; a running session keeps its current block untouched.
