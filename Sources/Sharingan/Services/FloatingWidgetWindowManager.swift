@@ -2,24 +2,25 @@ import AppKit
 import SwiftUI
 import SharinganCore
 
-/// Hosts the Dock widget (DockWidgetView) in a non-activating borderless
-/// NSPanel pinned flush against the Dock's inner edge — macOS Dock tiles are
-/// always square, so "widening the Dock" is really a window aligned flush
-/// with it. Placement adapts to the Dock's actual side (bottom, left, or
-/// right — see `DockWidgetGeometry`), not just the bottom-Dock case. Shown/
+/// Hosts the Floating widget (FloatingWidgetView) in a non-activating borderless
+/// NSPanel pinned flush against the Dock's inner edge by default — macOS Dock
+/// tiles are always square, so "widening the Dock" is really a window aligned
+/// flush with it. Draggable to a custom position (see `returnToDock()`), and
+/// while docked, placement adapts to the Dock's actual side (bottom, left, or
+/// right — see `FloatingWidgetGeometry`), not just the bottom-Dock case. Shown/
 /// hidden purely by the `dockWidgetEnabled` settings flag (via
-/// SharinganCoordinator.syncDockWidget()); like the today panel it ignores the
+/// SharinganCoordinator.syncFloatingWidget()); like the today panel it ignores the
 /// running state, so Start is always reachable.
 @MainActor
-final class DockWidgetWindowManager: DockWidgetController {
-    static let shared = DockWidgetWindowManager()
+final class FloatingWidgetWindowManager: FloatingWidgetController {
+    static let shared = FloatingWidgetWindowManager()
     private var panel: NSPanel?
-    private var hosting: NSHostingView<DockWidgetView>?
+    private var hosting: NSHostingView<FloatingWidgetView>?
     private var screenObserver: NSObjectProtocol?
     private var moveObserver: NSObjectProtocol?
     /// The timer whose settings drive size/alignment/opacity — read fresh in
     /// `reposition()` and `applySettings()` rather than snapshotted once, so a
-    /// live Settings change (from `syncDockWidget()`) takes effect immediately.
+    /// live Settings change (from `syncFloatingWidget()`) takes effect immediately.
     private weak var timer: PomodoroTimer?
     private static let posKeyX = "sharingan.dockwidget.x"
     private static let posKeyY = "sharingan.dockwidget.y"
@@ -28,7 +29,7 @@ final class DockWidgetWindowManager: DockWidgetController {
     /// tell those apart from an actual user drag and only persist the latter.
     private var isRepositioning = false
 
-    func showDockWidget(timer: PomodoroTimer) {
+    func showFloatingWidget(timer: PomodoroTimer) {
         self.timer = timer
         guard panel == nil else {
             applySettings()
@@ -37,7 +38,7 @@ final class DockWidgetWindowManager: DockWidgetController {
         }
         let preset = timer.settings.dockWidgetSize
         let size = NSSize(width: preset.width, height: preset.height)
-        let panel = DockWidgetPanel(
+        let panel = FloatingWidgetPanel(
             contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.borderless, .fullSizeContentView, .nonactivatingPanel],
             backing: .buffered, defer: false
@@ -59,7 +60,7 @@ final class DockWidgetWindowManager: DockWidgetController {
         panel.isMovableByWindowBackground = true
         panel.isFloatingPanel = true
 
-        let hosting = NSHostingView(rootView: DockWidgetView(timer: timer))
+        let hosting = NSHostingView(rootView: FloatingWidgetView(timer: timer))
         hosting.autoresizingMask = [.width, .height]
         panel.contentView = hosting
         self.hosting = hosting
@@ -74,7 +75,7 @@ final class DockWidgetWindowManager: DockWidgetController {
             forName: NSApplication.didChangeScreenParametersNotification,
             object: nil, queue: .main
         ) { _ in
-            MainActor.assumeIsolated { DockWidgetWindowManager.shared.reposition() }
+            MainActor.assumeIsolated { FloatingWidgetWindowManager.shared.reposition() }
         }
         // Persist position on drag — but only real drags: every programmatic
         // setFrame (dock placement, settings resize) brackets itself with
@@ -85,15 +86,15 @@ final class DockWidgetWindowManager: DockWidgetController {
             guard let panel else { return }
             let origin = panel.frame.origin
             MainActor.assumeIsolated {
-                guard !DockWidgetWindowManager.shared.isRepositioning else { return }
+                guard !FloatingWidgetWindowManager.shared.isRepositioning else { return }
                 let d = UserDefaults.standard
-                d.set(Double(origin.x), forKey: DockWidgetWindowManager.posKeyX)
-                d.set(Double(origin.y), forKey: DockWidgetWindowManager.posKeyY)
+                d.set(Double(origin.x), forKey: FloatingWidgetWindowManager.posKeyX)
+                d.set(Double(origin.y), forKey: FloatingWidgetWindowManager.posKeyY)
             }
         }
     }
 
-    func hideDockWidget() {
+    func hideFloatingWidget() {
         if let screenObserver {
             NotificationCenter.default.removeObserver(screenObserver)
             self.screenObserver = nil
@@ -148,10 +149,10 @@ final class DockWidgetWindowManager: DockWidgetController {
     /// position, in which case that position wins (clamped back into the
     /// visible frame on screen changes) and dock placement is skipped. The
     /// Dock's side and thickness fall out of the difference between the
-    /// screen's full frame and its visibleFrame (`DockWidgetGeometry.side`);
+    /// screen's full frame and its visibleFrame (`FloatingWidgetGeometry.side`);
     /// with the Dock auto-hidden the two (nearly) coincide and it reads as
     /// bottom, so the pill rests at the screen edge instead. The math itself
-    /// lives in SharinganCore (`DockWidgetGeometry`) so it is unit-testable
+    /// lives in SharinganCore (`FloatingWidgetGeometry`) so it is unit-testable
     /// without an `NSScreen`.
     private func reposition() {
         guard let panel, let screen = NSScreen.main, let t = timer else { return }
@@ -162,24 +163,24 @@ final class DockWidgetWindowManager: DockWidgetController {
         let s = CGSize(width: preset.width, height: preset.height)
 
         let origin: CGPoint
-        let anchor: DockWidgetAlignment
+        let anchor: FloatingWidgetAlignment
         if let custom = customOrigin() {
-            origin = DockWidgetGeometry.clamp(origin: custom, size: s, visibleFrame: vis)
-            anchor = DockWidgetGeometry.expandAnchor(customOrigin: origin, size: s, visibleFrame: vis)
+            origin = FloatingWidgetGeometry.clamp(origin: custom, size: s, visibleFrame: vis)
+            anchor = FloatingWidgetGeometry.expandAnchor(customOrigin: origin, size: s, visibleFrame: vis)
         } else {
-            origin = DockWidgetGeometry.origin(size: s, alignment: alignment,
+            origin = FloatingWidgetGeometry.origin(size: s, alignment: alignment,
                                                visibleFrame: vis, fullFrame: full)
-            anchor = DockWidgetGeometry.expandAnchor(alignment: alignment,
+            anchor = FloatingWidgetGeometry.expandAnchor(alignment: alignment,
                                                       visibleFrame: vis, fullFrame: full)
         }
         isRepositioning = true
         panel.setFrame(NSRect(origin: origin, size: s), display: true)
         isRepositioning = false
-        hosting?.rootView = DockWidgetView(timer: t, anchor: anchor)
+        hosting?.rootView = FloatingWidgetView(timer: t, anchor: anchor)
     }
 }
 
-private final class DockWidgetPanel: NSPanel {
+private final class FloatingWidgetPanel: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 }

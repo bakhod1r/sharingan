@@ -346,23 +346,23 @@ struct SettingsView: View {
                                unit: "pomodoros")
                 }
 
-                Section("Dock widget") {
-                    ToggleRow(title: "Dock widget",
+                Section("Floating widget") {
+                    ToggleRow(title: "Floating widget",
                               isOn: $settings.dockWidgetEnabled)
-                    Text("A pill above the Dock, near the Trash: active task, time left, and Start / Stop / Reset.")
+                    Text("A draggable pill — active task, time left, and Start / Stop / Reset. Docks flush above the Dock by default.")
                         .font(.system(.caption2, design: .rounded))
                         .foregroundStyle(.white.opacity(0.6))
 
                     if settings.dockWidgetEnabled {
                         Picker("Size", selection: $settings.dockWidgetSize) {
-                            ForEach(DockWidgetSize.allCases, id: \.self) { size in
+                            ForEach(FloatingWidgetSize.allCases, id: \.self) { size in
                                 Text(size.label).tag(size)
                             }
                         }
                         .pickerStyle(.segmented)
 
                         Picker("Position", selection: $settings.dockWidgetAlignment) {
-                            ForEach(DockWidgetAlignment.allCases, id: \.self) { alignment in
+                            ForEach(FloatingWidgetAlignment.allCases, id: \.self) { alignment in
                                 Text(alignment.label).tag(alignment)
                             }
                         }

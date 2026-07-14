@@ -1,24 +1,25 @@
 import SwiftUI
 import SharinganCore
 
-/// The Dock widget pill: a "now playing"-style strip anchored to the Dock by
-/// DockWidgetWindowManager. Progress ring + active task + remaining time on
+/// The Floating widget pill: a "now playing"-style strip that docks flush
+/// against the Dock by default (and can be dragged anywhere — see
+/// `FloatingWidgetWindowManager`). Progress ring + active task + remaining time on
 /// the left, three always-standing transport buttons on the right —
 /// ▶︎ start opens a mini picker of today's open tasks when there's an actual
 /// choice to make (resuming a paused session, or starting with today empty,
-/// skips straight past it — see `handleStart`/`DockWidgetStartAction`),
+/// skips straight past it — see `handleStart`/`FloatingWidgetStartAction`),
 /// ⏸ stop (pause), ⟲ reset (the engine's stop(): fresh focus, counters
 /// zeroed). Buttons disable rather than hide so the pill never changes shape
 /// under the pointer.
-struct DockWidgetView: View {
+struct FloatingWidgetView: View {
     @ObservedObject var timer: PomodoroTimer
     @ObservedObject private var tasks = TaskStore.shared
     /// Which container edge the pill hugs — the Dock-nearest edge, supplied
-    /// by `DockWidgetWindowManager` (`DockWidgetGeometry.expandAnchor`), not
+    /// by `FloatingWidgetWindowManager` (`FloatingWidgetGeometry.expandAnchor`), not
     /// the raw Position setting: on a vertical Dock the pill must expand
     /// away from the Dock regardless of what Position says, since Position
     /// is a horizontal-Dock concept.
-    var anchor: DockWidgetAlignment = .trailing
+    var anchor: FloatingWidgetAlignment = .trailing
     /// True while the pointer sits over the pill — drives the compact ↔
     /// expanded spring when `dockWidgetExpandOnHover` is on.
     @State private var hovering = false
@@ -33,7 +34,7 @@ struct DockWidgetView: View {
     private var todayTasks: [TaskItem] {
         tasks.grouped(filter: .today).flatMap(\.items)
     }
-    private var preset: DockWidgetSize { timer.settings.dockWidgetSize }
+    private var preset: FloatingWidgetSize { timer.settings.dockWidgetSize }
     /// Every metric below is tuned at the medium preset (56pt tall, k = 1)
     /// and scales linearly with whichever size is chosen.
     private var k: CGFloat { preset.height / 56 }
@@ -84,7 +85,7 @@ struct DockWidgetView: View {
         // Right-click: a way back to the Dock after a manual drag (no-op
         // while already docked — reposition() just re-derives the same spot).
         .contextMenu {
-            Button("Return to Dock") { DockWidgetWindowManager.shared.returnToDock() }
+            Button("Return to Dock") { FloatingWidgetWindowManager.shared.returnToDock() }
         }
     }
 
@@ -136,7 +137,7 @@ struct DockWidgetView: View {
                 handleStart()
             }
             .popover(isPresented: $showTaskPicker, arrowEdge: .bottom) {
-                DockWidgetTaskPickerView(timer: timer, todayTasks: todayTasks) {
+                FloatingWidgetTaskPickerView(timer: timer, todayTasks: todayTasks) {
                     showTaskPicker = false
                 }
             }
@@ -153,10 +154,10 @@ struct DockWidgetView: View {
     /// place (never re-routed through task selection), and an empty today
     /// list starts immediately rather than popping an empty picker. Only
     /// when there's an actual choice to make does the picker show — pure
-    /// logic lives in `DockWidgetStartAction` so it's unit-tested without a
+    /// logic lives in `FloatingWidgetStartAction` so it's unit-tested without a
     /// live timer/store.
     private func handleStart() {
-        switch DockWidgetStartAction.decide(isPaused: timer.phase == .paused,
+        switch FloatingWidgetStartAction.decide(isPaused: timer.phase == .paused,
                                             todayTaskCount: todayTasks.count) {
         case .startImmediately:
             timer.startFocusSession()

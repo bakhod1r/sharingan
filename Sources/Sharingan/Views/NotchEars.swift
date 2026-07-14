@@ -83,7 +83,7 @@ struct NotchEars: View {
     private var timeLabel: some View {
         // The one countdown-numeral face the whole app uses (`Font.dsTimer`),
         // so the ear's clock reads as the same element as the menu-bar strip and
-        // the Dock widget. Bumped a step to 13pt: the light rounded face needs
+        // the Floating widget. Bumped a step to 13pt: the light rounded face needs
         // it to stay crisp against the menu bar at ear size, and the ear (78pt)
         // has the room. Still monospaced, so the digits don't shimmy as they tick.
         Text(timer.settings.timeFormat.string(max(0, model.remaining)))

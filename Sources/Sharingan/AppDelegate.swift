@@ -69,9 +69,9 @@ final class MenuBarController: NSObject {
         // Restore the desktop today-panel if the user left it enabled (the
         // coordinator's initial syncAll ran before its controller was wired).
         coordinator.syncTodayPanel()
-        // Same launch-order gap for the Dock widget: without this re-sync the
-        // pill never appears on a fresh launch.
-        coordinator.syncDockWidget()
+        // Same launch-order gap for the Floating widget: without this re-sync
+        // the pill never appears on a fresh launch.
+        coordinator.syncFloatingWidget()
         coordinator.installCLIBridge()
 
         // Refresh title every second.
@@ -407,7 +407,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let coord = SharinganCoordinator(timer: timer)
         coord.breakPresenter = BreakWindowManager.shared
         coord.todayPanelController = TodayPanelWindowManager.shared
-        coord.dockWidgetController = DockWidgetWindowManager.shared
+        coord.floatingWidgetController = FloatingWidgetWindowManager.shared
         coord.quickAddController = QuickAddWindowManager.shared
         self.timer = timer
         self.coordinator = coord

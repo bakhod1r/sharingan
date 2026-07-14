@@ -20,9 +20,9 @@ public struct TagStyle: Codable, Equatable, Sendable {
     ]
 }
 
-/// Dock widget size presets, tuned to the pill's single-row layout (ring +
+/// Floating widget size presets, tuned to the pill's single-row layout (ring +
 /// time, title row, transport buttons).
-public enum DockWidgetSize: String, Codable, CaseIterable, Sendable {
+public enum FloatingWidgetSize: String, Codable, CaseIterable, Sendable {
     case small, medium, large
 
     /// Panel size in points.
@@ -51,8 +51,8 @@ public enum DockWidgetSize: String, Codable, CaseIterable, Sendable {
 }
 
 /// Which end of a bottom Dock the pill hugs; a vertical Dock ignores this
-/// and always vertically centers the pill instead — see `DockWidgetGeometry`.
-public enum DockWidgetAlignment: String, Codable, CaseIterable, Sendable {
+/// and always vertically centers the pill instead — see `FloatingWidgetGeometry`.
+public enum FloatingWidgetAlignment: String, Codable, CaseIterable, Sendable {
     case leading, center, trailing
 
     public var label: String {
@@ -191,14 +191,19 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var theme: SharinganTheme = .liquidGlass
     public var repeatConfig: RepeatConfig = .init()
     public var flashAtFiveSecLeft: Bool = true
-    /// Dock widget: a control pill anchored near the Trash end of the Dock —
-    /// active task, remaining time, Start / Stop / Reset.
+    /// Floating widget: a control pill — active task, remaining time,
+    /// Start / Stop / Reset — that docks flush against the Dock by default
+    /// and can be dragged anywhere ("Return to Dock" re-docks it). NOTE: this
+    /// property and the four below it keep their historical `dockWidget*`
+    /// name prefix so existing settings JSON blobs decode unchanged; the
+    /// feature's user-facing name is "Floating widget" everywhere else
+    /// (types, UI copy, docs).
     public var dockWidgetEnabled: Bool = true
     /// Preset pill size (Small/Medium/Large).
-    public var dockWidgetSize: DockWidgetSize = .medium
-    /// Which end of a bottom Dock the pill hugs; a vertical Dock ignores
-    /// this and centers the pill instead — see `DockWidgetGeometry`.
-    public var dockWidgetAlignment: DockWidgetAlignment = .trailing
+    public var dockWidgetSize: FloatingWidgetSize = .medium
+    /// Which end of a bottom Dock the pill hugs while docked; a vertical Dock
+    /// ignores this and centers the pill instead — see `FloatingWidgetGeometry`.
+    public var dockWidgetAlignment: FloatingWidgetAlignment = .trailing
     public var dockWidgetOpacity: Double = 1.0      // 0.3…1.0
     /// Rest compact (ring + time) and spring open under the pointer, like
     /// the Dock's now-playing widgets. Off = always fully open.
@@ -400,9 +405,9 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
         dockWidgetEnabled = try c.decodeIfPresent(Bool.self, forKey: .dockWidgetEnabled) ?? d.dockWidgetEnabled
         // Unknown raw values (a preset/side written by a newer build) fall back
         // to the default rather than throwing the whole blob away.
-        dockWidgetSize = ((try? c.decodeIfPresent(DockWidgetSize.self, forKey: .dockWidgetSize)) ?? nil)
+        dockWidgetSize = ((try? c.decodeIfPresent(FloatingWidgetSize.self, forKey: .dockWidgetSize)) ?? nil)
             ?? d.dockWidgetSize
-        dockWidgetAlignment = ((try? c.decodeIfPresent(DockWidgetAlignment.self, forKey: .dockWidgetAlignment)) ?? nil)
+        dockWidgetAlignment = ((try? c.decodeIfPresent(FloatingWidgetAlignment.self, forKey: .dockWidgetAlignment)) ?? nil)
             ?? d.dockWidgetAlignment
         dockWidgetOpacity = try c.decodeIfPresent(Double.self, forKey: .dockWidgetOpacity) ?? d.dockWidgetOpacity
         dockWidgetExpandOnHover = try c.decodeIfPresent(Bool.self, forKey: .dockWidgetExpandOnHover) ?? d.dockWidgetExpandOnHover

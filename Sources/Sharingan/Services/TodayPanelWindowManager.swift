@@ -7,7 +7,7 @@ import SharinganCore
 /// non-activating borderless NSPanel: joins all spaces, draggable by its
 /// body, position remembered across launches. Shown/hidden purely by the
 /// `showTodayPanel` settings flag (via SharinganCoordinator.syncTodayPanel()) —
-/// like the Dock widget, it does not follow the running state.
+/// like the Floating widget, it does not follow the running state.
 @MainActor
 final class TodayPanelWindowManager: TodayPanelController {
     static let shared = TodayPanelWindowManager()

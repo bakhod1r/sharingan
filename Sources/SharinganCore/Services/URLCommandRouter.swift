@@ -20,7 +20,7 @@ public enum URLCommand: Equatable, Sendable {
     /// this command used to show/hide is gone. The host string and this case
     /// stay recognized (an old Shortcuts/Raycast script must not silently
     /// fail) and `SharinganCoordinator.handle(_:)` retargets it to toggling
-    /// the Dock widget instead.
+    /// the Floating widget instead.
     case toggleFloating
     /// `sharingan://show` — open the main window.
     case show

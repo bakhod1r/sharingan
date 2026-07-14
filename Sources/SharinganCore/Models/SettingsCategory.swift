@@ -30,7 +30,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable, Hashable, Send
 
     public var subtitle: String {
         switch self {
-        case .timer:     return "Durations, mode, repeat, Dock widget"
+        case .timer:     return "Durations, mode, repeat, Floating widget"
         case .notch:     return "Island, ears, what it shows"
         case .tasks:     return "Goal, estimates, weekly planning, badges"
         case .breaks:    return "Break screen, ambience, brightness"

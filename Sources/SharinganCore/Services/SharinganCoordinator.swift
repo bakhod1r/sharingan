@@ -16,10 +16,10 @@ public protocol TodayPanelController: AnyObject {
 }
 
 @MainActor
-public protocol DockWidgetController: AnyObject {
+public protocol FloatingWidgetController: AnyObject {
     /// Show the Dock-anchored control pill (task + time + Start/Stop/Reset).
-    func showDockWidget(timer: PomodoroTimer)
-    func hideDockWidget()
+    func showFloatingWidget(timer: PomodoroTimer)
+    func hideFloatingWidget()
 }
 
 @MainActor
@@ -34,7 +34,7 @@ public final class SharinganCoordinator: ObservableObject {
     @Published public private(set) var needsTaskPick = false
     public var breakPresenter: BreakPresenter?
     public var todayPanelController: TodayPanelController?
-    public var dockWidgetController: DockWidgetController?
+    public var floatingWidgetController: FloatingWidgetController?
     public var quickAddController: QuickAddController?
     public var shortcuts: KeyboardShortcutsService = .shared
     private var cancellables: Set<AnyCancellable> = []
@@ -65,8 +65,8 @@ public final class SharinganCoordinator: ObservableObject {
             // Compat (Task 11): the floating timer this shortcut used to show/hide
             // is gone. Keep the case (so a persisted custom binding under the
             // "showFloating" key still resolves to a real shortcut instead of
-            // silently going dead) and retarget it to the Dock widget, which is
-            // now the app's one timer window.
+            // silently going dead) and retarget it to the Floating widget, which
+            // is now the app's one timer window.
             .showFloating: { [weak self] in
                 self?.timer.settings.dockWidgetEnabled.toggle()
             },
@@ -110,7 +110,7 @@ public final class SharinganCoordinator: ObservableObject {
         CameraService.shared.stop()
     }
 
-    /// Like the Dock widget, the today panel is not tied to a running
+    /// Like the Floating widget, the today panel is not tied to a running
     /// session — it follows its settings flag alone.
     public func syncTodayPanel() {
         if timer.settings.showTodayPanel {
@@ -120,13 +120,13 @@ public final class SharinganCoordinator: ObservableObject {
         }
     }
 
-    /// Like the today panel, the dock widget follows its settings flag alone —
-    /// it stays up while the timer is idle so Start is always reachable.
-    public func syncDockWidget() {
+    /// Like the today panel, the Floating widget follows its settings flag
+    /// alone — it stays up while the timer is idle so Start is always reachable.
+    public func syncFloatingWidget() {
         if timer.settings.dockWidgetEnabled {
-            dockWidgetController?.showDockWidget(timer: timer)
+            floatingWidgetController?.showFloatingWidget(timer: timer)
         } else {
-            dockWidgetController?.hideDockWidget()
+            floatingWidgetController?.hideFloatingWidget()
         }
     }
 
@@ -177,7 +177,7 @@ public final class SharinganCoordinator: ObservableObject {
             // Compat (Task 11): `sharingan://toggle-floating` used to show/hide
             // the now-removed floating timer. Keep the URL command recognized
             // (an old Shortcuts/Raycast script must not silently fail) and
-            // retarget it to the Dock widget.
+            // retarget it to the Floating widget.
             timer.settings.dockWidgetEnabled.toggle()
         case .show:
             break
@@ -414,7 +414,7 @@ public final class SharinganCoordinator: ObservableObject {
             || old.dockWidgetSize != new.dockWidgetSize
             || old.dockWidgetAlignment != new.dockWidgetAlignment
             || old.dockWidgetOpacity != new.dockWidgetOpacity
-            || old.dockWidgetExpandOnHover != new.dockWidgetExpandOnHover { syncDockWidget() }
+            || old.dockWidgetExpandOnHover != new.dockWidgetExpandOnHover { syncFloatingWidget() }
         if old.appBlockerSettings != new.appBlockerSettings
             || old.blockScreenDuringBreak != new.blockScreenDuringBreak
             || old.blockAppsDuringFocus != new.blockAppsDuringFocus { refreshAppBlocker() }
@@ -440,7 +440,7 @@ public final class SharinganCoordinator: ObservableObject {
         installShortcuts()
         syncCamera()
         syncTodayPanel()
-        syncDockWidget()
+        syncFloatingWidget()
         refreshAppBlocker()
         syncTTS()
         syncAmbience()

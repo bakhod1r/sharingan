@@ -5,10 +5,11 @@ import Foundation
 /// two (nearly) equal and reads as `.bottom`.
 public enum DockSide: Equatable, Sendable { case bottom, left, right }
 
-/// Pure placement math for the Dock widget pill. Extracted (like
+/// Pure placement math for the Floating widget pill's Dock-anchored (docked)
+/// position. Extracted (like
 /// NotchGeometry) so corner-vs-center decisions are unit-testable without
 /// AppKit windows.
-public enum DockWidgetGeometry {
+public enum FloatingWidgetGeometry {
     public static func side(visibleFrame vis: CGRect, fullFrame full: CGRect) -> DockSide {
         if vis.minX > full.minX { return .left }
         if vis.maxX < full.maxX { return .right }
@@ -19,7 +20,7 @@ public enum DockWidgetGeometry {
     /// end, or flush beside a vertical Dock at its vertical center (the
     /// Position setting is a horizontal-Dock concept; a corner-parked pill
     /// next to a vertical Dock is exactly the bug this replaces).
-    public static func origin(size: CGSize, alignment: DockWidgetAlignment,
+    public static func origin(size: CGSize, alignment: FloatingWidgetAlignment,
                               visibleFrame vis: CGRect, fullFrame full: CGRect) -> CGPoint {
         switch side(visibleFrame: vis, fullFrame: full) {
         case .left:
@@ -38,9 +39,9 @@ public enum DockWidgetGeometry {
     }
 
     /// Which container edge the pill hugs, so hover expansion grows away from
-    /// the Dock. Reuses DockWidgetAlignment as the anchor vocabulary.
-    public static func expandAnchor(alignment: DockWidgetAlignment,
-                                    visibleFrame vis: CGRect, fullFrame full: CGRect) -> DockWidgetAlignment {
+    /// the Dock. Reuses FloatingWidgetAlignment as the anchor vocabulary.
+    public static func expandAnchor(alignment: FloatingWidgetAlignment,
+                                    visibleFrame vis: CGRect, fullFrame full: CGRect) -> FloatingWidgetAlignment {
         switch side(visibleFrame: vis, fullFrame: full) {
         case .left:   return .leading
         case .right:  return .trailing
@@ -61,7 +62,7 @@ public enum DockWidgetGeometry {
     /// half of the screen its frame's midX falls in — left half opens
     /// rightward (`.leading`), right half opens leftward (`.trailing`).
     public static func expandAnchor(customOrigin origin: CGPoint, size: CGSize,
-                                    visibleFrame vis: CGRect) -> DockWidgetAlignment {
+                                    visibleFrame vis: CGRect) -> FloatingWidgetAlignment {
         (origin.x + size.width / 2) <= vis.midX ? .leading : .trailing
     }
 }

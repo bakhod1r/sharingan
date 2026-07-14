@@ -1,13 +1,13 @@
 import SwiftUI
 import SharinganCore
 
-/// The Dock widget's ▶︎ mini task picker — anchored off the play button as a
-/// SwiftUI `.popover` (DockWidgetView wires it; the panel it's hosted in
+/// The Floating widget's ▶︎ mini task picker — anchored off the play button as a
+/// SwiftUI `.popover` (FloatingWidgetView wires it; the panel it's hosted in
 /// stays non-activating, the popover itself may take key focus while open).
 /// Rows are today's open tasks, the exact set `TodayPanelView` shows
 /// (`TaskStore.grouped(filter: .today)`), so "today" never drifts between
 /// the two surfaces. A top row starts without touching the active task.
-struct DockWidgetTaskPickerView: View {
+struct FloatingWidgetTaskPickerView: View {
     @ObservedObject var timer: PomodoroTimer
     @ObservedObject private var tasks = TaskStore.shared
     let todayTasks: [TaskItem]

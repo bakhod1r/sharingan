@@ -63,7 +63,7 @@ struct MenuBarView: View {
             // On the Timer tab the controls are pinned BELOW the scroll — only
             // the plan (goal bar + tasks) scrolls — so Start / Skip / +5m can
             // never be pushed out of sight by a long list. (The old phase +
-            // countdown header is gone: the menu bar and Dock widget already
+            // countdown header is gone: the menu bar and Floating widget already
             // show the time; tasks get the space instead.)
             VStack(spacing: 14) {
                 ScrollView(.vertical, showsIndicators: false) {

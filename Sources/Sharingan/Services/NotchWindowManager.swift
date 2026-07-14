@@ -567,7 +567,7 @@ final class NotchWindowManager {
 /// Never key and never main: clicking the island must not take key status from
 /// the frontmost app's window (`.nonactivatingPanel` only stops the *app* from
 /// activating). SwiftUI/AppKit buttons still receive their clicks in a non-key
-/// window — matches every other non-activating panel in the app (Dock widget,
+/// window — matches every other non-activating panel in the app (Floating widget,
 /// Today panel, task pick, quick add).
 private final class NotchPanel: NSPanel {
     override var canBecomeKey: Bool { false }
