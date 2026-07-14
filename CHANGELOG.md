@@ -5,6 +5,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-07-14
+
+### Added
+- Subtask priorities: every step can carry its own P1–P4 flag. Import templates set it with an exact `p1`…`p4` token on the step line (Markdown) or a `"priority"` field on JSON subtasks; the subtask rows and the task editor show the flag as a colored rank chip, the editor's per-step flag menu edits it, and promoting a subtask keeps the step's own flag (falling back to the parent's). Step pomodoro size now carries over on promote too
+
 ## [1.2.0] — 2026-07-14
 
 ### Added
