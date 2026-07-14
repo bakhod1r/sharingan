@@ -113,7 +113,9 @@
 - Six themes: Liquid Glass, Frosted, Midnight, Cream, Neon, and Mono.
 - Liquid-glass design throughout.
 - Main window sections: Timer, Tasks, Week, Progress, Report, and Settings.
-- Menu-bar popover with timer, tasks, and week tabs plus today's goal. The
+- Menu-bar popover with timer, tasks, week, and report tabs plus today's
+  goal — the report tab is the main window's day-paged `ReportView` reused
+  unchanged, scrolling inside the popover's fixed tab area. The
   popover pins its own `NSAppearance` to dark: `NSApp.appearance` does not reach
   it because an `NSPopover` resolves appearance from its anchor view (the
   status-item button in the system menu bar), so under Light mode the dark-glass
