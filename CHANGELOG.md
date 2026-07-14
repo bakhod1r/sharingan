@@ -5,6 +5,9 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+### Fixed
+- Dock widget: the pill now appears on a fresh launch — the coordinator's initial sync ran before the widget's window controller was wired (same launch-order gap the today panel already guards against), so it only showed after a settings change.
+
 ## [1.16.0] — 2026-07-14
 
 ### Added
