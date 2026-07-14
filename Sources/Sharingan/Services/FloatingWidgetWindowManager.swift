@@ -78,18 +78,36 @@ final class FloatingWidgetWindowManager: FloatingWidgetController {
             MainActor.assumeIsolated { FloatingWidgetWindowManager.shared.reposition() }
         }
         // Persist position on drag — but only real drags: every programmatic
-        // setFrame (dock placement, settings resize) brackets itself with
-        // `isRepositioning`, which this observer checks before writing.
+        // setFrame (dock placement, settings resize, the initial 0.97→1
+        // settle animation) brackets itself with `isRepositioning`, and a
+        // real user drag additionally has the mouse button physically down
+        // (`NSEvent.pressedMouseButtons`) — a settle-animation move fires
+        // `didMoveNotification` with no button held, so that check alone
+        // would otherwise let a programmatic move slip through as a "drag"
+        // on any code path that forgets to bracket itself with
+        // `isRepositioning`. Once persisted, also re-derive the hover-expand
+        // anchor (same screen-half logic as `reposition()`) and push it into
+        // the hosted view — otherwise a pill dragged across the screen
+        // midline keeps expanding the old direction until the next
+        // `reposition()`.
         moveObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didMoveNotification, object: panel, queue: .main
         ) { [weak panel] _ in
             guard let panel else { return }
             let origin = panel.frame.origin
+            let size = panel.frame.size
             MainActor.assumeIsolated {
-                guard !FloatingWidgetWindowManager.shared.isRepositioning else { return }
+                let manager = FloatingWidgetWindowManager.shared
+                guard !manager.isRepositioning,
+                      NSEvent.pressedMouseButtons & 1 != 0 else { return }
                 let d = UserDefaults.standard
                 d.set(Double(origin.x), forKey: FloatingWidgetWindowManager.posKeyX)
                 d.set(Double(origin.y), forKey: FloatingWidgetWindowManager.posKeyY)
+                guard let t = manager.timer, let hosting = manager.hosting,
+                      let vis = NSScreen.main?.visibleFrame else { return }
+                let anchor = FloatingWidgetGeometry.expandAnchor(customOrigin: origin, size: size,
+                                                             visibleFrame: vis)
+                hosting.rootView = FloatingWidgetView(timer: t, anchor: anchor)
             }
         }
     }

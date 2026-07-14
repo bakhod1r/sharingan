@@ -4,7 +4,7 @@
 > whenever a feature is added, changed, or removed, update this document in the
 > same change.**
 
-- Version: 1.18.0
+- Version: 1.18.1
 - Platform: macOS 14+, lives in the menu bar
 
 ---
@@ -121,8 +121,8 @@
 - Menu-bar popover with timer, tasks, week, and report tabs plus today's
   goal — the report tab is the main window's day-paged `ReportView` reused
   unchanged, scrolling inside the popover's fixed tab area (560 pt). The
-  Pomodoro tab is plan-first: no phase + countdown header (the menu bar,
-  floating timer and Dock widget already show the time) — the goal bar and
+  Pomodoro tab is plan-first: no phase + countdown header (the menu bar
+  and the Floating widget already show the time) — the goal bar and
   task list take that space (list cap 360 pt), with the transport controls
   pinned below the scroll. The
   popover pins its own `NSAppearance` to dark: `NSApp.appearance` does not reach
@@ -184,7 +184,6 @@
   Sharingan", default on); the spinner also idles under macOS Reduce Motion
   and while screens sleep. Preview frames:
   `--render-menubar-icon <path> [rotationDegrees]`.
-- Floating timer: an always-on-top panel that joins all Spaces, is draggable, has size presets, and auto shows/hides around breaks. Carries the Dock widget's Start / Stop / Reset transport strip (`floatingShowControls`, on by default) — same disabled-not-hidden buttons, trailing edge on a wide pill, bottom row otherwise; the clock takes layout priority so a narrow pill crushes the task pill, not the time.
 - Notch HUD: an island over the MacBook camera housing — live ears while a session runs, the user's open tasks and quick actions on hover. Configurable (see below); absent, and disabled in Settings, on a Mac without a notch.
 - Confirmation prompt before quitting while a focus session is running.
 - Searchable settings, grouped into: Pomodoro, Tasks & Planning, Breaks, Focus & Blocking, Eye Care, Sharingan Eyes, General, Voice Guidance, and Shortcuts.
@@ -208,12 +207,12 @@ Simple/Advanced switch and nothing to seed at launch.
   content, in its own `Section`s, shown when `advancedExpanded` is `true`.
   `advancedExpanded` resets to `false` whenever the open category changes.
 - Timer's always-visible part shows the full "Pomodoro sizes" section (the
-  Small/Normal/Big grid) — there's no simplified two-stepper substitute.
-  The floating-timer detail rows (size, always-on-top, dots, task, transport
-  buttons, opacity, drag hint) are Advanced, still gated on `settings.floatingTimerEnabled`,
-  with a caption ("Enable the floating timer to configure it.") when it's
-  off. Eye Care's Advanced "Camera" section is gated on
-  `settings.cameraEyeTrackingEnabled` the same way.
+  Small/Normal/Big grid) — there's no simplified two-stepper substitute. The
+  "Floating widget" section (master toggle, then size / position / expand-on-
+  hover / opacity once it's on, gated on `settings.dockWidgetEnabled`) is
+  also essentials-tier — it isn't behind the Advanced accordion. Eye Care's
+  Advanced "Camera" section is gated on `settings.cameraEyeTrackingEnabled`
+  the same way.
 - The Sharingan "Desktop wallpaper" section (and its `.onChange` chain that
   re-applies `WallpaperConfig`) stays in `categorySections` — always
   visible — so it keeps observing even while the Advanced accordion
@@ -525,13 +524,21 @@ dynamic mode.
   valid dragged-to coordinate) whenever the panel moves. Every
   *programmatic* `setFrame` (dock-anchored placement in `reposition()`,
   settings-driven resize in `applySettings()`) brackets itself with a private
-  `isRepositioning` flag the move observer checks first, so only real user
-  drags get persisted. With a custom position stored: `reposition()` skips
-  dock-anchored placement entirely and instead reads the stored origin,
-  clamps it into the current `visibleFrame` with
-  `FloatingWidgetGeometry.clamp(origin:size:visibleFrame:)` (keeps a
-  dragged-off-screen pill on screen after a display change — same
-  min/max-per-axis idiom as `FloatingWindowManager`), and picks a hover-expand
+  `isRepositioning` flag the move observer checks first; it also requires
+  `NSEvent.pressedMouseButtons & 1 != 0` (the left button physically down) —
+  a settle-animation or other programmatic move that forgot to bracket
+  itself with `isRepositioning` still fires `didMoveNotification` with no
+  button held, so the button check is a second, independent guard against
+  mistaking it for a drag — so only real user drags get persisted. The same
+  guarded branch immediately re-derives the hover-expand anchor (below) from
+  the just-moved origin and pushes a fresh `hosting?.rootView` (no
+  `setFrame`), so a pill dragged across the screen midline flips its expand
+  direction mid-drag instead of waiting for the next `reposition()`. With a
+  custom position stored: `reposition()` skips dock-anchored placement
+  entirely and instead reads the stored origin, clamps it into the current
+  `visibleFrame` with `FloatingWidgetGeometry.clamp(origin:size:visibleFrame:)`
+  (keeps a dragged-off-screen pill on screen after a display change — same
+  min/max-per-axis idiom as `FloatingWidgetWindowManager`), and picks a hover-expand
   anchor with `FloatingWidgetGeometry.expandAnchor(customOrigin:size:visibleFrame:)`:
   whichever half of the screen the pill's midX falls in — left half →
   `.leading` (expands rightward), right half → `.trailing` — since there's no
@@ -616,7 +623,7 @@ dynamic mode.
 - All on-disk identifiers are namespaced `com.sharingan.*` / `sharingan.*`
   (settings `com.sharingan.settings`, stats `com.sharingan.stats`, CLI
   snapshot `com.sharingan.cliSnapshot`, CLI darwin commands
-  `com.sharingan.cli.*`, floating-timer/today-panel position keys, the focus
+  `com.sharingan.cli.*`, Floating widget/today-panel position keys, the focus
   queue, and the task pre-reminder-minutes setting). Task/template data lives
   in `~/Library/Application Support/Sharingan/` (SQLite db + the `tired` CLI's
   shared `cli/` snapshot files). Since 1.13.0 the bundle identifier itself is
@@ -665,9 +672,9 @@ dynamic mode.
 
 - **App blocking**: hide or force-quit distracting apps (presets include Chrome, Safari, VS Code, Slack, Telegram, Messages) — during breaks, during focus, or always. The "Add apps…" picker (`BlockAppPickerSheet` + `InstalledAppsCatalog`, Settings → Focus) lists every installed app — /Applications top level + one folder deep, /System/Applications, ~/Applications, plus running `.regular` apps — deduped by bundle id with icons and search; Block adds an enabled `BlockedApp`, tapping again removes it. Names come from `CFBundleDisplayName`/`CFBundleName` (the filename fallback strips ".app"). The dev-preview shot `block-app-picker.png` checks the layout (its rows vary per machine).
 - **Do Not Disturb**: toggles a macOS Focus mode automatically at the start and end of sessions.
-- **Global keyboard shortcuts** (rebindable): start/pause, skip, reset, +5 minutes, toggle floating timer, and quick-add task.
+- **Global keyboard shortcuts** (rebindable): start/pause, skip, reset, +5 minutes, toggle Floating widget, and quick-add task.
 - **`tired` CLI** — control the app from Terminal: start (with natural-language input), pause, resume, skip, reset, add/remove/set time, check live status, and manage tasks (add, list, mark done, start, queue).
-- **`sharingan://` URL scheme** for Shortcuts / Raycast: start, pause, resume, skip, reset, show, toggle floating timer, and add a task.
+- **`sharingan://` URL scheme** for Shortcuts / Raycast: start, pause, resume, skip, reset, show, toggle the Floating widget (compat host `toggle-floating`), and add a task.
 - **Launch at login** toggle.
 
 ---
@@ -688,7 +695,7 @@ dynamic mode.
 ## Marketing site
 
 - A single landing page focused on the three pillars — Pomodoro, Tasks, Eye health — each with a hand-built animated **CSS mock** of the app's UI (no videos, GIFs, or app renders): a counting timer ring, a Today panel that checks tasks off and slides new ones in, and the break screen with app-shaped almond eyes (MoveEyeShape Béziers via clip-path) running a guided drill with a spinning Sharingan iris.
-- A "Top features" grid of 12 cards, each with its own mini CSS animation (menu-bar timer, floating timer, focus queue, streak chart, app blocking, ambience equalizer, voice arcs, screen dim, reminders, weekly board, six themes, CLI).
+- A "Top features" grid of 12 cards, each with its own mini CSS animation (menu-bar timer, Floating widget, focus queue, streak chart, app blocking, ambience equalizer, voice arcs, screen dim, reminders, weekly board, six themes, CLI).
 - One live demo: the natural-language quick-add parser, in-page. Animated CLI terminal, FAQ (honest about sync being planned, not shipped), download.
 - Hero sits over the live WebGL eyes (loaded after window "load" so they never touch the critical path); below-fold animations stay paused until their section is revealed.
 - Light/dark theme toggle that remembers your choice; respects reduced-motion preferences.

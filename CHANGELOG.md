@@ -5,6 +5,13 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.18.1] — 2026-07-14
+
+### Fixed
+- docs/README/site still described the removed floating timer feature in several places (Settings-layout, keyboard-shortcuts and URL-scheme lists, marketing "Top features" grid, source-tree diagram) — swept to describe the Floating widget instead
+- Floating widget: dragging the pill across the screen midline now updates its hover-expand direction immediately, instead of waiting for the next reposition (screen change or relaunch)
+- Floating widget: a programmatic window-settle move can no longer be mistaken for a user drag and persisted as a custom position
+
 ## [1.18.0] — 2026-07-14
 
 ### Added

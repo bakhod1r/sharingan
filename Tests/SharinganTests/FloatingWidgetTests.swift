@@ -232,4 +232,28 @@ struct FloatingWidgetTests {
         #expect(FloatingWidgetGeometry.expandAnchor(customOrigin: CGPoint(x: 1200, y: 100),
                                                  size: size, visibleFrame: vis) == .trailing)
     }
+
+    // MARK: - Compat: legacy `floating*` blobs still decode
+
+    @Test("a legacy blob carrying removed floating* keys still decodes, ignoring them")
+    func legacyFloatingKeysAreIgnored() throws {
+        let json = """
+        {"floatingTimerEnabled":true,"floatingOpacity":0.7,"floatingSize":"large","dockWidgetEnabled":false}
+        """
+        let decoded = try JSONDecoder().decode(PomodoroSettings.self, from: Data(json.utf8))
+        #expect(decoded.dockWidgetEnabled == false)
+    }
+
+    @Test("a persisted shortcutBindings dict keyed by the legacy showFloating action still decodes")
+    func legacyShowFloatingBindingDecodes() throws {
+        let json = """
+        {"shortcutBindings":{"showFloating":{"keyCode":37,"modifiers":2304}}}
+        """
+        let decoded = try JSONDecoder().decode(PomodoroSettings.self, from: Data(json.utf8))
+        #expect(decoded.shortcutBindings["showFloating"]?.keyCode == 37)
+        #expect(decoded.shortcutBindings["showFloating"]?.modifiers == 2304)
+        // The case (and its rawValue) is kept in `GlobalShortcut` on purpose so
+        // this binding keeps resolving to a real shortcut instead of going dead.
+        #expect(GlobalShortcut(rawValue: "showFloating") == .showFloating)
+    }
 }

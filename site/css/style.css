@@ -1005,7 +1005,7 @@ footer a:hover { color: var(--ink); }
 .mb-time { font: 600 0.8rem/1 var(--font-mono); color: #ece9e4; }
 @keyframes fv-spin { to { transform: rotate(360deg); } }
 
-/* floating timer: glass pill bobbing over a window outline */
+/* Floating widget: glass pill bobbing over a window outline */
 .fl-win {
   width: 92px;
   height: 46px;

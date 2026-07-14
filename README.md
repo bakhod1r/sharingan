@@ -1,8 +1,8 @@
 # Sharingan
 
 > A macOS menu bar Pomodoro + eye-health app with liquid-glass design,
-> Vision-based gaze tracking, floating timer, natural-language input,
-> global hotkeys, streak system, CloudKit sync, app blocking, screen
+> Vision-based gaze tracking, a draggable Floating widget, natural-language
+> input, global hotkeys, streak system, CloudKit sync, app blocking, screen
 > dim, ambience sounds, and a `tired` CLI.
 
 Pure SwiftPM — no Xcode project required. (SwiftPM module names say
@@ -33,10 +33,13 @@ Pure SwiftPM — no Xcode project required. (SwiftPM module names say
 - **Camera indicator badge** — pulsing privacy UI
 - **TTS voice guidance** — per-step instruction text + rotating kalib pool, settings-driven
 
-### Floating timer
-- Always-on-top `.floating` panel, joins all Spaces
-- Digital time + uppercased phase label + theme gradient
-- Draggable, auto show/hide on break
+### Floating widget
+- Draggable pill — active task, time left, and Start / Stop / Reset — docks
+  flush above the Dock by default, joins all Spaces
+- ▶︎ opens a mini today-task picker when idle with tasks queued (a paused
+  session always resumes in place); "Return to Dock" snaps a dragged pill
+  back to its docked spot
+- Size presets, position, opacity, and an "expand on hover" compact mode
 
 ### Natural language input
 - `5 min`, `2h 30m`, `25` (=25 min), `5pm`, `Add 5 min`, `+5m`, `Remove 1 hour`, `-1h`, `reset`
@@ -46,7 +49,7 @@ Pure SwiftPM — no Xcode project required. (SwiftPM module names say
 - ⌃⌥F — skip
 - ⌃⌥R — reset
 - ⌃⌥+ — +5 minutes
-- ⌃⌥L — toggle floating timer
+- ⌃⌥L — toggle Floating widget
 
 ### Tasks & focus queue
 - Full task system — priorities (P1–P4), tags, projects, categories, due dates,
@@ -150,8 +153,8 @@ Sources/
     Models/               # PomodoroSettings, StreakStore, BreakExercise, …
     Services/             # PomodoroTimer, EyeTracker, CameraService, SyncService, …
   Sharingan/              # SwiftUI/AppKit executable (the .app)
-    Views/                # SettingsView, BreakView, FloatingTimerView, SharinganEyeView, …
-    Services/             # window managers (break / floating)
+    Views/                # SettingsView, BreakView, FloatingWidgetView, SharinganEyeView, …
+    Services/             # window managers (break / FloatingWidgetWindowManager)
     Resources/            # Animations, Sharingan PNGs → Bundle.module
   SelfTest/               # standalone assertion harness (swift run SelfTest)
   tired/                  # `tired` CLI executable
@@ -168,7 +171,7 @@ Everything is configurable from a single Settings screen:
 - Focus / break durations + long-break cycle
 - Repeat with delay
 - Break message text
-- Block screen + floating timer toggles
+- Block screen + Floating widget toggles
 - Eye exercise sequence (20-20-20 / gaze / blink) + step hold scale
 - Per-instruction TTS text editor + global kalib pool + kalib interval
 - Camera & Vision toggle
