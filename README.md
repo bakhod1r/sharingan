@@ -17,8 +17,7 @@ A menu-bar Pomodoro timer, a full task manager, and guided eye exercises — in 
 <p align="center">
   <a href="https://bakhod1r.github.io/Blink/"><b>Website</b></a> ·
   <a href="https://github.com/bakhod1r/sharingan/releases/latest"><b>Download</b></a> ·
-  <a href="CHANGELOG.md"><b>Changelog</b></a> ·
-  <a href="docs/TECHNICAL.md"><b>Full feature reference</b></a>
+  <a href="CHANGELOG.md"><b>Changelog</b></a>
 </p>
 
 <p align="center">
@@ -58,37 +57,65 @@ Scripts/install.sh          # build dist/Sharingan.app and install to /Applicati
 Scripts/install-cli.sh      # optional: put the `tired` CLI on your PATH
 ```
 
-## Highlights
+## Features
 
-- **Pomodoro, three gears** — Small `10′+3′`, Normal `25′+5′`, Big `90′+15′`
-  (each editable), countdown or count-up, auto-cycle, long breaks every N
-  pomodoros, `±5m` on the fly.
-- **Enforced breaks** — full-screen, multi-monitor break screen at screen-saver
-  level; ⌘Q/⌘W/⌘Tab are swallowed until the break ends (skippable if you allow it).
-- **Eye health** — 20-20-20, 8-direction gaze, and blink drills with animated
-  guides and voice guidance; optional **camera verification** of blinks and gaze
-  via Vision, with a privacy indicator. Break eyes render as animated Sharingan —
-  18 iris styles from classic tomoe to Rinnegan.
-- **Tasks & planning** — natural-language quick add in English and Uzbek
-  (`ertaga 15:00 p1 #ish ~2 hisobot yozish`), priorities, projects, tags, due
-  dates, subtasks, recurrence, templates; a focus queue that advances task by
-  task; Eisenhower matrix, weekly board, reports and per-project stats.
-- **Six surfaces** — menu-bar popover, main window, notch HUD with live "ears",
-  draggable floating pill timer, desktop WidgetKit widget, and a glass Today
-  panel on the desktop.
-- **Streaks & stats** — daily streaks with milestone badges (1→365 days),
-  SwiftCharts history, tomato counts per task.
-- **Break comfort** — ambience sounds (white noise, rain, forest, lo-fi),
-  smooth screen dim, optional Night Shift warmth, posture/water/custom reminders.
-- **Focus enforcement** — hide or force-quit distracting apps during breaks
-  (Chrome, Slack, Telegram… presets included).
-- **Automation** — global hotkeys (⌃⌥Space start/pause, ⌃⌥F skip, ⌃⌥R reset),
-  `sharingan://` URL scheme for Shortcuts/Raycast, and the `tired` CLI.
-- **Six themes** — Liquid Glass, Frosted, Midnight, Cream, Neon, Mono.
+**Timer / Pomodoro**
+- Three gears — Small `10′+3′`, Normal `25′+5′`, Big `90′+15′` (each editable),
+  countdown or count-up, auto-cycle, long breaks every N pomodoros, `±5m` on
+  the fly.
+- Natural-language time input (`5 min`, `2h 30m`, `5pm`, `+5m`), sleep-aware
+  tracking, and a custom one-off session length.
+
+**Tasks & planning**
+- Full task system: title, priority, tags, projects, categories, due dates,
+  notes, estimates, subtasks (each with its own priority/estimate), recurrence,
+  and templates.
+- Natural-language quick add in the **world's 25 most-spoken languages** at
+  once — e.g. `ertaga 15:00 p1 #ish ~2 hisobot yozish` — with live parse chips
+  as you type.
+- Bulk import from Markdown or JSON (paste, drag a file, or drop into any
+  add-a-task field), with duplicate detection.
+- Smart views (Today, Upcoming, All, Completed), free-text search, sort/filter
+  menus shared across every surface, and CSV export.
+- **Focus queue** that advances task by task, an **Eisenhower matrix**,
+  a **weekly board**, and a floating desktop **Today panel**.
+
+**Breaks & eye health**
+- Full-screen, multi-monitor break overlay at screen-saver level; ⌘Q/⌘W/⌘Tab
+  are blocked until the break ends (skippable if you allow it).
+- 20-20-20, 8-direction gaze, and blink drills with animated guides and voice
+  guidance (TTS).
+- Optional **camera verification** of blinks and gaze via Vision, with a
+  privacy indicator.
+- Ambience sounds (white noise, rain, forest, lo-fi), smooth screen dim,
+  optional Night Shift warmth, and posture/water/custom reminders.
+
+**Sharingan eyes & visuals**
+- 18 iris styles — classic tomoe through Mangekyō to Rinnegan — all rendered
+  as vector art, evolving as you use the app.
+- Animated eyes on the break screen and an optional live desktop wallpaper
+  that follows the cursor.
+
+**Six surfaces**
+- Menu-bar popover, main window, notch HUD with live "ears", a draggable
+  floating pill timer, a desktop WidgetKit widget, and the glass Today panel.
+
+**Stats, streaks & rewards**
+- Daily/weekly/monthly focus history and charts, consecutive-day streaks with
+  milestone badges (1→365 days), per-task and per-project focus logs, and a
+  configurable daily pomodoro goal.
+
+**Themes & interface**
+- Six themes — Liquid Glass, Frosted, Midnight, Cream, Neon, Mono — with
+  searchable settings and a global menu bar.
+
+**Focus enforcement & integrations**
+- Hide or force-quit distracting apps during focus/breaks (Chrome, Slack,
+  Telegram… presets included), automatic Do Not Disturb, rebindable global
+  hotkeys, the `sharingan://` URL scheme for Shortcuts/Raycast, and the
+  `tired` CLI.
 
 iCloud sync is planned but **not shipped yet** — everything is local today.
-The complete, always-current feature list lives in
-[docs/TECHNICAL.md](docs/TECHNICAL.md).
 
 ## `tired` — control it from the terminal
 
