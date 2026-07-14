@@ -9,7 +9,7 @@
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.sharingan.app</string>
+	<string>com.bakhod1r.sharingan</string>
 	<key>CFBundleName</key>
 	<string>Sharingan</string>
 	<key>CFBundlePackageType</key>
@@ -20,7 +20,7 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>com.sharingan.app.url</string>
+			<string>com.bakhod1r.sharingan.url</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>sharingan</string>

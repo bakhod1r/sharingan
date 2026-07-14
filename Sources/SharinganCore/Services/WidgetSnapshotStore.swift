@@ -3,7 +3,7 @@ import Foundation
 /// Reads/writes the snapshot file the app and the widget appex share.
 ///
 /// The canonical home is the **widget's own sandbox container**
-/// (`~/Library/Containers/com.sharingan.app.widget/Data/…`), not the app
+/// (`~/Library/Containers/com.bakhod1r.sharingan.widget/Data/…`), not the app
 /// group. The group looked right, but containermanagerd on macOS 26 REJECTS
 /// a team-ID-less (ad-hoc) signature's claim to a TCC-protected group
 /// container — "group containers identifiers should be prefixed by
@@ -15,9 +15,9 @@ import Foundation
 public enum WidgetSnapshotStore {
     /// Must match `com.apple.security.application-groups` in both
     /// Resources/App.entitlements and Resources/Widget.entitlements.
-    public static let appGroupID = "group.com.sharingan.app"
+    public static let appGroupID = "89LCRZKZ48.com.bakhod1r.sharingan"
     /// Must match CFBundleIdentifier in Resources/Widget-Info.plist.
-    public static let widgetBundleID = "com.sharingan.app.widget"
+    public static let widgetBundleID = "com.bakhod1r.sharingan.widget"
     public static let fileName = "widget-snapshot.json"
 
     /// The snapshot inside the widget's own container, from either process.

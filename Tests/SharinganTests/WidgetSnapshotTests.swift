@@ -82,8 +82,8 @@ struct WidgetSnapshotTests {
             probed = $0.path
             return true
         }
-        #expect(probed == "/Users/x/Library/Containers/com.sharingan.app.widget/Data")
-        #expect(url?.path == "/Users/x/Library/Containers/com.sharingan.app.widget"
+        #expect(probed == "/Users/x/Library/Containers/com.bakhod1r.sharingan.widget/Data")
+        #expect(url?.path == "/Users/x/Library/Containers/com.bakhod1r.sharingan.widget"
             + "/Data/Library/Application Support/widget-snapshot.json")
     }
 

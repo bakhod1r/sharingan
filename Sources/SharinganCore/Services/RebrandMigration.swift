@@ -14,7 +14,10 @@ public enum RebrandMigration {
     /// domain; renaming the bundle moved `UserDefaults.standard` to a fresh,
     /// empty `com.sharingan.app` domain.
     public static let oldBundleID = "com.blink.app"
-    public static let newBundleID = "com.sharingan.app"
+    /// 1.1.x shipped as com.sharingan.app; 1.2.0 (Developer ID signing)
+    /// moved to the developer-scoped ID below.
+    public static let sharinganV1BundleID = "com.sharingan.app"
+    public static let newBundleID = "com.bakhod1r.sharingan"
 
     /// The status item's defaults key for its menu-bar slot (points from the
     /// screen's RIGHT edge; AppKit reads it only at item creation).
@@ -53,7 +56,8 @@ public enum RebrandMigration {
         // `tired` CLI (no bundle id) and the test runner must not import the
         // app's old domain into their own.
         if Bundle.main.bundleIdentifier == newBundleID {
-            migrateDomain(into: defaults)
+            migrateDomain(from: oldBundleID, into: defaults)
+            migrateDomain(from: sharinganV1BundleID, into: defaults)
         }
         migrateDefaults(defaults)
         if let base = fileManager.urls(for: .applicationSupportDirectory,

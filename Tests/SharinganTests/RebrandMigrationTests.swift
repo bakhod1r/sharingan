@@ -143,4 +143,34 @@ struct RebrandMigrationTests {
         #expect(s.dndShortcutOn == "Sharingan Focus On")
         #expect(s.dndShortcutOff == "Sharingan Focus Off")
     }
+
+    // MARK: - Bundle-id rename (com.sharingan.app → com.bakhod1r.sharingan)
+
+    @Test("com.sharingan.app domain migrates into the Developer ID bundle")
+    func sharinganV1DomainMigrates() {
+        let suite = "test.rebrand.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let oldDomain = "test.old.\(UUID().uuidString)"
+        defaults.setPersistentDomain(
+            ["com.sharingan.settings": ["workMinutes": 25],
+             "NSStatusItem Preferred Position sharingan.menubar": 897.0],
+            forName: oldDomain)
+        defer { defaults.removePersistentDomain(forName: oldDomain) }
+
+        RebrandMigration.migrateDomain(from: oldDomain, into: defaults)
+
+        #expect(defaults.object(forKey: "com.sharingan.settings") != nil)
+        // Stale menu-bar slots are dropped and re-seeded to the rightmost slot.
+        #expect(defaults.double(forKey: RebrandMigration.menuBarSlotKey)
+                == RebrandMigration.rightmostSlot)
+    }
+
+    @Test("bundle-id and app-group constants match the rebrand")
+    func bundleIDConstants() {
+        #expect(RebrandMigration.newBundleID == "com.bakhod1r.sharingan")
+        #expect(RebrandMigration.sharinganV1BundleID == "com.sharingan.app")
+        #expect(WidgetSnapshotStore.appGroupID == "89LCRZKZ48.com.bakhod1r.sharingan")
+        #expect(WidgetSnapshotStore.widgetBundleID == "com.bakhod1r.sharingan.widget")
+    }
 }
