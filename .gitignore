@@ -27,3 +27,9 @@ Package.resolved
 
 # SDD scratch (plans, briefs, reports)
 .superpowers/
+
+# Signing material — certs/keys must never land in the public repo
+*.cer
+*.p12
+*.p8
+*.provisionprofile
