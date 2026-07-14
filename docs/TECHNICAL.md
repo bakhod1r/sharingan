@@ -4,7 +4,7 @@
 > whenever a feature is added, changed, or removed, update this document in the
 > same change.**
 
-- Version: 1.3.0
+- Version: 1.3.1
 - Platform: macOS 14+, lives in the menu bar
 
 ---
@@ -403,6 +403,12 @@ disagree with the HUD about whether the Mac has a notch; it re-asks on
 - iCloud sync is planned but **not active** in this build.
 
 ---
+
+## Packaging & releases
+
+- `Scripts/make-app.sh` assembles `dist/Sharingan.app`: builds `AppIcon.icns` from `Resources/AppIcon.appiconset/icon_1024.png` (sips + iconutil), stamps `CFBundleVersion` with the commit count, ad-hoc signs.
+- `Scripts/make-dmg.sh` wraps it in `dist/Sharingan.dmg` with an /Applications drag-install symlink. The image is built read-write first so the mounted **volume** gets the Sharingan icon (`.VolumeIcon.icns` + Finder custom-icon bit — it lives inside the image, so downloaded DMGs keep it), then converted to compressed UDZO; the `.dmg` **file** also gets the icon via Rez/SetFile (local copies only — resource forks don't survive internet downloads).
+- Releases: push a `v*` tag → `.github/workflows/release.yml` builds the DMG on a macOS runner and attaches it, notes from CHANGELOG.md.
 
 ## Marketing site
 

@@ -5,6 +5,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.3.1] — 2026-07-14
+
+### Fixed
+- The DMG now shows the Sharingan icon everywhere: the mounted volume carries `.VolumeIcon.icns` *inside* the image (so it survives GitHub release downloads too) and the local `.dmg` file gets the icon via its resource fork. The generic-icon app/dmg you may have on disk came from the pre-icon v1.0.0 release — rebuild (`Scripts/make-dmg.sh`) or grab the next release and replace those copies
+
 ## [1.3.0] — 2026-07-14
 
 ### Added
