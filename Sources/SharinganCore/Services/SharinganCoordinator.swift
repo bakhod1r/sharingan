@@ -545,7 +545,8 @@ public final class SharinganCoordinator: ObservableObject {
         case .focus:
             // A completed focus still counts as a pomodoro for the active task.
             if let taskID = TaskStore.shared.activeTaskID {
-                TaskStore.shared.incrementPomodoro(taskID)
+                let seconds = note.userInfo?["seconds"] as? TimeInterval ?? 0
+                TaskStore.shared.incrementPomodoro(taskID, seconds: seconds)
             }
             // The finished session hands the active slot to the next queued task.
             advanceQueueAfterFocus(store: TaskStore.shared)

@@ -328,7 +328,14 @@ public final class PomodoroTimer: ObservableObject {
             && phase == .focus
             && repeatIndex < repeatCfg.count - 1
         NotificationCenter.default.post(name: .phaseDidComplete, object: self,
-                                        userInfo: ["phase": phase, "willRepeat": willRepeat])
+                                        userInfo: ["phase": phase,
+                                                   "willRepeat": willRepeat,
+                                                   // The completed session's real
+                                                   // length; count-up also ends at
+                                                   // totalSeconds. Captured here
+                                                   // because delivery is async and
+                                                   // the timer transitions first.
+                                                   "seconds": totalSeconds])
 
         if willRepeat {
             scheduleRepeat()

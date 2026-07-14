@@ -193,3 +193,26 @@ struct FocusLogCreditingTests {
         #expect(store.focusEntries(on: Date())[0].seconds == 0)
     }
 }
+
+@Suite("Focus completion payload")
+struct FocusCompletionPayloadTests {
+    @MainActor @Test func phaseDidCompleteCarriesSessionSeconds() async throws {
+        let t = PomodoroTimer()
+        t.settings = PomodoroSettings()
+        t.stop()
+        t.start()
+        t.removeTime(t.totalSeconds - 1)     // ≈1s left in the focus session
+        let expected = t.totalSeconds
+        await confirmation(expectedCount: 1) { done in
+            let obs = NotificationCenter.default.addObserver(
+                forName: .phaseDidComplete, object: t, queue: .main) { note in
+                if let s = note.userInfo?["seconds"] as? TimeInterval, s == expected {
+                    done()
+                }
+            }
+            try? await Task.sleep(for: .seconds(3))
+            NotificationCenter.default.removeObserver(obs)
+        }
+        t.stop()
+    }
+}
