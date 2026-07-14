@@ -241,7 +241,23 @@ final class MenuBarController: NSObject {
             renderer.scale = 8 // 144px bitmap; crisp at 18pt on any backing scale
             styledIris = renderer.cgImage
         }
-        let img = NSImage(size: NSSize(width: side, height: side), flipped: false) { (fullRect: NSRect) -> Bool in
+        let img = NSImage(size: NSSize(width: side, height: side), flipped: false) { fullRect in
+            drawMenuBarIcon(in: fullRect, progress: progress, phase: phase,
+                            rotationDegrees: rotationDegrees, styledIris: styledIris)
+        }
+        img.isTemplate = false
+        if img.size.width > 0 { return img }
+        return NSImage(systemSymbolName: "stopwatch", accessibilityDescription: "Sharingan")
+    }
+
+    /// Draw body extracted from `menuBarIcon`'s `NSImage` closure — as a single
+    /// trailing-closure expression it made the type-checker time out under
+    /// Swift 6 strict concurrency; a plain function type-checks its statements
+    /// independently.
+    @MainActor
+    private static func drawMenuBarIcon(in fullRect: NSRect, progress: Double?,
+                                         phase: PomodoroPhase, rotationDegrees: Double,
+                                         styledIris: CGImage?) -> Bool {
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
             let c = CGPoint(x: fullRect.midX, y: fullRect.midY)
 
@@ -351,10 +367,6 @@ final class MenuBarController: NSObject {
                 ctx.fillPath()
             }
             return true
-        }
-        img.isTemplate = false
-        if img.size.width > 0 { return img }
-        return NSImage(systemSymbolName: "stopwatch", accessibilityDescription: "Sharingan")
     }
 
     /// Opens the popover if it isn't already visible. Used on launch/reopen so
