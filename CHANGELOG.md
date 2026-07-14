@@ -5,6 +5,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.19.2] — 2026-07-14
+
+### Fixed
+- Repo copy of `Resources/Widget-Info.plist` still carried the stale `1.13.0` version stamp from the rebrand. Harmless in practice — `make-app.sh` restamps the appex's version from the app's Info.plist at build time — but now synced, with a comment noting the restamp so it can't mislead again.
+
 ## [1.19.1] — 2026-07-14
 
 ### Fixed
