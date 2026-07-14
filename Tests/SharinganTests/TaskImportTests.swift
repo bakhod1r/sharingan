@@ -262,6 +262,64 @@ struct TaskImportTests {
         #expect(parse("[1, 2, 3]").isEmpty)
     }
 
+    // MARK: - Pasted-JSON damage tolerance
+
+    @Test func jsonInsideCodeFencesParses() {
+        // The shape an LLM answer arrives in.
+        let tasks = parse("""
+        ```json
+        [{"title": "Fenced", "priority": "P1"}]
+        ```
+        """)
+        #expect(tasks.count == 1)
+        #expect(tasks[0].title == "Fenced")
+        #expect(tasks[0].priority == .high)
+    }
+
+    @Test func markdownInsideCodeFencesParses() {
+        let tasks = parse("""
+        ```markdown
+        # Fenced task p2
+        ```
+        """)
+        #expect(tasks.count == 1)
+        #expect(tasks[0].title == "Fenced task")
+        #expect(tasks[0].priority == .medium)
+    }
+
+    @Test func trailingCommasAreTolerated() {
+        let tasks = parse("""
+        [
+          {
+            "title": "Messy",
+            "tags": ["a", "b",],
+          },
+        ]
+        """)
+        #expect(tasks.count == 1)
+        #expect(tasks[0].tags == ["a", "b"])
+    }
+
+    @Test func curlyQuotesAreTolerated() {
+        // Notes/TextEdit smart punctuation rewrites straight quotes.
+        let tasks = parse("[{\u{201C}title\u{201D}: \u{201C}Smart quotes\u{201D}}]")
+        #expect(tasks.count == 1)
+        #expect(tasks[0].title == "Smart quotes")
+    }
+
+    @Test func bomIsStripped() {
+        let tasks = parse("\u{FEFF}[{\"title\": \"BOM\"}]")
+        #expect(tasks.count == 1)
+    }
+
+    @Test func validJSONStringsAreNeverRewritten() {
+        // Cleanup passes must not fire when the document already parses:
+        // a legitimate ",]" inside a string survives untouched.
+        let tasks = parse(#"[{"title": "Keep ,] and “quotes” intact"}]"#)
+        #expect(tasks.count == 1)
+        #expect(tasks[0].title == "Keep ,] and \u{201C}quotes\u{201D} intact")
+    }
+
     // MARK: - Templates
 
     @Test func templatesRoundTripThroughTheParser() {

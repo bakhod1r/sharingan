@@ -287,6 +287,16 @@ struct TaskPickerSheet: View {
     private func addAndStart() {
         let title = newTitle.trimmingCharacters(in: .whitespaces)
         guard !title.isEmpty else { return }
+        // A pasted document imports in bulk and focus starts on its first task.
+        let imported = store.importIfDocument(title)
+        if imported > 0 {
+            let first = store.tasks.sorted { $0.sortOrder < $1.sortOrder }
+                .suffix(imported).first
+            if let first { store.setActive(first.id) }
+            newTitle = ""
+            finish(with: first?.id)
+            return
+        }
         store.add(title: title)
         let added = store.tasks.last(where: { $0.title == title })
         if let added { store.setActive(added.id) }

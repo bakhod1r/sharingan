@@ -281,6 +281,23 @@ public final class TaskStore: ObservableObject {
         persist()
     }
 
+    /// Bulk-import hook for every "add a task" text path: when the submitted
+    /// text is a whole document rather than one quick-add line — it has
+    /// multiple lines, or is fenced/JSON — it runs `TaskImportParser` and
+    /// inserts everything it yields, returning the count. Plain one-line
+    /// input returns 0 and the caller proceeds with its normal single add.
+    @discardableResult
+    public func importIfDocument(_ raw: String, now: Date = Date()) -> Int {
+        let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let looksLikeDocument = t.contains("\n") || t.hasPrefix("```")
+            || t.hasPrefix("{") || t.hasPrefix("[")
+        guard looksLikeDocument else { return 0 }
+        let imported = TaskImportParser.parse(t, now: now)
+        guard !imported.isEmpty else { return 0 }
+        for task in imported { insert(task) }
+        return imported.count
+    }
+
     /// Inserts a fully-formed task (e.g. one instantiated from a template) at
     /// the bottom of the manual order, schedules its deadline reminders, and
     /// persists. The caller is responsible for ids/createdAt (see

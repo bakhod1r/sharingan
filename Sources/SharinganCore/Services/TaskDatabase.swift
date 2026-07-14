@@ -48,7 +48,8 @@ final class TaskDatabase {
             recurrence TEXT NOT NULL DEFAULT 'none',
             project TEXT,
             priority INTEGER NOT NULL DEFAULT 0,
-            completedAt REAL
+            completedAt REAL,
+            pomodoroKind TEXT
         );
         """)
         exec("""
@@ -86,6 +87,12 @@ final class TaskDatabase {
         if !tableHasColumn("tasks", "completedAt") {
             exec("ALTER TABLE tasks ADD COLUMN completedAt REAL;")
         }
+        // The task-level pomodoro size never had a column — it silently
+        // dropped on every save/reload (subtask kinds survived inside the
+        // subtasks JSON). Found by the import end-to-end round-trip test.
+        if !tableHasColumn("tasks", "pomodoroKind") {
+            exec("ALTER TABLE tasks ADD COLUMN pomodoroKind TEXT;")
+        }
     }
 
     /// True when `PRAGMA table_info` lists the column — guards ALTER TABLE,
@@ -108,7 +115,7 @@ final class TaskDatabase {
         let sql = """
         SELECT id,title,category,tags,isDone,pomodorosDone,createdAt,dueDate,\
         sortOrder,estimatedPomodoros,plannedDate,notes,subtasks,recurrence,project,priority,\
-        completedAt \
+        completedAt,pomodoroKind \
         FROM tasks;
         """
         var stmt: OpaquePointer?
@@ -132,6 +139,7 @@ final class TaskDatabase {
             t.project = isNull(stmt, 14) ? nil : text(stmt, 14)
             t.priority = TaskPriority(rawValue: Int(int(stmt, 15)))
             t.completedAt = date(stmt, 16)
+            t.pomodoroKind = text(stmt, 17).flatMap(PomodoroKind.init(rawValue:))
             out.append(t)
         }
         return out
@@ -143,8 +151,8 @@ final class TaskDatabase {
             let sql = """
             INSERT INTO tasks (id,title,category,tags,isDone,pomodorosDone,createdAt,dueDate,\
             sortOrder,estimatedPomodoros,plannedDate,notes,subtasks,recurrence,project,priority,\
-            completedAt) \
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);
+            completedAt,pomodoroKind) \
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);
             """
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
@@ -169,6 +177,8 @@ final class TaskDatabase {
                 if let p = t.project { bindText(stmt, 15, p) } else { sqlite3_bind_null(stmt, 15) }
                 sqlite3_bind_int(stmt, 16, Int32(t.priority.rawValue))
                 bindDate(stmt, 17, t.completedAt)
+                if let k = t.pomodoroKind { bindText(stmt, 18, k.rawValue) }
+                else { sqlite3_bind_null(stmt, 18) }
                 guard sqlite3_step(stmt) == SQLITE_DONE else { return false }
             }
             return true

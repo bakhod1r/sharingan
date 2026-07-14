@@ -157,7 +157,10 @@ struct MenuBarWeekView: View {
     private func addBacklog() {
         let t = backlogDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
-        withAnimation(DS.Motion.standard) { store.add(title: t) }
+        withAnimation(DS.Motion.standard) {
+            // Whole pasted documents import in bulk; a line adds one task.
+            if store.importIfDocument(t) == 0 { store.add(title: t) }
+        }
         backlogDraft = ""
     }
 

@@ -862,6 +862,11 @@ struct MenuBarView: View {
     private func quickAdd() {
         let raw = quickTitle.trimmingCharacters(in: .whitespaces)
         guard !raw.isEmpty else { return }
+        // Whole pasted documents import in bulk; a line quick-adds.
+        if tasks.importIfDocument(raw) > 0 {
+            quickTitle = ""
+            return
+        }
         let parsed = TaskInputParser.parse(raw, now: Date())
         let title = parsed.title.isEmpty ? raw : parsed.title
         guard !title.trimmingCharacters(in: .whitespaces).isEmpty else { return }

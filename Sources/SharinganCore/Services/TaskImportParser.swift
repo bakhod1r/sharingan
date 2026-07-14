@@ -19,12 +19,29 @@ import Foundation
 public enum TaskImportParser {
 
     public static func parse(_ raw: String, now: Date = Date()) -> [TaskItem] {
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Pasted documents rarely arrive pristine: strip a UTF-8 BOM and the
+        // ```lang fence pair LLM answers are wrapped in before detecting.
+        let unfenced = stripCodeFences(raw.replacingOccurrences(of: "\u{FEFF}", with: ""))
+        let trimmed = unfenced.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
         if trimmed.hasPrefix("{") || trimmed.hasPrefix("[") {
             return parseJSON(trimmed, now: now)
         }
         return parseMarkdown(trimmed, now: now)
+    }
+
+    /// Removes one surrounding ``` fence pair (```json … ```); inner fences
+    /// and unfenced text pass through unchanged.
+    private static func stripCodeFences(_ text: String) -> String {
+        var lines = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            .components(separatedBy: .newlines)
+        guard lines.count >= 2,
+              lines[0].trimmingCharacters(in: .whitespaces).hasPrefix("```"),
+              lines[lines.count - 1].trimmingCharacters(in: .whitespaces) == "```"
+        else { return text }
+        lines.removeFirst()
+        lines.removeLast()
+        return lines.joined(separator: "\n")
     }
 
     // MARK: - Markdown
@@ -282,8 +299,7 @@ public enum TaskImportParser {
     // MARK: - JSON
 
     private static func parseJSON(_ text: String, now: Date) -> [TaskItem] {
-        guard let data = text.data(using: .utf8),
-              let root = try? JSONSerialization.jsonObject(with: data) else { return [] }
+        guard let root = jsonRoot(text) else { return [] }
         let objects: [[String: Any]]
         if let array = root as? [Any] {
             objects = array.compactMap { $0 as? [String: Any] }
@@ -297,6 +313,27 @@ public enum TaskImportParser {
             return []
         }
         return objects.compactMap { jsonTask($0, now: now) }
+    }
+
+    /// Strict parse first; only when that fails, retry after normalizing the
+    /// damage pasted JSON usually carries — smart punctuation (Notes/TextEdit
+    /// rewrite straight quotes to curly) and trailing commas (LLM output).
+    /// Valid documents never take the cleanup path, so their string contents
+    /// can't be rewritten.
+    private static func jsonRoot(_ text: String) -> Any? {
+        if let data = text.data(using: .utf8),
+           let root = try? JSONSerialization.jsonObject(with: data) {
+            return root
+        }
+        let cleaned = text
+            .replacingOccurrences(of: "\u{201C}", with: "\"")
+            .replacingOccurrences(of: "\u{201D}", with: "\"")
+            .replacingOccurrences(of: "\u{2018}", with: "'")
+            .replacingOccurrences(of: "\u{2019}", with: "'")
+            .replacingOccurrences(of: #",\s*([\}\]])"#, with: "$1",
+                                  options: .regularExpression)
+        guard let data = cleaned.data(using: .utf8) else { return nil }
+        return try? JSONSerialization.jsonObject(with: data)
     }
 
     private static func jsonTask(_ raw: [String: Any], now: Date) -> TaskItem? {

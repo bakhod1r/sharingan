@@ -1783,6 +1783,12 @@ struct TasksView: View {
     }
 
     private func add() {
+        // A pasted document (multi-line, fenced, or JSON) bulk-imports right
+        // from the composer — same parser as the import sheet.
+        if store.importIfDocument(newTitle) > 0 {
+            newTitle = ""
+            return
+        }
         commitTagDraft()   // fold any half-typed tag in before saving
         // Merge smart-parsed tokens with the manual pickers: whatever the user
         // set by hand wins; parsed values fill everything left untouched.
