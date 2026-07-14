@@ -1,221 +1,145 @@
-# Sharingan
+<p align="center">
+  <img src="Resources/AppIcon.appiconset/icon_256.png" width="128" alt="Sharingan app icon">
+</p>
 
-> A macOS menu bar Pomodoro + eye-health app with liquid-glass design,
-> Vision-based gaze tracking, a draggable Floating widget, natural-language
-> input, global hotkeys, streak system, CloudKit sync, app blocking, screen
-> dim, ambience sounds, and a `tired` CLI.
+<h1 align="center">Sharingan</h1>
 
-Pure SwiftPM — no Xcode project required. (SwiftPM module names say
-`Sharingan` — matching the shipped bundle; see `Makefile`.)
+<p align="center"><b>Pomodoro &amp; eye-health for macOS</b><br>
+A menu-bar Pomodoro timer, a full task manager, and guided eye exercises — in one liquid-glass app.</p>
 
----
+<p align="center">
+  <a href="https://github.com/bakhod1r/Blink/releases/latest"><img src="https://img.shields.io/github/v/release/bakhod1r/Blink?color=E5484D" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/macOS-14%2B-000000?logo=apple&logoColor=white" alt="macOS 14+">
+  <img src="https://img.shields.io/badge/Swift-5.9%2B-F05138?logo=swift&logoColor=white" alt="Swift 5.9+">
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/bakhod1r/Blink?color=3E63DD" alt="MIT license"></a>
+</p>
 
-## Features
+<p align="center">
+  <a href="https://bakhod1r.github.io/Blink/"><b>Website</b></a> ·
+  <a href="https://github.com/bakhod1r/Blink/releases/latest"><b>Download</b></a> ·
+  <a href="CHANGELOG.md"><b>Changelog</b></a> ·
+  <a href="docs/TECHNICAL.md"><b>Full feature reference</b></a>
+</p>
 
-### Pomodoro core
-- Configurable focus / short break / long break durations (25/5/15 defaults)
-- Countdown and count-up modes
-- Long break every N pomodoros
-- Auto-start focus / break toggles
-- Repeat with delay
-- Persistent state via `UserDefaults`
-
-### Break blocking
-- Full-screen multi-monitor `NSPanel` at `.screenSaver` level
-- Cmd+Q / Cmd+W / Cmd+Tab blocked during break
-- Liquid-glass countdown ring + phase chip + motivational message
-- Skip button
-
-### Eye health
-- **Eye exercise animations** — 20-20-20 rule, 8-direction gaze, blink exercise
-- **Camera blink detection** — AVFoundation + Vision face landmarks, eye-openness ratio, blink count
-- **Gaze tracking** — `GazeDirection` vector, exercise validator with retry signal
-- **Camera indicator badge** — pulsing privacy UI
-- **TTS voice guidance** — per-step instruction text + rotating kalib pool, settings-driven
-
-### Floating widget
-- Draggable pill — active task, time left, and Start / Stop / Reset — docks
-  flush above the Dock by default, joins all Spaces
-- ▶︎ opens a mini today-task picker when idle with tasks queued (a paused
-  session always resumes in place); "Return to Dock" snaps a dragged pill
-  back to its docked spot
-- Size presets, position, opacity, and an "expand on hover" compact mode
-
-### Natural language input
-- `5 min`, `2h 30m`, `25` (=25 min), `5pm`, `Add 5 min`, `+5m`, `Remove 1 hour`, `-1h`, `reset`
-
-### Global keyboard shortcuts
-- ⌃⌥Space — start/pause
-- ⌃⌥F — skip
-- ⌃⌥R — reset
-- ⌃⌥+ — +5 minutes
-- ⌃⌥L — toggle Floating widget
-
-### Tasks & focus queue
-- Full task system — priorities (P1–P4), tags, projects, categories, due dates,
-  notes, subtasks (reorder + promote-to-task), recurrence (daily / weekdays /
-  weekly / every N days / monthly)
-- **Natural-language quick add** — `ertaga 15:00 p1 #ish @blink ~2 hisobot yozish`
-  (English + Uzbek tokens), live parse chips in the composer and quick-add panel
-- **Focus queue** — queue several tasks, each finished pomodoro advances to the
-  next; break screen shows "Next: …"; post-break picker asks what's next
-- Snooze (tomorrow / next week / pick date), overdue badges, due pre-reminders
-- Templates + duplicate, completed history grouped by day with restore
-- Eisenhower matrix view, stats by project / tag
-- Floating **Today panel** — desktop glass card with today's tasks + timer
-- `sharingan://` URL scheme for Shortcuts / Raycast
-  (start / pause / resume / skip / reset / add-task / show)
-
-### Streaks & rewards
-- Consecutive-day streak tracking with gap reset
-- Milestone badges: 1, 7, 14, 30, 90, 365 days
-- Spring-animated reward banner on new milestone
-- SwiftCharts 7/30-day statistics
-
-### Break comfort
-- **Ambience sounds** — white noise, rain, forest, lo-fi pad (generated `.caf`, looping)
-- **Screen brightness dim** — gamma ramp via `CGSetDisplayTransferByFormula`, smooth cubic ease
-- **Posture / water / custom reminders** — interval-based, focus-only, pause during break
-
-### Multi-device
-- **iCloud sync** — CloudKit `CKContainer` → private DB → `BlinkZone`, JSON blob push/pull
-
-### Focus enforcement
-- **App blocking** — hide or force-quit distracting apps during break (Chrome, Safari, VS Code, Slack, Telegram, Messages presets)
-
-### CLI
-- `tired` command-line tool — control Sharingan from Terminal
-
-### Themes
-- Liquid Glass, Frosted, Midnight, Cream, Neon, Mono (black & white)
-
-### Break comfort extras
-- Night Shift warmth during breaks (optional, fail-soft private API)
-
-### Sharingan eye style
-- Premium anime-style eye animation during breaks — red iris, rotating tomoe, glossy highlight, red glow, breathing, blink
+<p align="center">
+  <img src="site/assets/app/iris/classic.png" width="56" alt="Classic iris">
+  <img src="site/assets/app/iris/tomoe2.png" width="56" alt="Tomoe iris">
+  <img src="site/assets/app/iris/mangekyou.png" width="56" alt="Mangekyou iris">
+  <img src="site/assets/app/iris/itachi.png" width="56" alt="Itachi iris">
+  <img src="site/assets/app/iris/madara.png" width="56" alt="Madara iris">
+  <img src="site/assets/app/iris/rinnegan.png" width="56" alt="Rinnegan iris">
+  <br><sub>18 Sharingan iris styles, rendered by the app itself</sub>
+</p>
 
 ---
 
-## Build & run
+Sharingan protects your eyes while you work: focus in Pomodoro blocks, then the
+screen locks for a real break with guided eye drills — optionally verified by
+the camera. A complete task system with natural-language input (English +
+Uzbek) keeps the work itself organized.
+
+> The repo is named **Blink** (the app's original name); the app, bundle, and
+> all modules are **Sharingan**. Pure SwiftPM — no Xcode project required.
+
+## Install
+
+**Download** — grab `Sharingan.dmg` from the
+[latest release](https://github.com/bakhod1r/Blink/releases/latest) and drag
+the app into Applications.
+
+Builds are not notarized yet: on first launch, right-click the app →
+**Open** (or run `xattr -cr /Applications/Sharingan.app`).
+
+**Build from source** — requires macOS 14+ and Xcode command-line tools:
 
 ```bash
-swift build                 # build all targets
-swift run Sharingan         # launch the menu bar app
-swift test                  # swift-testing suites
-swift run SelfTest          # extended assertion harness
-swift run tired status      # CLI: show current timer state
-Scripts/make-app.sh         # assemble dist/Sharingan.app
-Scripts/install.sh          # install to /Applications (builds if needed)
+git clone https://github.com/bakhod1r/Blink.git && cd Blink
+Scripts/install.sh          # build dist/Sharingan.app and install to /Applications
+Scripts/install-cli.sh      # optional: put the `tired` CLI on your PATH
 ```
 
-### Release build
+## Highlights
 
-```bash
-swift build -c release
-```
+- **Pomodoro, three gears** — Small `10′+3′`, Normal `25′+5′`, Big `90′+15′`
+  (each editable), countdown or count-up, auto-cycle, long breaks every N
+  pomodoros, `±5m` on the fly.
+- **Enforced breaks** — full-screen, multi-monitor break screen at screen-saver
+  level; ⌘Q/⌘W/⌘Tab are swallowed until the break ends (skippable if you allow it).
+- **Eye health** — 20-20-20, 8-direction gaze, and blink drills with animated
+  guides and voice guidance; optional **camera verification** of blinks and gaze
+  via Vision, with a privacy indicator. Break eyes render as animated Sharingan —
+  18 iris styles from classic tomoe to Rinnegan.
+- **Tasks & planning** — natural-language quick add in English and Uzbek
+  (`ertaga 15:00 p1 #ish ~2 hisobot yozish`), priorities, projects, tags, due
+  dates, subtasks, recurrence, templates; a focus queue that advances task by
+  task; Eisenhower matrix, weekly board, reports and per-project stats.
+- **Six surfaces** — menu-bar popover, main window, notch HUD with live "ears",
+  draggable floating pill timer, desktop WidgetKit widget, and a glass Today
+  panel on the desktop.
+- **Streaks & stats** — daily streaks with milestone badges (1→365 days),
+  SwiftCharts history, tomato counts per task.
+- **Break comfort** — ambience sounds (white noise, rain, forest, lo-fi),
+  smooth screen dim, optional Night Shift warmth, posture/water/custom reminders.
+- **Focus enforcement** — hide or force-quit distracting apps during breaks
+  (Chrome, Slack, Telegram… presets included).
+- **Automation** — global hotkeys (⌃⌥Space start/pause, ⌃⌥F skip, ⌃⌥R reset),
+  `sharingan://` URL scheme for Shortcuts/Raycast, and the `tired` CLI.
+- **Six themes** — Liquid Glass, Frosted, Midnight, Cream, Neon, Mono.
 
----
+iCloud sync is planned but **not shipped yet** — everything is local today.
+The complete, always-current feature list lives in
+[docs/TECHNICAL.md](docs/TECHNICAL.md).
 
-## `tired` CLI
+## `tired` — control it from the terminal
 
 ```bash
 tired start 25            # 25-minute focus
-tired start 5pm           # until 5:00 PM
-tired start 2h 30m        # 2.5 hours
-tired pause               # pause
-tired resume              # resume
-tired skip                # skip to next phase
-tired reset               # stop & reset
+tired start 5pm           # focus until 5:00 PM
+tired pause / resume      # pause & resume
+tired skip / reset        # next phase / stop
 tired add 5m              # +5 minutes
-tired remove 10m          # -10 minutes
-tired set 45m             # set custom duration
-tired status              # show current state
-tired task add <text>     # NL quick add ("ertaga p1 #ish hisobot")
-tired task list           # numbered list of open tasks
-tired task done 3         # complete task #3
+tired status              # current state
+tired task add "ertaga p1 #ish hisobot"   # NL quick add
+tired task list           # numbered open tasks
 tired task start 3        # make task #3 active
-tired task queue 3        # add task #3 to the focus queue
-tired help                # usage
+tired task queue 3        # queue task #3 for focus
 ```
 
-The CLI communicates with the running app via Darwin notifications +
-`UserDefaults` snapshot — no XPC required.
+The CLI talks to the running app via Darwin notifications + a `UserDefaults`
+snapshot — no XPC required.
 
----
+## Development
 
-## Project layout
+```bash
+make build          # debug build of all targets
+make run            # launch the menu-bar app from source
+make test           # swift-testing suites (plus: swift run SelfTest)
+make app            # assemble dist/Sharingan.app (icon, widget appex, codesign)
+make dmg            # wrap it into dist/Sharingan.dmg
+make open           # build the .app and launch it
+```
 
 ```
 Package.swift
 Sources/
-  SharinganCore/          # testable logic + services
-    Models/               # PomodoroSettings, StreakStore, BreakExercise, …
-    Services/             # PomodoroTimer, EyeTracker, CameraService, SyncService, …
-  Sharingan/              # SwiftUI/AppKit executable (the .app)
-    Views/                # SettingsView, BreakView, FloatingWidgetView, SharinganEyeView, …
-    Services/             # window managers (break / FloatingWidgetWindowManager)
-    Resources/            # Animations, Sharingan PNGs → Bundle.module
-  SelfTest/               # standalone assertion harness (swift run SelfTest)
-  tired/                  # `tired` CLI executable
-Resources/                # Info.plist + AppIcon.appiconset + Sounds/
+  SharinganCore/       # testable logic — models + services (timer, tasks, streaks, eye tracking)
+  Sharingan/           # SwiftUI/AppKit executable (the .app)
+  SharinganWidget/     # WidgetKit desktop widget (built into the appex by make-app.sh)
+  tired/               # `tired` CLI executable
+  SelfTest/            # standalone assertion harness
+Tests/                 # swift-testing suites
+Resources/             # Info.plist, entitlements, AppIcon, sounds
+Scripts/               # make-app.sh, make-dmg.sh, install.sh
+site/                  # marketing site (GitHub Pages)
 ```
 
----
+Releases are automated: pushing a `v*` tag builds the DMG on a macOS runner
+and attaches it to the GitHub release, with notes taken from the changelog.
 
-## Settings
-
-Everything is configurable from a single Settings screen:
-
-- Timer mode (countdown / count-up) + theme
-- Focus / break durations + long-break cycle
-- Repeat with delay
-- Break message text
-- Block screen + Floating widget toggles
-- Eye exercise sequence (20-20-20 / gaze / blink) + step hold scale
-- Per-instruction TTS text editor + global kalib pool + kalib interval
-- Camera & Vision toggle
-- Auto-start focus / break
-- Notifications (5-min left)
-- Alarm sound (glass / chime / soft bell / silent)
-- TTS voice rate / pitch
-- Global shortcuts toggle
-- Streak badge header
-- iCloud sync (enable + Push/Pull + status)
-- Screen brightness dim (enable + level + smooth)
-- App blocking (enable + force-quit + per-app toggles)
-- Reminders (posture / water / custom — add / remove / interval / message)
-
----
-
-## Tests
-
-```bash
-swift test          # swift-testing suites (Tests/SharinganTests)
-swift run SelfTest  # standalone assertion harness
-```
-
-SelfTest assertions cover:
-- Pomodoro models, timer state machine, add/remove/set/parsed-input
-- Natural language parser (durations, clock-target, deltas)
-- Count-up mode, repeat config
-- StreakStore, StreakBadge milestones, StreakRewardCenter
-- GazeDirection, BreakExercise library
-- AlarmSound + Ambience enum, BrightnessSettings, AppBlocker settings
-- Codable round-trip
-
----
-
-## Tech stack
-
-- Swift 5.9+, SwiftUI, AppKit, macOS 14+
-- Vision (face/eye landmarks), AVFoundation (camera + TTS + audio)
-- UserNotifications, CloudKit, Carbon (global hotkeys)
-- SwiftCharts (statistics)
-- Pure SwiftPM — no Xcode project
-
----
+**Tech stack** — Swift 5.9+, SwiftUI + AppKit, WidgetKit, Vision (face/eye
+landmarks), AVFoundation (camera, TTS, audio), SwiftCharts, Carbon global
+hotkeys. Pure SwiftPM.
 
 ## License
 
-Private. © 2026 mrb.
+[MIT](LICENSE) © 2026 Bakhodir Yashin Mansur
