@@ -5,6 +5,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.5.2] — 2026-07-14
+
+### Fixed
+- Finder shows the Sharingan icon on the app bundle again: Info.plist declared `CFBundleIconName` (the asset-catalog icon key) alongside `CFBundleIconFile`, but the bundle ships no Assets.car — Finder went looking for the catalog icon, found nothing, and drew the generic app blueprint while NSWorkspace correctly fell back to the .icns. The catalog key is gone; `.icns` is the single source
+
 ## [1.5.1] — 2026-07-14
 
 ### Fixed
