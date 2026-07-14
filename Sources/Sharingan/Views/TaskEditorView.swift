@@ -42,6 +42,7 @@ struct TaskEditorView: View {
                     projectField
                     notesSection
                     subtasksSection
+                    if !history.isEmpty { historySection }
                     deleteButton
                 }
                 .padding(20)
@@ -404,6 +405,68 @@ struct TaskEditorView: View {
             .background(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
                 .fill(Color.white.opacity(0.05)))
         }
+    }
+
+    // MARK: - Focus history
+
+    /// This task's focus-log rows (its own and its subtasks') for the last
+    /// 14 days. The task-level row already includes subtask credits — subtask
+    /// lines are detail, not addends (see FocusLog.swift).
+    private var history: [FocusLogEntry] {
+        store.focusHistory(for: draft.id, days: 14)
+    }
+
+    private var historySection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("HISTORY — LAST 14 DAYS")
+                .font(.system(size: 10, weight: .heavy, design: .rounded))
+                .tracking(1.2)
+                .foregroundStyle(.white.opacity(0.5))
+            let byDay = Dictionary(grouping: history, by: \.day)
+            ForEach(byDay.keys.sorted(by: >), id: \.self) { day in
+                let rows = byDay[day] ?? []
+                let taskRow = rows.first { $0.subtaskID == nil }
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 8) {
+                        Text(Self.historyDayLabel(day))
+                            .font(.system(.caption, design: .rounded).weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.85))
+                        Spacer(minLength: 8)
+                        Text("🍅 ×\(taskRow?.count ?? 0)")
+                            .font(.system(.caption2, design: .rounded).weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.75))
+                        Text(FocusReport.durationLabel(taskRow?.seconds ?? 0))
+                            .font(.system(.caption2, design: .rounded).weight(.bold).monospacedDigit())
+                            .foregroundStyle(accent)
+                            .frame(minWidth: 40, alignment: .trailing)
+                    }
+                    ForEach(rows.filter { $0.subtaskID != nil }) { sub in
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.turn.down.right")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundStyle(.white.opacity(0.3))
+                            Text(sub.title)
+                                .font(.system(.caption2, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.65))
+                                .lineLimit(1)
+                            Spacer(minLength: 8)
+                            Text("🍅 ×\(sub.count) · \(FocusReport.durationLabel(sub.seconds))")
+                                .font(.system(.caption2, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.55))
+                        }
+                        .padding(.leading, 12)
+                    }
+                }
+            }
+        }
+    }
+
+    private static func historyDayLabel(_ day: Date) -> String {
+        if Calendar.current.isDateInToday(day) { return "Today" }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US")
+        f.dateFormat = "MMM d"
+        return f.string(from: day)
     }
 
     private var deleteButton: some View {

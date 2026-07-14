@@ -13,6 +13,7 @@ struct StatsExtrasView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             heatmapCard
+            if !todayTaskEntries.isEmpty { byTaskTodayCard }
             HStack(alignment: .top, spacing: 16) {
                 weekdayCard
                 categoryCard
@@ -76,6 +77,52 @@ struct StatsExtrasView: View {
                 }
             }
             legend
+        }
+        .padding(14)
+        .glassRounded(DS.Radius.xl, material: .regular)
+        .liquidShadow(radius: 12, y: 6)
+    }
+
+    // MARK: - By task (today)
+
+    /// Today's task-level focus-log rows, minutes-descending. Subtask rows are
+    /// excluded — the task row already contains them (see FocusLog.swift).
+    private var todayTaskEntries: [FocusLogEntry] {
+        store.focusEntries(on: Date())
+            .filter { $0.subtaskID == nil }
+            .sorted { $0.seconds > $1.seconds }
+    }
+
+    private var byTaskTodayCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("By task — today").dsSectionLabel()
+                Spacer()
+                if todayTaskEntries.count > 5 {
+                    Button { AppRouter.shared.section = .report } label: {
+                        Text("Full report →")
+                            .font(.system(.caption2, design: .rounded).weight(.semibold))
+                            .foregroundStyle(accent)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            ForEach(todayTaskEntries.prefix(5)) { e in
+                HStack(spacing: 8) {
+                    Text(e.title)
+                        .font(.system(.caption, design: .rounded).weight(.medium))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                    Text("🍅 ×\(e.count)")
+                        .font(.system(.caption2, design: .rounded).weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.75))
+                    Text(FocusReport.durationLabel(e.seconds))
+                        .font(.system(.caption2, design: .rounded).weight(.bold).monospacedDigit())
+                        .foregroundStyle(accent)
+                        .frame(minWidth: 40, alignment: .trailing)
+                }
+            }
         }
         .padding(14)
         .glassRounded(DS.Radius.xl, material: .regular)
