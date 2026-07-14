@@ -60,15 +60,18 @@ Compatibility rules:
   category tests are updated to the new surface, keeping their decode-
   tolerance assertions.
 
-## 4. Rename: "Dock widget" → "Float widget" (owner, after the removal)
+## 4. Rename: "Dock widget" → "Floating widget" (owner, after the removal)
 
-Once the floating card is gone, the unified pill takes the "Float widget"
-name: user-facing labels (Settings section, hints, menus, CHANGELOG,
-TECHNICAL.md) and Swift types/files (`FloatWidgetView`,
-`FloatWidgetWindowManager`, `FloatWidgetController`, `FloatWidgetGeometry`,
-tests). The PERSISTED `PomodoroSettings` property names keep the historical
-`dockWidget*` prefix so existing settings blobs decode unchanged — noted with
-a comment at the declarations.
+Once the floating card is gone, the unified pill takes the "Floating widget"
+name (owner: "floating widget — dock widget emas"): user-facing labels
+(Settings section, hints, menus, CHANGELOG, TECHNICAL.md) and Swift
+types/files (`FloatingWidgetView`, `FloatingWidgetWindowManager`,
+`FloatingWidgetController`, `FloatingWidgetGeometry`,
+`FloatingWidgetSize/Alignment/StartAction`, tests). The PERSISTED
+`PomodoroSettings` property names keep the historical `dockWidget*` prefix so
+existing settings blobs decode unchanged — noted with a comment at the
+declarations. Settings hint copy drops "near the Trash" (the pill is
+draggable now; docked placement is just its home position).
 
 ## 5. Versioning
 
