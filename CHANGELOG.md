@@ -6,9 +6,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 ## [Unreleased]
 
 ### Added
+- Bulk task import from Markdown or JSON: paste a document into Tasks → import (or drop a `.md`/`.json` file on the list) and every task feature parses — priority, category, project, tags, due, planned day, estimate, repeat, pomodoro size, subtasks with estimates, notes. Copyable templates for both formats live in Settings → Tasks & Planning; markdown headings understand the quick-add syntax in all 25 languages, and a plain checklist works too
 - Report section: day-by-day per-task focus statistics — pomodoros and real minutes per task and subtask, with day totals; plus a "By task — today" card in Progress and a 14-day history block in the task editor
 
 ### Fixed
+- ⌘V / ⌘C / ⌘X / ⌘A / ⌘Z now work in every text field: the app never installed a main menu (accessory apps don't get one by default), so the standard Edit-menu key equivalents had nothing to route through — a minimal hidden Edit menu now carries them
 - Closed notch island no longer shows a black lip under the notch on light menu bars (light wallpapers): idle is now exactly the hardware cutout — nothing painted beyond the housing; the 4pt lip lives only in the running state, where it carries the progress line
 - Adding a task no longer creates it twice: every text field submits through a single `.onSubmit` — the legacy `TextField(onCommit:)` fired a second time on end-editing with the field's stale text (`SubmitWiringTests` now lints the pattern out)
 - Menu-bar popover is readable under system Light mode: it pins its own dark appearance instead of inheriting light from the menu bar it's anchored to, which rendered the dark-glass design's white text on a light popover

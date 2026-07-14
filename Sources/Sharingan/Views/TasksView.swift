@@ -411,6 +411,96 @@ struct TasksView: View {
         queuedOpenTasks.firstIndex { $0.id == id }.map { $0 + 1 }
     }
 
+    /// Opens the bulk-import sheet (paste Markdown/JSON or drop a file).
+    private var importButton: some View {
+        Button { showImportSheet = true } label: {
+            Image(systemName: "square.and.arrow.down")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color.dsSecondary)
+                .frame(width: 27, height: 27)
+                .background(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
+                    .fill(Color.dsFill))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.pressableSubtle)
+        .help("Import tasks — paste Markdown or JSON, or drop a .md/.json file")
+        .accessibilityLabel("Import tasks")
+    }
+
+    /// Paste-a-document import: the Markdown template, a plain checklist, or
+    /// JSON — auto-detected, previewed as a live task count before inserting.
+    private var importSheet: some View {
+        let parsed = TaskImportParser.parse(importText)
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Import Tasks")
+                    .font(.system(.headline, design: .rounded).weight(.bold))
+                    .foregroundStyle(.white)
+                Spacer()
+                Button { showImportSheet = false } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                }
+                .buttonStyle(.pressableSubtle)
+            }
+            Text("Paste Markdown or JSON — the template lives in Settings → Tasks & Planning. A plain checklist works too.")
+                .font(.system(.caption2, design: .rounded))
+                .foregroundStyle(Color.dsTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+            TextEditor(text: $importText)
+                .font(.system(.caption, design: .monospaced))
+                .scrollContentBackground(.hidden)
+                .padding(6)
+                .frame(height: 220)
+                .background(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
+                    .fill(Color.black.opacity(0.25)))
+            HStack {
+                Button("Cancel") { importText = ""; showImportSheet = false }
+                    .buttonStyle(.pressableSubtle)
+                    .foregroundStyle(.white.opacity(0.7))
+                Spacer()
+                if !importText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text(parsed.isEmpty
+                         ? "Nothing recognized"
+                         : "\(parsed.count) task\(parsed.count == 1 ? "" : "s") recognized")
+                        .font(.system(.caption2, design: .rounded).weight(.medium))
+                        .foregroundStyle(parsed.isEmpty ? Color.orange.opacity(0.9) : Color.dsSecondary)
+                }
+                Button("Import") { runImport(parsed) }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(parsed.isEmpty)
+            }
+        }
+        .padding(16)
+        .frame(width: 430)
+        .background(Color.black.opacity(0.3).background(.ultraThinMaterial))
+    }
+
+    private func runImport(_ tasks: [TaskItem]) {
+        guard !tasks.isEmpty else { return }
+        withAnimation(DS.Motion.standard) {
+            for t in tasks { store.insert(t) }
+        }
+        importText = ""
+        showImportSheet = false
+    }
+
+    /// A `.md`/`.json`/`.txt` file dropped on the task list opens the import
+    /// sheet prefilled with its contents.
+    private func handleFileDrop(_ providers: [NSItemProvider]) -> Bool {
+        guard let provider = providers.first(where: { $0.canLoadObject(ofClass: URL.self) })
+        else { return false }
+        _ = provider.loadObject(ofClass: URL.self) { url, _ in
+            guard let url,
+                  ["md", "markdown", "json", "txt"].contains(url.pathExtension.lowercased()),
+                  let text = try? String(contentsOf: url, encoding: .utf8) else { return }
+            DispatchQueue.main.async {
+                importText = text
+                showImportSheet = true
+            }
+        }
+        return true
+    }
+
     /// Compact "Queue N" chip in the view bar — only when the queue has tasks.
     @ViewBuilder
     private var queueChip: some View {
@@ -1223,6 +1313,13 @@ struct TasksView: View {
                     .foregroundStyle(Color.dsSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            Button { showImportSheet = true } label: {
+                Label("Import from Markdown or JSON", systemImage: "square.and.arrow.down")
+                    .font(.system(.caption, design: .rounded).weight(.semibold))
+                    .foregroundStyle(accent)
+            }
+            .buttonStyle(.pressableSubtle)
+            .help("Paste a task list or drop a .md/.json file")
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 44)

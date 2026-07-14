@@ -40,6 +40,10 @@ struct SettingsView: View {
     /// question the window manager places the panel from, so the two can never
     /// disagree about whether this Mac has a notch.
     @State private var hasNotch = false
+    /// Which import-template flavor the Tasks page previews (0 = MD, 1 = JSON).
+    @State private var importTemplateFormat = 0
+    /// Brief "Copied!" feedback after the template copy button.
+    @State private var templateCopied = false
 
     var body: some View {
         ZStack {
@@ -423,6 +427,46 @@ struct SettingsView: View {
                     Text("A “Due soon” notification ahead of each task's due time, on top of the one at the deadline itself.")
                         .font(.system(.caption2, design: .rounded))
                         .foregroundStyle(.white.opacity(0.6))
+                }
+
+                Section("Import template") {
+                    Text("Copy a template, fill it in (or have an AI write it), then paste it into Tasks → \(Image(systemName: "square.and.arrow.down")) — every task feature is covered: priority, category, project, tags, due, planned day, estimate, repeat, pomodoro size, subtasks, notes. Dropping a .md/.json file on the task list works too.")
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.6))
+                    Picker("", selection: $importTemplateFormat) {
+                        Text("Markdown").tag(0)
+                        Text("JSON").tag(1)
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    ScrollView {
+                        Text(importTemplateFormat == 0
+                             ? TaskImportParser.markdownTemplate
+                             : TaskImportParser.jsonTemplate)
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.75))
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(8)
+                    }
+                    .frame(height: 150)
+                    .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color.black.opacity(0.25)))
+                    Button {
+                        let text = importTemplateFormat == 0
+                            ? TaskImportParser.markdownTemplate
+                            : TaskImportParser.jsonTemplate
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(text, forType: .string)
+                        templateCopied = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                            templateCopied = false
+                        }
+                    } label: {
+                        Label(templateCopied ? "Copied!" : "Copy template",
+                              systemImage: templateCopied ? "checkmark" : "doc.on.doc")
+                    }
+                    .buttonStyle(.bordered)
                 }
 
         case .breaks:

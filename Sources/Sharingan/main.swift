@@ -588,6 +588,22 @@ if let outDir = HeadlessRender.outputDirectory(for: "--render-dev-preview") {
                         .environment(\.colorScheme, .dark),
                     to: "\(outDir)/settings-notch.png",
                     size: NSSize(width: 640, height: 2000))
+        // The Tasks & Planning page — where the import-template block lives
+        // (segmented MD/JSON preview + copy button).
+        writeHosted(SettingsView(timer: timer, settings: .constant(timer.settings),
+                                 initialCategory: .tasks)
+                        .background(Color(white: 0.12))
+                        .environment(\.colorScheme, .dark),
+                    to: "\(outDir)/settings-tasks.png",
+                    size: NSSize(width: 640, height: 1100))
+        // The Tasks tab with the seeded list — hosted, because its list is a
+        // ScrollView. The view bar (search / matrix / import / queue) is here.
+        writeHosted(TasksView(timer: timer)
+                        .padding(16)
+                        .background(Color(white: 0.12))
+                        .environment(\.colorScheme, .dark),
+                    to: "\(outDir)/tasks-tab.png",
+                    size: NSSize(width: 480, height: 760))
         // The notch island, in each shape it takes. This machine has no camera
         // housing, so the HUD never instantiates at runtime here — but the view
         // is driven entirely by `NotchHUDModel`, so handing it 14"-MacBook-Pro
