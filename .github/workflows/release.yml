@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   release:
@@ -16,6 +17,12 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Scripts/make-app.sh stamps CFBundleVersion from
+          # `git rev-list --count HEAD`, which needs full history — a shallow
+          # (default depth-1) checkout would stamp every build "1" and the
+          # published appcast would never advance past sparkle:version=1.
+          fetch-depth: 0
       - name: Show toolchain
         run: swift --version
       - name: Import signing certificate
@@ -67,10 +74,13 @@ jobs:
           name: Sharingan ${{ github.ref_name }}
       # The tag checkout is detached; checking out main and pushing the
       # one-file commit is safe because the release job runs alone on tags.
-      # Pages redeploys on the push.
+      # A push made with the workflow's GITHUB_TOKEN does NOT trigger other
+      # push-event workflows, so pages.yml would never redeploy on its own —
+      # the appcast dispatch below kicks it explicitly.
       - name: Update appcast on main
         env:
           SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           if [[ -z "$SPARKLE_ED_PRIVATE_KEY" ]]; then
             echo "no SPARKLE_ED_PRIVATE_KEY — skipping appcast update"
@@ -97,3 +107,4 @@ jobs:
           git add site/appcast.xml
           git commit -m "chore(appcast): Sharingan $VERSION"
           git push origin main
+          gh workflow run pages.yml --ref main
