@@ -25,6 +25,13 @@ public protocol TodayPanelController: AnyObject {
 }
 
 @MainActor
+public protocol DockWidgetController: AnyObject {
+    /// Show the Dock-anchored control pill (task + time + Start/Stop/Reset).
+    func showDockWidget(timer: PomodoroTimer)
+    func hideDockWidget()
+}
+
+@MainActor
 public final class SharinganCoordinator: ObservableObject {
     public let timer: PomodoroTimer
     /// Ordered task ids the user works through, one focus session each.
@@ -37,6 +44,7 @@ public final class SharinganCoordinator: ObservableObject {
     public var breakPresenter: BreakPresenter?
     public var floatingController: FloatingTimerController?
     public var todayPanelController: TodayPanelController?
+    public var dockWidgetController: DockWidgetController?
     public var quickAddController: QuickAddController?
     public var shortcuts: KeyboardShortcutsService = .shared
     private var cancellables: Set<AnyCancellable> = []
@@ -124,6 +132,16 @@ public final class SharinganCoordinator: ObservableObject {
             todayPanelController?.showTodayPanel(timer: timer)
         } else {
             todayPanelController?.hideTodayPanel()
+        }
+    }
+
+    /// Like the today panel, the dock widget follows its settings flag alone —
+    /// it stays up while the timer is idle so Start is always reachable.
+    public func syncDockWidget() {
+        if timer.settings.dockWidgetEnabled {
+            dockWidgetController?.showDockWidget(timer: timer)
+        } else {
+            dockWidgetController?.hideDockWidget()
         }
     }
 
@@ -414,6 +432,7 @@ public final class SharinganCoordinator: ObservableObject {
             || old.floatingSize != new.floatingSize
             || old.floatingAlwaysOnTop != new.floatingAlwaysOnTop { syncFloating() }
         if old.showTodayPanel != new.showTodayPanel { syncTodayPanel() }
+        if old.dockWidgetEnabled != new.dockWidgetEnabled { syncDockWidget() }
         if old.appBlockerSettings != new.appBlockerSettings
             || old.blockScreenDuringBreak != new.blockScreenDuringBreak
             || old.blockAppsDuringFocus != new.blockAppsDuringFocus { refreshAppBlocker() }
@@ -440,6 +459,7 @@ public final class SharinganCoordinator: ObservableObject {
         syncCamera()
         syncFloating()
         syncTodayPanel()
+        syncDockWidget()
         refreshAppBlocker()
         syncTTS()
         syncAmbience()
