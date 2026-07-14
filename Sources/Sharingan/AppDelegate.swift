@@ -422,6 +422,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MenuBarController.shared.install(timer: timer, coordinator: coord)
         NotchWindowManager.shared.install(timer: timer, coordinator: coord)
 
+        // Desktop widget (WidgetKit): keep the appex's snapshot file fresh.
+        WidgetSnapshotPublisher.shared.install(timer: timer)
+
         // Without this, notify()/schedule() silently no-op on a fresh install:
         // UNUserNotificationCenter.add fails while status is .notDetermined.
         Task { await NotificationService.shared.requestAuthorization() }
@@ -491,5 +494,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let timer {
             DNDShortcutService.shared.deactivate(settings: timer.settings)
         }
+        // …and never leave the desktop widget counting down a session that
+        // died with the app.
+        WidgetSnapshotPublisher.shared.publishFinal()
     }
 }

@@ -84,15 +84,45 @@ if [[ -f "$ICONSET_SRC/icon_1024.png" ]]; then
   echo "  ✓ AppIcon.icns"
 fi
 
+# WidgetKit extension (.appex). Deliberately OUTSIDE Package.swift: the appex
+# is hand-assembled like the rest of the bundle, so its sources are compiled
+# straight to a binary here — the widget UI plus the two snapshot files it
+# shares with SharinganCore (one module, no imports between them).
+echo "▸ Building widget extension…"
+WIDGET="SharinganWidget"
+APPEX="$APP/Contents/PlugIns/$WIDGET.appex"
+mkdir -p "$APPEX/Contents/MacOS"
+xcrun swiftc -O -parse-as-library -module-name "$WIDGET" \
+  -target "$(uname -m)-apple-macos14.0" \
+  "$ROOT/Sources/SharinganWidget"/*.swift \
+  "$ROOT/Sources/SharinganCore/Models/WidgetSnapshot.swift" \
+  "$ROOT/Sources/SharinganCore/Services/WidgetSnapshotStore.swift" \
+  -o "$APPEX/Contents/MacOS/$WIDGET"
+cp "$ROOT/Resources/Widget-Info.plist" "$APPEX/Contents/Info.plist"
+# Version stamps stay in lockstep with the app's.
+if [[ -n "${BUILD_NUM:-}" ]]; then
+  plutil -replace CFBundleVersion -string "$BUILD_NUM" "$APPEX/Contents/Info.plist"
+fi
+APP_VER="$(plutil -extract CFBundleShortVersionString raw "$APP/Contents/Info.plist")"
+plutil -replace CFBundleShortVersionString -string "$APP_VER" "$APPEX/Contents/Info.plist"
+echo "  ✓ $WIDGET.appex"
+
 # Strip any quarantine flag (e.g. if a resource came in via download/AirDrop)
 # so macOS 15/26 Gatekeeper doesn't block the ad-hoc bundle with a
 # "Sharingan can't be opened" dialog.
 xattr -cr "$APP" 2>/dev/null || true
 
-# Ad-hoc codesign so SMAppService / LaunchServices accept the bundle. Nothing
-# lives at the bundle root (Contents/ only), so the seal is valid and survives
-# Gatekeeper's strict re-verification of a quarantined copy on another Mac.
-codesign --force --deep --sign - "$APP" 2>/dev/null && echo "  ✓ ad-hoc signed" || echo "  ! codesign skipped"
+# Sign inside-out: the appex first, WITH its entitlements (sandbox + app
+# group — chronod won't load an unsandboxed widget, and the app group is how
+# it reads the snapshot the app writes). Then the outer app with its own
+# entitlements and WITHOUT --deep: a --deep re-sign would strip the appex's
+# entitlements again.
+codesign --force --sign - \
+  --entitlements "$ROOT/Resources/Widget.entitlements" \
+  "$APPEX" 2>/dev/null && echo "  ✓ appex ad-hoc signed" || echo "  ! appex codesign skipped"
+codesign --force --sign - \
+  --entitlements "$ROOT/Resources/App.entitlements" \
+  "$APP" 2>/dev/null && echo "  ✓ ad-hoc signed" || echo "  ! codesign skipped"
 
 # Fail loudly if the seal isn't strict-valid: this is exactly what Gatekeeper
 # checks on another Mac, so a failure here means "won't open there".

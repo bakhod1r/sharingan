@@ -4,7 +4,7 @@
 > whenever a feature is added, changed, or removed, update this document in the
 > same change.**
 
-- Version: 1.10.0
+- Version: 1.11.0
 - Platform: macOS 14+, lives in the menu bar
 
 ---
@@ -392,7 +392,34 @@ disagree with the HUD about whether the Mac has a notch; it re-asks on
 
 ---
 
-## Storage identifiers
+## Desktop widget (WidgetKit)
+
+- A real system widget (widget gallery / desktop / Notification Center),
+  small + medium families: progress ring and remaining time in the phase
+  color, phase label, and today's 🍅 count; medium adds the active task
+  title, `n / goal`, 🔥 streak, and ▶︎ ⏸ ⟲ transport glyphs.
+- **No AppIntents** (pure-SwiftPM appex — same constraint as the CLI): the
+  widget is display + deep links. Small opens the app (`sharingan://show`);
+  the medium transport glyphs hit `sharingan://start|pause|reset` through the
+  existing `URLCommandRouter`.
+- **Process split**: the widget can't observe `PomodoroTimer`.
+  `WidgetSnapshotPublisher` (app side, wired in `AppDelegate`) debounces
+  timer/task changes, fingerprints them (end date bucketed to 5 s so per-second
+  ticks don't spam chronod), writes a `WidgetSnapshot` JSON to the app-group
+  container `group.com.blink.app`, and pokes `WidgetCenter`. A running session
+  needs **no** rewrites: seconds tick via `Text(timerInterval:)`, the ring
+  re-fills from one timeline entry per minute. `applicationWillTerminate`
+  parks the widget in the idle state so a quit app never leaves a counting
+  widget behind.
+- **Reading-side repair** (`WidgetSnapshot.normalized`, unit-tested): a
+  "running" snapshot whose end date passed (app force-killed) renders idle; a
+  snapshot written on a previous day shows 0 today; corrupt/missing/newer-schema
+  files fall back to a placeholder.
+- **Model/store live in SharinganCore** (`Models/WidgetSnapshot.swift`,
+  `Services/WidgetSnapshotStore.swift`); the appex compiles those two files
+  plus `Sources/SharinganWidget/*` directly — the widget target is deliberately
+  **outside Package.swift** (see Packaging below), so `swift build`/`swift run`
+  are untouched by it.
 
 - All on-disk identifiers are namespaced `com.sharingan.*` / `sharingan.*`
   (settings `com.sharingan.settings`, stats `com.sharingan.stats`, CLI
@@ -448,7 +475,7 @@ disagree with the HUD about whether the Mac has a notch; it re-asks on
 
 ## Packaging & releases
 
-- `Scripts/make-app.sh` assembles `dist/Sharingan.app`: builds `AppIcon.icns` from `Resources/AppIcon.appiconset/icon_1024.png` (sips + iconutil), stamps `CFBundleVersion` with the commit count, ad-hoc signs.
+- `Scripts/make-app.sh` assembles `dist/Sharingan.app`: builds `AppIcon.icns` from `Resources/AppIcon.appiconset/icon_1024.png` (sips + iconutil), stamps `CFBundleVersion` with the commit count, compiles the WidgetKit appex with `swiftc` straight into `Contents/PlugIns/SharinganWidget.appex` (`Resources/Widget-Info.plist`, versions stamped in lockstep), then signs **inside-out**: the appex first with `Resources/Widget.entitlements` (sandbox + app group — chronod won't load an unsandboxed widget), the outer app with `Resources/App.entitlements` and **without `--deep`**, which would re-sign the appex and strip its entitlements.
 - `Scripts/make-dmg.sh` wraps it in `dist/Sharingan.dmg` with an /Applications drag-install symlink. The image is built read-write first so the mounted **volume** gets the Sharingan icon (`.VolumeIcon.icns` + Finder custom-icon bit — it lives inside the image, so downloaded DMGs keep it), then converted to compressed UDZO; the `.dmg` **file** also gets the icon via Rez/SetFile (local copies only — resource forks don't survive internet downloads).
 - **Branded install window**: the app renders its own 560×400 @2x background (`Sharingan --render-dmg-background <png>` — ghost classic iris, title, arrow, "Drag into Applications to install") into the volume's `.background/`, and an AppleScript poses Finder — icon view, no toolbar/statusbar, 100pt icons, app at (140,195), Applications at (420,195) — so the written `.DS_Store` persists into the compressed image. Best-effort: without Finder Automation permission the DMG still builds, just unstyled.
 - Releases: push a `v*` tag → `.github/workflows/release.yml` builds the DMG on a macOS runner and attaches it, notes from CHANGELOG.md.

@@ -5,6 +5,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.11.0] — 2026-07-14
+
+### Added
+- Desktop widget (WidgetKit): Sharingan now ships a real system widget — small and medium sizes in the widget gallery. Progress ring and remaining time tick live in the phase color, with the phase label and today's 🍅 count; the medium widget adds the active task, `n / goal` progress, 🔥 streak, and ▶︎ ⏸ ⟲ buttons that deep-link through the `sharingan://` scheme. The app feeds it a snapshot file in the `group.com.blink.app` container; a force-quit app renders as idle instead of a stuck countdown, and stale day counts show 0. The appex is compiled and signed by `make-app.sh` (sandbox + app-group entitlements, signed inside-out) — `Package.swift` is untouched
+
 ## [1.10.0] — 2026-07-14
 
 ### Added
