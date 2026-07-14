@@ -44,10 +44,18 @@ Uzbek) keeps the work itself organized.
 
 **Download** — grab `Sharingan.dmg` from the
 [latest release](https://github.com/bakhod1r/sharingan/releases/latest) and drag
-the app into Applications.
+the app into Applications. The build is universal — Apple silicon and Intel.
 
-Builds are not notarized yet: on first launch, right-click the app →
-**Open** (or run `xattr -cr /Applications/Sharingan.app`).
+Builds are ad-hoc signed, not notarized, so macOS blocks the first launch with
+*"Apple could not verify Sharingan is free of malware"*. On macOS 15+ the old
+right-click → **Open** trick no longer works; clear the quarantine flag instead:
+
+```bash
+xattr -cr /Applications/Sharingan.app
+```
+
+(Or open it once, then approve it in **System Settings → Privacy & Security →
+Open Anyway**.)
 
 **Build from source** — requires macOS 14+ and Xcode command-line tools:
 

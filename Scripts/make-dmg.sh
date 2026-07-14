@@ -18,8 +18,12 @@ APP="$DIST/$APP_NAME.app"
 DMG="$DIST/$APP_NAME.dmg"
 VOL_NAME="Sharingan"
 
-# 1) Build the app bundle (forwards --debug).
-"$ROOT/Scripts/make-app.sh" "${1:-}"
+# 1) Build the app bundle. A DMG is what other people download, so it defaults
+#    to a UNIVERSAL build — an arm64-only bundle refuses to launch on an Intel
+#    Mac. Pass --debug (or --host) explicitly to skip the extra slice locally.
+DMG_BUILD_FLAG="${1:---universal}"
+[[ "$DMG_BUILD_FLAG" == "--host" ]] && DMG_BUILD_FLAG=""
+"$ROOT/Scripts/make-app.sh" "$DMG_BUILD_FLAG"
 
 # 2) Stage a clean folder with the app + an Applications shortcut.
 STAGE="$(mktemp -d)/dmg"

@@ -14,10 +14,18 @@ CONFIG="release"
 [[ "${1:-}" == "--debug" ]] && CONFIG="debug"
 [[ "${1:-}" == "--universal" ]] && CONFIG="release"
 
-# Release builds stay host-arch (no Xcode/xcbuild required). If you have
-# Xcode installed and want a universal binary, pass --universal.
+# Local builds stay host-arch — fast. Anything DISTRIBUTED must be universal
+# (arm64 + x86_64) or it simply won't launch on an Intel Mac; make-dmg.sh
+# therefore passes --universal by default. Universal costs ~3× the build time
+# and needs a full Xcode toolchain (xcodebuild), not just the CLT.
+UNIVERSAL=0
 ARCH_FLAGS=()
-[[ "${1:-}" == "--universal" ]] && ARCH_FLAGS=(--arch arm64 --arch x86_64)
+APPEX_ARCHES=("$(uname -m)")
+if [[ "${1:-}" == "--universal" ]]; then
+  UNIVERSAL=1
+  ARCH_FLAGS=(--arch arm64 --arch x86_64)
+  APPEX_ARCHES=(arm64 x86_64)
+fi
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -33,7 +41,7 @@ build() { swift build -c "$CONFIG" ${ARCH_FLAGS[@]+"${ARCH_FLAGS[@]}"} "$@"; }
 
 BINDIR="$(build --show-bin-path)"
 
-label="$CONFIG"; [[ "${1:-}" == "--universal" ]] && label="$label, universal"
+label="$CONFIG"; (( UNIVERSAL )) && label="$label, universal (arm64 + x86_64)"
 echo "▸ Building ($label)…"
 build --product "$PRODUCT_NAME"
 
@@ -100,13 +108,32 @@ mkdir -p "$APPEX/Contents/MacOS"
 # exit(0)s, chronod records "query failed", and the widget never reaches the
 # gallery. @main stays for swiftc to emit the WidgetBundle metadata that
 # WidgetKit's host locates at runtime.
-xcrun swiftc -O -parse-as-library -module-name "$WIDGET" \
-  -target "$(uname -m)-apple-macos14.0" \
-  -Xlinker -e -Xlinker _NSExtensionMain \
-  "$ROOT/Sources/SharinganWidget"/*.swift \
-  "$ROOT/Sources/SharinganCore/Models/WidgetSnapshot.swift" \
-  "$ROOT/Sources/SharinganCore/Services/WidgetSnapshotStore.swift" \
-  -o "$APPEX/Contents/MacOS/$WIDGET"
+#
+# swiftc emits ONE slice per invocation, so a universal appex is built as one
+# binary per arch and lipo'd together — an arm64-only appex inside a universal
+# app would leave Intel Macs with a widget that can't load.
+WIDGET_SRCS=(
+  "$ROOT/Sources/SharinganWidget"/*.swift
+  "$ROOT/Sources/SharinganCore/Models/WidgetSnapshot.swift"
+  "$ROOT/Sources/SharinganCore/Services/WidgetSnapshotStore.swift"
+)
+SLICE_DIR="$(mktemp -d)"
+SLICES=()
+for arch in "${APPEX_ARCHES[@]}"; do
+  xcrun swiftc -O -parse-as-library -module-name "$WIDGET" \
+    -target "${arch}-apple-macos14.0" \
+    -Xlinker -e -Xlinker _NSExtensionMain \
+    "${WIDGET_SRCS[@]}" \
+    -o "$SLICE_DIR/$WIDGET-$arch"
+  SLICES+=("$SLICE_DIR/$WIDGET-$arch")
+done
+if (( ${#SLICES[@]} > 1 )); then
+  lipo -create "${SLICES[@]}" -output "$APPEX/Contents/MacOS/$WIDGET"
+else
+  cp "${SLICES[0]}" "$APPEX/Contents/MacOS/$WIDGET"
+fi
+rm -rf "$SLICE_DIR"
+echo "  ✓ appex slices: $(lipo -archs "$APPEX/Contents/MacOS/$WIDGET")"
 cp "$ROOT/Resources/Widget-Info.plist" "$APPEX/Contents/Info.plist"
 # Version stamps stay in lockstep with the app's.
 if [[ -n "${BUILD_NUM:-}" ]]; then
@@ -150,6 +177,19 @@ fi
 touch "$APP"
 LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 [[ -x "$LSREGISTER" ]] && "$LSREGISTER" -f "$APP" >/dev/null 2>&1 || true
+
+# A distributed build that is missing a slice launches on nobody's Mac but the
+# builder's — fail loudly rather than shipping it.
+APP_ARCHES="$(lipo -archs "$APP/Contents/MacOS/$APP_NAME")"
+if (( UNIVERSAL )); then
+  for arch in arm64 x86_64; do
+    if [[ "$APP_ARCHES" != *"$arch"* ]]; then
+      echo "  ✗ universal build is missing the $arch slice (got: $APP_ARCHES)" >&2
+      exit 1
+    fi
+  done
+fi
+echo "  ✓ app slices: $APP_ARCHES"
 
 echo "✅ Done → $APP"
 echo "   Install:  Scripts/install.sh   (build + install to /Applications)"

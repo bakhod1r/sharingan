@@ -5,6 +5,20 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-07-14
+
+### Added
+- **Universal binary.** The app and its WidgetKit extension now ship both
+  arm64 and x86_64 slices, so Sharingan runs on Intel Macs as well as Apple
+  silicon. `make-dmg.sh` builds universal by default (a DMG is what other
+  people download; an arm64-only bundle simply refuses to launch on an Intel
+  Mac) and fails loudly if either slice is missing. Local `make-app.sh` stays
+  host-arch for speed — pass `--universal` to match a release build.
+
+### Fixed
+- The bundle version now matches the public release line: the v1.0.0 DMG's app
+  still reported the pre-public `1.20.0` internal version.
+
 ## [1.0.0] — 2026-07-14
 
 Initial public release.
