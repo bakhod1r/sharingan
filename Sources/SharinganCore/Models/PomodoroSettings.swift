@@ -81,8 +81,8 @@ public enum DockWidgetSize: String, Codable, CaseIterable, Sendable {
     }
 }
 
-/// Which end of the Dock the pill hugs (bottom Dock; a vertical Dock keeps
-/// the pill at its bottom end regardless — see `DockWidgetWindowManager`).
+/// Which end of a bottom Dock the pill hugs; a vertical Dock ignores this
+/// and always vertically centers the pill instead — see `DockWidgetGeometry`.
 public enum DockWidgetAlignment: String, Codable, CaseIterable, Sendable {
     case leading, center, trailing
 
@@ -240,8 +240,8 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var dockWidgetEnabled: Bool = true
     /// Preset pill size (Small/Medium/Large).
     public var dockWidgetSize: DockWidgetSize = .medium
-    /// Which end of the Dock the pill hugs (bottom Dock; a vertical Dock
-    /// keeps the pill at its bottom end regardless).
+    /// Which end of a bottom Dock the pill hugs; a vertical Dock ignores
+    /// this and centers the pill instead — see `DockWidgetGeometry`.
     public var dockWidgetAlignment: DockWidgetAlignment = .trailing
     public var dockWidgetOpacity: Double = 1.0      // 0.3…1.0
     /// Rest compact (ring + time) and spring open under the pointer, like
