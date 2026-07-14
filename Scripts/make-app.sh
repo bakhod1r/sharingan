@@ -148,17 +148,29 @@ echo "  ✓ $WIDGET.appex"
 # "Sharingan can't be opened" dialog.
 xattr -cr "$APP" 2>/dev/null || true
 
+# SIGN_IDENTITY selects the codesign identity. Unset ⇒ ad-hoc "-", which is
+# the local-dev default and needs no certificate. A real "Developer ID
+# Application: …" identity additionally turns on the hardened runtime and a
+# secure timestamp — both are hard requirements for notarization, and a
+# bundle signed without them is rejected by notarytool, not by codesign, so
+# they must be set here rather than discovered at submission time.
+SIGN_IDENTITY="${SIGN_IDENTITY:--}"
+SIGN_FLAGS=()
+if [[ "$SIGN_IDENTITY" != "-" ]]; then
+  SIGN_FLAGS=(--options runtime --timestamp)
+fi
+
 # Sign inside-out: the appex first, WITH its entitlements (sandbox + app
 # group — chronod won't load an unsandboxed widget, and the app group is how
 # it reads the snapshot the app writes). Then the outer app with its own
 # entitlements and WITHOUT --deep: a --deep re-sign would strip the appex's
 # entitlements again.
-codesign --force --sign - \
+codesign --force --sign "$SIGN_IDENTITY" ${SIGN_FLAGS[@]+"${SIGN_FLAGS[@]}"} \
   --entitlements "$ROOT/Resources/Widget.entitlements" \
-  "$APPEX" 2>/dev/null && echo "  ✓ appex ad-hoc signed" || echo "  ! appex codesign skipped"
-codesign --force --sign - \
+  "$APPEX" 2>/dev/null && echo "  ✓ appex signed ($SIGN_IDENTITY)" || echo "  ! appex codesign skipped"
+codesign --force --sign "$SIGN_IDENTITY" ${SIGN_FLAGS[@]+"${SIGN_FLAGS[@]}"} \
   --entitlements "$ROOT/Resources/App.entitlements" \
-  "$APP" 2>/dev/null && echo "  ✓ ad-hoc signed" || echo "  ! codesign skipped"
+  "$APP" 2>/dev/null && echo "  ✓ app signed ($SIGN_IDENTITY)" || echo "  ! codesign skipped"
 
 # Fail loudly if the seal isn't strict-valid: this is exactly what Gatekeeper
 # checks on another Mac, so a failure here means "won't open there".
