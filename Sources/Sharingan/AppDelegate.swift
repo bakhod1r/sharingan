@@ -24,6 +24,7 @@ final class MenuBarController: NSObject {
     }
     private var lastIconKey: IconKey?
     private let spinner = IconSpinner()
+    private var dockAnimator: DockIconAnimator?
 
     func install(timer: PomodoroTimer, coordinator: SharinganCoordinator) {
         self.timer = timer
@@ -62,7 +63,11 @@ final class MenuBarController: NSObject {
         }
         updateTitle() // seeds both the title and the initial icon
 
-        spinner.onFrame = { [weak self] _, _ in self?.updateTitle() }
+        dockAnimator = DockIconAnimator()
+        spinner.onFrame = { [weak self] angle, spinning in
+            self?.updateTitle()
+            self?.dockAnimator?.apply(angle: angle, spinning: spinning)
+        }
         syncSpinner()
 
         // Sync coordinator services now that the menu bar is live.
