@@ -1,6 +1,6 @@
 # Dock Widget — design
 
-**Date:** 2026-07-14 · **Target version:** 1.8.0
+**Date:** 2026-07-14 · **Target version:** next minor at implementation time (1.11.0 as of planning; parallel release agents may advance it)
 
 ## Overview
 
@@ -90,7 +90,8 @@ engine methods directly. No new state stores, no polling.
 
 ## Versioning & docs (repo rules)
 
-- Bump to **1.8.0**: `CHANGELOG.md` entry, `Info.plist` version,
+- Bump to the next minor (**1.11.0** as of planning — re-check at implementation
+  time): `CHANGELOG.md` entry, `Info.plist` version,
   `docs/TECHNICAL.md` section for the Dock widget.
 - `docs/` is gitignored — spec and TECHNICAL.md changes need `git add -f`.
 - Commit + push after completion (multi-Mac workflow).
