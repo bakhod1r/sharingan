@@ -53,13 +53,13 @@ struct NotchGeometryTests {
 
     /// The radius is a pure function of height so that the drawn shape and the
     /// hit-test mask can be cut from the same number. Two properties matter: it
-    /// never moves for the short states (`idle`/`live` are the cutout plus a
-    /// lip, and must keep the hardware's own 14pt corner), and it is monotone
-    /// and bounded, so no island can ever ask for a corner rounder than half of
-    /// itself.
+    /// never moves for the short states (`idle` is the bare cutout, `live` the
+    /// cutout plus its lip — both keep the hardware's own 14pt corner), and it
+    /// is monotone and bounded, so no island can ever ask for a corner rounder
+    /// than half of itself.
     @Test("the bottom radius grows with the island's height, and stays bounded")
     func cornerRadiusFollowsHeight() {
-        let base = Self.notched.notchHeight + NotchGeometry.idleExtraHeight
+        let base = Self.notched.notchHeight + NotchGeometry.liveLipHeight
         let tallest = NotchGeometry.expandedSize(menuBarHeight: Self.menuBar).height
 
         // Short states: the notch's own corner, exactly.
@@ -126,12 +126,12 @@ struct NotchGeometryTests {
         let m = Self.notched
         let union = NotchGeometry.panelSize(m)
 
-        // Closed shapes: exactly the cutout plus its lip — the menu-bar row.
-        // This is the property the whole fix hangs on: while the island is
-        // idle or live, the window reaches nowhere near the browser tab strip.
-        let closed = m.notchHeight + NotchGeometry.idleExtraHeight
-        #expect(NotchGeometry.panelHeight(m, size: .idle) == closed)
-        #expect(NotchGeometry.panelHeight(m, size: .live) == closed)
+        // Closed shapes: the menu-bar row and nothing below it. This is the
+        // property the whole fix hangs on: while the island is idle or live,
+        // the window reaches nowhere near the browser tab strip.
+        #expect(NotchGeometry.panelHeight(m, size: .idle) == m.notchHeight)
+        #expect(NotchGeometry.panelHeight(m, size: .live)
+                == m.notchHeight + NotchGeometry.liveLipHeight)
 
         // Open shapes: the T-body's bottom.
         #expect(NotchGeometry.panelHeight(m, size: .activity)
@@ -190,11 +190,14 @@ struct NotchGeometryTests {
         #expect(expanded.island.width > idle.island.width)
     }
 
-    @Test("idle is the notch plus a small lip")
+    /// The closed island paints nothing the housing does not hide: on a light
+    /// menu bar (light wallpaper) a lip would be a visible black droplet under
+    /// the notch, so there is none — the lip belongs to `.live` alone.
+    @Test("idle is exactly the hardware cutout — no lip, nothing visible")
     func idleHugsNotch() {
         let idle = NotchGeometry.layout(Self.notched, size: .idle)
         #expect(idle.island.width == Self.notched.notchWidth)
-        #expect(idle.island.height == Self.notched.notchHeight + NotchGeometry.idleExtraHeight)
+        #expect(idle.island.height == Self.notched.notchHeight)
         #expect(idle.leftEar == nil)
         #expect(idle.rightEar == nil)
     }
@@ -292,7 +295,7 @@ struct NotchGeometryTests {
         let sideMargin = CGPoint(x: 2, y: 4)          // beside the idle island
         let below = CGPoint(x: panelWidth / 2, y: 200) // under the idle island
 
-        // Idle: only the small lip over the cutout is hittable.
+        // Idle: only the cutout itself is hittable.
         #expect(NotchGeometry.hitTest(center, metrics: m, size: .idle))
         #expect(!NotchGeometry.hitTest(sideMargin, metrics: m, size: .idle))
         #expect(!NotchGeometry.hitTest(below, metrics: m, size: .idle))
@@ -475,8 +478,8 @@ struct NotchTeeTests {
         }
     }
 
-    /// The short states are untouched: `idle` is the cutout plus its lip and
-    /// `live` is that plus the ears, both flat rectangles in the menu-bar row.
+    /// The short states are untouched: `idle` is the bare cutout and `live`
+    /// adds the ears and the progress lip, both flat rectangles in the menu-bar row.
     /// The ears are the point of a notch HUD and `notchEars` is what switches
     /// them off — the T is not a second, silent way to do it.
     @Test("the flat states keep their rectangle")
@@ -688,7 +691,7 @@ struct NotchExpandedSizingTests {
                                       showQuickActions: false, showStatusStrip: false)
         let h = NotchGeometry.expandedSize(bare, menuBarHeight: Self.menuBar).height
         #expect(h >= NotchGeometry.activitySize(menuBarHeight: Self.menuBar).height)
-        #expect(h > Self.cutout.height + NotchGeometry.idleExtraHeight)
+        #expect(h > Self.cutout.height + NotchGeometry.liveLipHeight)
 
         // …and it is still an ordered morph for every config: the expanded
         // island outranks every shorter state, whatever the user switched off.

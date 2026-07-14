@@ -131,8 +131,8 @@ enum NotchMotion {
 
     /// The island dips a hair before it grows — the classic anticipation beat,
     /// and the one way to read "mass" without ever leaving the rect: a scale
-    /// *down* is by definition inside the silhouette. 2.8% on the 41pt idle lip
-    /// is about a point: felt, not seen.
+    /// *down* is by definition inside the silhouette. 2.8% on the 37pt idle
+    /// island is about a point: felt, not seen.
     static let squashScale: Double = 0.972
     /// Down fast …
     static let squashDown: Double = 0.07

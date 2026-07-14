@@ -245,8 +245,11 @@ public enum NotchGeometry {
     /// but a narrower one would, so the width is part of the contract.
     public static let expandedWidth: CGFloat = 340
     public static let earWidth: CGFloat = 78
-    /// The idle island is the cutout plus this lip, so it reads as hardware.
-    public static let idleExtraHeight: CGFloat = 4
+    /// The **live** island is the cutout plus this lip — the strip the
+    /// progress line runs along. Idle grows no lip at all: it is exactly the
+    /// hardware cutout, so a closed HUD paints nothing a light menu bar (light
+    /// wallpaper) could show as a black droplet under the notch.
+    public static let liveLipHeight: CGFloat = 4
     /// The announcement's width, and the height of its **body** — the part below
     /// the menu bar. (Measured: a 14pt icon beside a 12pt line is 16pt of
     /// content; 14pt of air above and below it is 44.) The island itself is this
@@ -259,7 +262,7 @@ public enum NotchGeometry {
     }
     public static let progressHeight: CGFloat = 3
     /// The hardware cutout's own bottom corner — the radius of the short states
-    /// (`idle`, `live`), which are the cutout plus a 4pt lip.
+    /// (`idle`, the bare cutout; `live`, the cutout plus its 4pt lip).
     public static let cornerRadius: CGFloat = 14
     /// … and the radius of the tall one. The expanded panel wearing the notch's
     /// 14pt corner looks pinched; 22pt reads as the same shape, grown.
@@ -488,7 +491,7 @@ public enum NotchGeometry {
         let width = max(expanded.width,
                         cutout.width + earReserve,
                         activityWidth)
-        let height = max(expanded.height, cutout.height + idleExtraHeight)
+        let height = max(expanded.height, cutout.height + liveLipHeight)
         return CGSize(width: width, height: height)
     }
 
@@ -536,7 +539,7 @@ public enum NotchGeometry {
     }
 
     /// The silhouette of a state that lives **entirely in the menu-bar row** —
-    /// `idle` and `live`, the cutout plus a 4pt lip. A stem as wide as the island
+    /// `idle` (the bare cutout) and `live` (plus its lip). A stem as wide as the island
     /// itself has no body beside it, so the T degenerates to the rounded-bottom
     /// rectangle these states have always drawn.
     ///
@@ -569,9 +572,10 @@ public enum NotchGeometry {
             CGRect(x: (panel.width - width) / 2, y: 0, width: width, height: height)
         }
 
-        /// The short states — the cutout plus its lip — are the baseline the
+        /// The live island — the cutout plus its lip — is the baseline the
         /// radius grows from, and the expanded island is the top of the ramp.
-        let baseHeight = cutout.height + idleExtraHeight
+        /// (Idle sits *below* the baseline and clamps to the hardware corner.)
+        let baseHeight = cutout.height + liveLipHeight
         func radius(_ island: CGRect) -> CGFloat {
             cornerRadius(forHeight: island.height, baseHeight: baseHeight,
                          maxHeight: expanded.height)
@@ -596,7 +600,15 @@ public enum NotchGeometry {
             return empty(panel: panel)
 
         case .idle:
-            let island = centered(width: cutout.width, height: baseHeight)
+            // Exactly the hardware cutout — nothing painted the housing does
+            // not already hide. The closed island used to add the 4pt lip "so
+            // it reads as hardware", which is true over a dark menu bar and a
+            // black droplet under the notch over a light one (light
+            // wallpaper). The lip survives only in `.live`, where it carries
+            // the progress line; the black fill stays (screen captures render
+            // the cutout region), but on glass every pixel of it is behind
+            // the housing.
+            let island = centered(width: cutout.width, height: cutout.height)
             return NotchLayout(panelSize: panel, island: island, leftEar: nil,
                                rightEar: nil, progressTrack: nil,
                                silhouette: flat(width: island.width,

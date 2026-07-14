@@ -208,8 +208,15 @@ disagree with the HUD about whether the Mac has a notch; it re-asks on
   (`NotchHUDView`) paints the two slabs either side of the cutout with the
   expanded body's recipe — `.regularMaterial`, the theme wash, the hairline —
   driven off the layout's ear rects, so a dropped ear drops its glass. The
-  cutout column and the idle lip stay pure black: they imitate hardware.
-  Visual only — no rect the mask is cut from changes.
+  cutout column stays pure black: it imitates hardware. Visual only — no rect
+  the mask is cut from changes.
+- **The closed island paints nothing beyond the housing.** Idle is exactly the
+  hardware cutout (`NotchGeometry.layout`, `.idle`): the old 4pt lip read as
+  hardware over a dark menu bar but showed as a black droplet under the notch
+  over a light one (light wallpaper). The lip survives only in `.live` —
+  `NotchGeometry.liveLipHeight`, the strip the progress line runs along — so
+  `panelHeight(.idle) == notchHeight` and the hover target is the cutout
+  itself (the pointer still tracks through the notch region).
 - **The island dresses for the theme.** The body's and ears' surface wash is
   `timer.settings.theme.gradient` at 0.20 over the dark material (the Today
   panel's recipe, so light themes tint rather than lighten), read in `body` so
