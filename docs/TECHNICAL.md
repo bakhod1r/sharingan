@@ -4,7 +4,7 @@
 > whenever a feature is added, changed, or removed, update this document in the
 > same change.**
 
-- Version: 1.12.0
+- Version: 1.13.0
 - Platform: macOS 14+, lives in the menu bar
 
 ---
@@ -422,7 +422,7 @@ not a status light, so a session can be started without opening the app.
   `SharinganCoordinator.syncDockWidget()` alone — like the today panel, the
   pill's visibility follows the flag, never `timer.isRunning`, so Start stays
   reachable even when nothing is counting down. `syncDockWidget()` runs once
-  from `syncAll()` at launch and again from `updateForSettingsChange` whenever
+  from `syncAll()` at launch and again from `syncChanged(_:)` whenever
   `dockWidgetEnabled` flips; the Settings toggle sits in its own "Dock widget"
   section right under "Floating timer".
 - **Placement is `visibleFrame` vs. `frame` math, not a hardcoded corner.**
@@ -468,7 +468,7 @@ not a status light, so a session can be started without opening the app.
   `WidgetSnapshotPublisher` (app side, wired in `AppDelegate`) debounces
   timer/task changes, fingerprints them (end date bucketed to 5 s so per-second
   ticks don't spam chronod), writes a `WidgetSnapshot` JSON to the app-group
-  container `group.com.blink.app`, and pokes `WidgetCenter`. A running session
+  container `group.com.sharingan.app`, and pokes `WidgetCenter`. A running session
   needs **no** rewrites: seconds tick via `Text(timerInterval:)`, the ring
   re-fills from one timeline entry per minute. `applicationWillTerminate`
   parks the widget in the idle state so a quit app never leaves a counting
@@ -489,7 +489,10 @@ not a status light, so a session can be started without opening the app.
   `com.sharingan.cli.*`, floating-timer/today-panel position keys, the focus
   queue, and the task pre-reminder-minutes setting). Task/template data lives
   in `~/Library/Application Support/Sharingan/` (SQLite db + the `tired` CLI's
-  shared `cli/` snapshot files).
+  shared `cli/` snapshot files). Since 1.13.0 the bundle identifier itself is
+  `com.sharingan.app` (widget appex `com.sharingan.app.widget`, app group
+  `group.com.sharingan.app`) — renaming it moved the `UserDefaults` domain,
+  handled by the migration below.
 - **A headless render never touches that database.** `--render-dev-preview` and
   `--render-site-assets` seed sample tasks into `TaskStore.shared` to have
   something to photograph, and `TaskStore.shared` persists — so `HeadlessRender`
@@ -505,7 +508,17 @@ not a status light, so a session can be started without opening the app.
   kept, never deleted); the old `Blink/` Application Support directory is
   moved (renamed) to `Sharingan/`, never merged into an existing `Sharingan/`
   dir. Safe to call on every launch — a copy/move only happens once, the
-  first time the new location is still empty. Stored `dndShortcutOn/Off`
+  first time the new location is still empty. The 1.13.0 bundle-id rename
+  (`com.blink.app` → `com.sharingan.app`) added `migrateDomain`: everything
+  persisted under the old `com.blink.app` defaults domain is copied into the
+  new domain (existing new-domain values win; app process only — the CLI and
+  tests are excluded by a bundle-id guard), EXCEPT `NSStatusItem …` keys.
+  Those carried a stale mid-bar menu-bar slot that macOS 26's menu-bar item
+  hiding collapsed behind the chevron — the slot is instead re-seeded at the
+  far right next to the system icons (6 pt from the right edge, the same spot
+  `rescueFromNotchIfHidden` uses). The rename also resets TCC identity:
+  notification/camera permissions are asked once more, and a Launch-at-login
+  registration re-registers under the new id. Stored `dndShortcutOn/Off`
   values inside a user's settings blob are deliberately NOT rewritten (they
   name real user-created Shortcuts.app shortcuts); only the code defaults for
   fresh installs changed, to "Sharingan Focus On/Off".
