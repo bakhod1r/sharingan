@@ -351,6 +351,14 @@ struct SettingsView: View {
                               isOn: $settings.floatingTimerEnabled)
                 }
 
+                Section("Dock widget") {
+                    ToggleRow(title: "Dock widget",
+                              isOn: $settings.dockWidgetEnabled)
+                    Text("A pill above the Dock, near the Trash: active task, time left, and Start / Stop / Reset.")
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+
                 Section("Today panel") {
                     ToggleRow(title: "Today panel on desktop",
                               isOn: $settings.showTodayPanel)
