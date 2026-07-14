@@ -1229,6 +1229,79 @@ footer a:hover { color: var(--ink); }
   animation: caret-blink 1s steps(1) infinite;
 }
 
+/* notch HUD: the island under the camera housing expands on hover */
+.fv-notch { align-items: flex-start; }
+.nh-bar {
+  position: relative;
+  margin-top: 9px;
+  width: 150px;
+  height: 12px;
+  border-radius: 4px 4px 0 0;
+  background: rgba(236, 233, 228, 0.1);
+}
+.nh-island {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 46px;
+  height: 12px;
+  transform: translateX(-50%);
+  background: #000;
+  border-radius: 0 0 8px 8px;
+  overflow: hidden;
+  animation: fv-nh 5.5s cubic-bezier(0.32, 0.72, 0.28, 1) infinite;
+}
+/* the session progress line along the lip… */
+.nh-island::after {
+  content: "";
+  position: absolute;
+  left: 7px;
+  right: 7px;
+  bottom: 2.5px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--red);
+}
+/* …and faint task rows that appear while expanded */
+.nh-island::before {
+  content: "";
+  position: absolute;
+  left: 9px;
+  right: 9px;
+  top: 9px;
+  height: 24px;
+  background: repeating-linear-gradient(180deg, rgba(236, 233, 228, 0.22) 0 3px, transparent 3px 10px);
+  opacity: 0;
+  animation: fv-nh-rows 5.5s linear infinite;
+}
+@keyframes fv-nh {
+  0%, 28% { width: 46px; height: 12px; }
+  40%, 78% { width: 118px; height: 46px; }
+  90%, 100% { width: 46px; height: 12px; }
+}
+@keyframes fv-nh-rows {
+  0%, 40% { opacity: 0; }
+  46%, 74% { opacity: 1; }
+  80%, 100% { opacity: 0; }
+}
+
+/* desktop widget: a WidgetKit tile with the live ring */
+.wg-tile {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.55rem 0.8rem;
+  border-radius: 12px;
+  border: 1px solid rgba(236, 233, 228, 0.14);
+  background: linear-gradient(160deg, #23262e, #15171c);
+}
+.fv-widget .mb-ring { width: 18px; height: 18px; }
+.fv-widget .mb-ring::after { background: #1d2026; }
+.wg-col { display: flex; flex-direction: column; gap: 2px; }
+.wg-time { font: 700 0.82rem/1 var(--font-mono); color: #ece9e4; }
+.wg-task { font: 500 0.62rem/1 var(--font-body); font-style: normal; color: rgba(236, 233, 228, 0.5); }
+.wg-toms { margin-left: 0.35rem; font: 600 0.62rem/1 var(--font-body); color: rgba(236, 233, 228, 0.65); }
+
 @media (prefers-reduced-motion: reduce) {
   .mock *, .mock *::before, .mock *::after,
   .fv *, .fv *::before, .fv *::after { animation: none !important; }

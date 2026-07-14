@@ -721,7 +721,7 @@ dynamic mode.
 ## Marketing site
 
 - A single landing page focused on the three pillars — Pomodoro, Tasks, Eye health — each with a hand-built animated **CSS mock** of the app's UI (no videos, GIFs, or app renders): a counting timer ring, a Today panel that checks tasks off and slides new ones in, and the break screen with app-shaped almond eyes (MoveEyeShape Béziers via clip-path) running a guided drill with a spinning Sharingan iris.
-- A "Top features" grid of 12 cards, each with its own mini CSS animation (menu-bar timer, Floating widget, focus queue, streak chart, app blocking, ambience equalizer, voice arcs, screen dim, reminders, weekly board, six themes, CLI).
+- A "Top features" grid of 14 cards, each with its own mini CSS animation (menu-bar timer, Notch HUD island that expands, WidgetKit desktop-widget tile, Floating widget, focus queue, streak chart, app blocking, ambience equalizer, voice arcs, screen dim, reminders, weekly board, six themes, CLI). Pillar bullets cover the 1.x feature wave: per-task pomodoro sizes, custom priority levels, 25-language quick add, Markdown/JSON bulk import, sort/filter, and the per-task Report. Advertised version lives in `site/js/config.js` (+ the hero's static `cta-meta` fallback).
 - One live demo: the natural-language quick-add parser, in-page. Animated CLI terminal, FAQ (honest about sync being planned, not shipped), download.
 - Hero sits over the live WebGL eyes (loaded after window "load" so they never touch the critical path); below-fold animations stay paused until their section is revealed.
 - Light/dark theme toggle that remembers your choice; respects reduced-motion preferences.
