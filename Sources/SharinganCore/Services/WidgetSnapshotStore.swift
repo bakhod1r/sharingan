@@ -10,7 +10,7 @@ import Foundation
 public enum WidgetSnapshotStore {
     /// Must match `com.apple.security.application-groups` in both
     /// Resources/App.entitlements and Resources/Widget.entitlements.
-    public static let appGroupID = "group.com.blink.app"
+    public static let appGroupID = "group.com.sharingan.app"
     public static let fileName = "widget-snapshot.json"
 
     public static var defaultFileURL: URL? {

@@ -160,7 +160,7 @@ struct TaskEditorView: View {
         .popover(isPresented: $showCustomDue, arrowEdge: .bottom) {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Due date").dsSectionLabel()
-                BlinkCalendar(date: Binding(
+                SharinganCalendar(date: Binding(
                     get: { draft.dueDate ?? Date() },
                     set: { draft.dueDate = $0 }),
                     accent: accent,

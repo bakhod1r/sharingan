@@ -70,12 +70,12 @@ Families: `systemSmall`, `systemMedium`. Both use
 | `Sources/SharinganWidget/` (new executable target) | `@main WidgetBundle` → one `Widget` with a `TimelineProvider` that reads the snapshot and one SwiftUI entry view (small/medium layouts). Links WidgetKit + SwiftUI only. |
 | `Sources/Sharingan/Services/WidgetSnapshotPublisher.swift` (new) | Observes `PomodoroTimer` / `TaskStore` / stats (Combine, debounced ~0.5 s), maps to `WidgetSnapshot`, writes via the store, calls `WidgetCenter.shared.reloadAllTimelines()`. Writes an idle snapshot in `applicationWillTerminate` so a quit app never leaves a counting widget behind. Wired in `AppDelegate` like other services. |
 | `Scripts/make-app.sh` | Builds the `SharinganWidget` product, assembles `Contents/PlugIns/SharinganWidget.appex` (binary + generated Info.plist), signs the appex **with entitlements first**, then signs the outer app **without `--deep`** (a `--deep` re-sign would strip the appex entitlements). |
-| `Resources/Widget-Info.plist`, `Resources/Widget.entitlements` (new) | Appex identity `com.blink.app.widget`, `NSExtensionPointIdentifier = com.apple.widgetkit-extension`; sandbox + app group `group.com.blink.app`. |
+| `Resources/Widget-Info.plist`, `Resources/Widget.entitlements` (new) | Appex identity `com.sharingan.app.widget` (`com.blink.app.widget` before the 1.13.0 bundle-id rename), `NSExtensionPointIdentifier = com.apple.widgetkit-extension`; sandbox + app group `group.com.sharingan.app`. |
 
 ### Data flow
 
 `PomodoroTimer`/`TaskStore` (app) → `WidgetSnapshotPublisher` → JSON at
-`~/Library/Group Containers/group.com.blink.app/widget-snapshot.json`
+`~/Library/Group Containers/group.com.sharingan.app/widget-snapshot.json`
 (app writes the raw path; sandboxed widget reads it via
 `containerURL(forSecurityApplicationGroupIdentifier:)`) → `TimelineProvider` →
 entry view. Timeline policy: running → `.after(endDate)`; else `.after(next

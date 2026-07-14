@@ -278,7 +278,7 @@ struct NotchExpandedPanel: View {
                     .truncationMode(.tail)
             }
             .buttonStyle(.plain)
-            .help("Open “\(task.title)” in Blink")
+            .help("Open “\(task.title)” in Sharingan")
 
             Spacer(minLength: 4)
 
@@ -317,7 +317,7 @@ struct NotchExpandedPanel: View {
         .padding(.vertical, NotchGeometry.taskRowPadding)
         .padding(.horizontal, 6)
         // The active row is the accent the app puts on a live row — a tinted fill
-        // and a hairline of the same, the way the rest of Blink marks the row that
+        // and a hairline of the same, the way the rest of Sharingan marks the row that
         // is running. It stays phase-colored: the active row means "the task the
         // clock is counting down", which is phase information. Mono is the one
         // exception (`notchPhaseAccent`) — a colored fill would break its
@@ -371,7 +371,7 @@ struct NotchExpandedPanel: View {
             action("plus", "Quick add a task") {
                 AppServices.coordinator?.quickAddController?.showQuickAdd()
             }
-            action("gearshape.fill", "Open Blink") { MainWindowManager.shared.show() }
+            action("gearshape.fill", "Open Sharingan") { MainWindowManager.shared.show() }
         }
     }
 

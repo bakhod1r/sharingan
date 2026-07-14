@@ -25,7 +25,7 @@ import Foundation
 /// of these flags would not be a normal launch, because `main.swift` would
 /// photograph the UI and exit before the app existed. The two facts are welded
 /// together: the same argument that redirects the database is the argument that
-/// stops the process from becoming Blink.
+/// stops the process from becoming Sharingan.
 public enum HeadlessRender {
     /// Every flag `main.swift` seeds sample tasks and renders-and-exits on. A
     /// flag added there without being added here is a flag that writes to the

@@ -824,7 +824,7 @@ struct TasksView: View {
         .popover(isPresented: $showCustomDue, arrowEdge: .bottom) {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Due date").dsSectionLabel()
-                BlinkCalendar(date: $newDue,
+                SharinganCalendar(date: $newDue,
                               accent: timer.settings.theme.accent,
                               weekStartsOnMonday: timer.settings.weekStartsOnMonday)
                 HStack {
@@ -1133,7 +1133,7 @@ struct TasksView: View {
     private func snoozeSheet(_ task: TaskItem) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Snooze until").dsSectionLabel()
-            BlinkCalendar(date: $snoozeDate, showsTime: false,
+            SharinganCalendar(date: $snoozeDate, showsTime: false,
                           accent: timer.settings.theme.accent,
                           weekStartsOnMonday: timer.settings.weekStartsOnMonday)
             HStack {

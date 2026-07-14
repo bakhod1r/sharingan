@@ -131,7 +131,7 @@ struct NotchHUDView: View {
                 IslandShape(silhouette: l.silhouette)
                     // The cutout span stays pure black — it is imitating the
                     // camera housing. Everything the island *adds* to the
-                    // hardware is dressed in Blink's dark glass on top of it:
+                    // hardware is dressed in Sharingan's dark glass on top of it:
                     // the expanded body below the menu bar (`bodyGlass`) and
                     // the live ears either side of the cutout (`earGlass`).
                     //

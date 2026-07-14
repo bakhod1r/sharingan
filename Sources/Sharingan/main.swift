@@ -657,7 +657,7 @@ if let outDir = HeadlessRender.outputDirectory(for: "--render-dev-preview") {
                     to: "\(outDir)/menubar.png",
                     size: NSSize(width: 360, height: 760))
         for _ in 0..<maxedHoists { store.move(maxed.id, up: false) }
-        write(BlinkCalendar(date: .constant(Date()))
+        write(SharinganCalendar(date: .constant(Date()))
                 .padding(16)
                 .background(Color.black.opacity(0.85))
                 .environment(\.colorScheme, .dark),

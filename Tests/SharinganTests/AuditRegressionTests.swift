@@ -82,7 +82,7 @@ struct AuditRegressionTests {
     // MARK: - CLI payload files are consumed, not replayed
 
     @Test func cliPayloadConsumedOnRead() {
-        let name = "com.blink.test.payload-consume"
+        let name = "com.sharingan.test.payload-consume"
         CLIBridge.postCommand(name, payload: "50m")
         #expect(CLIBridge.readPayload(name) == "50m")
         // A second read must find nothing — a leftover payload made a plain
@@ -91,7 +91,7 @@ struct AuditRegressionTests {
     }
 
     @Test func plainPostClearsStalePayload() {
-        let name = "com.blink.test.payload-clear"
+        let name = "com.sharingan.test.payload-clear"
         CLIBridge.postCommand(name, payload: "50m")
         CLIBridge.postCommand(name) // payload-less post must clear the file
         #expect(CLIBridge.readPayload(name) == nil)

@@ -5,6 +5,15 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.13.0] — 2026-07-14
+
+### Changed
+- Bundle identifier renamed `com.blink.app` → `com.sharingan.app` (widget appex `com.sharingan.app.widget`, app group `group.com.sharingan.app`, URL-type name `com.sharingan.app.url`) — the last on-disk remnants of the Blink name. Everything persisted under the old defaults domain (settings, stats, window frames…) is copied into the new domain on first launch; values already in the new domain always win. macOS treats the renamed app as brand new, so notification/camera permissions are asked once more and Launch at login re-registers
+- Brand "Blink" swept out of the app: the notch panel's "Open Blink" action and task tooltip now say Sharingan, the internal `BlinkCalendar` date picker is `SharinganCalendar`, and icon-set metadata says Sharingan. The English verb *blink* in eye-exercise copy ("Blink quickly 8 times", blink-rate alerts) is not the brand and stays, as do the GitHub site/release URLs (the repository is still named Blink) and the migration constants that read old `com.blink.*` storage
+
+### Fixed
+- Menu-bar icon stranded invisible: the status item's saved slot sat mid-bar (897 pt from the right edge), inside the zone macOS 26 collapses behind the menu-bar chevron — the icon existed but never showed. The domain migration deliberately drops the stale `NSStatusItem` slot keys and seeds the far-right slot next to the system icons (the same spot the notch rescue targets), so the icon comes back visible after the update
+
 ## [1.12.0] — 2026-07-14
 
 ### Added

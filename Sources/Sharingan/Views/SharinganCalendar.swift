@@ -1,11 +1,11 @@
 import SwiftUI
 import SharinganCore
 
-/// Blink's own date picker — replaces the stock `.graphical` DatePicker in
+/// Sharingan's own date picker — replaces the stock `.graphical` DatePicker in
 /// every "Pick a date…" popover. Beyond the usual month grid it shows the
 /// existing workload: days that already have open tasks due carry small
 /// tomato dots, so picking a deadline doubles as a glance at the week's load.
-struct BlinkCalendar: View {
+struct SharinganCalendar: View {
     @Binding var date: Date
     var showsTime: Bool = true
     var accent: Color = .paletteFocusStart
