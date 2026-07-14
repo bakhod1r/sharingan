@@ -42,6 +42,9 @@ final class AppRouter: ObservableObject {
     @Published var pendingTaskTag: String?
     @Published var pendingTaskPriority: TaskPriority?
     @Published var focusTaskSearch = false
+    /// One-shot "scroll to and flash this task" — set by task rows outside the
+    /// main window (the notch island), consumed by TasksView like the filters.
+    @Published var pendingRevealTaskID: UUID?
 
     /// Bumped whenever Settings is (re)opened from outside — the sidebar row,
     /// the menu-bar gear — so SettingsView pops any open sub-page back to the
@@ -65,6 +68,13 @@ final class AppRouter: ObservableObject {
         pendingTaskTag = tag
         pendingTaskPriority = priority
         focusTaskSearch = focusSearch
+        section = .tasks
+    }
+
+    /// Jump to the Tasks section landed on one specific task: the list clears
+    /// whatever would hide it, scrolls the row to centre and flashes it.
+    func revealTask(_ id: UUID) {
+        pendingRevealTaskID = id
         section = .tasks
     }
 }

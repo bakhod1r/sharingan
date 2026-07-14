@@ -262,12 +262,23 @@ struct NotchExpandedPanel: View {
             .buttonStyle(.plain)
             .help(task.isDone ? "Mark as not done" : "Mark as done")
 
-            Text(task.title)
-                .font(.system(size: 12, design: .rounded).weight(isActive ? .semibold : .regular))
-                .strikethrough(task.isDone, color: Color.dsTertiary)
-                .foregroundStyle(isActive ? Color.dsPrimary : Color.dsSecondary)
-                .lineLimit(1)
-                .truncationMode(.tail)
+            // The title is the row's "open" affordance: it raises the main
+            // window on the Tasks section, scrolled to and flashing this task
+            // (`AppRouter.revealTask`). The done box and the play button keep
+            // their jobs either side of it.
+            Button {
+                MainWindowManager.shared.show()
+                AppRouter.shared.revealTask(task.id)
+            } label: {
+                Text(task.title)
+                    .font(.system(size: 12, design: .rounded).weight(isActive ? .semibold : .regular))
+                    .strikethrough(task.isDone, color: Color.dsTertiary)
+                    .foregroundStyle(isActive ? Color.dsPrimary : Color.dsSecondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            .buttonStyle(.plain)
+            .help("Open “\(task.title)” in Blink")
 
             Spacer(minLength: 4)
 

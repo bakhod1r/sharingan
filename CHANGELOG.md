@@ -5,6 +5,9 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+### Added
+- Clicking a task's title in the notch island opens the main window on the Tasks section, scrolled to that task with a short highlight flash — the done box and the play button on either side keep working as before
+
 ## [1.1.0] — 2026-07-14
 
 ### Added

@@ -79,6 +79,9 @@ struct TasksView: View {
     @State private var categoryFilter: String?
     @State private var tagFilter: String?
     @State private var priorityFilter: TaskPriority?
+    /// Row being flash-highlighted after a reveal deep-link (see `AppRouter.
+    /// revealTask`) — cleared a couple of seconds after the scroll lands.
+    @State private var revealedTaskID: UUID?
     @ObservedObject private var router = AppRouter.shared
 
     private var newCategoryAccent: Color { Color(hex: store.color(for: newCategory)) }
@@ -151,6 +154,7 @@ struct TasksView: View {
         .onChange(of: router.pendingTaskTag) { consumeDeepLink() }
         .onChange(of: router.pendingTaskPriority) { consumeDeepLink() }
         .onChange(of: router.focusTaskSearch) { consumeDeepLink() }
+        .onChange(of: router.pendingRevealTaskID) { consumeDeepLink() }
     }
 
     /// Applies (and clears) one-shot sidebar deep-links: smart filter, one
@@ -173,6 +177,23 @@ struct TasksView: View {
         if router.focusTaskSearch {
             searchFocused = true
             router.focusTaskSearch = false
+        }
+        if let id = router.pendingRevealTaskID {
+            // A reveal outranks whatever the list happens to be showing: drop
+            // the search, the sidebar narrowing and the matrix, and land on the
+            // smart view that actually contains the task (Done for completed).
+            search = ""
+            categoryFilter = nil; tagFilter = nil; priorityFilter = nil
+            showEisenhower = false
+            let isDone = store.tasks.first { $0.id == id }?.isDone ?? false
+            filter = isDone ? .completed : .all
+            revealedTaskID = id
+            router.pendingRevealTaskID = nil
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
+                if revealedTaskID == id {
+                    withAnimation(DS.Motion.gentle) { revealedTaskID = nil }
+                }
+            }
         }
     }
 
@@ -233,16 +254,32 @@ struct TasksView: View {
     /// The Done view regroups by completion day instead of category — history
     /// reads chronologically, newest first.
     private func taskList(_ groups: [(category: String, items: [TaskItem])]) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            if filter == .completed {
-                ForEach(doneGroups(groups), id: \.label) { group in
-                    doneSection(group.label, group.items)
-                }
-            } else {
-                ForEach(groups, id: \.category) { group in
-                    section(group.category, group.items)
+        ScrollViewReader { proxy in
+            VStack(alignment: .leading, spacing: 16) {
+                if filter == .completed {
+                    ForEach(doneGroups(groups), id: \.label) { group in
+                        doneSection(group.label, group.items)
+                    }
+                } else {
+                    ForEach(groups, id: \.category) { group in
+                        section(group.category, group.items)
+                    }
                 }
             }
+            // Both hooks matter: onChange for a reveal that arrives while the
+            // list is on screen, onAppear for one consumed before it was (the
+            // deep-link flipped the matrix / empty state back into the list).
+            .onAppear { scrollToRevealed(proxy) }
+            .onChange(of: revealedTaskID) { scrollToRevealed(proxy) }
+        }
+    }
+
+    /// Centres the revealed row — one runloop later, so a filter change from
+    /// the same deep-link has laid the row out before we scroll to it.
+    private func scrollToRevealed(_ proxy: ScrollViewProxy) {
+        guard let id = revealedTaskID else { return }
+        DispatchQueue.main.async {
+            withAnimation(DS.Motion.gentle) { proxy.scrollTo(id, anchor: .center) }
         }
     }
 
@@ -293,7 +330,9 @@ struct TasksView: View {
                     .padding(.horizontal, 7).padding(.vertical, 2)
                     .background(Capsule().fill(Color.white.opacity(0.06)))
             }
-            ForEach(items) { task in row(task) }
+            ForEach(items) { task in
+                row(task).id(task.id)   // scroll anchor for reveal deep-links
+            }
         }
     }
 
@@ -1354,6 +1393,7 @@ struct TasksView: View {
                         subtaskPanel(task)
                     }
                 }
+                .id(task.id)   // scroll anchor for reveal deep-links
             }
         }
     }
@@ -1511,6 +1551,7 @@ struct TasksView: View {
         let isActive = store.activeTaskID == task.id
         let accent = Color(hex: store.color(for: task.category))
         let hovered = hoveredTask == task.id
+        let revealed = revealedTaskID == task.id
         let prio = timer.settings.priorityColorHex(task.priority).map { Color(hex: $0) }
         return HStack(spacing: 11) {
             // Checkbox — priority-tinted ring (Todoist-style), fills green when done.
@@ -1633,6 +1674,9 @@ struct TasksView: View {
         .background(
             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                 .fill(isActive ? accent.opacity(0.16)
+                      // The reveal flash — a beat stronger than the active tint
+                      // so the row a deep-link landed on is unmistakable.
+                      : revealed ? accent.opacity(0.24)
                       : (hovered ? Color.dsFillStrong : Color.dsFill))
         )
         // Left category accent bar (overlay so it matches the row height).
@@ -1644,7 +1688,7 @@ struct TasksView: View {
         }
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .stroke(isActive ? accent.opacity(0.5) : .clear, lineWidth: 1)
+                .stroke(isActive || revealed ? accent.opacity(0.5) : .clear, lineWidth: 1)
         )
         .shadow(color: .black.opacity(hovered ? 0.18 : 0), radius: 6, y: 3)
         .scaleEffect(hovered && !isActive ? 1.006 : 1)

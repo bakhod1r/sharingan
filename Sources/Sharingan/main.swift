@@ -708,6 +708,26 @@ if let outDir = HeadlessRender.outputDirectory(for: "--render-dev-preview") {
             .taskRows(limit: notchModel.config.clampedTaskRows).count   // 0
         writeIsland("notch-expanded-empty")
 
+        // The reveal deep-link, photographed end-to-end. A notch row's title
+        // click is `MainWindowManager.show()` + `AppRouter.revealTask(id)`;
+        // this shot is the second half: the main window landed on the Tasks
+        // section, scrolled to the revealed row and flashing it. The revealed
+        // task sits behind fourteen backlog rows in a later category, so an
+        // unscrolled window cannot show it — the row being in frame (accent
+        // fill + stroke) IS the scroll having worked. Hosted, with time for
+        // the scroll animation to settle.
+        for i in 1...14 {
+            store.add(title: "Backlog item \(i)", category: "Work")
+        }
+        store.add(title: "Reveal me — clicked in the notch", category: "Personal")
+        let revealID = store.tasks.first { $0.title.hasPrefix("Reveal me") }!.id
+        AppRouter.shared.revealTask(revealID)
+        writeHosted(MainWindowView(timer: timer)
+                        .environment(\.colorScheme, .dark),
+                    to: "\(outDir)/main-reveal.png",
+                    size: NSSize(width: 1040, height: 720),
+                    settle: 1.2)
+
         print("dev previews rendered to \(outDir)")
     }
     exit(0)

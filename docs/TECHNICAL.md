@@ -313,6 +313,16 @@ disagree with the HUD about whether the Mac has a notch; it re-asks on
   28 for one with them, and a list of bare tasks would sit 35pt short of the black
   reserved for it — the island is sized from the row *count*, which knows nothing
   about what any row carries.
+- **A row's title opens the task in the app.** Clicking the title (the done box
+  and play button keep their jobs either side of it) calls
+  `MainWindowManager.show()` + `AppRouter.revealTask(id)`: a one-shot
+  `pendingRevealTaskID` deep-link that lands the main window on the Tasks
+  section, clears whatever would hide the row (search, sidebar narrowing, the
+  Eisenhower matrix — and picks the Done view for a completed task), scrolls it
+  to centre (`ScrollViewReader`, ids on both the category and Done rows) and
+  flashes it with the category accent for ~2s. Photographed end-to-end by the
+  dev-preview `main-reveal.png` shot: the revealed row is seeded behind fourteen
+  backlog rows, so the row being in frame is the scroll having worked.
 - **`notchEars` changes the silhouette, not just the labels.** `.both` → cutout +
   2 ears, `.trailingOnly` → cutout + 1 (the island is anchored to the cutout's
   left edge, never centred), `.none` → the cutout alone with the progress line.
