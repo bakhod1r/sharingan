@@ -90,7 +90,8 @@ public enum SettingsCategory: String, CaseIterable, Identifiable, Hashable, Send
             return ["theme", "appearance", "liquid", "glass",
                     "auto-start", "auto start", "sound", "alarm", "chime",
                     "notification", "launch at login", "startup",
-                    "menu bar icon", "dock", "spin", "animate", "animation"]
+                    "menu bar icon", "dock", "spin", "animate", "animation",
+                    "icloud", "sync", "cloud", "mirror"]
         case .voice:
             return ["tts", "voice", "speak", "spoken", "announcement", "rate", "pitch"]
         case .shortcuts:

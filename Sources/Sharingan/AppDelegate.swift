@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 import SharinganCore
 
@@ -394,6 +395,13 @@ final class MenuBarController: NSObject {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     var timer: PomodoroTimer?
     var coordinator: SharinganCoordinator?
+    /// Always built (so Settings has a status to show), started only while
+    /// the "Sync with iCloud" toggle is on.
+    var syncEngine: CloudSyncEngine?
+    /// The app menu's "Sync Now" item — hidden while sync is off/unavailable,
+    /// mirroring the updater item's pattern.
+    var syncMenuItem: NSMenuItem?
+    private var syncStatusCancellable: AnyCancellable?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -449,6 +457,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Desktop widget (WidgetKit): keep the appex's snapshot file fresh.
         WidgetSnapshotPublisher.shared.install(timer: timer)
 
+        // iCloud sync: the engine always exists (Settings needs its status),
+        // but only start()s while the opt-in toggle is on. Everything
+        // degrades to a calm status string without an account/entitlement.
+        let sync = CloudSyncEngine(store: TaskStore.shared,
+                                   templates: TemplateStore.shared)
+        self.syncEngine = sync
+        AppServices.syncEngine = sync
+        coord.installSync(engine: sync)
+        syncStatusCancellable = sync.$status
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] status in self?.syncStatusChanged(status) }
+        if UserDefaults.standard.bool(forKey: CloudSyncEngine.syncEnabledKey) {
+            sync.start()
+            SettingsSync.start()
+        }
+
         // Without this, notify()/schedule() silently no-op on a fresh install:
         // UNUserNotificationCenter.add fails while status is .notDetermined.
         Task { await NotificationService.shared.requestAuthorization() }
@@ -474,6 +498,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     // The full main menu lives in MainMenu.swift (installMainMenu()).
+
+    /// Keeps the app menu's "Sync Now" item in step with the engine: hidden
+    /// while sync is off or can't run (same pattern as the updater item), and
+    /// carrying the last-synced time as lightweight status when idle.
+    private func syncStatusChanged(_ status: SyncStatus) {
+        guard let item = syncMenuItem else { return }
+        switch status {
+        case .disabled, .unavailable:
+            item.isHidden = true
+        case .syncing:
+            item.isHidden = false
+            item.title = "Sync Now — syncing…"
+        case .idle(let lastSynced) where lastSynced != nil:
+            item.isHidden = false
+            item.title = "Sync Now — \(status.label().lowercased())"
+        case .idle, .failed:
+            item.isHidden = false
+            item.title = "Sync Now"
+        }
+    }
 
     // sharingan:// URL scheme (Shortcuts/Raycast/browser automation). AppKit
     // installs the kAEGetURL Apple-event handler for us because the delegate

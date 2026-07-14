@@ -37,6 +37,14 @@ extension AppDelegate {
                                       keyEquivalent: "")
         updateItem.target = UpdaterService.shared
         updateItem.isHidden = !UpdaterService.shared.isAvailable
+        // Hidden until the sync engine reports a usable status (the engine is
+        // built after this menu installs — syncStatusChanged flips it live).
+        let syncItem = menu.addItem(withTitle: "Sync Now",
+                                    action: #selector(menuSyncNow),
+                                    keyEquivalent: "")
+        syncItem.target = self
+        syncItem.isHidden = true
+        syncMenuItem = syncItem
         menu.addItem(withTitle: "About Sharingan",
                      action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
                      keyEquivalent: "")
@@ -162,6 +170,8 @@ extension AppDelegate {
         AppRouter.shared.section = .tasks
         AppRouter.shared.focusTaskSearch = true
     }
+
+    @MainActor @objc private func menuSyncNow() { syncEngine?.syncNow() }
 
     @MainActor @objc private func menuToggleTimer() { timer?.toggle() }
     @MainActor @objc private func menuSkipPhase() { timer?.skip() }

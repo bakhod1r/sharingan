@@ -9,6 +9,11 @@ import SharinganCore
 enum AppServices {
     static weak var coordinator: SharinganCoordinator?
 
+    /// The one iCloud sync engine, owned by the AppDelegate (always built,
+    /// started only while the Settings toggle is on). Views reach it here for
+    /// the same constructed-by-generic-hosts reason as the coordinator.
+    static weak var syncEngine: CloudSyncEngine?
+
     /// Preview/detached fallback so views always have a queue to observe.
     private static let orphanQueue = FocusQueue()
 

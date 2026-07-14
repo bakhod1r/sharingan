@@ -799,6 +799,13 @@ struct SettingsView: View {
                 }
                 .disabled(!UpdaterService.shared.isAvailable)
 
+                // The engine exists whenever the app delegate ran (always in
+                // the real app); previews/renders without one just omit the
+                // section rather than crashing on a dummy.
+                if let engine = AppServices.syncEngine {
+                    SettingsSyncSection(engine: engine)
+                }
+
         case .voice:
                 Section("Voice guidance (TTS)") {
                     ToggleRow(title: "Spoken instructions",
