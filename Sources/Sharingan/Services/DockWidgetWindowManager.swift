@@ -3,15 +3,18 @@ import SwiftUI
 import SharinganCore
 
 /// Hosts the Dock widget (DockWidgetView) in a non-activating borderless
-/// NSPanel pinned just above the Dock near its Trash end — macOS Dock tiles
-/// are always square, so "widening the Dock" is really a window aligned flush
-/// with it. Shown/hidden purely by the `dockWidgetEnabled` settings flag (via
+/// NSPanel pinned flush against the Dock's inner edge — macOS Dock tiles are
+/// always square, so "widening the Dock" is really a window aligned flush
+/// with it. Placement adapts to the Dock's actual side (bottom, left, or
+/// right — see `DockWidgetGeometry`), not just the bottom-Dock case. Shown/
+/// hidden purely by the `dockWidgetEnabled` settings flag (via
 /// SharinganCoordinator.syncDockWidget()); like the today panel it ignores the
 /// running state, so Start is always reachable.
 @MainActor
 final class DockWidgetWindowManager: DockWidgetController {
     static let shared = DockWidgetWindowManager()
     private var panel: NSPanel?
+    private var hosting: NSHostingView<DockWidgetView>?
     private var screenObserver: NSObjectProtocol?
     /// The timer whose settings drive size/alignment/opacity — read fresh in
     /// `reposition()` and `applySettings()` rather than snapshotted once, so a
@@ -49,6 +52,7 @@ final class DockWidgetWindowManager: DockWidgetController {
         let hosting = NSHostingView(rootView: DockWidgetView(timer: timer))
         hosting.autoresizingMask = [.width, .height]
         panel.contentView = hosting
+        self.hosting = hosting
         self.panel = panel
         applySettings()
         reposition()
@@ -69,6 +73,7 @@ final class DockWidgetWindowManager: DockWidgetController {
         }
         guard let panel else { return }
         self.panel = nil
+        self.hosting = nil
         WindowAnimator.dismiss(panel) {
             panel.orderOut(nil)
             panel.contentView = nil
@@ -87,32 +92,27 @@ final class DockWidgetWindowManager: DockWidgetController {
         panel.alphaValue = CGFloat(min(max(settings.dockWidgetOpacity, 0.3), 1.0))
     }
 
-    /// Flush against the Dock's inner edge, near the Trash end. The Dock's
-    /// side and thickness fall out of the difference between the screen's
-    /// full frame and its visibleFrame; with the Dock auto-hidden the two
-    /// (nearly) coincide and the pill rests at the screen edge instead.
+    /// Flush against the Dock's inner edge — beside it, centered, on a
+    /// vertical Dock; above it, at the Position setting's end, on a
+    /// horizontal one. The Dock's side and thickness fall out of the
+    /// difference between the screen's full frame and its visibleFrame
+    /// (`DockWidgetGeometry.side`); with the Dock auto-hidden the two
+    /// (nearly) coincide and it reads as bottom, so the pill rests at the
+    /// screen edge instead. The math itself lives in SharinganCore
+    /// (`DockWidgetGeometry`) so it is unit-testable without an `NSScreen`.
     private func reposition() {
-        guard let panel, let screen = NSScreen.main else { return }
+        guard let panel, let screen = NSScreen.main, let t = timer else { return }
         let vis = screen.visibleFrame
         let full = screen.frame
-        let preset = timer?.settings.dockWidgetSize ?? .medium
-        let alignment = timer?.settings.dockWidgetAlignment ?? .trailing
-        let s = NSSize(width: preset.width, height: preset.height)
-        var origin: NSPoint
-        if vis.minX > full.minX {          // Dock on the left
-            origin = NSPoint(x: vis.minX + 4, y: vis.minY + 16)
-        } else if vis.maxX < full.maxX {   // Dock on the right
-            origin = NSPoint(x: vis.maxX - s.width - 4, y: vis.minY + 16)
-        } else {                           // Dock on the bottom (the common case)
-            let x: CGFloat
-            switch alignment {
-            case .leading:  x = vis.minX + 16
-            case .center:   x = vis.midX - s.width / 2
-            case .trailing: x = vis.maxX - s.width - 16
-            }
-            origin = NSPoint(x: x, y: vis.minY + 4)
-        }
+        let preset = t.settings.dockWidgetSize
+        let alignment = t.settings.dockWidgetAlignment
+        let s = CGSize(width: preset.width, height: preset.height)
+        let origin = DockWidgetGeometry.origin(size: s, alignment: alignment,
+                                               visibleFrame: vis, fullFrame: full)
         panel.setFrame(NSRect(origin: origin, size: s), display: true)
+        let anchor = DockWidgetGeometry.expandAnchor(alignment: alignment,
+                                                      visibleFrame: vis, fullFrame: full)
+        hosting?.rootView = DockWidgetView(timer: t, anchor: anchor)
     }
 }
 

@@ -10,6 +10,12 @@ import SharinganCore
 struct DockWidgetView: View {
     @ObservedObject var timer: PomodoroTimer
     @ObservedObject private var tasks = TaskStore.shared
+    /// Which container edge the pill hugs — the Dock-nearest edge, supplied
+    /// by `DockWidgetWindowManager` (`DockWidgetGeometry.expandAnchor`), not
+    /// the raw Position setting: on a vertical Dock the pill must expand
+    /// away from the Dock regardless of what Position says, since Position
+    /// is a horizontal-Dock concept.
+    var anchor: DockWidgetAlignment = .trailing
     /// True while the pointer sits over the pill — drives the compact ↔
     /// expanded spring when `dockWidgetExpandOnHover` is on.
     @State private var hovering = false
@@ -24,7 +30,7 @@ struct DockWidgetView: View {
     /// under the pointer — the Dock's now-playing widgets' behavior.
     private var expanded: Bool { !timer.settings.dockWidgetExpandOnHover || hovering }
     private var containerAlignment: Alignment {
-        switch timer.settings.dockWidgetAlignment {
+        switch anchor {
         case .leading:  return .leading
         case .center:   return .center
         case .trailing: return .trailing

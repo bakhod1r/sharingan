@@ -121,4 +121,55 @@ struct DockWidgetTests {
         #expect(spy.shown == 1)
         #expect(spy.hidden == 1)
     }
+
+    // MARK: - Placement geometry
+
+    @Test("dock side detection: bottom, left, right, auto-hidden")
+    func sideDetection() {
+        let full = CGRect(x: 0, y: 0, width: 1600, height: 1000)
+        #expect(DockWidgetGeometry.side(visibleFrame: CGRect(x: 0, y: 70, width: 1600, height: 905), fullFrame: full) == .bottom)
+        #expect(DockWidgetGeometry.side(visibleFrame: CGRect(x: 74, y: 0, width: 1526, height: 975), fullFrame: full) == .left)
+        #expect(DockWidgetGeometry.side(visibleFrame: CGRect(x: 0, y: 0, width: 1526, height: 975), fullFrame: full) == .right)
+        // Auto-hidden Dock: only the menu bar differs → bottom rules.
+        #expect(DockWidgetGeometry.side(visibleFrame: CGRect(x: 0, y: 0, width: 1600, height: 975), fullFrame: full) == .bottom)
+    }
+
+    @Test("vertical docks center the pill instead of parking it in the corner")
+    func verticalDockCenters() {
+        let full = CGRect(x: 0, y: 0, width: 1600, height: 1000)
+        let vis = CGRect(x: 74, y: 0, width: 1526, height: 975)
+        let size = CGSize(width: 320, height: 56)
+        let o = DockWidgetGeometry.origin(size: size, alignment: .trailing,
+                                          visibleFrame: vis, fullFrame: full)
+        #expect(o.x == vis.minX + 8)
+        #expect(o.y == vis.midY - size.height / 2)
+    }
+
+    @Test("bottom dock honors the Position setting")
+    func bottomDockAlignment() {
+        let full = CGRect(x: 0, y: 0, width: 1600, height: 1000)
+        let vis = CGRect(x: 0, y: 70, width: 1600, height: 905)
+        let size = CGSize(width: 320, height: 56)
+        for a in DockWidgetAlignment.allCases {
+            let o = DockWidgetGeometry.origin(size: size, alignment: a,
+                                              visibleFrame: vis, fullFrame: full)
+            #expect(o.y == vis.minY + 4)
+            switch a {
+            case .leading:  #expect(o.x == vis.minX + 16)
+            case .center:   #expect(o.x == vis.midX - size.width / 2)
+            case .trailing: #expect(o.x == vis.maxX - size.width - 16)
+            }
+        }
+    }
+
+    @Test("hover expansion opens away from a vertical dock")
+    func expandAnchorFollowsDock() {
+        let full = CGRect(x: 0, y: 0, width: 1600, height: 1000)
+        let left = CGRect(x: 74, y: 0, width: 1526, height: 975)
+        let right = CGRect(x: 0, y: 0, width: 1526, height: 975)
+        let bottom = CGRect(x: 0, y: 70, width: 1600, height: 905)
+        #expect(DockWidgetGeometry.expandAnchor(alignment: .center, visibleFrame: left, fullFrame: full) == .leading)
+        #expect(DockWidgetGeometry.expandAnchor(alignment: .center, visibleFrame: right, fullFrame: full) == .trailing)
+        #expect(DockWidgetGeometry.expandAnchor(alignment: .center, visibleFrame: bottom, fullFrame: full) == .center)
+    }
 }

@@ -4,7 +4,7 @@
 > whenever a feature is added, changed, or removed, update this document in the
 > same change.**
 
-- Version: 1.14.0
+- Version: 1.15.0
 - Platform: macOS 14+, lives in the menu bar
 
 ---
@@ -440,35 +440,54 @@ size/opacity controls.
   settings object away. `dockWidgetOpacity: Double` (0.3…1.0, default `1.0`)
   and `dockWidgetExpandOnHover: Bool` (default `true`) decode with plain
   `decodeIfPresent ?? default`.
-- **Placement is `visibleFrame` vs. `frame` math, not a hardcoded corner.**
-  `NSScreen.main`'s `frame` is the full display; `visibleFrame` excludes the
-  Dock (and the menu bar). Comparing the two on each edge tells
-  `DockWidgetWindowManager.reposition()` where the Dock actually is. The
-  window is always sized to the FULL preset (`dockWidgetSize.width/height`)
-  regardless of the hover state — only the pill drawn inside it resizes — so
-  `reposition()` never has to reconcile a resizing window with its anchor:
+- **Placement is `visibleFrame` vs. `frame` math, extracted into a pure,
+  unit-testable model** — `DockWidgetGeometry` (SharinganCore/Models), the
+  same precedent as `NotchGeometry`. `NSScreen.main`'s `frame` is the full
+  display; `visibleFrame` excludes the Dock (and the menu bar).
+  `DockWidgetGeometry.side(visibleFrame:fullFrame:)` compares the two on each
+  edge (`visibleFrame.minX > frame.minX` → `.left`, `visibleFrame.maxX <
+  frame.maxX` → `.right`, else `.bottom`) to tell
+  `DockWidgetWindowManager.reposition()` where the Dock actually is, and
+  `DockWidgetGeometry.origin(size:alignment:visibleFrame:fullFrame:)` turns
+  that into a window origin. The window is always sized to the FULL preset
+  (`dockWidgetSize.width/height`) regardless of the hover state — only the
+  pill drawn inside it resizes — so `reposition()` never has to reconcile a
+  resizing window with its anchor:
   - Dock on the bottom (the common case): the x position follows
     `dockWidgetAlignment` — `.leading` → `visibleFrame.minX + 16`, `.center`
     → `visibleFrame.midX − width / 2`, `.trailing` (default) →
     `visibleFrame.maxX − width − 16`, i.e. near the Trash. Either way the
     pill sits at `visibleFrame.minY + 4`.
-  - Dock on the left (`visibleFrame.minX > frame.minX`): pill moves to
-    `visibleFrame.minX + 4, visibleFrame.minY + 16`, flush against the Dock's
-    right edge instead. Alignment is ignored on a vertical Dock — the pill
-    stays at its bottom end regardless of the setting.
-  - Dock on the right (`visibleFrame.maxX < frame.maxX`): pill sits at
-    `visibleFrame.maxX − width − 4, visibleFrame.minY + 16` (alignment
-    ignored, same as the left case).
+  - Dock on the left (`visibleFrame.minX > frame.minX`): pill sits flush
+    beside the Dock's inner edge, **vertically centered** —
+    `visibleFrame.minX + 8, visibleFrame.midY − height / 2` — instead of
+    wedged into the bottom-left corner (the bug this replaced). The Position
+    setting is a horizontal-Dock concept, so a vertical Dock always centers
+    regardless of what it says — the simplest deliberate look.
+  - Dock on the right (`visibleFrame.maxX < frame.maxX`): mirrored —
+    `visibleFrame.maxX − width − 8, visibleFrame.midY − height / 2`.
   - **Auto-hide** falls out of the same comparison for free: when the Dock is
     set to auto-hide, `visibleFrame` and `frame` (nearly) coincide since macOS
-    stops reserving Dock space, so the pill's computed origin lands at the
-    screen edge instead of hovering over empty space where the Dock used to
-    be — no separate auto-hide detection needed.
+    stops reserving Dock space, so `side()` reads `.bottom` and the pill's
+    computed origin lands at the screen edge instead of hovering over empty
+    space where the Dock used to be — no separate auto-hide detection needed.
+  - **Hover expansion opens away from the Dock.** The pill hugs the
+    container edge nearest the Dock, not always the Position setting:
+    `DockWidgetGeometry.expandAnchor(alignment:visibleFrame:fullFrame:)`
+    returns `.leading` on a left Dock, `.trailing` on a right Dock, and the
+    `dockWidgetAlignment` setting unchanged on the bottom. `reposition()`
+    feeds the result into `DockWidgetView`'s `anchor` parameter (default
+    `.trailing`), which drives `containerAlignment` instead of reading
+    `dockWidgetAlignment` directly — so the pill on a left Dock always grows
+    rightward, away from the Dock, however Position is set.
   - `reposition()` re-runs on `NSApplication.didChangeScreenParametersNotification`,
     so moving the Dock, resizing a display, or toggling auto-hide re-anchors
     the pill live. `DockWidgetWindowManager` keeps a `weak var timer` (set in
-    `showDockWidget`) so `reposition()` and `applySettings()` always read the
-    live settings rather than a snapshot from when the panel was created.
+    `showDockWidget`) and a `NSHostingView<DockWidgetView>` reference
+    (`hosting`, nilled in `hideDockWidget()`) so `reposition()` and
+    `applySettings()` always read the live settings rather than a snapshot
+    from when the panel was created, and can push a fresh `anchor` into the
+    hosted view without recreating the panel.
   - `showDockWidget(timer:)` on an already-showing panel live-applies
     settings instead of a no-op: `applySettings()` (resizes to the current
     preset, reclamps opacity) then `reposition()` — so flipping size,
@@ -487,10 +506,13 @@ size/opacity controls.
   padding, spacing) by `k = dockWidgetSize.height / 56`, so the whole layout
   is a linear scale off the medium preset rather than three hand-tuned
   layouts. The view sits inside a full-preset-size transparent container,
-  `.frame(width:height:alignment:)`-anchored per `dockWidgetAlignment`
-  (`.leading`/`.center`/`.trailing`); the pill itself carries the
-  `.onHover` (not the container), so empty container space neither expands
-  the pill nor swallows Dock clicks. When `dockWidgetExpandOnHover` is on,
+  `.frame(width:height:alignment:)`-anchored per its `anchor` parameter
+  (`.leading`/`.center`/`.trailing`, default `.trailing`) — the
+  Dock-nearest edge `DockWidgetWindowManager` computes via
+  `DockWidgetGeometry.expandAnchor`, not the raw `dockWidgetAlignment`
+  setting; the pill itself carries the `.onHover` (not the container), so
+  empty container space neither expands the pill nor swallows Dock clicks.
+  When `dockWidgetExpandOnHover` is on,
   the pill rests compact — progress ring + remaining time only, width
   `height * 2.6` — and springs to the full task-title-and-transport-buttons
   layout (`.spring(response: 0.32, dampingFraction: 0.78)`, width only —

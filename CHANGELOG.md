@@ -5,6 +5,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.15.0] — 2026-07-14
+
+### Fixed
+- Dock widget wedged in the screen corner on vertical (left/right) Docks: it now adapts to horizontal AND vertical Docks — vertical Docks get the pill centered beside the Dock instead of wedged in the corner, and hover expansion opens away from the Dock
+
 ## [1.14.0] — 2026-07-14
 
 ### Added
