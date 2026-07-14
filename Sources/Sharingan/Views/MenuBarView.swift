@@ -27,7 +27,7 @@ struct MenuBarView: View {
     @State private var editorTask: TaskItem?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private enum Tab: Hashable { case timer, tasks, week }
+    private enum Tab: Hashable { case timer, tasks, week, report }
 
     /// Fixed height for the switchable tab area so the popover keeps one height
     /// across tabs. Sized to fit the timer tab's controls (the stats strip is
@@ -53,6 +53,7 @@ struct MenuBarView: View {
                 Label("Timer", systemImage: "timer").tag(Tab.timer)
                 Label("Tasks", systemImage: "checklist").tag(Tab.tasks)
                 Label("Week", systemImage: "calendar").tag(Tab.week)
+                Label("Report", systemImage: "list.bullet.rectangle").tag(Tab.report)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -66,9 +67,10 @@ struct MenuBarView: View {
                 ScrollView(.vertical, showsIndicators: false) {
                     Group {
                         switch tab {
-                        case .timer: timerTab
-                        case .tasks: TasksView(timer: timer)
-                        case .week:  MenuBarWeekView(timer: timer)
+                        case .timer:  timerTab
+                        case .tasks:  TasksView(timer: timer)
+                        case .week:   MenuBarWeekView(timer: timer)
+                        case .report: ReportView(timer: timer)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .top)
