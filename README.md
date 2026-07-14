@@ -140,6 +140,10 @@ and attaches it to the GitHub release, with notes taken from the changelog.
 landmarks), AVFoundation (camera, TTS, audio), SwiftCharts, Carbon global
 hotkeys. Pure SwiftPM.
 
+## Contact
+
+Bakhodir Yashin Mansur — bakhodiryashinmansur@gmail.com
+
 ## License
 
 [MIT](LICENSE) © 2026 Bakhodir Yashin Mansur
