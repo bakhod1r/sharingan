@@ -5,6 +5,25 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-07-15
+
+### Added
+- **iCloud sync** (opt-in, off by default): tasks, categories, tags, templates,
+  focus statistics and settings follow you between Macs through your private
+  iCloud database. Turn it on in Settings → iCloud sync. Conflicts never lose
+  data — the newest edit of a task wins, statistics from two Macs add up
+  instead of overwriting each other, and a delete never swallows an edit made
+  after it elsewhere.
+- The active timer is mirrored read-only across Macs: start a focus session on
+  one Mac and the other shows it.
+- Near-instant sync via CloudKit silent push, with wake/foreground and
+  periodic fetch fallbacks when push can't reach the app.
+
+### Note
+- Sync requires the app to be signed with an iCloud-capable provisioning
+  profile. Builds without one (including local `make app` builds) run exactly
+  as before — the Settings section simply reports sync as unavailable.
+
 ## [1.2.0] — 2026-07-15
 
 ### Added
