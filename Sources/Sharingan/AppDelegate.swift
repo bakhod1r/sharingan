@@ -69,6 +69,9 @@ final class MenuBarController: NSObject {
         // Restore the desktop today-panel if the user left it enabled (the
         // coordinator's initial syncAll ran before its controller was wired).
         coordinator.syncTodayPanel()
+        // Same launch-order gap for the Dock widget: without this re-sync the
+        // pill never appears on a fresh launch.
+        coordinator.syncDockWidget()
         coordinator.installCLIBridge()
 
         // Refresh title every second.
