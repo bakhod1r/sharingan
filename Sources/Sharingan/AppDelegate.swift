@@ -108,9 +108,12 @@ final class MenuBarController: NSObject {
     /// ring draws around it: a dim full-circle track plus a bright elapsed arc
     /// sweeping clockwise from 12 o'clock — red-orange in focus, green on
     /// breaks, dimmed while paused.
+    ///
+    /// `rotationDegrees` spins the tomoe (clockwise) — the animated menu bar.
     @MainActor
     static func menuBarIcon(progress: Double? = nil,
-                            phase: PomodoroPhase = .focus) -> NSImage? {
+                            phase: PomodoroPhase = .focus,
+                            rotationDegrees: Double = 0) -> NSImage? {
         let side: CGFloat = 18
         let img = NSImage(size: NSSize(width: side, height: side), flipped: false) { fullRect in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
@@ -193,7 +196,7 @@ final class MenuBarController: NSObject {
             let sweep = 100.0 * .pi / 180.0
             let steps = 14
             for i in 0..<3 {
-                let head = (-80.0 + Double(i) * 120.0) * .pi / 180.0
+                let head = (-80.0 + Double(i) * 120.0 - rotationDegrees) * .pi / 180.0
                 let p = CGPoint(x: c.x + ringR * cos(head), y: c.y + ringR * sin(head))
                 ctx.fillEllipse(in: CGRect(x: p.x - tomoeR, y: p.y - tomoeR,
                                            width: tomoeR * 2, height: tomoeR * 2))

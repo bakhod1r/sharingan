@@ -15,12 +15,16 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-icon"),
 }
 
 // Headless preview of the 18pt menu-bar icon, upscaled for inspection:
-// `Sharingan --render-menubar-icon <path>` (debug utility).
+// `Sharingan --render-menubar-icon <path> [rotationDegrees]` (debug utility;
+// the optional angle previews the spinning-tomoe animation frames).
 if let i = CommandLine.arguments.firstIndex(of: "--render-menubar-icon"),
    i + 1 < CommandLine.arguments.count {
     let out = CommandLine.arguments[i + 1]
+    let rotation = i + 2 < CommandLine.arguments.count
+        ? Double(CommandLine.arguments[i + 2]) ?? 0 : 0
     MainActor.assumeIsolated {
-        if let img = MenuBarController.menuBarIcon(progress: 0.4, phase: .focus),
+        if let img = MenuBarController.menuBarIcon(progress: 0.4, phase: .focus,
+                                                   rotationDegrees: rotation),
            let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 144, pixelsHigh: 144,
                                       bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
                                       isPlanar: false, colorSpaceName: .deviceRGB,
@@ -447,7 +451,8 @@ if let outDir = HeadlessRender.outputDirectory(for: "--render-dev-preview") {
         /// never fronted) window and cache its display instead. A hosted view also
         /// runs `onAppear`, which is where the Settings page asks whether this Mac
         /// has a notch.
-        @MainActor func writeHosted(_ view: some View, to path: String, size: NSSize) {
+        @MainActor func writeHosted(_ view: some View, to path: String, size: NSSize,
+                                    settle: TimeInterval = 0.35) {
             let host = NSHostingView(rootView: view.frame(width: size.width,
                                                           height: size.height))
             host.frame = NSRect(origin: .zero, size: size)
@@ -456,7 +461,9 @@ if let outDir = HeadlessRender.outputDirectory(for: "--render-dev-preview") {
             window.contentView = host
             host.layoutSubtreeIfNeeded()
             // A turn of the run loop, so `onAppear` has fired before the shot.
-            RunLoop.current.run(until: Date().addingTimeInterval(0.35))
+            // (Longer for shots that have to wait out an animation — the reveal
+            // shot's scroll-to-row below.)
+            RunLoop.current.run(until: Date().addingTimeInterval(settle))
             guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { return }
             host.cacheDisplay(in: host.bounds, to: rep)
             try? rep.representation(using: .png, properties: [:])?
