@@ -24,7 +24,10 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 - Bundle identity moved onto developer-scoped identifiers
   (`com.bakhod1r.sharingan`, app group `89LCRZKZ48.com.bakhod1r.sharingan`) as
   signing requires. Settings and data from 1.1.x migrate automatically on
-  first launch.
+  first launch. Two things the migration can't carry over automatically:
+  desktop widgets placed under 1.1.x need to be re-added (the widget's bundle
+  identity changed too, so macOS treats it as a new widget), and Launch at
+  Login may need a one-time re-enable in Settings.
 
 ### Note
 - This release must be installed by hand one last time — 1.1.x has no updater

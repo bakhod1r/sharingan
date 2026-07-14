@@ -56,8 +56,16 @@ public enum RebrandMigration {
         // `tired` CLI (no bundle id) and the test runner must not import the
         // app's old domain into their own.
         if Bundle.main.bundleIdentifier == newBundleID {
-            migrateDomain(from: oldBundleID, into: defaults)
+            // Most-recent-domain-last would let an older value win: both
+            // migrateDomain calls skip keys already present, so whichever
+            // domain runs first fills the key and the later call's value for
+            // that same key (e.g. a framework-written NSWindow Frame
+            // autosave persisted under both old domains) is discarded. Run
+            // the newer sharinganV1 domain first so its values win, then
+            // fall back to the oldest (com.blink.app) domain for anything
+            // sharinganV1 never wrote.
             migrateDomain(from: sharinganV1BundleID, into: defaults)
+            migrateDomain(from: oldBundleID, into: defaults)
         }
         migrateDefaults(defaults)
         if let base = fileManager.urls(for: .applicationSupportDirectory,

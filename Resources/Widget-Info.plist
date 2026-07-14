@@ -18,7 +18,7 @@
 	<string>XPC!</string>
 	<!-- make-app.sh restamps this from the app's Info.plist at build time; kept in sync here to avoid confusion. -->
 	<key>CFBundleShortVersionString</key>
-	<string>1.1.0</string>
+	<string>1.2.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>LSMinimumSystemVersion</key>

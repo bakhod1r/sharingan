@@ -17,7 +17,8 @@ SIGN_BIN="$(find "$ROOT/.build" -type f -name sign_update -path "*artifacts*" ! 
 [[ -n "$SIGN_BIN" ]] || { echo "sign_update not found (run swift build first)"; exit 1; }
 
 if [[ -n "${SPARKLE_ED_PRIVATE_KEY:-}" ]]; then
-  KEY_FILE="$(mktemp)"; printf '%s' "$SPARKLE_ED_PRIVATE_KEY" > "$KEY_FILE"
+  KEY_FILE="$(mktemp)"; trap 'rm -f "$KEY_FILE"' EXIT
+  printf '%s' "$SPARKLE_ED_PRIVATE_KEY" > "$KEY_FILE"
   SIG_LINE="$("$SIGN_BIN" --ed-key-file "$KEY_FILE" "$DMG")"
   rm -f "$KEY_FILE"
 else
