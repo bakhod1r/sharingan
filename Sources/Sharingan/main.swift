@@ -69,6 +69,56 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-iris-grid"),
     exit(0)
 }
 
+// Headless render of the DMG install-window background:
+// `Sharingan --render-dmg-background <path>` writes a 560×400pt PNG at @2x
+// (rep.size stamps 144 dpi so Finder draws it 1:1 in points). The icon slots
+// styled by make-dmg.sh's AppleScript sit at (140,195) for the app and
+// (420,195) for /Applications — the arrow and caption are drawn around them.
+if let i = CommandLine.arguments.firstIndex(of: "--render-dmg-background"),
+   i + 1 < CommandLine.arguments.count {
+    let out = CommandLine.arguments[i + 1]
+    MainActor.assumeIsolated {
+        let view = ZStack {
+            LinearGradient(colors: [Color(red: 0.11, green: 0.12, blue: 0.14),
+                                    Color(red: 0.045, green: 0.05, blue: 0.06)],
+                           startPoint: .top, endPoint: .bottom)
+            // Oversized ghost iris bleeding off the bottom — branding without
+            // fighting the icons for attention. Placed with .position (which
+            // adopts the proposed 560×400) — an .offset would leave the 560pt
+            // circle in the layout union and shift every other layer up.
+            MoveIrisView(diameter: 560, style: .classic)
+                .opacity(0.09)
+                .position(x: 280, y: 360)
+            Text("Sharingan")
+                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.92))
+                .position(x: 280, y: 52)
+            Text("Pomodoro · Tasks · Eye care")
+                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .foregroundStyle(.white.opacity(0.40))
+                .position(x: 280, y: 78)
+            Image(systemName: "arrow.right")
+                .font(.system(size: 40, weight: .bold))
+                .foregroundStyle(.white.opacity(0.35))
+                .position(x: 280, y: 195)
+            Text("Drag into Applications to install")
+                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .foregroundStyle(.white.opacity(0.45))
+                .position(x: 280, y: 330)
+        }
+        .frame(width: 560, height: 400)
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = 2
+        if let cg = renderer.cgImage {
+            let rep = NSBitmapImageRep(cgImage: cg)
+            rep.size = NSSize(width: 560, height: 400)   // 144 dpi
+            try? rep.representation(using: .png, properties: [:])?
+                .write(to: URL(fileURLWithPath: out))
+        }
+    }
+    exit(0)
+}
+
 // Headless preview of the wallpaper scene + break-screen eye pair:
 // `Sharingan --render-eyes-preview <path>`.
 if let i = CommandLine.arguments.firstIndex(of: "--render-eyes-preview"),

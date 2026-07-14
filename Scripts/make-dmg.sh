@@ -47,8 +47,47 @@ if [[ -f "$ICNS" ]]; then
   if [[ -d "$MOUNT_POINT" ]]; then
     cp "$ICNS" "$MOUNT_POINT/.VolumeIcon.icns"
     SetFile -a C "$MOUNT_POINT" 2>/dev/null || true
-    hdiutil detach "$MOUNT_POINT" >/dev/null
     echo "  ✓ volume icon"
+
+    # Branded install window: the app renders its own background (ghost iris,
+    # arrow, caption), and Finder is scripted to lay the window out around it —
+    # icon view, 560×400, app at (140,195), Applications at (420,195). The
+    # .DS_Store Finder writes persists into the compressed image. Best-effort:
+    # if Finder scripting is unavailable (no Automation permission), the DMG
+    # still builds, just unstyled.
+    mkdir -p "$MOUNT_POINT/.background"
+    if "$APP/Contents/MacOS/$APP_NAME" --render-dmg-background \
+         "$MOUNT_POINT/.background/bg.png" 2>/dev/null \
+       && [[ -s "$MOUNT_POINT/.background/bg.png" ]]; then
+      if osascript >/dev/null <<OSA
+tell application "Finder"
+  tell disk "$VOL_NAME"
+    open
+    set current view of container window to icon view
+    set toolbar visible of container window to false
+    set statusbar visible of container window to false
+    set the bounds of container window to {200, 120, 760, 520}
+    set viewOptions to the icon view options of container window
+    set arrangement of viewOptions to not arranged
+    set icon size of viewOptions to 100
+    set text size of viewOptions to 13
+    set background picture of viewOptions to file ".background:bg.png"
+    set position of item "$APP_NAME.app" of container window to {140, 195}
+    set position of item "Applications" of container window to {420, 195}
+    update without registering applications
+    delay 1
+    close
+  end tell
+end tell
+OSA
+      then
+        echo "  ✓ install window styled"
+      else
+        echo "  ⚠ Finder styling skipped (no Automation permission?)"
+      fi
+    fi
+
+    hdiutil detach "$MOUNT_POINT" >/dev/null
   fi
 fi
 

@@ -5,6 +5,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.4.1] — 2026-07-14
+
+### Added
+- Branded DMG install window: opening Sharingan.dmg now shows a designed window — dark background with a ghost Sharingan iris rendered by the app itself (`--render-dmg-background`), the app icon and Applications folder laid out side-by-side with an arrow, toolbar hidden. The layout is scripted into the image's .DS_Store at build time, so it survives release downloads
+
 ## [1.4.0] — 2026-07-14
 
 ### Added

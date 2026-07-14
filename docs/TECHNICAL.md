@@ -4,7 +4,7 @@
 > whenever a feature is added, changed, or removed, update this document in the
 > same change.**
 
-- Version: 1.4.0
+- Version: 1.4.1
 - Platform: macOS 14+, lives in the menu bar
 
 ---
@@ -410,6 +410,7 @@ disagree with the HUD about whether the Mac has a notch; it re-asks on
 
 - `Scripts/make-app.sh` assembles `dist/Sharingan.app`: builds `AppIcon.icns` from `Resources/AppIcon.appiconset/icon_1024.png` (sips + iconutil), stamps `CFBundleVersion` with the commit count, ad-hoc signs.
 - `Scripts/make-dmg.sh` wraps it in `dist/Sharingan.dmg` with an /Applications drag-install symlink. The image is built read-write first so the mounted **volume** gets the Sharingan icon (`.VolumeIcon.icns` + Finder custom-icon bit — it lives inside the image, so downloaded DMGs keep it), then converted to compressed UDZO; the `.dmg` **file** also gets the icon via Rez/SetFile (local copies only — resource forks don't survive internet downloads).
+- **Branded install window**: the app renders its own 560×400 @2x background (`Sharingan --render-dmg-background <png>` — ghost classic iris, title, arrow, "Drag into Applications to install") into the volume's `.background/`, and an AppleScript poses Finder — icon view, no toolbar/statusbar, 100pt icons, app at (140,195), Applications at (420,195) — so the written `.DS_Store` persists into the compressed image. Best-effort: without Finder Automation permission the DMG still builds, just unstyled.
 - Releases: push a `v*` tag → `.github/workflows/release.yml` builds the DMG on a macOS runner and attaches it, notes from CHANGELOG.md.
 
 ## Marketing site
