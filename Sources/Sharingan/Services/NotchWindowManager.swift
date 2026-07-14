@@ -3,10 +3,16 @@ import SwiftUI
 import Combine
 import SharinganCore
 
-/// The notch HUD's window. One `NSPanel` on one screen, sized to the union of
-/// every island state and pinned to the top center. It is *above* the menu bar,
-/// so the content view's `hitTest` must return nil everywhere the island isn't
-/// drawn — otherwise the top of the screen stops accepting clicks.
+/// The notch HUD's window. One `NSPanel` on one screen, pinned to the top
+/// center and **only ever as tall as the current island state's silhouette**
+/// (`NotchGeometry.panelHeight`; `syncPanelFrame` follows every state change).
+/// It is *above* the menu bar, so the content view's `hitTest` must return nil
+/// everywhere the island isn't drawn — otherwise the top of the screen stops
+/// accepting clicks. The frame hugging is the second, sturdier line of the same
+/// defense: hit-testing and alpha click-through only protect the region the
+/// window covers *correctly*, and the window server's cached click shape for a
+/// transparent window has been observed to go stale — so the closed island
+/// simply leaves no window over the desktop below the menu bar at all.
 @MainActor
 final class NotchWindowManager {
     static let shared = NotchWindowManager()
@@ -16,6 +22,12 @@ final class NotchWindowManager {
     private var cancellables: Set<AnyCancellable> = []
     private var activityJob: Task<Void, Never>?
     private var hoverJob: Task<Void, Never>?
+    /// The pending *deferred* frame change, `nil` when none is in flight: a
+    /// shrink (or an order-out for `.hidden`) waits out the island's collapse
+    /// animation before touching the window. Cancelled by the next state
+    /// change — a rapid re-open flips the frame back before this ever lands —
+    /// and by anything that re-places or tears down the panel wholesale.
+    private var frameJob: Task<Void, Never>?
     /// What the in-flight `hoverJob` is about to commit, `nil` when nothing is
     /// pending. Debouncing has to compare against *this*, not the committed
     /// `state.hovering` — see `hoverChanged(_:)`.
@@ -95,6 +107,26 @@ final class NotchWindowManager {
             MainActor.assumeIsolated { NotchWindowManager.shared.refresh() }
         }
 
+        // The window's frame follows the island's state: grow before the
+        // opening spring, shrink after the closing one (see `syncPanelFrame`).
+        // Subscribed to the model rather than hooked into each state write —
+        // `state` is written from half a dozen places (hover commits,
+        // announcements, timer ticks, settings, the break overlay), and the
+        // window has to follow all of them or none.
+        //
+        // Deliberately *no* `receive(on:)`: `$state` emits synchronously during
+        // the write (always on the main actor here), which is what puts a
+        // *growing* resize ahead of the SwiftUI render pass that starts the
+        // opening spring — the island only ever springs inside a window that
+        // already has room for it. The sink reads nothing off `model.state`
+        // (mid-willSet it would still be the old value); the new size arrives
+        // as the element.
+        model.$state
+            .map(\.size)
+            .removeDuplicates()
+            .sink { [weak self] size in self?.syncPanelFrame(for: size) }
+            .store(in: &cancellables)
+
         syncTimer(timer)
         refresh()
     }
@@ -134,10 +166,11 @@ final class NotchWindowManager {
     /// geometry reads it — one write, so the drawn shape, the mask and the
     /// panel's list all keep coming off one number.
     ///
-    /// The panel's *window* is not re-placed: `NotchGeometry.panelSize` is pinned
-    /// to the row cap on purpose, so it already covers the fullest list this
-    /// config can draw. Resizing the window here would clip the island while it
-    /// is still springing to its new height (see `panelSize`).
+    /// The panel's *window* is not re-placed: `NotchGeometry.panelHeight` (and
+    /// `panelSize`, the geometry's canvas) are pinned to the row cap on
+    /// purpose, so the open window already covers the fullest list this config
+    /// can draw. Resizing the window here would clip the island while it is
+    /// still springing to its new height (see `panelHeight`).
     private func syncTaskRows() {
         let count = Self.taskRows(limit: model.config.clampedTaskRows).count
         guard model.config.taskCount != count else { return }
@@ -276,18 +309,131 @@ final class NotchWindowManager {
 
     // MARK: - Panel
 
+    /// The window's frame for one island state: the union **width** (the live
+    /// ears legitimately span it, and its side margins sit in the menu-bar row,
+    /// which the silhouette mask already hands back), the state's own
+    /// **height** (`NotchGeometry.panelHeight`), top edge pinned to the
+    /// screen's.
+    ///
+    /// The pinning is what makes a resize coordinate-neutral: AppKit is y-up,
+    /// the geometry y-down with its origin at the panel's *top*-left, so a
+    /// top-pinned window whose only moving edge is the bottom
+    /// (`origin.y = screen.maxY - height`) never shifts a coordinate the mask,
+    /// the tracking or the views use — geometry (0,0) stays exactly at the
+    /// screen's top-center-left of the panel, whatever the height.
+    private func panelFrame(on screen: NSScreen, for size: NotchHUDSize) -> NSRect {
+        let width = NotchGeometry.panelSize(model.metrics, config: model.config).width
+        let height = NotchGeometry.panelHeight(model.metrics, size: size,
+                                               config: model.config)
+        return NSRect(
+            x: screen.frame.midX - width / 2,
+            y: screen.frame.maxY - height,   // top-anchored (AppKit y-up)
+            width: width, height: height)
+    }
+
+    /// One place for the frame write and what has to follow it: the shadow is
+    /// invalidated (harmless while `hasShadow` is false, and mandatory the day
+    /// it isn't — a borderless window's shadow is cached against its old
+    /// shape). The tracking area needs nothing here: it is `.inVisibleRect`,
+    /// so it follows the view's visible rect by itself, and the hosting view
+    /// autoresizes with the window (`autoresizingMask = [.width, .height]`).
+    private func apply(_ frame: NSRect, to panel: NSPanel) {
+        panel.setFrame(frame, display: true)
+        panel.invalidateShadow()
+    }
+
+    /// Resize the window to hug `size`'s silhouette — **the dead-click-zone
+    /// fix** (see the class comment and `NotchGeometry.panelHeight`). Runs on
+    /// every state change, and the direction decides the clock:
+    ///
+    /// - **Growing** (or staying): resize immediately. The sink fires
+    ///   synchronously during the state write, before SwiftUI has rendered the
+    ///   change, so the opening spring always plays inside a window that
+    ///   already has room for it.
+    /// - **Shrinking**: the collapse animation has to play inside the old,
+    ///   larger window first — a window that shrinks on the spot clips the
+    ///   island mid-spring — so the resize waits out
+    ///   `NotchMotion.windowShrinkDelay`. The job is cancelled by the next
+    ///   state change: hover back within the beat and the shrink never lands.
+    ///   (It also cannot shrink under a pointer that is *using* the island: a
+    ///   shrink only follows a state change to a smaller shape, and the only
+    ///   route out of `.expanded` is the hover debounce having already said
+    ///   the pointer left.)
+    /// - **`.hidden`**: ordered out entirely, after the same beat (the island
+    ///   fades over its departure — and this path is the break overlay, whose
+    ///   `.screenSaver`-level window is covering the screen anyway; *disabling*
+    ///   the HUD tears the panel down via `refresh()` instead). No window, no
+    ///   stale click shape, nothing to swallow a click.
+    ///
+    /// Hover keeps working across all of it. In idle/live the window is
+    /// exactly the menu-bar strip — which is where the island, the only hover
+    /// target, lives, so the tracking area still sees the pointer. Opening
+    /// grows the window before the body springs down, so the pointer can
+    /// travel into the body without ever leaving the window. And when the
+    /// window does shrink under a pointer idling where the body used to be,
+    /// the resulting `mouseExited` is a no-op: the island closed the moment
+    /// the debounce saw the pointer leave it, long before this fired.
+    private func syncPanelFrame(for size: NotchHUDSize) {
+        frameJob?.cancel()
+        frameJob = nil
+        guard let panel, let screen = Self.hudScreen() else { return }
+
+        guard size != .hidden else {
+            frameJob = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(NotchMotion.windowShrinkDelay))
+                guard !Task.isCancelled else { return }
+                self?.panel?.orderOut(nil)
+                self?.frameJob = nil
+            }
+            return
+        }
+
+        let frame = panelFrame(on: screen, for: size)
+        guard panel.isVisible else {
+            // Back from `.hidden`: nothing is animating inside a window that
+            // is not on screen, so there is no collapse to protect — frame it
+            // to the new state and show it, whatever direction that is.
+            apply(frame, to: panel)
+            panel.orderFrontRegardless()
+            return
+        }
+
+        if frame.height >= panel.frame.height {
+            apply(frame, to: panel)
+        } else {
+            frameJob = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(NotchMotion.windowShrinkDelay))
+                guard !Task.isCancelled, let self, let panel = self.panel else { return }
+                self.apply(frame, to: panel)
+                self.frameJob = nil
+            }
+        }
+    }
+
     private func place(on screen: NSScreen) {
         // Before anything is built: a panel with no timer to host has nothing
         // to show, and constructing one first would just leak it.
         guard let timer else { return }
-        let size = NotchGeometry.panelSize(model.metrics, config: model.config)
-        let frame = NSRect(
-            x: screen.frame.midX - size.width / 2,
-            y: screen.frame.maxY - size.height,   // top-anchored (AppKit y-up)
-            width: size.width, height: size.height)
+        // A re-place is a re-decision: whatever deferred resize was in flight
+        // was computed against the old screen or the old settings.
+        frameJob?.cancel()
+        frameJob = nil
+
+        let size = model.state.size
+        // `.hidden` with the HUD still enabled is the break overlay. Keep the
+        // panel built (so the state change that ends the break has a window to
+        // bring back — `syncPanelFrame` re-frames an invisible panel before
+        // showing it) but off screen; a panel first *created* mid-break takes
+        // the idle frame as a sane shape to come back with.
+        let frame = panelFrame(on: screen, for: size == .hidden ? .idle : size)
 
         if let panel {
-            panel.setFrame(frame, display: true)
+            if size == .hidden {
+                panel.orderOut(nil)
+            } else {
+                apply(frame, to: panel)
+                if !panel.isVisible { panel.orderFrontRegardless() }
+            }
             return
         }
 
@@ -329,7 +475,7 @@ final class NotchWindowManager {
         panel.contentView = host
 
         self.panel = panel
-        panel.orderFrontRegardless()
+        if size != .hidden { panel.orderFrontRegardless() }
     }
 
     private func teardown() {
@@ -339,6 +485,11 @@ final class NotchWindowManager {
         // brings the panel back already expanded. Shared with `setBreakOverlay`,
         // which is the same suspension.
         suspendInteraction()
+        // A deferred frame change outliving the panel it was for would be a
+        // no-op (the job re-reads `self.panel`), but cancel it anyway: the next
+        // panel deserves a fresh decision.
+        frameJob?.cancel()
+        frameJob = nil
         guard let panel else { return }
         self.panel = nil
         panel.orderOut(nil)
@@ -422,9 +573,12 @@ private final class NotchPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
-/// Hit-testing is the safety-critical part: the panel covers ~356×260 at the top
-/// of the screen, and anything it swallows is a menu-bar click the user loses.
-/// Only the currently rendered island shape is hittable.
+/// Hit-testing is the safety-critical part: the panel spans ~356pt of the
+/// menu-bar row at all times (and hangs ~290pt below it while the island is
+/// open), and anything it swallows is a click the user loses. Only the
+/// currently rendered island shape is hittable. The window's frame hugging the
+/// state (`syncPanelFrame`) is the belt to this suspender: everywhere the
+/// island *can't* be, there is no window to hit-test at all.
 private final class NotchHostingView<Content: View>: NSHostingView<Content> {
     weak var model: NotchHUDModel?
     private var tracking: NSTrackingArea?

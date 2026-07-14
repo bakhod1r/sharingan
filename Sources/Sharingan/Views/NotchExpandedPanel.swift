@@ -342,22 +342,16 @@ struct NotchExpandedPanel: View {
 
     // MARK: - Actions
 
+    /// Two actions, on purpose. "Break now" would be `timer.skip()` — the Skip
+    /// button one row up. The app-blocker toggle and the Today-panel toggle
+    /// were here and got cut on user feedback ("these two buttons aren't
+    /// needed"): blocking still *shows* in the status strip below, and both
+    /// live one ⚙ away. The row keeps its measured `quickActionsHeight` — the
+    /// chips just share the width two ways instead of four.
     private var quickActions: some View {
         HStack(spacing: 6) {
             action("plus", "Quick add a task") {
                 AppServices.coordinator?.quickAddController?.showQuickAdd()
-            }
-            // No "Break now" here: it would be `timer.skip()`, which is exactly
-            // what the Skip button one row up already does.
-            action(blocker.isActive ? "hand.raised.fill" : "hand.raised",
-                   blocker.isActive ? "Stop blocking apps" : "Block distracting apps") {
-                blocker.isActive ? blocker.deactivate() : blocker.activate()
-            }
-            // The coordinator already watches this flag and shows/hides the panel
-            // itself (`settingsChanged` → `syncTodayPanel()`), so flipping it is
-            // the whole action — same thing the Settings checkbox does.
-            action("list.bullet", "Show or hide the Today panel") {
-                timer.settings.showTodayPanel.toggle()
             }
             action("gearshape.fill", "Open Blink") { MainWindowManager.shared.show() }
         }

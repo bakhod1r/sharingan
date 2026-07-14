@@ -186,6 +186,35 @@ disagree with the HUD about whether the Mac has a notch; it re-asks on
   and body top are deliberately non-animatable, so they flip with the mask while
   the frame springs, keeping the drawn shape inside the mask through the morph.
 
+- **The window hugs the current state's silhouette.** The panel used to be the
+  union of every state (`panelSize`, ~356×290) at all times, giving everything
+  below the island back through `hitTest` + alpha click-through — which the
+  window server caches, and the stale cache left a dead click zone over the
+  browser tab strip after an expand-and-collapse even with the island closed.
+  The window keeps the union *width* (the live ears span it; its side margins
+  are menu-bar row the mask hands back) but its **height** is the state's own
+  `NotchGeometry.panelHeight` — `layout.island.maxY`, top edge pinned, bottom
+  edge the only mover, so no geometry coordinate shifts. `syncPanelFrame`
+  follows every `state.size` change: **grow before** the opening spring
+  (synchronously, off `model.$state`'s willSet emission), **shrink after** the
+  closing one (`NotchMotion.windowShrinkDelay`, 0.45s, cancelled by the next
+  state change), `.hidden` orders the panel out entirely. A closed island
+  leaves *no window* below the menu-bar row — nothing to swallow a click. The
+  view's root fills the hosting view (`maxWidth/maxHeight: .infinity`,
+  top-leading) instead of fixing itself to `panelSize`, or `NSHostingView`
+  would center the oversized root in the shorter window; `panelSize` remains
+  the geometry's canvas (all x-coordinates) and the dev preview's frame.
+- **The live ears are dark glass; the cutout span stays black.** `earGlass`
+  (`NotchHUDView`) paints the two slabs either side of the cutout with the
+  expanded body's recipe — `.regularMaterial`, the faint diagonal phase wash,
+  a `dsHairline` ring — driven off the layout's ear rects, so a dropped ear
+  drops its glass. The cutout column and the idle lip stay pure black: they
+  imitate hardware. Visual only — no rect the mask is cut from changes.
+- **Quick actions are ＋ and ⚙ only** (quick add, open Blink). The blocker
+  toggle and the Today-panel toggle were cut on user feedback; blocking state
+  still shows in the status strip. The row keeps its measured
+  `quickActionsHeight`.
+
 - **Configurable content.** `PomodoroSettings.notchShow{TimerControls,Tasks,
   QuickActions,StatusStrip}` + `notchTaskRows` (3–5), projected through
   `settings.notchContent` into `NotchContentConfig` (SharinganCore) — the one
@@ -225,10 +254,10 @@ disagree with the HUD about whether the Mac has a notch; it re-asks on
   body is 170pt at an empty list against 288pt at five rows (island = that plus
   the menu-bar row). The island resizes
   live as tasks are ticked off (`NotchMotion.resize`, critically damped like every
-  other spring on the frame). The panel *window* stays pinned to the cap
-  (`panelSize` reads `config.sizedForRowCap`): it is invisible and click-through
-  everywhere the mask says no, and resizing the window under an island that is
-  still springing would clip it.
+  other spring on the frame). The *open* window stays pinned to the cap
+  (`panelHeight`, like `panelSize`, reads `config.sizedForRowCap`): resizing the
+  window under an island that is still springing would clip it, so the list
+  churning never moves the window — only a state change does.
 - **The panel's task rows say what the main window's rows say.** Each row carries
   the done box, the title, the subtask badge (`2/2`), the pomodoro ring and a
   play button that is a *pause* button when that task is the one the timer is

@@ -115,6 +115,67 @@ struct NotchGeometryTests {
         }
     }
 
+    /// The window's height per state — the click-through fix. The window used
+    /// to be the union of every state at all times and relied on hit-testing +
+    /// alpha click-through (which the window server caches, stalely) for
+    /// everything below the island; now the closed island's window ends at the
+    /// island's own bottom edge, so there is nothing over the screen region the
+    /// expansion would occupy.
+    @Test("the window's height hugs the current state, not the union")
+    func panelHeightHugsTheState() {
+        let m = Self.notched
+        let union = NotchGeometry.panelSize(m)
+
+        // Closed shapes: exactly the cutout plus its lip — the menu-bar row.
+        // This is the property the whole fix hangs on: while the island is
+        // idle or live, the window reaches nowhere near the browser tab strip.
+        let closed = m.notchHeight + NotchGeometry.idleExtraHeight
+        #expect(NotchGeometry.panelHeight(m, size: .idle) == closed)
+        #expect(NotchGeometry.panelHeight(m, size: .live) == closed)
+
+        // Open shapes: the T-body's bottom.
+        #expect(NotchGeometry.panelHeight(m, size: .activity)
+                == NotchGeometry.activitySize(menuBarHeight: Self.menuBar).height)
+        #expect(NotchGeometry.panelHeight(m, size: .expanded) == union.height)
+
+        // Hidden, and a notchless display: no window at all.
+        #expect(NotchGeometry.panelHeight(m, size: .hidden) == 0)
+        for size in NotchHUDSize.allCases {
+            #expect(NotchGeometry.panelHeight(Self.plain, size: size) == 0)
+        }
+
+        // Every state's island fits the window cut for it, and none needs more
+        // than the union the canvas reserves.
+        for size in NotchHUDSize.allCases {
+            let h = NotchGeometry.panelHeight(m, size: size)
+            #expect(NotchGeometry.layout(m, size: size).island.maxY <= h + 0.01)
+            #expect(h <= union.height + 0.01)
+        }
+    }
+
+    /// Ticking a task off the *open* island springs the island shorter; the
+    /// window must not move under the spring (`NSWindow` clips its content
+    /// view). `panelHeight` therefore reads the row cap, exactly as
+    /// `panelSize` does: one expanded window height for the whole churn —
+    /// and tall enough for the island at every real count.
+    @Test("the expanded window height is pinned to the row cap, not the live count")
+    func panelHeightStableWhileTheListChurns() {
+        let m = Self.notched
+        let heights = Set((0...5).map { count in
+            NotchGeometry.panelHeight(m, size: .expanded,
+                                      config: .default.withTaskCount(count))
+        })
+        #expect(heights.count == 1)
+        #expect(heights.first == NotchGeometry.panelSize(m).height)
+
+        for count in 0...5 {
+            let config = NotchContentConfig.default.withTaskCount(count)
+            let island = NotchGeometry.layout(m, size: .expanded, config: config).island
+            #expect(island.maxY
+                    <= NotchGeometry.panelHeight(m, size: .expanded, config: config) + 0.01)
+        }
+    }
+
     @Test("the island is centered on the notch and grows downward only")
     func islandCentered() {
         let idle = NotchGeometry.layout(Self.notched, size: .idle)

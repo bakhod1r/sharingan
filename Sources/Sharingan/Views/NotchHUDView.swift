@@ -92,8 +92,18 @@ struct NotchHUDView: View {
                 }
                 .offset(x: l.island.minX, y: l.island.minY)
         }
-        .frame(width: l.panelSize.width, height: l.panelSize.height,
-               alignment: .topLeading)
+        // Fill whatever the host proposes, pinned to the top-left, rather than
+        // a fixed `l.panelSize`. The window's *height* now hugs the current
+        // state (`NotchWindowManager.syncPanelFrame`), and a root view with a
+        // fixed size taller than the hosting view's bounds would be *centered*
+        // in them by `NSHostingView` — sliding the island, and every rect the
+        // mask assumes, half the difference up the screen. Filling keeps
+        // geometry (0,0) glued to the hosting view's top-left at every window
+        // height; the width the manager sets is `panelSize`'s union width, so
+        // the x-coordinates are unchanged. (The dev preview proposes the full
+        // union `panelSize` around this view and photographs the same thing it
+        // always did.)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         // The panel deliberately overlaps the menu bar and the notch; SwiftUI
         // would otherwise inset the content by the screen's top safe area and
         // push the island ~37pt below the rect the mask assumes it occupies.
@@ -118,11 +128,15 @@ struct NotchHUDView: View {
             EmptyView()
         } else {
             IslandShape(silhouette: l.silhouette)
-                // The stem stays pure black — it is imitating the camera housing.
-                // The body is dressed in Blink's dark glass on top of it, so only
-                // the part below the menu bar reads as material; the stem does not.
+                // The cutout span stays pure black — it is imitating the camera
+                // housing. Everything the island *adds* to the hardware is
+                // dressed in Blink's dark glass on top of it: the expanded
+                // body below the menu bar (`bodyGlass`) and the live ears
+                // either side of the cutout (`earGlass`). Idle — the cutout
+                // plus its lip, nothing added — stays all black.
                 .fill(.black)
                 .overlay(alignment: .topLeading) { bodyGlass(l) }
+                .overlay(alignment: .topLeading) { earGlass(l) }
                 .overlay(alignment: .top) {
                     content(l, reduce: reduce)
                         // Content runs on its own clock, deliberately behind the
@@ -208,6 +222,66 @@ struct NotchHUDView: View {
                 .frame(width: body.width, height: body.height)
                 .offset(x: body.minX - l.island.minX, y: body.minY - l.island.minY)
         }
+    }
+
+    /// The live ears' glass — the body's recipe (`.regularMaterial`, the faint
+    /// phase wash, `Color.dsHairline`), cut down to the two slabs either side
+    /// of the cutout, so the live island reads as the same material family as
+    /// the expanded panel instead of a flat black bar. **The cutout span
+    /// itself stays pure black**: it is imitating the camera housing, exactly
+    /// like the idle lip, so the glass stops at the hardware's edges and the
+    /// black in the middle keeps reading as hardware rather than as a tinted
+    /// window.
+    ///
+    /// Geometry-driven off the layout's ear rects — the same rects the labels
+    /// are laid out against — so a dropped ear (`NotchEarsMode`) drops its
+    /// glass with it, and no state but `.live` (the only one with ears) is
+    /// touched. Visual only: nothing here changes a rect the mask is cut from.
+    /// Each slab spans the island's full height (the ear row *and* the 4pt
+    /// lip), keeping the seam against the black a single straight vertical at
+    /// the cutout's edge; the outer bottom corner takes the silhouette's own
+    /// radius, and the island's `.clipShape` trues everything up against the
+    /// drawn shape regardless.
+    @ViewBuilder
+    private func earGlass(_ l: NotchLayout) -> some View {
+        if let left = l.leftEar {
+            earGlassSlab(l, x: left.minX, width: left.width,
+                         bottomLeadingRadius: l.silhouette.cornerRadius,
+                         bottomTrailingRadius: 0)
+        }
+        if let right = l.rightEar {
+            earGlassSlab(l, x: right.minX, width: right.width,
+                         bottomLeadingRadius: 0,
+                         bottomTrailingRadius: l.silhouette.cornerRadius)
+        }
+    }
+
+    private func earGlassSlab(_ l: NotchLayout, x: CGFloat, width: CGFloat,
+                              bottomLeadingRadius: CGFloat,
+                              bottomTrailingRadius: CGFloat) -> some View {
+        let shape = UnevenRoundedRectangle(
+            topLeadingRadius: 0,
+            bottomLeadingRadius: bottomLeadingRadius,
+            bottomTrailingRadius: bottomTrailingRadius,
+            topTrailingRadius: 0,
+            style: .continuous)
+        let phase = model.phase.gradient
+        return shape
+            .fill(.regularMaterial)
+            .overlay {
+                // The same faint diagonal phase tie the body wears — an accent,
+                // not a wash: the ears are a 41pt strip against the menu bar,
+                // and anything louder would fight the labels sitting on it.
+                LinearGradient(colors: phase,
+                               startPoint: .topLeading, endPoint: .bottomTrailing)
+                    .opacity(0.13)
+            }
+            .clipShape(shape)
+            .overlay { shape.stroke(Color.dsHairline, lineWidth: 1) }
+            .animation(NotchMotion.phaseFade(reduceMotion: motion.isOn),
+                       value: model.phase)
+            .frame(width: width, height: l.island.height)
+            .offset(x: x - l.island.minX, y: 0)
     }
 
     /// Idle draws nothing but the shape itself.

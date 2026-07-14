@@ -92,6 +92,20 @@ enum NotchMotion {
                 .delay(closeLead)
     }
 
+    // MARK: - The window
+
+    /// How long `NotchWindowManager.syncPanelFrame` waits, after a state change
+    /// that *shrinks* the island, before pulling the panel window down to the
+    /// new silhouette. The window must outlive the collapse — a window that
+    /// shrinks the instant the state flips would clip the island mid-spring:
+    /// the content's departure head start (`closeLead`, 0.07) plus the closing
+    /// spring (`closeResponse`, 0.26 — critically damped, so visually settled
+    /// around its response) is ~0.33s, and the margin covers the spring's tail.
+    /// Growth is the other way round and needs no constant: the window is
+    /// resized *before* the opening spring, so the island always grows inside
+    /// it.
+    static let windowShrinkDelay: Double = 0.45
+
     /// The island **re-sizing in place**: a task ticked off the panel's own list
     /// leaves the island one row taller than it needs to be, so the black closes
     /// up behind it.
