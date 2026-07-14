@@ -773,6 +773,32 @@ struct SettingsView: View {
 
                 }
 
+                Section("Updates") {
+                    ToggleRow(title: "Check for updates automatically",
+                              isOn: Binding(
+                                get: { UpdaterService.shared.automaticallyChecksForUpdates },
+                                set: { UpdaterService.shared.automaticallyChecksForUpdates = $0 }))
+                    HStack(spacing: 12) {
+                        Text("Version")
+                            .font(.system(.body, design: .rounded))
+                            .foregroundStyle(.white)
+                        Spacer(minLength: 8)
+                        Text(appVersion)
+                            .font(.system(.body, design: .rounded).weight(.semibold).monospacedDigit())
+                            .foregroundStyle(Color.dsSecondary)
+                        Button("Check Now…") { UpdaterService.shared.checkForUpdates(nil) }
+                            .buttonStyle(.pressableSubtle)
+                            .font(.system(.caption, design: .rounded).weight(.semibold))
+                    }
+                    .frame(minHeight: 24)
+                    if !UpdaterService.shared.isAvailable {
+                        Text("Updates work only when running the packaged Sharingan.app.")
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .disabled(!UpdaterService.shared.isAvailable)
+
         case .voice:
                 Section("Voice guidance (TTS)") {
                     ToggleRow(title: "Spoken instructions",
@@ -1302,6 +1328,10 @@ struct SettingsView: View {
             DSStepper(value: binding)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private var appVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
     }
 
     private func Section<C: View>(_ title: LocalizedStringKey,

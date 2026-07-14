@@ -15,7 +15,7 @@ import SharinganCore
 /// responder chain.
 extension AppDelegate {
 
-    func installMainMenu() {
+    @MainActor func installMainMenu() {
         let main = NSMenu()
         main.addItem(appMenuItem())
         main.addItem(fileMenuItem())
@@ -29,8 +29,14 @@ extension AppDelegate {
 
     // MARK: - Menus
 
-    private func appMenuItem() -> NSMenuItem {
+    @MainActor private func appMenuItem() -> NSMenuItem {
         let menu = NSMenu()
+        // Hidden outside the packaged app, where there is no updater to talk to.
+        let updateItem = menu.addItem(withTitle: "Check for Updates…",
+                                      action: #selector(UpdaterService.checkForUpdates(_:)),
+                                      keyEquivalent: "")
+        updateItem.target = UpdaterService.shared
+        updateItem.isHidden = !UpdaterService.shared.isAvailable
         menu.addItem(withTitle: "About Sharingan",
                      action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
                      keyEquivalent: "")

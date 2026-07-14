@@ -405,6 +405,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // what puts the Sharingan menu bar and Dock icon up), so this menu is
         // visible then — a full File / View / Timer / Window / Help bar, not
         // just the key-equivalent shim it started as.
+        //
+        // Sparkle first: the menu's "Check for Updates…" item hides itself when
+        // the updater is unavailable, and it reads that at build time.
+        UpdaterService.shared.start()
         installMainMenu()
 
         // One-shot Blink → Sharingan storage rename.
