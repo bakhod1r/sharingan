@@ -177,19 +177,19 @@ struct NotchHUDView: View {
         }
     }
 
-    /// The body's glass — Blink's dark-glass material, the **theme** wash and a
-    /// hairline, painted over the black base for the part of the island below the
-    /// menu bar. Same recipe as the menu-bar popover and the Today panel
-    /// (`.regularMaterial` + a low-opacity *theme* gradient + a hairline ring), so
-    /// the island reads as the same glass as them, seen through the notch, and
-    /// follows the theme with them.
+    /// The body's surface — `ThemeWindowWash`, the exact recipe the main window
+    /// and Settings fill their background with, cut to the island's silhouette.
+    /// One shared definition is what makes the island 1:1 with the app's
+    /// windows: the same full-strength theme gradient, the same darkening for
+    /// text contrast, the same corner highlight — not a low-opacity
+    /// approximation that reads grey next to the real thing.
     ///
     /// Only the wide states have a body worth glazing. The flat states (`idle`,
     /// `live`) live entirely in the menu-bar row — their `layout.body` is a few
     /// points tall — so they are left as the pure-black hardware lip they always
-    /// were. Two layers: the theme gradient as the surface wash, and above it the
-    /// one thing that is phase-semantic here — a glow behind the timer that says
-    /// which phase you are in, faded out before it reaches the task rows.
+    /// were. Above the wash sits the one thing that is phase-semantic here — a
+    /// glow behind the timer that says which phase you are in, faded out before
+    /// it reaches the task rows.
     @ViewBuilder
     private func bodyGlass(_ l: NotchLayout) -> some View {
         let body = l.body
@@ -202,18 +202,7 @@ struct NotchHUDView: View {
                 topTrailingRadius: s.bodyTopRadius,
                 style: .continuous)
             let theme = timer.settings.theme
-            shape
-                .fill(.regularMaterial)
-                .overlay {
-                    // The surface wash is the THEME, not the phase — the same tint
-                    // the Today panel and the floating pill wear over the same dark
-                    // material, so the island is one glass with them. 0.20 keeps it
-                    // dark enough that Cream/Frosted warm or frost the glass without
-                    // lightening it past the white text on top.
-                    LinearGradient(colors: theme.gradient,
-                                   startPoint: .topLeading, endPoint: .bottomTrailing)
-                        .opacity(0.20)
-                }
+            ThemeWindowWash(theme: theme, highlightRadius: 360)
                 .overlay {
                     // The one phase-semantic mark on the body: a soft glow behind
                     // the clock, gone before it reaches the tasks. Mono desaturates
@@ -287,18 +276,10 @@ struct NotchHUDView: View {
             topTrailingRadius: 0,
             style: .continuous)
         let theme = timer.settings.theme
-        return shape
-            .fill(.regularMaterial)
-            .overlay {
-                // The body's wash, cut down to the ears: the THEME gradient over
-                // the dark material, so the live island is the same glass as the
-                // expanded panel and follows the theme with it. Kept to 0.20 — the
-                // ears are a 41pt strip against the menu bar with the two labels
-                // sitting right on it.
-                LinearGradient(colors: theme.gradient,
-                               startPoint: .topLeading, endPoint: .bottomTrailing)
-                    .opacity(0.20)
-            }
+        // The body's surface cut down to the ears — the same `ThemeWindowWash`
+        // the app's windows wear, with the highlight reach scaled to a 41pt
+        // strip, so the live island and the expanded panel are one surface.
+        return ThemeWindowWash(theme: theme, highlightRadius: 140)
             .clipShape(shape)
             .overlay { shape.stroke(islandHairline(theme), lineWidth: 1) }
             .animation(NotchMotion.phaseFade(reduceMotion: motion.isOn),

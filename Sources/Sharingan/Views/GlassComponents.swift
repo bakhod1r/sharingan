@@ -1,4 +1,5 @@
 import SwiftUI
+import SharinganCore
 
 // MARK: - Liquid Glass primitives
 
@@ -164,5 +165,33 @@ struct LiquidMeshBackground: View {
                 .overlay(Color.black.opacity(0.18))
         }
         .ignoresSafeArea()
+    }
+}
+/// The app's window surface: the deep theme gradient, darkened for text
+/// contrast, with a screen-blended highlight in the top-leading corner.
+/// `MainWindowView` fills the whole window with it, and the notch island wears
+/// the same recipe cut to its silhouette — one definition, so the island and
+/// the app's windows are the same surface by construction rather than two
+/// approximations of each other.
+struct ThemeWindowWash: View {
+    var theme: SharinganTheme
+    /// The corner highlight's reach. 620 suits a full window; small surfaces
+    /// (the notch body, the live ears) pass their own so the highlight scales
+    /// with them instead of washing them out.
+    var highlightRadius: CGFloat = 620
+
+    var body: some View {
+        let colors = theme.gradient
+        ZStack {
+            LinearGradient(colors: colors,
+                           startPoint: .topLeading, endPoint: .bottomTrailing)
+            LinearGradient(colors: [Color.black.opacity(0.30),
+                                    Color.black.opacity(0.62)],
+                           startPoint: .top, endPoint: .bottom)
+            RadialGradient(colors: [(colors.first ?? .blue).opacity(0.45), .clear],
+                           center: .topLeading, startRadius: 0,
+                           endRadius: highlightRadius)
+                .blendMode(.screen)
+        }
     }
 }

@@ -924,19 +924,11 @@ struct MainWindowView: View {
     }
 
     /// Deep, colored gradient that fills the whole window, tinted by the theme
-    /// and darkened for text contrast.
+    /// and darkened for text contrast. The recipe lives in `ThemeWindowWash`,
+    /// shared with the notch island so the two stay 1:1.
     private var windowBackground: some View {
-        let colors = timer.settings.theme.gradient
-        return ZStack {
-            LinearGradient(colors: colors,
-                           startPoint: .topLeading, endPoint: .bottomTrailing)
-            LinearGradient(colors: [Color.black.opacity(0.30), Color.black.opacity(0.62)],
-                           startPoint: .top, endPoint: .bottom)
-            RadialGradient(colors: [(colors.first ?? .blue).opacity(0.45), .clear],
-                           center: .topLeading, startRadius: 0, endRadius: 620)
-                .blendMode(.screen)
-        }
-        .ignoresSafeArea()
+        ThemeWindowWash(theme: timer.settings.theme)
+            .ignoresSafeArea()
     }
 }
 
