@@ -554,12 +554,23 @@ if let outDir = HeadlessRender.outputDirectory(for: "--render-dev-preview") {
                 .background(Color(white: 0.12))
                 .environment(\.colorScheme, .dark),
               to: "\(outDir)/stats-extras.png")
-
-        write(MenuBarView(timer: timer)
-                .frame(width: 360, height: 700)
-                .background(Color.black.opacity(0.85))
+        // The report at the popover's content width (360 minus 2×18 outer
+        // padding): checks the day pager and the metric column survive 324pt.
+        write(ReportView(timer: timer)
+                .frame(width: 324)
+                .padding(18)
+                .background(Color(white: 0.12))
                 .environment(\.colorScheme, .dark),
-              to: "\(outDir)/menubar.png")
+              to: "\(outDir)/report-popover.png")
+
+        // Hosted, not `ImageRenderer`-ed: the renderer skips the segmented
+        // Picker (and the tab area's ScrollView content), and the segment row
+        // is what this shot now exists to check — four labels at 360pt.
+        writeHosted(MenuBarView(timer: timer)
+                        .background(Color.black.opacity(0.85))
+                        .environment(\.colorScheme, .dark),
+                    to: "\(outDir)/menubar.png",
+                    size: NSSize(width: 360, height: 760))
         write(BlinkCalendar(date: .constant(Date()))
                 .padding(16)
                 .background(Color.black.opacity(0.85))
