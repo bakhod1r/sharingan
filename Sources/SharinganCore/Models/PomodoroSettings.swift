@@ -20,39 +20,8 @@ public struct TagStyle: Codable, Equatable, Sendable {
     ]
 }
 
-/// Floating timer size presets. Pixel sizes are tuned to the card's vertical
-/// layout (clock over dots over task pill); the wide side-by-side layout stays
-/// reachable by manual resize.
-public enum FloatingTimerSize: String, Codable, CaseIterable, Sendable {
-    case small, medium, large
-
-    /// Panel size in points.
-    public var width: Double {
-        switch self {
-        case .small:  return 150
-        case .medium: return 190
-        case .large:  return 260
-        }
-    }
-    public var height: Double {
-        switch self {
-        case .small:  return 90
-        case .medium: return 110
-        case .large:  return 150
-        }
-    }
-
-    public var label: String {
-        switch self {
-        case .small:  return "Small"
-        case .medium: return "Medium"
-        case .large:  return "Large"
-        }
-    }
-}
-
-/// Dock widget size presets — same idea as `FloatingTimerSize`, tuned to the
-/// pill's single-row layout (ring + time, title row, transport buttons).
+/// Dock widget size presets, tuned to the pill's single-row layout (ring +
+/// time, title row, transport buttons).
 public enum DockWidgetSize: String, Codable, CaseIterable, Sendable {
     case small, medium, large
 
@@ -222,22 +191,6 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var theme: SharinganTheme = .liquidGlass
     public var repeatConfig: RepeatConfig = .init()
     public var flashAtFiveSecLeft: Bool = true
-    public var floatingTimerEnabled: Bool = true
-    /// Floating timer appearance (position is remembered separately, in
-    /// UserDefaults, to avoid churning settings on every drag).
-    public var floatingOpacity: Double = 1.0        // 0.3…1.0
-    public var floatingCompact: Bool = false        // legacy; superseded by floatingSize
-    public var floatingAlwaysOnTop: Bool = true      // above other apps
-    /// Preset panel size (Small/Medium/Large). Manual resize still works; a
-    /// preset just snaps the panel to a known-good frame.
-    public var floatingSize: FloatingTimerSize = .medium
-    /// Show the cycle dots strip on the floating card.
-    public var floatingShowDots: Bool = true
-    /// Show the active-task pill on the floating card (when tall enough).
-    public var floatingShowTask: Bool = true
-    /// Show the Dock-widget-style transport buttons (Start / Stop / Reset)
-    /// on the floating card.
-    public var floatingShowControls: Bool = true
     /// Dock widget: a control pill anchored near the Trash end of the Dock —
     /// active task, remaining time, Start / Stop / Reset.
     public var dockWidgetEnabled: Bool = true
@@ -438,20 +391,15 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
         theme = try c.decodeIfPresent(SharinganTheme.self, forKey: .theme) ?? d.theme
         repeatConfig = try c.decodeIfPresent(RepeatConfig.self, forKey: .repeatConfig) ?? d.repeatConfig
         flashAtFiveSecLeft = try c.decodeIfPresent(Bool.self, forKey: .flashAtFiveSecLeft) ?? d.flashAtFiveSecLeft
-        floatingTimerEnabled = try c.decodeIfPresent(Bool.self, forKey: .floatingTimerEnabled) ?? d.floatingTimerEnabled
-        floatingOpacity = try c.decodeIfPresent(Double.self, forKey: .floatingOpacity) ?? d.floatingOpacity
-        floatingCompact = try c.decodeIfPresent(Bool.self, forKey: .floatingCompact) ?? d.floatingCompact
-        floatingAlwaysOnTop = try c.decodeIfPresent(Bool.self, forKey: .floatingAlwaysOnTop) ?? d.floatingAlwaysOnTop
-        // Older blobs have no size preset: honor their legacy "compact" flag so
-        // the pill doesn't grow on update. Unknown raw values fall back too.
-        floatingSize = ((try? c.decodeIfPresent(FloatingTimerSize.self, forKey: .floatingSize)) ?? nil)
-            ?? (floatingCompact ? .small : d.floatingSize)
-        floatingShowDots = try c.decodeIfPresent(Bool.self, forKey: .floatingShowDots) ?? d.floatingShowDots
-        floatingShowTask = try c.decodeIfPresent(Bool.self, forKey: .floatingShowTask) ?? d.floatingShowTask
-        floatingShowControls = try c.decodeIfPresent(Bool.self, forKey: .floatingShowControls) ?? d.floatingShowControls
+        // Note: the `floating*` fields (Task 11 removed the floating timer) are
+        // gone from this struct on purpose. `CodingKeys` is synthesized from the
+        // struct's stored properties, so it no longer has those cases either —
+        // an older persisted blob that still carries those JSON keys decodes fine
+        // regardless, because `JSONDecoder`'s keyed container silently ignores
+        // any key it has no matching `CodingKeys` case for.
         dockWidgetEnabled = try c.decodeIfPresent(Bool.self, forKey: .dockWidgetEnabled) ?? d.dockWidgetEnabled
         // Unknown raw values (a preset/side written by a newer build) fall back
-        // to the default rather than throwing the whole blob away, like `floatingSize`.
+        // to the default rather than throwing the whole blob away.
         dockWidgetSize = ((try? c.decodeIfPresent(DockWidgetSize.self, forKey: .dockWidgetSize)) ?? nil)
             ?? d.dockWidgetSize
         dockWidgetAlignment = ((try? c.decodeIfPresent(DockWidgetAlignment.self, forKey: .dockWidgetAlignment)) ?? nil)
@@ -495,7 +443,7 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
         dndShortcutOff = try c.decodeIfPresent(String.self, forKey: .dndShortcutOff) ?? d.dndShortcutOff
         notchHUDEnabled = try c.decodeIfPresent(Bool.self, forKey: .notchHUDEnabled) ?? d.notchHUDEnabled
         // An unknown raw value (a mode a newer build wrote) falls back to the
-        // default rather than throwing the whole blob away, like `floatingSize`.
+        // default rather than throwing the whole blob away, like `dockWidgetSize`.
         notchEars = ((try? c.decodeIfPresent(NotchEarsMode.self, forKey: .notchEars)) ?? nil)
             ?? d.notchEars
         notchLiveActivity = try c.decodeIfPresent(Bool.self, forKey: .notchLiveActivity) ?? d.notchLiveActivity

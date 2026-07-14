@@ -6,6 +6,12 @@ public enum GlobalShortcut: String, CaseIterable, Sendable {
     case skip
     case reset
     case addFive
+    /// Compat (Task 11): named for the floating timer it used to show/hide,
+    /// which is gone — the case (and its rawValue "showFloating", the
+    /// dictionary key a persisted custom `ShortcutBinding` is stored under)
+    /// stays so an existing binding keeps resolving to a real shortcut
+    /// instead of silently going dead. `SharinganCoordinator.installShortcuts()`
+    /// retargets its action to the Dock widget, the app's one timer window now.
     case showFloating
     case quickAddTask
 
@@ -34,7 +40,7 @@ public enum GlobalShortcut: String, CaseIterable, Sendable {
         case .skip:         return "Skip"
         case .reset:        return "Reset"
         case .addFive:      return "+5 minutes"
-        case .showFloating: return "Show floating timer"
+        case .showFloating: return "Toggle Dock widget"
         case .quickAddTask: return "Quick add task"
         }
     }

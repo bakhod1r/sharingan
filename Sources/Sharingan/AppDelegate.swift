@@ -406,7 +406,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let timer = PomodoroTimer()
         let coord = SharinganCoordinator(timer: timer)
         coord.breakPresenter = BreakWindowManager.shared
-        coord.floatingController = FloatingWindowManager.shared
         coord.todayPanelController = TodayPanelWindowManager.shared
         coord.dockWidgetController = DockWidgetWindowManager.shared
         coord.quickAddController = QuickAddWindowManager.shared

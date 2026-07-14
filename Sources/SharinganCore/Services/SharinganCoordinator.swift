@@ -3,15 +3,6 @@ import Combine
 import SwiftUI
 
 @MainActor
-public protocol FloatingTimerController: AnyObject {
-    func showFloating(timer: PomodoroTimer)
-    func hideFloating()
-    func toggleFloating(timer: PomodoroTimer)
-    /// Re-apply appearance settings (opacity, size, level) to a visible panel.
-    func refreshFloating(timer: PomodoroTimer)
-}
-
-@MainActor
 public protocol QuickAddController: AnyObject {
     /// Pop up the global quick-add-task window.
     func showQuickAdd()
@@ -42,7 +33,6 @@ public final class SharinganCoordinator: ObservableObject {
     /// answers via `resolveTaskPick(with:)`.
     @Published public private(set) var needsTaskPick = false
     public var breakPresenter: BreakPresenter?
-    public var floatingController: FloatingTimerController?
     public var todayPanelController: TodayPanelController?
     public var dockWidgetController: DockWidgetController?
     public var quickAddController: QuickAddController?
@@ -72,9 +62,13 @@ public final class SharinganCoordinator: ObservableObject {
             .skip:         { [weak self] in self?.timer.skip() },
             .reset:        { [weak self] in self?.timer.stop() },
             .addFive:      { [weak self] in self?.timer.addTime(300) },
+            // Compat (Task 11): the floating timer this shortcut used to show/hide
+            // is gone. Keep the case (so a persisted custom binding under the
+            // "showFloating" key still resolves to a real shortcut instead of
+            // silently going dead) and retarget it to the Dock widget, which is
+            // now the app's one timer window.
             .showFloating: { [weak self] in
-                guard let self else { return }
-                self.floatingController?.toggleFloating(timer: self.timer)
+                self?.timer.settings.dockWidgetEnabled.toggle()
             },
             .quickAddTask: { [weak self] in self?.quickAddController?.showQuickAdd() }
         ]
@@ -116,16 +110,7 @@ public final class SharinganCoordinator: ObservableObject {
         CameraService.shared.stop()
     }
 
-    public func syncFloating() {
-        guard timer.settings.floatingTimerEnabled else {
-            floatingController?.hideFloating()
-            return
-        }
-        if timer.isRunning { floatingController?.showFloating(timer: timer) }
-        floatingController?.refreshFloating(timer: timer)
-    }
-
-    /// Unlike the floating timer, the today panel is not tied to a running
+    /// Like the Dock widget, the today panel is not tied to a running
     /// session — it follows its settings flag alone.
     public func syncTodayPanel() {
         if timer.settings.showTodayPanel {
@@ -189,7 +174,11 @@ public final class SharinganCoordinator: ObservableObject {
         case .addTask(let text):
             cliTaskAdd(text, store: .shared)
         case .toggleFloating:
-            floatingController?.toggleFloating(timer: timer)
+            // Compat (Task 11): `sharingan://toggle-floating` used to show/hide
+            // the now-removed floating timer. Keep the URL command recognized
+            // (an old Shortcuts/Raycast script must not silently fail) and
+            // retarget it to the Dock widget.
+            timer.settings.dockWidgetEnabled.toggle()
         case .show:
             break
         }
@@ -349,12 +338,6 @@ public final class SharinganCoordinator: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] running in
                 guard let self else { return }
-                // Floating timer is shown only while a pomodoro is actually running.
-                if running && self.timer.settings.floatingTimerEnabled {
-                    self.floatingController?.showFloating(timer: self.timer)
-                } else {
-                    self.floatingController?.hideFloating()
-                }
                 // Starting a focus session settles the "which task next?"
                 // question, whichever way the user answered it.
                 if running && self.timer.phase == .focus { self.needsTaskPick = false }
@@ -426,11 +409,6 @@ public final class SharinganCoordinator: ObservableObject {
         if old.globalShortcutsEnabled != new.globalShortcutsEnabled
             || old.shortcutBindings != new.shortcutBindings { installShortcuts() }
         if old.cameraEyeTrackingEnabled != new.cameraEyeTrackingEnabled { syncCamera() }
-        if old.floatingTimerEnabled != new.floatingTimerEnabled
-            || old.floatingOpacity != new.floatingOpacity
-            || old.floatingCompact != new.floatingCompact
-            || old.floatingSize != new.floatingSize
-            || old.floatingAlwaysOnTop != new.floatingAlwaysOnTop { syncFloating() }
         if old.showTodayPanel != new.showTodayPanel { syncTodayPanel() }
         if old.dockWidgetEnabled != new.dockWidgetEnabled
             || old.dockWidgetSize != new.dockWidgetSize
@@ -461,7 +439,6 @@ public final class SharinganCoordinator: ObservableObject {
         syncAlarm()
         installShortcuts()
         syncCamera()
-        syncFloating()
         syncTodayPanel()
         syncDockWidget()
         refreshAppBlocker()
@@ -598,7 +575,6 @@ public final class SharinganCoordinator: ObservableObject {
                 body: "Focus complete. Starting break.",
                 identifier: "sharingan.focusDone")
             ReminderService.shared.pauseForBreak()
-            floatingController?.hideFloating()
             if let p = breakPresenter, timer.settings.blockScreenDuringBreak {
                 p.presentBreak(
                     timer: timer,

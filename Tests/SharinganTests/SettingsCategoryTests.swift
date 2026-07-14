@@ -32,7 +32,7 @@ struct SettingsCategoryTests {
 
     @Test("Timer keeps its own (non-notch) keywords")
     func timerKeepsItsKeywords() {
-        for query in ["floating", "opacity", "repeat", "today panel"] {
+        for query in ["dock", "opacity", "repeat", "today panel"] {
             #expect(SettingsCategory.timer.matches(query))
         }
     }

@@ -794,7 +794,7 @@ testBrightnessSettings()
         s.theme = .neon
         s.repeatConfig = RepeatConfig(enabled: true, count: 3, delaySeconds: 90)
         s.flashAtFiveSecLeft = true
-        s.floatingTimerEnabled = false
+        s.dockWidgetEnabled = false
         s.globalShortcutsEnabled = false
         s.breakMessage = "Test message."
 
@@ -806,7 +806,7 @@ testBrightnessSettings()
         check(decoded.timerMode == .countUp, "decoded timerMode")
         check(decoded.theme == .neon, "decoded theme")
         check(decoded.repeatConfig == s.repeatConfig, "decoded repeatConfig")
-        check(decoded.floatingTimerEnabled == false, "decoded floating flag")
+        check(decoded.dockWidgetEnabled == false, "decoded dockWidgetEnabled flag")
         check(abs(decoded.ttsRate - 0.62) < 0.0001, "decoded ttsRate")
 
         var stats = PomodoroStats()

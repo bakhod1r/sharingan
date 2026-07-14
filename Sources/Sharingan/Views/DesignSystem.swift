@@ -65,8 +65,8 @@ extension Font {
     static let dsMicro    = Font.system(.caption2, design: .rounded).weight(.semibold) // meta, badges
 
     /// The one countdown-numeral style — a light, rounded, monospaced-digit face
-    /// used at every size (76pt hero, menu-bar strip, break screen, floating
-    /// pill) so the clock reads as one element across surfaces. Fixed size
+    /// used at every size (76pt hero, menu-bar strip, break screen, Dock widget)
+    /// so the clock reads as one element across surfaces. Fixed size
     /// because the digits are laid out to the pixel; weight stays constant.
     static func dsTimer(_ size: CGFloat) -> Font {
         .system(size: size, weight: .light, design: .rounded).monospacedDigit()

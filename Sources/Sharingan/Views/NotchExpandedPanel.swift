@@ -73,7 +73,7 @@ struct NotchExpandedPanel: View {
     private var bodyRect: CGRect { layout.body }
 
     /// The whole app formats durations through the user's `TimeDisplayFormat`
-    /// (see `TodayPanelView` / `FloatingTimerView`); the island is not an
+    /// (see `TodayPanelView` / `DockWidgetView`); the island is not an
     /// exception.
     private func clock(_ seconds: TimeInterval) -> String {
         timer.settings.timeFormat.string(max(0, seconds))
@@ -155,7 +155,7 @@ struct NotchExpandedPanel: View {
                 Text(clock(timer.remainingSeconds))
                     // The app's one countdown face (`Font.dsTimer`), light and
                     // rounded, so the island's clock is the same element as the
-                    // menu bar's and the floating pill's.
+                    // menu bar's and the Dock widget's.
                     .font(.dsTimer(26))
                     .foregroundStyle(Color.dsPrimary)
                     .contentTransition(.numericText())

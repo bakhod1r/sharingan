@@ -30,7 +30,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable, Hashable, Send
 
     public var subtitle: String {
         switch self {
-        case .timer:     return "Durations, mode, repeat, floating timer"
+        case .timer:     return "Durations, mode, repeat, Dock widget"
         case .notch:     return "Island, ears, what it shows"
         case .tasks:     return "Goal, estimates, weekly planning, badges"
         case .breaks:    return "Break screen, ambience, brightness"
@@ -64,11 +64,9 @@ public enum SettingsCategory: String, CaseIterable, Identifiable, Hashable, Send
         switch self {
         case .timer:
             return ["duration", "minutes", "pomodoro", "focus length", "mode",
-                    "countdown", "count up", "repeat", "endless", "floating",
-                    "float", "opacity", "always on top", "compact",
-                    "size", "small", "medium", "large", "preset",
-                    "dots", "cycle dots", "active task", "task pill",
-                    "today panel", "panel", "desktop", "widget"]
+                    "countdown", "count up", "repeat", "endless",
+                    "opacity", "size", "small", "medium", "large", "preset",
+                    "today panel", "panel", "desktop", "widget", "dock"]
         case .notch:
             return ["notch", "island", "dynamic island", "hud",
                     "ears", "camera housing", "menu bar", "live activity"]

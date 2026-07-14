@@ -346,11 +346,6 @@ struct SettingsView: View {
                                unit: "pomodoros")
                 }
 
-                Section("Floating timer") {
-                    ToggleRow(title: "Floating timer (while running)",
-                              isOn: $settings.floatingTimerEnabled)
-                }
-
                 Section("Dock widget") {
                     ToggleRow(title: "Dock widget",
                               isOn: $settings.dockWidgetEnabled)
@@ -887,39 +882,6 @@ struct SettingsView: View {
                                        get: { Int(settings.repeatConfig.delaySeconds / 60) },
                                        set: { settings.repeatConfig.delaySeconds = TimeInterval($0) * 60 }),
                                    unit: "min")
-                    }
-                }
-
-                Section("Floating timer details") {
-                    if settings.floatingTimerEnabled {
-                        Picker("Size", selection: $settings.floatingSize) {
-                            ForEach(FloatingTimerSize.allCases, id: \.self) { size in
-                                Text(size.label).tag(size)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-
-                        ToggleRow(title: "Always on top",
-                                  isOn: $settings.floatingAlwaysOnTop)
-                        ToggleRow(title: "Cycle dots on floating timer",
-                                  isOn: $settings.floatingShowDots)
-                        ToggleRow(title: "Active task on floating timer",
-                                  isOn: $settings.floatingShowTask)
-                        ToggleRow(title: "Start / Stop / Reset buttons on floating timer",
-                                  isOn: $settings.floatingShowControls)
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Opacity: \(Int(settings.floatingOpacity * 100))%")
-                                .font(.system(.caption, design: .rounded).weight(.medium))
-                            Slider(value: $settings.floatingOpacity, in: 0.3...1.0)
-
-                        }
-                        Text("Drag the floating timer to reposition — its spot is remembered. Right-click it for size presets.")
-                            .font(.system(.caption2, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.6))
-                    } else {
-                        Text("Enable the floating timer to configure it.")
-                            .font(.system(.caption2, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.6))
                     }
                 }
 

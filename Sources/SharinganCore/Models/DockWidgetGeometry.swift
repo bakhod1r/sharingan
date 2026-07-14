@@ -50,7 +50,7 @@ public enum DockWidgetGeometry {
 
     /// Clamp a custom (user-dragged) origin for a widget of `size` into
     /// `visibleFrame`, keeping a repositioned pill on screen after a display
-    /// change — same idea as `FloatingWindowManager.clamped`.
+    /// change.
     public static func clamp(origin: CGPoint, size: CGSize, visibleFrame vis: CGRect) -> CGPoint {
         let x = min(max(origin.x, vis.minX), max(vis.minX, vis.maxX - size.width))
         let y = min(max(origin.y, vis.minY), max(vis.minY, vis.maxY - size.height))

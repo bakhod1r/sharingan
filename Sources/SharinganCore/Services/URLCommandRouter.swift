@@ -16,7 +16,11 @@ public enum URLCommand: Equatable, Sendable {
     /// `sharingan://add-task?text=ertaga%20p1%20hisobot` — the text goes
     /// through TaskInputParser downstream, exactly like CLI/quick-add.
     case addTask(String)
-    /// `sharingan://toggle-floating`
+    /// `sharingan://toggle-floating` — compat (Task 11): the floating timer
+    /// this command used to show/hide is gone. The host string and this case
+    /// stay recognized (an old Shortcuts/Raycast script must not silently
+    /// fail) and `SharinganCoordinator.handle(_:)` retargets it to toggling
+    /// the Dock widget instead.
     case toggleFloating
     /// `sharingan://show` — open the main window.
     case show

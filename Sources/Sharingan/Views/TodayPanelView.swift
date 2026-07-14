@@ -70,7 +70,7 @@ struct TodayPanelView: View {
     private var header: some View {
         HStack(spacing: 10) {
             Button {
-                // Same start path the floating timer / menu bar use: respect
+                // Same start path the Dock widget / menu bar use: respect
                 // the "require a task" guard when a coordinator is installed.
                 if let coord = AppServices.coordinator {
                     coord.toggleRespectingTaskGuard()

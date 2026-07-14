@@ -48,7 +48,7 @@ final class DockWidgetWindowManager: DockWidgetController {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         // The pill draws its own material; the OS shadow would be a rectangle
-        // around the transparent window (same reasoning as the floating timer).
+        // around the transparent window.
         panel.hasShadow = false
         panel.hidesOnDeactivate = false
         // Draggable to a custom position (persisted below); dock-anchored
@@ -130,7 +130,7 @@ final class DockWidgetWindowManager: DockWidgetController {
 
     /// Live-apply appearance settings to the current panel: the full preset
     /// frame (hover expansion happens inside the view, not by resizing the
-    /// window) and the opacity clamp, same idea as `FloatingWindowManager`.
+    /// window) and the opacity clamp.
     private func applySettings() {
         guard let panel, let settings = timer?.settings else { return }
         let preset = settings.dockWidgetSize
