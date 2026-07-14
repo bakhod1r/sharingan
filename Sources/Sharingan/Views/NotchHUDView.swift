@@ -132,8 +132,10 @@ struct NotchHUDView: View {
                 // housing. Everything the island *adds* to the hardware is
                 // dressed in Blink's dark glass on top of it: the expanded
                 // body below the menu bar (`bodyGlass`) and the live ears
-                // either side of the cutout (`earGlass`). Idle — the cutout
-                // plus its lip, nothing added — stays all black.
+                // either side of the cutout (`earGlass`). Idle — exactly the
+                // cutout, nothing added — stays all black, and every pixel of
+                // it sits behind the housing: on a light menu bar the closed
+                // island shows nothing at all.
                 .fill(.black)
                 .overlay(alignment: .topLeading) { bodyGlass(l) }
                 .overlay(alignment: .topLeading) { earGlass(l) }
@@ -177,19 +179,21 @@ struct NotchHUDView: View {
         }
     }
 
-    /// The body's surface — `ThemeWindowWash`, the exact recipe the main window
-    /// and Settings fill their background with, cut to the island's silhouette.
-    /// One shared definition is what makes the island 1:1 with the app's
-    /// windows: the same full-strength theme gradient, the same darkening for
-    /// text contrast, the same corner highlight — not a low-opacity
-    /// approximation that reads grey next to the real thing.
+    /// The body's surface — the app window's tone, **flattened**. The window's
+    /// full recipe (`ThemeWindowWash`: darkening ramp + corner highlight) is
+    /// tuned for a window-sized canvas; compressed into a 340pt island the same
+    /// ramp reads as a loud "gradient effect", which the user explicitly does
+    /// not want. So the island takes the window's color and drops its lighting:
+    /// the theme gradient under one uniform darkening — the tone a mid-window
+    /// crop of `ThemeWindowWash` averages to. Same color as the app, flat as a
+    /// panel. (`flatDarkening` mirrors the wash's 0.30→0.62 ramp's midpoint.)
     ///
     /// Only the wide states have a body worth glazing. The flat states (`idle`,
     /// `live`) live entirely in the menu-bar row — their `layout.body` is a few
-    /// points tall — so they are left as the pure-black hardware lip they always
-    /// were. Above the wash sits the one thing that is phase-semantic here — a
-    /// glow behind the timer that says which phase you are in, faded out before
-    /// it reaches the task rows.
+    /// points tall — so they stay pure black: idle hides entirely behind the
+    /// housing, and live adds only the lip the progress line runs on.
+    private static let flatDarkening: Double = 0.46
+
     @ViewBuilder
     private func bodyGlass(_ l: NotchLayout) -> some View {
         let body = l.body
@@ -202,21 +206,11 @@ struct NotchHUDView: View {
                 topTrailingRadius: s.bodyTopRadius,
                 style: .continuous)
             let theme = timer.settings.theme
-            ThemeWindowWash(theme: theme, highlightRadius: 360)
-                .overlay {
-                    // The one phase-semantic mark on the body: a soft glow behind
-                    // the clock, gone before it reaches the tasks. Mono desaturates
-                    // it to its near-white accent (`notchPhaseAccent`) so the
-                    // surface stays monochrome; every other theme keeps the phase
-                    // color, because that color is the message.
-                    LinearGradient(
-                        colors: [theme.notchPhaseAccent(model.phase).opacity(0.32), .clear],
-                        startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.55))
-                }
+            LinearGradient(colors: theme.gradient,
+                           startPoint: .topLeading, endPoint: .bottomTrailing)
+                .overlay(Color.black.opacity(Self.flatDarkening))
                 .clipShape(shape)
                 .overlay { shape.stroke(islandHairline(theme), lineWidth: 1) }
-                .animation(NotchMotion.phaseFade(reduceMotion: motion.isOn),
-                           value: model.phase)
                 .frame(width: body.width, height: body.height)
                 .offset(x: body.minX - l.island.minX, y: body.minY - l.island.minY)
         }
@@ -239,7 +233,7 @@ struct NotchHUDView: View {
     /// cutout, so the live island reads as the same material family as the
     /// expanded panel instead of a flat black bar. **The cutout span
     /// itself stays pure black**: it is imitating the camera housing, exactly
-    /// like the idle lip, so the glass stops at the hardware's edges and the
+    /// like the idle island, so the glass stops at the hardware's edges and the
     /// black in the middle keeps reading as hardware rather than as a tinted
     /// window.
     ///
@@ -276,14 +270,14 @@ struct NotchHUDView: View {
             topTrailingRadius: 0,
             style: .continuous)
         let theme = timer.settings.theme
-        // The body's surface cut down to the ears — the same `ThemeWindowWash`
-        // the app's windows wear, with the highlight reach scaled to a 41pt
-        // strip, so the live island and the expanded panel are one surface.
-        return ThemeWindowWash(theme: theme, highlightRadius: 140)
+        // The body's flat tone cut down to the ears — the theme's color under
+        // the same uniform darkening, no lighting effects, so the live island
+        // and the expanded panel are one plain surface with the app's color.
+        return LinearGradient(colors: theme.gradient,
+                              startPoint: .topLeading, endPoint: .bottomTrailing)
+            .overlay(Color.black.opacity(Self.flatDarkening))
             .clipShape(shape)
             .overlay { shape.stroke(islandHairline(theme), lineWidth: 1) }
-            .animation(NotchMotion.phaseFade(reduceMotion: motion.isOn),
-                       value: model.phase)
             .frame(width: width, height: l.island.height)
             .offset(x: x - l.island.minX, y: 0)
     }
