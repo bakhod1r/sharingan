@@ -26,18 +26,16 @@ final class MenuBarController: NSObject {
     private let spinner = IconSpinner()
     private var dockAnimator: DockIconAnimator?
 
+    /// The status item's autosave name and the defaults key macOS stores its
+    /// menu-bar slot under. `rescueFromNotchIfHidden` seeds the key directly.
+    private static let autosaveName = "sharingan.menubar"
+    private static let positionKey = "NSStatusItem Preferred Position \(autosaveName)"
+
     func install(timer: PomodoroTimer, coordinator: SharinganCoordinator) {
         self.timer = timer
         self.coordinator = coordinator
 
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        // Persist the item's menu-bar slot. On notched MacBooks a crowded menu
-        // bar pushes the newest (leftmost) status item under the camera housing
-        // where it renders invisible; with an autosave name the position can be
-        // seeded/moved (defaults key "NSStatusItem Preferred Position
-        // sharingan.menubar") and any manual ⌘-drag by the user sticks.
-        item.autosaveName = "sharingan.menubar"
-        statusItem = item
+        makeStatusItem()
 
         let popover = NSPopover()
         popover.behavior = .transient
@@ -55,13 +53,6 @@ final class MenuBarController: NSObject {
         hosting.sizingOptions = [.preferredContentSize]
         popover.contentViewController = hosting
         self.popover = popover
-
-        if let button = item.button {
-            button.imagePosition = .imageLeading
-            button.action = #selector(togglePopover)
-            button.target = self
-        }
-        updateTitle() // seeds both the title and the initial icon
 
         dockAnimator = DockIconAnimator()
         spinner.onFrame = { [weak self] angle, spinning in
@@ -83,9 +74,84 @@ final class MenuBarController: NSObject {
         Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.syncSpinner()
+                self?.syncVisibility()
                 self?.updateTitle()
             }
         }
+
+        // The button's window has a real menu-bar frame only after this
+        // run-loop turn settles; check for the invisible-slot state then.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            self?.rescueFromNotchIfHidden()
+        }
+    }
+
+    /// Creates (or re-creates) the status item and wires its button. Split out
+    /// of `install` so `rescueFromNotchIfHidden` can rebuild the item after
+    /// re-seeding its menu-bar slot — macOS reads the slot at creation time.
+    private func makeStatusItem() {
+        if let old = statusItem { NSStatusBar.system.removeStatusItem(old) }
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        // Persist the item's menu-bar slot. On notched MacBooks a crowded menu
+        // bar pushes the newest (leftmost) status item under the camera housing
+        // where it renders invisible; with an autosave name the position can be
+        // seeded/moved (defaults key `Self.positionKey`) and any manual ⌘-drag
+        // by the user sticks.
+        item.autosaveName = Self.autosaveName
+        if let button = item.button {
+            button.imagePosition = .imageLeading
+            button.action = #selector(togglePopover)
+            button.target = self
+        }
+        statusItem = item
+        lastIconKey = nil // fresh button — force the next icon render
+        syncVisibility()
+        updateTitle() // seeds both the title and the initial icon
+    }
+
+    /// Applies the "Show menu bar icon" setting. Turning it on also clears a
+    /// stale `NSStatusItem Visible … = false` that macOS persists when the icon
+    /// is ⌘-dragged off the bar — one of the two ways the icon silently
+    /// disappears for good (the other is `rescueFromNotchIfHidden`).
+    private func syncVisibility() {
+        guard let item = statusItem else { return }
+        let wanted = timer?.settings.showMenuBarIcon ?? true
+        guard item.isVisible != wanted else { return }
+        item.isVisible = wanted
+        if wanted {
+            // Re-shown items reappear in their stored slot, which may itself
+            // be the hidden one — give AppKit a beat to place the window.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+                self?.rescueFromNotchIfHidden()
+            }
+        }
+    }
+
+    /// One-shot repair for the icon sitting in an invisible menu-bar slot on a
+    /// notched MacBook. The rebrand renamed the item's autosaveName; Macs that
+    /// launched a build before the defaults migration existed persisted a fresh
+    /// leftmost slot, which a crowded menu bar parks under the camera housing.
+    /// The migration can't heal those (the new key already exists), so detect
+    /// the parked state at runtime: if the button's window overlaps the
+    /// housing, re-seed the slot next to the system items — the rightmost spot
+    /// third-party items can occupy, visible on every Mac — and rebuild the
+    /// item so the bar reads the seeded position.
+    private func rescueFromNotchIfHidden() {
+        guard let item = statusItem, item.isVisible,
+              let window = item.button?.window,
+              let screen = window.screen,
+              screen.safeAreaInsets.top > 0,
+              let left = screen.auxiliaryTopLeftArea,
+              let right = screen.auxiliaryTopRightArea else { return }
+        let housing = NSRect(x: left.maxX, y: left.minY,
+                             width: right.minX - left.maxX,
+                             height: max(left.height, right.height))
+        guard window.frame.intersects(housing) else { return }
+        NSStatusBar.system.removeStatusItem(item)
+        statusItem = nil
+        // Distance from the screen's right edge — small means far right.
+        UserDefaults.standard.set(6.0, forKey: Self.positionKey)
+        makeStatusItem()
     }
 
     /// Pushes the settings switch into the spinner (1 s latency at most).

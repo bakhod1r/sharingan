@@ -4,7 +4,7 @@
 > whenever a feature is added, changed, or removed, update this document in the
 > same change.**
 
-- Version: 1.7.0
+- Version: 1.8.0
 - Platform: macOS 14+, lives in the menu bar
 
 ---
@@ -125,6 +125,30 @@
   it because an `NSPopover` resolves appearance from its anchor view (the
   status-item button in the system menu bar), so under Light mode the dark-glass
   content used to render white-on-light.
+- Popover task rows degrade whole, never squash: the title (layout-priority 1,
+  one line) wins width first; step + pomodoro progress badges are `fixedSize`
+  and never drop; the decorations sit in one `ViewThatFits` ladder of
+  `fixedSize` tiers (category + tags + due + state icons → due + icons →
+  icons → nothing), so each tier renders complete or yields to the next.
+  Without the ladder, SwiftUI compressed chips in place — empty capsule
+  slivers and count labels wrapped onto two overlapping lines (the
+  metadata-maxed seed row in `--render-dev-preview`'s `menubar.png` is where
+  this is checked).
+- Menu-bar icon visibility is self-healing (`MenuBarController`): the item is
+  created by `makeStatusItem()` (autosave `sharingan.menubar`), and the
+  "Show menu bar icon" setting (`showMenuBarIcon`, Settings → Pomodoro →
+  Menu bar) is applied by `syncVisibility()` on the 1 s tick — turning it on
+  clears a stale `NSStatusItem Visible … = false` that macOS persists when
+  the icon is ⌘-dragged off the bar. `rescueFromNotchIfHidden()` (2 s after
+  install, and 1 s after the setting turns the icon back on) detects the
+  button's window overlapping a notched screen's camera housing (between
+  `auxiliaryTopLeftArea`/`auxiliaryTopRightArea`) — the invisible slot a
+  crowded menu bar parks new items in — then seeds
+  `NSStatusItem Preferred Position sharingan.menubar = 6` (points from the
+  right edge) and rebuilds the item, which macOS re-reads at creation. The
+  rebrand's defaults migration cannot heal Macs that launched a renamed
+  build before it existed (the new key already holds the bad slot), hence
+  the runtime rescue.
 - Text fields submit through a single `.onSubmit` — the legacy
   `TextField(onCommit:)` initializer is banned (`SubmitWiringTests` lints for
   it). On macOS `onCommit` fires on Return *and again* on end-editing with the

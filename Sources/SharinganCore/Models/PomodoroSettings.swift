@@ -243,6 +243,10 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var customPriorityLevels: [Int] = []
     /// Custom icon/color per tag (label), keyed by the tag text.
     public var tagStyles: [String: TagStyle] = [:]
+    /// Show the app's menu-bar icon at all. On = also rescues the icon when
+    /// macOS has it parked in an invisible slot (⌘-dragged off, or pushed
+    /// under a notched MacBook's camera housing by a crowded menu bar).
+    public var showMenuBarIcon: Bool = true
     /// Show the MM:SS countdown next to the menu-bar icon while a session
     /// is engaged (off = icon only).
     public var showMenuBarCountdown: Bool = true
@@ -413,6 +417,7 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
         priorityColors = try c.decodeIfPresent([String: String].self, forKey: .priorityColors) ?? d.priorityColors
         customPriorityLevels = try c.decodeIfPresent([Int].self, forKey: .customPriorityLevels) ?? d.customPriorityLevels
         tagStyles = try c.decodeIfPresent([String: TagStyle].self, forKey: .tagStyles) ?? d.tagStyles
+        showMenuBarIcon = try c.decodeIfPresent(Bool.self, forKey: .showMenuBarIcon) ?? d.showMenuBarIcon
         showMenuBarCountdown = try c.decodeIfPresent(Bool.self, forKey: .showMenuBarCountdown) ?? d.showMenuBarCountdown
         animateIcon = try c.decodeIfPresent(Bool.self, forKey: .animateIcon) ?? d.animateIcon
         dndEnabled = try c.decodeIfPresent(Bool.self, forKey: .dndEnabled) ?? d.dndEnabled

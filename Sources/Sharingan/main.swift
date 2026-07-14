@@ -549,6 +549,20 @@ if let outDir = HeadlessRender.outputDirectory(for: "--render-dev-preview") {
         var counted = store.tasks.first { $0.title == "Draft the release notes" }!
         counted.pomodorosDone = 4
         store.update(counted)
+        // A metadata-maxed row: long title + tags + due + planned-today +
+        // repeat + steps + kind + estimate, all at once. The menubar shot is
+        // where "chips drop whole instead of crushing" is checked — a row
+        // like this used to render empty capsule slivers and count badges
+        // wrapped onto two overlapping lines in the 360pt popover.
+        store.add(title: "Tranzaksiya importini tekshirish va yakunlash",
+                  category: "Work", tags: ["fintech", "review"], dueDate: Date(),
+                  estimatedPomodoros: 2)
+        var maxed = store.tasks.first { $0.title.hasPrefix("Tranzaksiya") }!
+        maxed.recurrence = .weekly
+        maxed.pomodoroKind = .small
+        maxed.subtasks = [Subtask(title: "CSV parserni sinash")]
+        store.update(maxed)
+        store.togglePlannedToday(maxed.id)
 
         let timer = PomodoroTimer()
 
@@ -625,11 +639,20 @@ if let outDir = HeadlessRender.outputDirectory(for: "--render-dev-preview") {
         // Hosted, not `ImageRenderer`-ed: the renderer skips the segmented
         // Picker (and the tab area's ScrollView content), and the segment row
         // is what this shot now exists to check — four labels at 360pt.
+        // The metadata-maxed row is hoisted to the top of the list for the
+        // shot (the clipped ScrollView photographs only the first rows), then
+        // put back so the `store.tasks[0]`-based seeds below stay aimed at
+        // "Ship landing page v1".
+        var maxedHoists = 0
+        while store.tasks.first?.id != maxed.id, maxedHoists < 32 {
+            store.move(maxed.id, up: true); maxedHoists += 1
+        }
         writeHosted(MenuBarView(timer: timer)
                         .background(Color.black.opacity(0.85))
                         .environment(\.colorScheme, .dark),
                     to: "\(outDir)/menubar.png",
                     size: NSSize(width: 360, height: 760))
+        for _ in 0..<maxedHoists { store.move(maxed.id, up: false) }
         write(BlinkCalendar(date: .constant(Date()))
                 .padding(16)
                 .background(Color.black.opacity(0.85))

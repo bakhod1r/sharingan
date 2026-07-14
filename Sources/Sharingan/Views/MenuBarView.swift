@@ -486,54 +486,40 @@ struct MenuBarView: View {
                 Text(task.title)
                     .font(.system(.callout, design: .rounded).weight(.medium))
                     .lineLimit(1)
-                    // Keep the title legible: metadata chips yield width first
-                    // instead of collapsing the title to a few characters.
+                    // Keep the title legible: sized before the chip ladder, so
+                    // chips yield width first. Without this the stack offers
+                    // the title an equal share and a long title truncates to a
+                    // few characters even while the Spacer holds free width.
                     .layoutPriority(1)
-
-                // Category — the colored bucket pill (hidden inside an accordion
-                // section, whose header already names the category).
-                if showCategory {
-                    categoryTag(task.category, accent: accent)
-                }
-
-                // Tags — separate `#label` chips (a tag is not a category).
-                ForEach(task.tags.prefix(2), id: \.self) { tag in
-                    tagChip(tag)
-                }
-
-                // Due date chip (red when overdue).
-                if let due = task.dueDate {
-                    Label(dueChipText(due), systemImage: "calendar")
-                        .font(.system(size: 10, weight: .semibold, design: .rounded))
-                        .foregroundStyle(task.isOverdue() ? Color.red : .secondary)
-                        .labelStyle(.titleAndIcon)
-                }
 
                 Spacer(minLength: 6)
             }
 
-            if task.isPlannedToday() {
-                Image(systemName: "sun.max.fill")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.orange)
-                    .help("On today's plan")
+            // Decorations — one ladder, widest tier that fits. Every tier is
+            // fixed-size, so a tier either renders whole or the next (leaner)
+            // one is used: chips drop first, then the due date, then the
+            // small state icons. Decorations used to compress in place
+            // instead: empty crushed capsules and count labels wrapped onto
+            // two overlapping lines once a task carried enough metadata.
+            if editingTaskID != task.id {
+                ViewThatFits(in: .horizontal) {
+                    miniMeta(task, accent: accent, category: showCategory, tags: 2, due: true)
+                    miniMeta(task, accent: accent, category: false, tags: 0, due: true)
+                    miniMeta(task, accent: accent, category: false, tags: 0, due: false)
+                    Color.clear.frame(width: 0, height: 0)
+                }
+
+                // Step + pomodoro progress — never dropped and never squashed
+                // (`fixedSize`): on a long title the title truncates instead,
+                // like every task app's row. The title still can't be starved
+                // below the leftover the fixed cluster leaves it.
+                if task.subtaskProgress.total > 0 {
+                    SubtaskProgressBadge(task.subtaskProgress)
+                        .fixedSize()
+                }
+                pomodoroBadge(task)
+                    .fixedSize()
             }
-            if task.recurrence != .none {
-                Image(systemName: "repeat")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .help(task.recurrence.label)
-            }
-            if task.subtaskProgress.total > 0 {
-                SubtaskProgressBadge(task.subtaskProgress)
-            }
-            if let kind = task.pomodoroKind {
-                Image(systemName: kind.systemImage)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .help(kind.label)
-            }
-            pomodoroBadge(task)
 
             // Expand to manage subtasks / notes.
             Button {
@@ -710,6 +696,54 @@ struct MenuBarView: View {
         .background(
             Capsule().fill(accent.opacity(0.14))
         )
+    }
+
+    /// One fixed-width tier of a row's decorations — chips (category pill, up
+    /// to `tags` tag chips, the due-date chip) and the small state icons
+    /// (planned today / repeat / pomodoro kind). `fixedSize` makes the tier
+    /// all-or-nothing so `ViewThatFits` in `miniRow` can walk down the ladder;
+    /// without it SwiftUI compresses the labels in place into unreadable
+    /// slivers. Step/pomodoro progress deliberately lives outside the ladder —
+    /// it never drops.
+    private func miniMeta(_ task: TaskItem, accent: Color,
+                          category: Bool, tags: Int, due: Bool) -> some View {
+        HStack(spacing: 8) {
+            // Category — the colored bucket pill (hidden inside an accordion
+            // section, whose header already names the category).
+            if category {
+                categoryTag(task.category, accent: accent)
+            }
+            // Tags — separate `#label` chips (a tag is not a category).
+            ForEach(task.tags.prefix(tags), id: \.self) { tag in
+                tagChip(tag)
+            }
+            // Due date chip (red when overdue).
+            if due, let d = task.dueDate {
+                Label(dueChipText(d), systemImage: "calendar")
+                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    .foregroundStyle(task.isOverdue() ? Color.red : .secondary)
+                    .labelStyle(.titleAndIcon)
+            }
+            if task.isPlannedToday() {
+                Image(systemName: "sun.max.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.orange)
+                    .help("On today's plan")
+            }
+            if task.recurrence != .none {
+                Image(systemName: "repeat")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .help(task.recurrence.label)
+            }
+            if let kind = task.pomodoroKind {
+                Image(systemName: kind.systemImage)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .help(kind.label)
+            }
+        }
+        .fixedSize()
     }
 
     /// Expanded subtasks + notes editor for a task in the popover.

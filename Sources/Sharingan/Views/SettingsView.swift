@@ -358,6 +358,11 @@ struct SettingsView: View {
                 }
 
                 Section("Menu bar") {
+                    ToggleRow(title: "Show menu bar icon",
+                              isOn: $settings.showMenuBarIcon)
+                    Text("If a crowded menu bar has pushed the icon under the notch, turning this on moves it back next to the system icons.")
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.6))
                     ToggleRow(title: "Show countdown in menu bar",
                               isOn: $settings.showMenuBarCountdown)
                 }

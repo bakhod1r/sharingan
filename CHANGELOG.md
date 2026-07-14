@@ -5,6 +5,14 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.8.0] — 2026-07-14
+
+### Added
+- "Show menu bar icon" toggle (Settings → Pomodoro → Menu bar). Turning it on also repairs the two ways the icon silently vanishes: the hidden flag macOS keeps after the icon is ⌘-dragged off the bar, and — on notched MacBooks — a crowded menu bar parking the icon in the invisible slot under the camera housing. The parked state is also detected on every launch: the icon is moved back next to the system icons automatically, which heals Macs that picked up the renamed status item before the defaults migration existed (for them the migration is a permanent no-op — the new key already holds the bad slot)
+
+### Fixed
+- Menu-bar popover task rows no longer squash metadata into unreadable slivers (empty capsule husks, count labels wrapped onto two overlapping lines) once a task carried tags + due date + steps + estimate at once. Decorations now drop whole, tier by tier (chips first, then the due chip, then the small state icons), the one-line title truncates, and the step/pomodoro progress badges always stay whole; the dev-preview's popover shot gained a metadata-maxed row so a regression photographs itself
+
 ## [1.7.0] — 2026-07-14
 
 ### Added
