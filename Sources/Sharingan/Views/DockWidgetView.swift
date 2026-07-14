@@ -4,9 +4,12 @@ import SharinganCore
 /// The Dock widget pill: a "now playing"-style strip anchored to the Dock by
 /// DockWidgetWindowManager. Progress ring + active task + remaining time on
 /// the left, three always-standing transport buttons on the right —
-/// ▶︎ start (resumes a paused session), ⏸ stop (pause), ⟲ reset (the engine's
-/// stop(): fresh focus, counters zeroed). Buttons disable rather than hide so
-/// the pill never changes shape under the pointer.
+/// ▶︎ start opens a mini picker of today's open tasks when there's an actual
+/// choice to make (resuming a paused session, or starting with today empty,
+/// skips straight past it — see `handleStart`/`DockWidgetStartAction`),
+/// ⏸ stop (pause), ⟲ reset (the engine's stop(): fresh focus, counters
+/// zeroed). Buttons disable rather than hide so the pill never changes shape
+/// under the pointer.
 struct DockWidgetView: View {
     @ObservedObject var timer: PomodoroTimer
     @ObservedObject private var tasks = TaskStore.shared
@@ -19,9 +22,17 @@ struct DockWidgetView: View {
     /// True while the pointer sits over the pill — drives the compact ↔
     /// expanded spring when `dockWidgetExpandOnHover` is on.
     @State private var hovering = false
+    /// Drives the ▶︎ button's `.popover` — the mini today-task picker.
+    @State private var showTaskPicker = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var phaseColors: [Color] { timer.phase.gradient }
+    /// The same set the Today panel shows (planned today OR due today OR
+    /// overdue, always open), reused verbatim so "today" never drifts
+    /// between the two surfaces — see `TodayPanelView.todayTasks`.
+    private var todayTasks: [TaskItem] {
+        tasks.grouped(filter: .today).flatMap(\.items)
+    }
     private var preset: DockWidgetSize { timer.settings.dockWidgetSize }
     /// Every metric below is tuned at the medium preset (56pt tall, k = 1)
     /// and scales linearly with whichever size is chosen.
@@ -122,7 +133,12 @@ struct DockWidgetView: View {
     private var controls: some View {
         HStack(spacing: 8 * k) {
             control("play.fill", enabled: !timer.isRunning, help: "Start") {
-                timer.start()
+                handleStart()
+            }
+            .popover(isPresented: $showTaskPicker, arrowEdge: .bottom) {
+                DockWidgetTaskPickerView(timer: timer, todayTasks: todayTasks) {
+                    showTaskPicker = false
+                }
             }
             control("pause.fill", enabled: timer.isRunning, help: "Stop") {
                 timer.pause()
@@ -130,6 +146,22 @@ struct DockWidgetView: View {
             control("arrow.counterclockwise", enabled: true, help: "Reset") {
                 timer.stop()
             }
+        }
+    }
+
+    /// ▶︎'s decision, per the design: a paused session always resumes in
+    /// place (never re-routed through task selection), and an empty today
+    /// list starts immediately rather than popping an empty picker. Only
+    /// when there's an actual choice to make does the picker show — pure
+    /// logic lives in `DockWidgetStartAction` so it's unit-tested without a
+    /// live timer/store.
+    private func handleStart() {
+        switch DockWidgetStartAction.decide(isPaused: timer.phase == .paused,
+                                            todayTaskCount: todayTasks.count) {
+        case .startImmediately:
+            timer.startFocusSession()
+        case .showPicker:
+            showTaskPicker = true
         }
     }
 

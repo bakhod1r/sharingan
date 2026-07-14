@@ -173,6 +173,25 @@ struct DockWidgetTests {
         #expect(DockWidgetGeometry.expandAnchor(alignment: .center, visibleFrame: bottom, fullFrame: full) == .center)
     }
 
+    // MARK: - Start → mini task picker decision
+
+    @Test("paused always resumes immediately, even with tasks today")
+    func pausedResumesImmediately() {
+        #expect(DockWidgetStartAction.decide(isPaused: true, todayTaskCount: 3) == .startImmediately)
+        #expect(DockWidgetStartAction.decide(isPaused: true, todayTaskCount: 0) == .startImmediately)
+    }
+
+    @Test("idle with an empty today list starts immediately (no empty picker)")
+    func emptyTodayStartsImmediately() {
+        #expect(DockWidgetStartAction.decide(isPaused: false, todayTaskCount: 0) == .startImmediately)
+    }
+
+    @Test("idle with today tasks shows the picker")
+    func nonEmptyTodayShowsPicker() {
+        #expect(DockWidgetStartAction.decide(isPaused: false, todayTaskCount: 1) == .showPicker)
+        #expect(DockWidgetStartAction.decide(isPaused: false, todayTaskCount: 5) == .showPicker)
+    }
+
     // MARK: - Draggable pill: custom-position clamp + hover anchor
 
     @Test("clamp keeps a dragged-in custom origin inside the visible frame")
