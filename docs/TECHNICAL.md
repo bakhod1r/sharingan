@@ -87,6 +87,15 @@
 - Consecutive-day streak tracking that resets on a missed day.
 - Milestone badges at 1, 7, 14, 30, 90, and 365 days, with a spring-animated reward banner when a new one is unlocked.
 - Pomodoro breakdown by project and by tag.
+- **Per-task daily focus log.** Every completed focus session is attributed to
+  its task — and, when one was targeted, its subtask — as a per-day row
+  (pomodoro count + the session's real seconds, `focus_log` table). The task
+  row is the aggregate and already includes subtask credits; consumers never
+  sum the two. Titles are snapshotted so history survives deletion; no
+  backfill before the feature shipped. Surfaced in the main window's
+  **Report** section (day pager, expandable subtask rows, day totals), a
+  "By task — today" Progress card, and a 14-day history block in the task
+  editor.
 - A configurable daily pomodoro goal with progress and a "goal reached" notification.
 
 ---
@@ -95,7 +104,7 @@
 
 - Six themes: Liquid Glass, Frosted, Midnight, Cream, Neon, and Mono.
 - Liquid-glass design throughout.
-- Main window sections: Timer, Tasks, Week, Progress, and Settings.
+- Main window sections: Timer, Tasks, Week, Progress, Report, and Settings.
 - Menu-bar popover with timer, tasks, and week tabs plus today's goal. The
   popover pins its own `NSAppearance` to dark: `NSApp.appearance` does not reach
   it because an `NSPopover` resolves appearance from its anchor view (the
