@@ -473,6 +473,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             SettingsSync.start()
         }
 
+        // Phase 3 fetch fallbacks: silent push is best-effort, so also pull
+        // on wake and on foreground (both no-op while sync is off — the
+        // engine's fetchChanges guards on its own lifecycle).
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { _ in
+            Task { @MainActor in AppServices.syncEngine?.fetchChanges() }
+        }
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { _ in
+            Task { @MainActor in AppServices.syncEngine?.fetchChanges() }
+        }
+
         // Without this, notify()/schedule() silently no-op on a fresh install:
         // UNUserNotificationCenter.add fails while status is .notDetermined.
         Task { await NotificationService.shared.requestAuthorization() }
@@ -503,6 +517,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// while sync is off or can't run (same pattern as the updater item), and
     /// carrying the last-synced time as lightweight status when idle.
     private func syncStatusChanged(_ status: SyncStatus) {
+        // Silent-push registration rides the status: whenever sync is
+        // actually running (any status but off/unavailable), make sure the
+        // process is registered for remote notifications. Idempotent, and
+        // harmless without the aps-environment entitlement — registration
+        // just fails into didFailToRegister below while the polling
+        // fallbacks keep sync converging.
+        switch status {
+        case .disabled, .unavailable:
+            break
+        default:
+            NSApp.registerForRemoteNotifications()
+        }
         guard let item = syncMenuItem else { return }
         switch status {
         case .disabled, .unavailable:
@@ -533,6 +559,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 coordinator?.handle(command)
             }
         }
+    }
+
+    // CloudKit's silent pushes (the CKDatabaseSubscription CloudSyncEngine
+    // registers) arrive here; every one means "another Mac wrote something",
+    // so the only correct response is a fetch. No payload parsing — the
+    // engine's change tokens already know what is new.
+    func application(_ application: NSApplication,
+                     didReceiveRemoteNotification userInfo: [String: Any]) {
+        syncEngine?.fetchChanges()
+    }
+
+    func application(_ application: NSApplication,
+                     didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        // Expected without the aps-environment entitlement (dev builds, no
+        // provisioning profile). Sync still converges via the wake/foreground
+        // fetches and the 15-minute timer — nothing to surface to the user.
+        NSLog("Sharingan: remote-notification registration failed: \(error.localizedDescription)")
     }
 
     // Finder/Launchpad re-launch of an already-running accessory app fires
