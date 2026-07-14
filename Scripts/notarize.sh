@@ -14,7 +14,9 @@ TARGET="${1:?usage: notarize.sh <file>}"
 : "${ASC_KEY_P8:?ASC_KEY_P8 is not set}"
 
 # notarytool wants the key as a file; keep it out of the repo and shred after.
-KEYFILE="$(mktemp -t asc_key).p8"
+KEYFILE="$(mktemp -t asc_key)"
+mv "$KEYFILE" "$KEYFILE.p8"
+KEYFILE="$KEYFILE.p8"
 trap 'rm -f "$KEYFILE"' EXIT
 printf '%s\n' "$ASC_KEY_P8" > "$KEYFILE"
 AUTH=(--key "$KEYFILE" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID")
