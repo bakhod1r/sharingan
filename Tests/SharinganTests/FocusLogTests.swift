@@ -38,3 +38,26 @@ struct FocusLogModelTests {
         #expect(FocusReport.durationLabel(120 * 60) == "2h")
     }
 }
+
+@Suite("Focus log persistence")
+struct FocusLogPersistenceTests {
+    @Test func roundTripsThroughSQLite() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("focuslog-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let path = dir.appendingPathComponent("t.sqlite").path
+        let day = Calendar.current.startOfDay(for: Date())
+        let task = UUID(), sub = UUID()
+        let entries = [
+            FocusLogEntry(day: day, taskID: task, subtaskID: nil,  title: "T",  count: 2, seconds: 3000),
+            FocusLogEntry(day: day, taskID: task, subtaskID: sub, title: "T.s", count: 1, seconds: 1500),
+        ]
+        do {
+            let db = try #require(TaskDatabase(path: path))
+            db.saveFocusLog(entries)
+        }
+        let db2 = try #require(TaskDatabase(path: path))
+        let loaded = db2.loadFocusLog()
+        #expect(Set(loaded) == Set(entries))
+    }
+}

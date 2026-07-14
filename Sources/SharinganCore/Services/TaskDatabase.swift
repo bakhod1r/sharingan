@@ -70,6 +70,17 @@ final class TaskDatabase {
             name TEXT PRIMARY KEY
         );
         """)
+        exec("""
+        CREATE TABLE IF NOT EXISTS focus_log (
+            day REAL NOT NULL,
+            task_id TEXT NOT NULL,
+            subtask_id TEXT NOT NULL DEFAULT '',
+            title TEXT NOT NULL,
+            count INTEGER NOT NULL DEFAULT 0,
+            seconds REAL NOT NULL DEFAULT 0,
+            PRIMARY KEY (day, task_id, subtask_id)
+        );
+        """)
         // Databases created before the column shipped need it added in place
         // (CREATE IF NOT EXISTS won't touch an existing table).
         if !tableHasColumn("tasks", "completedAt") {
@@ -262,6 +273,52 @@ final class TaskDatabase {
                 bindText(stmt, 2, t.name)
                 guard let json = encodeJSON(t.item) else { return false }
                 bindText(stmt, 3, json)
+                guard sqlite3_step(stmt) == SQLITE_DONE else { return false }
+            }
+            return true
+        }
+    }
+
+    // MARK: - Focus log
+
+    func loadFocusLog() -> [FocusLogEntry] {
+        var out: [FocusLogEntry] = []
+        var stmt: OpaquePointer?
+        let sql = "SELECT day, task_id, subtask_id, title, count, seconds FROM focus_log;"
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return out }
+        defer { sqlite3_finalize(stmt) }
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            guard let taskID = UUID(uuidString: text(stmt, 1) ?? "") else { continue }
+            let subRaw = text(stmt, 2) ?? ""
+            out.append(FocusLogEntry(
+                day: Date(timeIntervalSince1970: double(stmt, 0)),
+                taskID: taskID,
+                subtaskID: subRaw.isEmpty ? nil : UUID(uuidString: subRaw),
+                title: text(stmt, 3) ?? "",
+                count: Int(int(stmt, 4)),
+                seconds: double(stmt, 5)))
+        }
+        return out
+    }
+
+    func saveFocusLog(_ entries: [FocusLogEntry]) {
+        transaction {
+            guard exec("DELETE FROM focus_log;") else { return false }
+            let sql = """
+            INSERT INTO focus_log (day, task_id, subtask_id, title, count, seconds)
+            VALUES (?,?,?,?,?,?);
+            """
+            var stmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
+            defer { sqlite3_finalize(stmt) }
+            for e in entries {
+                sqlite3_reset(stmt)
+                sqlite3_bind_double(stmt, 1, e.day.timeIntervalSince1970)
+                bindText(stmt, 2, e.taskID.uuidString)
+                bindText(stmt, 3, e.subtaskID?.uuidString ?? "")
+                bindText(stmt, 4, e.title)
+                sqlite3_bind_int64(stmt, 5, Int64(e.count))
+                sqlite3_bind_double(stmt, 6, e.seconds)
                 guard sqlite3_step(stmt) == SQLITE_DONE else { return false }
             }
             return true
