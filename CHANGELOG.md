@@ -5,6 +5,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.12.0] — 2026-07-14
+
+### Added
+- Dock widget: a "now playing"-style pill anchored just above the Dock near the Trash — active task, remaining time, and always-standing Start / Stop / Reset buttons. On by default; toggle in Settings, next to the floating timer.
+
 ## [1.11.0] — 2026-07-14
 
 ### Added

@@ -4,7 +4,7 @@
 > whenever a feature is added, changed, or removed, update this document in the
 > same change.**
 
-- Version: 1.11.0
+- Version: 1.12.0
 - Platform: macOS 14+, lives in the menu bar
 
 ---
@@ -389,6 +389,68 @@ disagree with the HUD about whether the Mac has a notch; it re-asks on
   `PomodoroTimer.objectWillChange` (`refreshIfSettingsChanged`), whose snapshot
   includes the whole `notchContent` — every switch resizes the island, and the
   panel's frame is cut from that size.
+
+---
+
+## Dock widget
+
+A "now playing"-style pill flush against the Dock's inner edge near the
+Trash — active task, remaining time, and always-standing ▶︎ Start / ⏸ Stop /
+⟲ Reset buttons. Same philosophy as the today panel: it shows the controls,
+not a status light, so a session can be started without opening the app.
+
+- **The square-tile limitation and the flush-panel trick.** The Dock itself
+  cannot be widened or grow a custom tile — every Dock icon is a fixed square
+  slot the system owns. The widget is therefore not a Dock tile at all: it is
+  an ordinary borderless `NSPanel` (`DockWidgetWindowManager`) positioned
+  immediately above the Dock's own rectangle so it *reads* as part of it
+  without the Dock ever knowing it exists.
+- **Three code units.** `DockWidgetWindowManager` (Sources/Sharingan/Services)
+  owns the panel's lifecycle and placement; `DockWidgetView`
+  (Sources/Sharingan/Views) is the SwiftUI pill itself — a mini progress ring,
+  the active task title (or "No task selected"), the remaining time, and the
+  three transport buttons, which disable rather than hide so the pill never
+  changes shape under the pointer. `DockWidgetController` (protocol,
+  SharinganCore/Services/SharinganCoordinator.swift) is the seam
+  `SharinganCoordinator` calls through (`showDockWidget(timer:)` /
+  `hideDockWidget()`), same pattern as `TodayPanelController` and
+  `FloatingTimerController` — `AppDelegate` wires
+  `coord.dockWidgetController = DockWidgetWindowManager.shared`, and tests
+  swap in a spy instead of touching AppKit.
+- **`dockWidgetEnabled` is a settings-flag-only switch, on by default.**
+  `PomodoroSettings.dockWidgetEnabled` (default `true`) is read by
+  `SharinganCoordinator.syncDockWidget()` alone — like the today panel, the
+  pill's visibility follows the flag, never `timer.isRunning`, so Start stays
+  reachable even when nothing is counting down. `syncDockWidget()` runs once
+  from `syncAll()` at launch and again from `updateForSettingsChange` whenever
+  `dockWidgetEnabled` flips; the Settings toggle sits in its own "Dock widget"
+  section right under "Floating timer".
+- **Placement is `visibleFrame` vs. `frame` math, not a hardcoded corner.**
+  `NSScreen.main`'s `frame` is the full display; `visibleFrame` excludes the
+  Dock (and the menu bar). Comparing the two on each edge tells
+  `DockWidgetWindowManager.reposition()` where the Dock actually is:
+  - Default (Dock on the bottom, the common case): pill sits at
+    `visibleFrame.maxX − width − 16, visibleFrame.minY + 4` — flush against
+    the Dock's top-right corner, near the Trash.
+  - Dock on the left (`visibleFrame.minX > frame.minX`): pill moves to
+    `visibleFrame.minX + 4, visibleFrame.minY + 16`, flush against the Dock's
+    right edge instead.
+  - Dock on the right (`visibleFrame.maxX < frame.maxX`): pill sits at
+    `visibleFrame.maxX − width − 4, visibleFrame.minY + 16`.
+  - **Auto-hide** falls out of the same comparison for free: when the Dock is
+    set to auto-hide, `visibleFrame` and `frame` (nearly) coincide since macOS
+    stops reserving Dock space, so the pill's computed origin lands at the
+    screen edge instead of hovering over empty space where the Dock used to
+    be — no separate auto-hide detection needed.
+  - `reposition()` re-runs on `NSApplication.didChangeScreenParametersNotification`,
+    so moving the Dock, resizing a display, or toggling auto-hide re-anchors
+    the pill live.
+  - The panel is `isMovable = false` (pinned to the Dock, not user-draggable),
+    `hasShadow = false` (the pill draws its own material; an OS shadow would
+    frame the transparent window in a visible rectangle — the floating
+    timer's same reasoning), and `canBecomeKey`/`canBecomeMain` both `false`
+    (`DockWidgetPanel`) so clicking its buttons never steals focus from
+    whatever app is in front.
 
 ---
 
