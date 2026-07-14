@@ -5,6 +5,31 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-07-15
+
+### Added
+- **Auto-updates.** Sharingan now updates itself: "Check for Updates…" in the
+  menu, an Updates section in Settings (automatic checks, current version,
+  check now), and a signed Sparkle appcast published alongside every release.
+  Each update is verified against the app's EdDSA key on top of Apple's own
+  signature check.
+
+### Changed
+- **Signed and notarized.** Releases carry a Developer ID signature, a
+  hardened runtime and an Apple notarization ticket stapled to both the app
+  and the DMG — the "Sharingan can't be opened / Apple could not verify" wall
+  on first launch is gone, with no `xattr` incantation or Privacy & Security
+  detour. The release build fails if Gatekeeper would reject the artifact, so
+  an unopenable DMG can no longer ship.
+- Bundle identity moved onto developer-scoped identifiers
+  (`com.bakhod1r.sharingan`, app group `89LCRZKZ48.com.bakhod1r.sharingan`) as
+  signing requires. Settings and data from 1.1.x migrate automatically on
+  first launch.
+
+### Note
+- This release must be installed by hand one last time — 1.1.x has no updater
+  to offer it. Updates from 1.2.0 onward install in-app.
+
 ## [1.1.0] — 2026-07-14
 
 ### Added
