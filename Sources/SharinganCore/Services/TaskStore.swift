@@ -204,6 +204,28 @@ public final class TaskStore: ObservableObject {
 
     private let database: TaskDatabase?
 
+    // MARK: - Sync seam
+
+    /// Fired after the store has persisted any of its collections, so sync can
+    /// diff the new state against its shadow. Deliberately ONE hook rather
+    /// than per-mutation callbacks — the store already funnels every change
+    /// through the persist* functions, and the sync layer derives what changed
+    /// by diffing, not by being told.
+    public var didPersist: (() -> Void)?
+
+    /// True while `mergeRemote` persists, so an applied fetch neither fires
+    /// `didPersist` (a merge must not bounce straight back to CloudKit) nor
+    /// re-stamps `modifiedAt` (the remote edit's own timestamp must survive
+    /// the round trip, or last-writer-wins degenerates to last-fetched-wins).
+    private var isApplyingRemoteMerge = false
+
+    /// contentHash per task as of the last persist — how `persist()` knows
+    /// which tasks a mutation actually touched. The store's mutation methods
+    /// never stamp `modifiedAt` themselves (that would mean editing 40 call
+    /// sites); the persistence funnel stamps exactly the tasks whose synced
+    /// content moved.
+    private var persistedTaskHashes: [UUID: String] = [:]
+
     /// `fileURL`, when given (tests), is the SQLite database path. In the app it
     /// defaults to `Application Support/Sharingan/blink.sqlite`.
     ///
@@ -1011,10 +1033,25 @@ public final class TaskStore: ObservableObject {
 
     private func load() {
         tasks = database?.loadTasks() ?? []
+        persistedTaskHashes = Dictionary(uniqueKeysWithValues:
+            tasks.map { ($0.id, $0.contentHash) })
     }
 
     private func persist() {
+        // Stamp modifiedAt for every task whose synced content changed since
+        // the last persist. contentHash excludes modifiedAt, so the stamp
+        // itself never triggers another "change" — the stamping is idempotent.
+        if !isApplyingRemoteMerge {
+            let now = Date()
+            for i in tasks.indices
+            where persistedTaskHashes[tasks[i].id] != tasks[i].contentHash {
+                tasks[i].modifiedAt = now
+            }
+        }
+        persistedTaskHashes = Dictionary(uniqueKeysWithValues:
+            tasks.map { ($0.id, $0.contentHash) })
         database?.saveTasks(tasks)
+        if !isApplyingRemoteMerge { didPersist?() }
     }
 
     private func loadCategories() {
@@ -1023,6 +1060,7 @@ public final class TaskStore: ObservableObject {
 
     private func persistCategories() {
         database?.saveCategories(customCategories)
+        if !isApplyingRemoteMerge { didPersist?() }
     }
 
     private func loadTags() {
@@ -1035,10 +1073,90 @@ public final class TaskStore: ObservableObject {
 
     private func persistFocusLog() {
         database?.saveFocusLog(focusLog)
+        if !isApplyingRemoteMerge { didPersist?() }
     }
 
     private func persistTags() {
         database?.saveTags(customTags)
+        if !isApplyingRemoteMerge { didPersist?() }
+    }
+
+    // MARK: - Remote merge (sync)
+
+    /// Applies records fetched from CloudKit to the in-memory collections and
+    /// persists once through the normal save path. All conflict decisions are
+    /// MergePolicy's; deletions arrive pre-filtered (the engine has already
+    /// decided a tombstone should apply — see CloudSyncEngine). `didPersist`
+    /// and modifiedAt stamping are suppressed for the write: a merge must not
+    /// echo back to CloudKit, and a remote edit keeps its own timestamp.
+    public func mergeRemote(tasks remoteTasks: [TaskItem] = [],
+                            categories remoteCategories: [TaskCategory] = [],
+                            tags remoteTags: [String] = [],
+                            focusEntries remoteFocus: [FocusLogEntry] = [],
+                            deletedTaskIDs: [UUID] = [],
+                            deletedCategoryNames: [String] = [],
+                            deletedTagNames: [String] = [],
+                            deletedFocusRecordNames: [String] = []) {
+        isApplyingRemoteMerge = true
+        defer { isApplyingRemoteMerge = false }
+
+        for remote in remoteTasks {
+            if let i = tasks.firstIndex(where: { $0.id == remote.id }) {
+                tasks[i] = MergePolicy.mergeTask(local: tasks[i], remote: remote)
+            } else {
+                tasks.append(MergePolicy.mergeTask(local: nil, remote: remote))
+            }
+            // A task arriving from the other Mac carries its deadline with it;
+            // this Mac schedules its own reminders for it (same rule as edits).
+            if let applied = tasks.first(where: { $0.id == remote.id }) {
+                syncDueNotifications(for: applied)
+            }
+        }
+        for id in deletedTaskIDs {
+            cancelDueNotifications(for: id)
+            tasks.removeAll { $0.id == id }
+            if activeTaskID == id { activeTaskID = nil; activeSubtaskID = nil }
+        }
+
+        for remote in remoteCategories {
+            // Categories have no edit timestamp; the fetched value is by
+            // definition the newer intent (record-level LWW happened upstream
+            // via CloudKit's change tags).
+            if let i = customCategories.firstIndex(where: { $0.name == remote.name }) {
+                customCategories[i] = remote
+            } else {
+                customCategories.append(remote)
+            }
+        }
+        customCategories.removeAll { deletedCategoryNames.contains($0.name) }
+
+        for tag in remoteTags where !customTags.contains(where: {
+            $0.caseInsensitiveCompare(tag) == .orderedSame
+        }) {
+            customTags.append(tag)
+        }
+        customTags.removeAll { deletedTagNames.contains($0) }
+
+        for remote in remoteFocus {
+            if let i = focusLog.firstIndex(where: { $0.recordName == remote.recordName }) {
+                focusLog[i] = MergePolicy.mergeFocusLog(local: focusLog[i], remote: remote)
+            } else {
+                focusLog.append(MergePolicy.mergeFocusLog(local: nil, remote: remote))
+            }
+        }
+        if !deletedFocusRecordNames.isEmpty {
+            let doomed = Set(deletedFocusRecordNames)
+            focusLog.removeAll { doomed.contains($0.recordName) }
+        }
+
+        // Keep the hash baseline in step with the merged content so the next
+        // local mutation stamps only what IT changes.
+        persistedTaskHashes = Dictionary(uniqueKeysWithValues:
+            tasks.map { ($0.id, $0.contentHash) })
+        persist()
+        persistCategories()
+        persistTags()
+        persistFocusLog()
     }
 
     /// One-time import of the pre-SQLite JSON files sitting next to the database.

@@ -33,6 +33,11 @@ public final class TemplateStore: ObservableObject {
 
     private let database: TaskDatabase?
 
+    /// Sync seam, mirroring TaskStore's: one hook after persist, and a flag
+    /// that keeps an applied fetch from echoing straight back to CloudKit.
+    public var didPersist: (() -> Void)?
+    private var isApplyingRemoteMerge = false
+
     /// `fileURL`, when given (tests), is the SQLite database path. In the app
     /// it defaults to `Application Support/Sharingan/blink.sqlite` — the same
     /// database TaskStore uses.
@@ -107,5 +112,23 @@ public final class TemplateStore: ObservableObject {
 
     private func persist() {
         database?.saveTemplates(templates)
+        if !isApplyingRemoteMerge { didPersist?() }
+    }
+
+    /// Applies templates fetched from CloudKit. Templates carry no edit
+    /// timestamp, so the fetched value wins record-level (CloudKit's change
+    /// tags already serialized the writes); deletions arrive pre-filtered.
+    public func mergeRemote(templates remote: [TaskTemplate], deletedIDs: [UUID]) {
+        isApplyingRemoteMerge = true
+        defer { isApplyingRemoteMerge = false }
+        for template in remote {
+            if let i = templates.firstIndex(where: { $0.id == template.id }) {
+                templates[i] = template
+            } else {
+                templates.append(template)
+            }
+        }
+        templates.removeAll { deletedIDs.contains($0.id) }
+        persist()
     }
 }

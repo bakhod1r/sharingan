@@ -27,6 +27,15 @@ public enum MergePolicy {
         return merged
     }
 
+    /// The active timer is one record; whoever wrote last owns the session.
+    /// `>=` (unlike tasks' strict `>`): the timer is transient state, and on
+    /// an exact tie the remote is at least as fresh as what we hold.
+    public static func mergeTimer(local: ActiveTimerState?,
+                                  remote: ActiveTimerState) -> ActiveTimerState {
+        guard let local else { return remote }
+        return remote.updatedAt >= local.updatedAt ? remote : local
+    }
+
     /// A tombstone only wins if nothing edited the record after it was
     /// deleted; otherwise the newer edit is a deliberate resurrection.
     public static func shouldApplyDelete(recordName: String,

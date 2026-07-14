@@ -175,6 +175,43 @@ public enum RecordMapper {
         return decode(TaskTemplate.self, from: raw)
     }
 
+    // MARK: Active timer
+
+    public static func record(for state: ActiveTimerState,
+                              in zoneID: CKRecordZone.ID,
+                              systemFields: Data?) -> CKRecord {
+        let record = base(recordType: .activeTimer, name: ActiveTimerState.recordName,
+                          zoneID: zoneID, systemFields: systemFields)
+        record["deviceID"] = state.deviceID as CKRecordValue
+        record["deviceName"] = state.deviceName as CKRecordValue
+        record["phase"] = state.phase as CKRecordValue
+        record["startedAt"] = state.startedAt as CKRecordValue
+        record["endsAt"] = state.endsAt as CKRecordValue?
+        record["isPaused"] = (state.isPaused ? 1 : 0) as CKRecordValue
+        record["taskTitle"] = state.taskTitle as CKRecordValue?
+        record["updatedAt"] = state.updatedAt as CKRecordValue
+        record["schemaVersion"] = schemaVersion as CKRecordValue
+        return record
+    }
+
+    public static func activeTimer(from record: CKRecord) -> ActiveTimerState? {
+        guard record.recordType == SyncRecordType.activeTimer.rawValue,
+              let deviceID = record["deviceID"] as? String,
+              let phase = record["phase"] as? String,
+              let startedAt = record["startedAt"] as? Date,
+              let updatedAt = record["updatedAt"] as? Date
+        else { return nil }
+        return ActiveTimerState(
+            deviceID: deviceID,
+            deviceName: record["deviceName"] as? String ?? "Mac",
+            phase: phase,
+            startedAt: startedAt,
+            endsAt: record["endsAt"] as? Date,
+            isPaused: (record["isPaused"] as? Int ?? 0) == 1,
+            taskTitle: record["taskTitle"] as? String,
+            updatedAt: updatedAt)
+    }
+
     // MARK: Plumbing
 
     /// Re-hydrating a record from its archived system fields is what makes a
