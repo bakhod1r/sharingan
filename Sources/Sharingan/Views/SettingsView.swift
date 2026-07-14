@@ -357,6 +357,34 @@ struct SettingsView: View {
                     Text("A pill above the Dock, near the Trash: active task, time left, and Start / Stop / Reset.")
                         .font(.system(.caption2, design: .rounded))
                         .foregroundStyle(.white.opacity(0.6))
+
+                    if settings.dockWidgetEnabled {
+                        Picker("Size", selection: $settings.dockWidgetSize) {
+                            ForEach(DockWidgetSize.allCases, id: \.self) { size in
+                                Text(size.label).tag(size)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+
+                        Picker("Position", selection: $settings.dockWidgetAlignment) {
+                            ForEach(DockWidgetAlignment.allCases, id: \.self) { alignment in
+                                Text(alignment.label).tag(alignment)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+
+                        ToggleRow(title: "Expand on hover",
+                                  isOn: $settings.dockWidgetExpandOnHover)
+                        Text("Rests compact — ring and time only — and springs open under the pointer, like the Dock's now-playing widgets.")
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.6))
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Opacity: \(Int(settings.dockWidgetOpacity * 100))%")
+                                .font(.system(.caption, design: .rounded).weight(.medium))
+                            Slider(value: $settings.dockWidgetOpacity, in: 0.3...1.0)
+                        }
+                    }
                 }
 
                 Section("Today panel") {

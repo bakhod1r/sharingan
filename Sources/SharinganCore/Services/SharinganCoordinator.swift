@@ -432,7 +432,11 @@ public final class SharinganCoordinator: ObservableObject {
             || old.floatingSize != new.floatingSize
             || old.floatingAlwaysOnTop != new.floatingAlwaysOnTop { syncFloating() }
         if old.showTodayPanel != new.showTodayPanel { syncTodayPanel() }
-        if old.dockWidgetEnabled != new.dockWidgetEnabled { syncDockWidget() }
+        if old.dockWidgetEnabled != new.dockWidgetEnabled
+            || old.dockWidgetSize != new.dockWidgetSize
+            || old.dockWidgetAlignment != new.dockWidgetAlignment
+            || old.dockWidgetOpacity != new.dockWidgetOpacity
+            || old.dockWidgetExpandOnHover != new.dockWidgetExpandOnHover { syncDockWidget() }
         if old.appBlockerSettings != new.appBlockerSettings
             || old.blockScreenDuringBreak != new.blockScreenDuringBreak
             || old.blockAppsDuringFocus != new.blockAppsDuringFocus { refreshAppBlocker() }

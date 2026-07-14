@@ -13,12 +13,22 @@ final class DockWidgetWindowManager: DockWidgetController {
     static let shared = DockWidgetWindowManager()
     private var panel: NSPanel?
     private var screenObserver: NSObjectProtocol?
-    private static let size = NSSize(width: 320, height: 56)
+    /// The timer whose settings drive size/alignment/opacity — read fresh in
+    /// `reposition()` and `applySettings()` rather than snapshotted once, so a
+    /// live Settings change (from `syncDockWidget()`) takes effect immediately.
+    private weak var timer: PomodoroTimer?
 
     func showDockWidget(timer: PomodoroTimer) {
-        guard panel == nil else { reposition(); return }
+        self.timer = timer
+        guard panel == nil else {
+            applySettings()
+            reposition()
+            return
+        }
+        let preset = timer.settings.dockWidgetSize
+        let size = NSSize(width: preset.width, height: preset.height)
         let panel = DockWidgetPanel(
-            contentRect: NSRect(origin: .zero, size: Self.size),
+            contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.borderless, .fullSizeContentView, .nonactivatingPanel],
             backing: .buffered, defer: false
         )
@@ -40,6 +50,7 @@ final class DockWidgetWindowManager: DockWidgetController {
         hosting.autoresizingMask = [.width, .height]
         panel.contentView = hosting
         self.panel = panel
+        applySettings()
         reposition()
         WindowAnimator.present(panel, makeKey: false)
 
@@ -64,6 +75,18 @@ final class DockWidgetWindowManager: DockWidgetController {
         }
     }
 
+    /// Live-apply appearance settings to the current panel: the full preset
+    /// frame (hover expansion happens inside the view, not by resizing the
+    /// window) and the opacity clamp, same idea as `FloatingWindowManager`.
+    private func applySettings() {
+        guard let panel, let settings = timer?.settings else { return }
+        let preset = settings.dockWidgetSize
+        var frame = panel.frame
+        frame.size = NSSize(width: preset.width, height: preset.height)
+        panel.setFrame(frame, display: true)
+        panel.alphaValue = CGFloat(min(max(settings.dockWidgetOpacity, 0.3), 1.0))
+    }
+
     /// Flush against the Dock's inner edge, near the Trash end. The Dock's
     /// side and thickness fall out of the difference between the screen's
     /// full frame and its visibleFrame; with the Dock auto-hidden the two
@@ -72,12 +95,22 @@ final class DockWidgetWindowManager: DockWidgetController {
         guard let panel, let screen = NSScreen.main else { return }
         let vis = screen.visibleFrame
         let full = screen.frame
-        let s = Self.size
-        var origin = NSPoint(x: vis.maxX - s.width - 16, y: vis.minY + 4)
+        let preset = timer?.settings.dockWidgetSize ?? .medium
+        let alignment = timer?.settings.dockWidgetAlignment ?? .trailing
+        let s = NSSize(width: preset.width, height: preset.height)
+        var origin: NSPoint
         if vis.minX > full.minX {          // Dock on the left
             origin = NSPoint(x: vis.minX + 4, y: vis.minY + 16)
         } else if vis.maxX < full.maxX {   // Dock on the right
             origin = NSPoint(x: vis.maxX - s.width - 4, y: vis.minY + 16)
+        } else {                           // Dock on the bottom (the common case)
+            let x: CGFloat
+            switch alignment {
+            case .leading:  x = vis.minX + 16
+            case .center:   x = vis.midX - s.width / 2
+            case .trailing: x = vis.maxX - s.width - 16
+            }
+            origin = NSPoint(x: x, y: vis.minY + 4)
         }
         panel.setFrame(NSRect(origin: origin, size: s), display: true)
     }

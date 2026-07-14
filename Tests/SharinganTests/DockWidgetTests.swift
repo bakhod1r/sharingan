@@ -29,6 +29,64 @@ struct DockWidgetTests {
         #expect(decoded.dockWidgetEnabled == true)
     }
 
+    // MARK: - Size / alignment / opacity / hover-expand
+
+    @Test("new dock widget fields default to today's look")
+    func newFieldDefaults() {
+        let s = PomodoroSettings()
+        #expect(s.dockWidgetSize == .medium)
+        #expect(s.dockWidgetAlignment == .trailing)
+        #expect(s.dockWidgetOpacity == 1.0)
+        #expect(s.dockWidgetExpandOnHover == true)
+    }
+
+    @Test("DockWidgetSize preset pixel mapping is sane and strictly ordered")
+    func presetPixelsSane() {
+        for size in DockWidgetSize.allCases {
+            #expect(size.width > 0)
+            #expect(size.height > 0)
+        }
+        #expect(DockWidgetSize.small.width < DockWidgetSize.medium.width)
+        #expect(DockWidgetSize.medium.width < DockWidgetSize.large.width)
+        #expect(DockWidgetSize.small.height < DockWidgetSize.medium.height)
+        #expect(DockWidgetSize.medium.height < DockWidgetSize.large.height)
+    }
+
+    @Test("new dock widget fields survive a settings codable round trip")
+    func newFieldsRoundTrip() throws {
+        var s = PomodoroSettings()
+        s.dockWidgetSize = .large
+        s.dockWidgetAlignment = .leading
+        s.dockWidgetOpacity = 0.5
+        s.dockWidgetExpandOnHover = false
+        let decoded = try JSONDecoder().decode(PomodoroSettings.self,
+                                               from: JSONEncoder().encode(s))
+        #expect(decoded.dockWidgetSize == .large)
+        #expect(decoded.dockWidgetAlignment == .leading)
+        #expect(decoded.dockWidgetOpacity == 0.5)
+        #expect(decoded.dockWidgetExpandOnHover == false)
+        #expect(decoded == s)
+    }
+
+    @Test("old settings blob without the new keys decodes to the defaults")
+    func newFieldsDefensiveDecode() throws {
+        let decoded = try JSONDecoder().decode(PomodoroSettings.self,
+                                               from: Data("{}".utf8))
+        #expect(decoded.dockWidgetSize == .medium)
+        #expect(decoded.dockWidgetAlignment == .trailing)
+        #expect(decoded.dockWidgetOpacity == 1.0)
+        #expect(decoded.dockWidgetExpandOnHover == true)
+    }
+
+    @Test("garbage dockWidgetSize/dockWidgetAlignment raw values fall back to the defaults")
+    func garbageEnumsFallBack() throws {
+        let decoded = try JSONDecoder().decode(
+            PomodoroSettings.self,
+            from: Data(#"{"dockWidgetSize":"gigantic","dockWidgetAlignment":"top"}"#.utf8))
+        #expect(decoded.dockWidgetSize == .medium)
+        #expect(decoded.dockWidgetAlignment == .trailing)
+    }
+
     // MARK: - Coordinator sync
 
     /// Records show/hide calls so the sync logic is assertable headless.

@@ -10,41 +10,82 @@ import SharinganCore
 struct DockWidgetView: View {
     @ObservedObject var timer: PomodoroTimer
     @ObservedObject private var tasks = TaskStore.shared
+    /// True while the pointer sits over the pill — drives the compact ↔
+    /// expanded spring when `dockWidgetExpandOnHover` is on.
+    @State private var hovering = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var phaseColors: [Color] { timer.phase.gradient }
+    private var preset: DockWidgetSize { timer.settings.dockWidgetSize }
+    /// Every metric below is tuned at the medium preset (56pt tall, k = 1)
+    /// and scales linearly with whichever size is chosen.
+    private var k: CGFloat { preset.height / 56 }
+    /// Off = always fully open; on = compact (ring + time) at rest, full pill
+    /// under the pointer — the Dock's now-playing widgets' behavior.
+    private var expanded: Bool { !timer.settings.dockWidgetExpandOnHover || hovering }
+    private var containerAlignment: Alignment {
+        switch timer.settings.dockWidgetAlignment {
+        case .leading:  return .leading
+        case .center:   return .center
+        case .trailing: return .trailing
+        }
+    }
 
     var body: some View {
-        HStack(spacing: 12) {
+        // A full-preset-size transparent container (matching the window's
+        // frame) with the pill anchored to the chosen Dock-hugging edge; the
+        // pill itself — not this container — resizes on hover.
+        pill
+            .frame(width: preset.width, height: preset.height,
+                   alignment: containerAlignment)
+    }
+
+    private var pill: some View {
+        HStack(spacing: 12 * k) {
             ring
-            VStack(alignment: .leading, spacing: 2) {
-                titleRow
-                Text(timer.settings.timeFormat.string(max(0, timer.remainingSeconds)))
-                    .font(.dsTimer(17))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .contentTransition(.numericText())
-                    .animation(.snappy(duration: 0.3), value: timer.remainingSeconds)
+            if expanded {
+                VStack(alignment: .leading, spacing: 2) {
+                    titleRow
+                    timeText
+                }
+                Spacer(minLength: 8 * k)
+                controls
+            } else {
+                timeText
             }
-            Spacer(minLength: 8)
-            controls
         }
-        .padding(.horizontal, 14)
-        .frame(width: 320, height: 56)
+        .padding(.horizontal, 14 * k)
+        // Only the width animates between the compact and expanded pill —
+        // the height stays pinned to the preset so the pill never bobs.
+        .frame(width: expanded ? preset.width : preset.height * 2.6,
+               height: preset.height)
         .background(.regularMaterial,
                     in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .onHover { hovering = $0 }
+        .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.78),
+                   value: hovering)
+    }
+
+    private var timeText: some View {
+        Text(timer.settings.timeFormat.string(max(0, timer.remainingSeconds)))
+            .font(.dsTimer(17 * k))
+            .foregroundStyle(.white)
+            .lineLimit(1)
+            .contentTransition(.numericText())
+            .animation(.snappy(duration: 0.3), value: timer.remainingSeconds)
     }
 
     /// Mini progress ring stroked with the phase gradient; dimmed while idle.
     private var ring: some View {
         ZStack {
-            Circle().stroke(.white.opacity(0.15), lineWidth: 3.5)
+            Circle().stroke(.white.opacity(0.15), lineWidth: 3.5 * k)
             Circle()
                 .trim(from: 0, to: max(0.003, timer.progress))
                 .stroke(AngularGradient(colors: phaseColors, center: .center),
-                        style: StrokeStyle(lineWidth: 3.5, lineCap: .round))
+                        style: StrokeStyle(lineWidth: 3.5 * k, lineCap: .round))
                 .rotationEffect(.degrees(-90))
         }
-        .frame(width: 30, height: 30)
+        .frame(width: 30 * k, height: 30 * k)
         .opacity(timer.isRunning ? 1 : 0.55)
         .animation(.snappy(duration: 0.3), value: timer.progress)
     }
@@ -54,21 +95,21 @@ struct DockWidgetView: View {
         if let task = tasks.activeTask {
             HStack(spacing: 5) {
                 Circle().fill(Color(hex: tasks.color(for: task.category)))
-                    .frame(width: 6, height: 6)
+                    .frame(width: 6 * k, height: 6 * k)
                 Text(task.title)
-                    .font(.system(size: 12, design: .rounded).weight(.semibold))
+                    .font(.system(size: 12 * k, design: .rounded).weight(.semibold))
                     .foregroundStyle(.white.opacity(0.92))
                     .lineLimit(1)
             }
         } else {
             Text("No task selected")
-                .font(.system(size: 12, design: .rounded))
+                .font(.system(size: 12 * k, design: .rounded))
                 .foregroundStyle(.white.opacity(0.55))
         }
     }
 
     private var controls: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 8 * k) {
             control("play.fill", enabled: !timer.isRunning, help: "Start") {
                 timer.start()
             }
@@ -85,9 +126,9 @@ struct DockWidgetView: View {
                          action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 12, weight: .bold))
+                .font(.system(size: 12 * k, weight: .bold))
                 .foregroundStyle(.white.opacity(enabled ? 0.9 : 0.3))
-                .frame(width: 26, height: 26)
+                .frame(width: 26 * k, height: 26 * k)
                 .background(Circle().fill(.white.opacity(0.12)))
         }
         .buttonStyle(.plain)

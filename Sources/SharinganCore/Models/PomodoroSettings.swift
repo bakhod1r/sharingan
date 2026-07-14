@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 
 /// Per-tag (label) appearance: an SF Symbol and a flag color. Both optional —
 /// missing fields fall back to the app defaults ("at" mark, accent color).
@@ -46,6 +47,50 @@ public enum FloatingTimerSize: String, Codable, CaseIterable, Sendable {
         case .small:  return "Small"
         case .medium: return "Medium"
         case .large:  return "Large"
+        }
+    }
+}
+
+/// Dock widget size presets — same idea as `FloatingTimerSize`, tuned to the
+/// pill's single-row layout (ring + time, title row, transport buttons).
+public enum DockWidgetSize: String, Codable, CaseIterable, Sendable {
+    case small, medium, large
+
+    /// Panel size in points.
+    public var width: CGFloat {
+        switch self {
+        case .small:  return 280
+        case .medium: return 320
+        case .large:  return 380
+        }
+    }
+    public var height: CGFloat {
+        switch self {
+        case .small:  return 48
+        case .medium: return 56
+        case .large:  return 68
+        }
+    }
+
+    public var label: String {
+        switch self {
+        case .small:  return "Small"
+        case .medium: return "Medium"
+        case .large:  return "Large"
+        }
+    }
+}
+
+/// Which end of the Dock the pill hugs (bottom Dock; a vertical Dock keeps
+/// the pill at its bottom end regardless — see `DockWidgetWindowManager`).
+public enum DockWidgetAlignment: String, Codable, CaseIterable, Sendable {
+    case leading, center, trailing
+
+    public var label: String {
+        switch self {
+        case .leading:  return "Left"
+        case .center:   return "Center"
+        case .trailing: return "Right"
         }
     }
 }
@@ -193,6 +238,15 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     /// Dock widget: a control pill anchored near the Trash end of the Dock —
     /// active task, remaining time, Start / Stop / Reset.
     public var dockWidgetEnabled: Bool = true
+    /// Preset pill size (Small/Medium/Large).
+    public var dockWidgetSize: DockWidgetSize = .medium
+    /// Which end of the Dock the pill hugs (bottom Dock; a vertical Dock
+    /// keeps the pill at its bottom end regardless).
+    public var dockWidgetAlignment: DockWidgetAlignment = .trailing
+    public var dockWidgetOpacity: Double = 1.0      // 0.3…1.0
+    /// Rest compact (ring + time) and spring open under the pointer, like
+    /// the Dock's now-playing widgets. Off = always fully open.
+    public var dockWidgetExpandOnHover: Bool = true
     /// Always-on-desktop glass panel with today's tasks + timer state
     /// (the WidgetKit substitute for the SwiftPM build).
     public var showTodayPanel: Bool = false
@@ -392,6 +446,14 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
         floatingShowDots = try c.decodeIfPresent(Bool.self, forKey: .floatingShowDots) ?? d.floatingShowDots
         floatingShowTask = try c.decodeIfPresent(Bool.self, forKey: .floatingShowTask) ?? d.floatingShowTask
         dockWidgetEnabled = try c.decodeIfPresent(Bool.self, forKey: .dockWidgetEnabled) ?? d.dockWidgetEnabled
+        // Unknown raw values (a preset/side written by a newer build) fall back
+        // to the default rather than throwing the whole blob away, like `floatingSize`.
+        dockWidgetSize = ((try? c.decodeIfPresent(DockWidgetSize.self, forKey: .dockWidgetSize)) ?? nil)
+            ?? d.dockWidgetSize
+        dockWidgetAlignment = ((try? c.decodeIfPresent(DockWidgetAlignment.self, forKey: .dockWidgetAlignment)) ?? nil)
+            ?? d.dockWidgetAlignment
+        dockWidgetOpacity = try c.decodeIfPresent(Double.self, forKey: .dockWidgetOpacity) ?? d.dockWidgetOpacity
+        dockWidgetExpandOnHover = try c.decodeIfPresent(Bool.self, forKey: .dockWidgetExpandOnHover) ?? d.dockWidgetExpandOnHover
         showTodayPanel = try c.decodeIfPresent(Bool.self, forKey: .showTodayPanel) ?? d.showTodayPanel
         globalShortcutsEnabled = try c.decodeIfPresent(Bool.self, forKey: .globalShortcutsEnabled) ?? d.globalShortcutsEnabled
         shortcutBindings = try c.decodeIfPresent([String: ShortcutBinding].self, forKey: .shortcutBindings) ?? d.shortcutBindings
