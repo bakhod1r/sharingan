@@ -4,7 +4,7 @@
 > whenever a feature is added, changed, or removed, update this document in the
 > same change.**
 
-- Version: 1.16.0
+- Version: 1.17.0
 - Platform: macOS 14+, lives in the menu bar
 
 ---
@@ -120,7 +120,11 @@
 - **Main menu bar** (`MainMenu.swift`, visible while the main window holds the app in `.regular`): App menu (About, Settings… ⌘, → `AppRouter.openSettings`, Quit ⌘Q); File — New Task… ⌘N (the quick-add panel), Import Tasks… ⇧⌘I (opens Tasks with the bulk-import sheet via the one-shot `AppRouter.openTaskImport`), Export Tasks as CSV…, Close ⌘W; Edit — the standard first-responder six; View — the five sections on ⌘1–⌘5 plus Search Tasks ⌘F; Timer — Start/Pause Focus ⌘⏎, Skip Phase ⇧⌘⏎, Add/Remove 5 Minutes ⌘+/⌘−; Window — Minimize/Zoom + the system windows list (`NSApp.windowsMenu`); Help — website and releases (`NSApp.helpMenu`). Actions dispatch through the same singletons the in-app buttons use; delegate-targeted items set `target:` explicitly since the app delegate is outside the responder chain.
 - Menu-bar popover with timer, tasks, week, and report tabs plus today's
   goal — the report tab is the main window's day-paged `ReportView` reused
-  unchanged, scrolling inside the popover's fixed tab area. The
+  unchanged, scrolling inside the popover's fixed tab area (560 pt). The
+  Pomodoro tab is plan-first: no phase + countdown header (the menu bar,
+  floating timer and Dock widget already show the time) — the goal bar and
+  task list take that space (list cap 360 pt), with the transport controls
+  pinned below the scroll. The
   popover pins its own `NSAppearance` to dark: `NSApp.appearance` does not reach
   it because an `NSPopover` resolves appearance from its anchor view (the
   status-item button in the system menu bar), so under Light mode the dark-glass

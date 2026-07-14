@@ -32,7 +32,7 @@ struct MenuBarView: View {
     /// Fixed height for the switchable tab area so the popover keeps one height
     /// across tabs. Sized to fit the timer tab's controls (the stats strip is
     /// pinned separately below); a very long task list scrolls within.
-    private let tabContentHeight: CGFloat = 512
+    private let tabContentHeight: CGFloat = 560
 
     /// Outer popover padding — also part of the Week-tab width math below, so
     /// tweaking one can't silently clip the board.
@@ -60,9 +60,11 @@ struct MenuBarView: View {
 
             // Fixed-height area so switching Timer ↔ Tasks never resizes the
             // popover. Content is top-aligned; an over-long list scrolls within.
-            // On the Timer tab the status + controls are pinned BELOW the
-            // scroll — only the plan (goal bar + tasks) scrolls — so Start /
-            // Skip / +5m can never be pushed out of sight by a long list.
+            // On the Timer tab the controls are pinned BELOW the scroll — only
+            // the plan (goal bar + tasks) scrolls — so Start / Skip / +5m can
+            // never be pushed out of sight by a long list. (The old phase +
+            // countdown header is gone: the menu bar, floating timer and Dock
+            // widget already show the time; tasks get the space instead.)
             VStack(spacing: 14) {
                 ScrollView(.vertical, showsIndicators: false) {
                     Group {
@@ -87,7 +89,6 @@ struct MenuBarView: View {
                     }
                 )
                 if tab == .timer {
-                    statusHeader
                     controls
                 }
             }
@@ -125,7 +126,7 @@ struct MenuBarView: View {
             dailyGoalBar
             // Task list is the primary plan — it sits at the very top so the
             // user's added todos are the first thing shown. The pomodoro
-            // status and controls are pinned below the scroll (see `body`).
+            // controls are pinned below the scroll (see `body`).
             taskList
         }
     }
@@ -370,7 +371,7 @@ struct MenuBarView: View {
                 }
             }
         }
-        return min(max(h, 40), 300)
+        return min(max(h, 40), 360)
     }
 
     /// Open tasks grouped by category, in the app's category order.
@@ -925,34 +926,6 @@ struct MenuBarView: View {
     }
 
     // MARK: - Pieces
-
-    private var statusHeader: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                Circle().fill(Color.white.opacity(0.1))
-                Image(systemName: timer.phase.systemImage)
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(timer.phase.glow)
-                    .contentTransition(.opacity)
-            }
-            .frame(width: 46, height: 46)
-            .glassCapsule()
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(timer.phase.label)
-                    .font(.system(.headline, design: .rounded).weight(.bold))
-                    .contentTransition(.opacity)
-                Text(timer.settings.timeFormat.string(timer.remainingSeconds))
-                    .font(.dsTimer(20))
-                    .foregroundStyle(.secondary)
-                    .contentTransition(.numericText())
-                    .animation(DS.Motion.snappy, value: timer.remainingSeconds)
-            }
-            Spacer()
-        }
-        // Icon, label and glow cross-fade when the phase changes.
-        .animation(DS.Motion.gentle, value: timer.phase)
-    }
 
     private var controls: some View {
         VStack(spacing: 8) {

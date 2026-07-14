@@ -8,6 +8,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 ### Fixed
 - Dock widget: the pill now appears on a fresh launch — the coordinator's initial sync ran before the widget's window controller was wired (same launch-order gap the today panel already guards against), so it only showed after a settings change.
 
+## [1.17.0] — 2026-07-14
+
+### Changed
+- Menu-bar popover's Pomodoro tab shows roughly twice as many tasks: the phase-icon + countdown header above the controls is gone (the menu bar, floating timer and Dock widget already show the time), the fixed tab area grew 512 → 560 pt, and the task-list height cap 300 → 360 pt
+
 ## [1.16.0] — 2026-07-14
 
 ### Added
