@@ -30,15 +30,18 @@ final class IconSpinner {
         let ws = NSWorkspace.shared.notificationCenter
         ws.addObserver(forName: NSWorkspace.screensDidSleepNotification,
                        object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.screensAsleep = true }
+            guard let self else { return }
+            Task { @MainActor in self.screensAsleep = true }
         }
         ws.addObserver(forName: NSWorkspace.screensDidWakeNotification,
                        object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.screensAsleep = false }
+            guard let self else { return }
+            Task { @MainActor in self.screensAsleep = false }
         }
         ws.addObserver(forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
                        object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.sync() }
+            guard let self else { return }
+            Task { @MainActor in self.sync() }
         }
     }
 
@@ -51,7 +54,8 @@ final class IconSpinner {
         if shouldSpin, timer == nil {
             let t = Timer.scheduledTimer(withTimeInterval: 1.0 / 12.0,
                                          repeats: true) { [weak self] _ in
-                Task { @MainActor in self?.tick() }
+                guard let self else { return }
+                Task { @MainActor in self.tick() }
             }
             t.tolerance = 0.02
             timer = t

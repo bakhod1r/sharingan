@@ -76,10 +76,11 @@ final class MenuBarController: NSObject {
 
         // Refresh title every second.
         Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            guard let self else { return }
             Task { @MainActor in
-                self?.syncSpinner()
-                self?.syncVisibility()
-                self?.updateTitle()
+                self.syncSpinner()
+                self.syncVisibility()
+                self.updateTitle()
             }
         }
 
@@ -240,7 +241,7 @@ final class MenuBarController: NSObject {
             renderer.scale = 8 // 144px bitmap; crisp at 18pt on any backing scale
             styledIris = renderer.cgImage
         }
-        let img = NSImage(size: NSSize(width: side, height: side), flipped: false) { fullRect in
+        let img = NSImage(size: NSSize(width: side, height: side), flipped: false) { (fullRect: NSRect) -> Bool in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
             let c = CGPoint(x: fullRect.midX, y: fullRect.midY)
 
