@@ -5,5 +5,16 @@
     <link>https://bakhod1r.github.io/sharingan/appcast.xml</link>
     <description>Sharingan updates</description>
     <language>en</language>
+    <item>
+      <title>Sharingan 1.2.0</title>
+      <pubDate>Tue, 14 Jul 2026 19:57:51 +0000</pubDate>
+      <sparkle:version>391</sparkle:version>
+      <sparkle:shortVersionString>1.2.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+
+      ]]></description>
+      <enclosure url="https://github.com/bakhod1r/sharingan/releases/download/v1.2.0/Sharingan.dmg" length="16192973" type="application/octet-stream" sparkle:edSignature="M/qy3oDEdD9G+hiAXpHXv7dI1f6yicL7A/kjy3+3XlCfij/eNxbrcPfpIWbEX1WNZk5VfaK4KfYAF24DZdnpCw=="/>
+    </item>
   </channel>
 </rss>
