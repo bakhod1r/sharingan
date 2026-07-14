@@ -8,7 +8,7 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .timer:    return "Timer"
+        case .timer:    return "Pomodoro"
         case .tasks:    return "Tasks"
         case .week:     return "Week"
         case .stats:    return "Progress"

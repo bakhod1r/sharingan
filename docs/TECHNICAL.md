@@ -114,7 +114,7 @@
 
 - Six themes: Liquid Glass, Frosted, Midnight, Cream, Neon, and Mono.
 - Liquid-glass design throughout.
-- Main window sections: Timer, Tasks, Week, Progress, Report, and Settings.
+- Main window sections: Pomodoro, Tasks, Week, Progress, Report, and Settings.
 - Menu-bar popover with timer, tasks, week, and report tabs plus today's
   goal — the report tab is the main window's day-paged `ReportView` reused
   unchanged, scrolling inside the popover's fixed tab area. The
@@ -143,14 +143,14 @@
 - Floating timer: an always-on-top panel that joins all Spaces, is draggable, has size presets, and auto shows/hides around breaks.
 - Notch HUD: an island over the MacBook camera housing — live ears while a session runs, the user's open tasks and quick actions on hover. Configurable (see below); absent, and disabled in Settings, on a Mac without a notch.
 - Confirmation prompt before quitting while a focus session is running.
-- Searchable settings, grouped into: Timer, Tasks & Planning, Breaks, Focus & Blocking, Eye Care, Sharingan Eyes, General, Voice Guidance, and Shortcuts.
+- Searchable settings, grouped into: Pomodoro, Tasks & Planning, Breaks, Focus & Blocking, Eye Care, Sharingan Eyes, General, Voice Guidance, and Shortcuts.
 
 ---
 
 ## Settings layout (essentials + Advanced accordion)
 
 All 10 categories are always visible on the root list (General first,
-Notch HUD right after Timer — `SettingsCategory` declaration order). Each category page shows its
+Notch HUD right after Pomodoro — `SettingsCategory` declaration order). Each category page shows its
 essential rows always; extra rows live in one collapsible "Advanced
 settings" disclosure at the bottom of the page. There is no global
 Simple/Advanced switch and nothing to seed at launch.
@@ -174,7 +174,7 @@ Simple/Advanced switch and nothing to seed at launch.
   re-applies `WallpaperConfig`) stays in `categorySections` — always
   visible — so it keeps observing even while the Advanced accordion
   (which holds the wallpaper spin/idle/doze rows) is collapsed.
-- The **Notch HUD** is its own category (declared right after Timer, so it
+- The **Notch HUD** is its own category (declared right after Pomodoro, so it
   sits under Timer in the sidebar), not buried in Timer's Advanced tier. Its
   essential rows are the master "Show the notch HUD" toggle and the ears
   picker; its Advanced tier ("Notch HUD details") holds the live-activity

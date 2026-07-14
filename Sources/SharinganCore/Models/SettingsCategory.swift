@@ -15,7 +15,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable, Hashable, Send
 
     public var title: String {
         switch self {
-        case .timer:     return "Timer"
+        case .timer:     return "Pomodoro"
         case .notch:     return "Notch HUD"
         case .tasks:     return "Tasks & Planning"
         case .breaks:    return "Breaks"

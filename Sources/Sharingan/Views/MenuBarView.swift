@@ -50,7 +50,7 @@ struct MenuBarView: View {
     var body: some View {
         VStack(spacing: 14) {
             Picker("", selection: $tab) {
-                Label("Timer", systemImage: "timer").tag(Tab.timer)
+                Label("Pomodoro", systemImage: "timer").tag(Tab.timer)
                 Label("Tasks", systemImage: "checklist").tag(Tab.tasks)
                 Label("Week", systemImage: "calendar").tag(Tab.week)
                 Label("Report", systemImage: "list.bullet.rectangle").tag(Tab.report)
