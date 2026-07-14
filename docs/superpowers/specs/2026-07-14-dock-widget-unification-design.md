@@ -24,16 +24,18 @@ widget becomes draggable.
 
 ## 2. Start → mini task picker
 
-- ▶︎ no longer starts blindly: it opens a small anchored list (NSPopover on
-  the widget's hosting view) of OPEN tasks — active task highlighted, row =
-  category dot + title (+ 🍅 count). Choosing a row: `TaskStore.setActive(id)`
-  then `timer.startFocusSession(kind: <task's pomodoro kind>)` — the same
-  entry point every task-row play button uses (find the exact precedent in
-  TasksView/MenuBarView and mirror it). Top row: "Continue without task" →
-  plain `startFocusSession()`.
-- Picker opens on every ▶︎ press (owner's choice), with the current active
-  task pre-highlighted; Esc / click-away dismisses without starting.
-  ⏸ and ⟲ are unchanged.
+- ▶︎ opens a small anchored list (NSPopover on the widget's hosting view) of
+  **today's open tasks** — the same task set the Today panel shows, reusing
+  its exact filter — active task highlighted, row = category dot + title
+  (+ 🍅 count). Choosing a row: `TaskStore.setActive(id)` then
+  `timer.startFocusSession(kind: <task's pomodoro kind>)` — the same entry
+  point every task-row play button uses (find the exact precedent in
+  TasksView/MenuBarView and mirror it). Top row: "Start without task" →
+  plain `startFocusSession()` with the active task left as-is.
+- Owner refinement: if today's open-task list is EMPTY, ▶︎ starts immediately
+  (no empty picker). Starting must never be blocked by the picker — Esc /
+  click-away dismisses without starting, and "Start without task" always
+  works. ⏸ and ⟲ are unchanged.
 - The popover may take key focus while open (it's a deliberate interaction);
   the widget panel itself stays non-activating.
 
