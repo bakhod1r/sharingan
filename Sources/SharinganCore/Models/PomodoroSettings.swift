@@ -190,6 +190,9 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var floatingShowDots: Bool = true
     /// Show the active-task pill on the floating card (when tall enough).
     public var floatingShowTask: Bool = true
+    /// Dock widget: a control pill anchored near the Trash end of the Dock —
+    /// active task, remaining time, Start / Stop / Reset.
+    public var dockWidgetEnabled: Bool = true
     /// Always-on-desktop glass panel with today's tasks + timer state
     /// (the WidgetKit substitute for the SwiftPM build).
     public var showTodayPanel: Bool = false
@@ -388,6 +391,7 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
             ?? (floatingCompact ? .small : d.floatingSize)
         floatingShowDots = try c.decodeIfPresent(Bool.self, forKey: .floatingShowDots) ?? d.floatingShowDots
         floatingShowTask = try c.decodeIfPresent(Bool.self, forKey: .floatingShowTask) ?? d.floatingShowTask
+        dockWidgetEnabled = try c.decodeIfPresent(Bool.self, forKey: .dockWidgetEnabled) ?? d.dockWidgetEnabled
         showTodayPanel = try c.decodeIfPresent(Bool.self, forKey: .showTodayPanel) ?? d.showTodayPanel
         globalShortcutsEnabled = try c.decodeIfPresent(Bool.self, forKey: .globalShortcutsEnabled) ?? d.globalShortcutsEnabled
         shortcutBindings = try c.decodeIfPresent([String: ShortcutBinding].self, forKey: .shortcutBindings) ?? d.shortcutBindings
