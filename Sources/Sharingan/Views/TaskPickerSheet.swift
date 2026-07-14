@@ -20,9 +20,28 @@ struct TaskPickerSheet: View {
     @State private var newTitle = ""
     /// Tasks whose subtask list is expanded so a specific step can be targeted.
     @State private var expanded: Set<UUID> = []
+    /// Same ordering the Tasks list uses — one shared preference.
+    @AppStorage("tasks.sortMode") private var sortModeRaw = TaskSortMode.manual.rawValue
+    private var sortMode: TaskSortMode { TaskSortMode(rawValue: sortModeRaw) ?? .manual }
+    /// One-dimension narrowing (category / tag / priority) — transient, the
+    /// sheet is short-lived.
+    @State private var categoryFilter: String?
+    @State private var tagFilter: String?
+    @State private var priorityFilter: TaskPriority?
+    private var isNarrowed: Bool {
+        categoryFilter != nil || tagFilter != nil || priorityFilter != nil
+    }
 
-    private var openTasks: [TaskItem] {
+    private var allOpenTasks: [TaskItem] {
         store.tasks.filter { !$0.isDone }
+    }
+
+    /// The list as shown: open tasks, narrowed by the filter menu, in the
+    /// shared sort order (manual = the Tasks list's drag order).
+    private var openTasks: [TaskItem] {
+        narrowTasks(allOpenTasks, category: categoryFilter, tag: tagFilter,
+                    priority: priorityFilter)
+            .sorted(by: sortMode.inOrder)
     }
 
     var body: some View {
@@ -30,19 +49,37 @@ struct TaskPickerSheet: View {
             header
             Divider().opacity(0.25)
 
-            if openTasks.isEmpty {
+            if allOpenTasks.isEmpty {
                 emptyState
             } else {
-                ScrollView {
+                sortFilterBar
+                if openTasks.isEmpty {
+                    // The filter emptied the list — say so instead of the
+                    // "add one below" empty state, and keep the bar visible
+                    // so the filter can be cleared.
                     VStack(spacing: 8) {
-                        ForEach(openTasks) { task in
-                            row(task)
-                            if expanded.contains(task.id) {
-                                subtaskRows(task)
+                        Spacer()
+                        Image(systemName: "line.3.horizontal.decrease.circle")
+                            .font(.system(size: 28))
+                            .foregroundStyle(.white.opacity(0.6))
+                        Text("No tasks match the filter")
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.7))
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
+                } else {
+                    ScrollView {
+                        VStack(spacing: 8) {
+                            ForEach(openTasks) { task in
+                                row(task)
+                                if expanded.contains(task.id) {
+                                    subtaskRows(task)
+                                }
                             }
                         }
+                        .padding(16)
                     }
-                    .padding(16)
                 }
             }
 
@@ -68,6 +105,59 @@ struct TaskPickerSheet: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 20).padding(.bottom, 16)
+    }
+
+    // MARK: - Sort & filter
+
+    /// Slim controls row under the header: sort (shared with the Tasks list)
+    /// and a one-dimension filter, both as quiet capsule chips.
+    private var sortFilterBar: some View {
+        HStack(spacing: 6) {
+            Menu {
+                TaskSortMenuItems(sortModeRaw: $sortModeRaw)
+            } label: {
+                pickerChip(icon: "arrow.up.arrow.down",
+                           text: sortMode == .manual ? "Sort" : sortMode.label,
+                           active: sortMode != .manual)
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .help("Sort tasks")
+
+            Menu {
+                TaskFilterMenuItems(store: store, settings: timer.settings,
+                                    categoryFilter: $categoryFilter,
+                                    tagFilter: $tagFilter,
+                                    priorityFilter: $priorityFilter)
+            } label: {
+                pickerChip(icon: isNarrowed
+                                ? "line.3.horizontal.decrease.circle.fill"
+                                : "line.3.horizontal.decrease.circle",
+                           text: filterChipLabel, active: isNarrowed)
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .help("Filter by category, tag, or priority")
+
+            Spacer()
+        }
+        .padding(.horizontal, 16).padding(.top, 10)
+    }
+
+    private var filterChipLabel: String {
+        if let c = categoryFilter { return c }
+        if let t = tagFilter { return "#\(t)" }
+        if let p = priorityFilter { return timer.settings.priorityName(p) }
+        return "Filter"
+    }
+
+    private func pickerChip(icon: String, text: String, active: Bool) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon).font(.system(size: 9, weight: .semibold))
+            Text(text).font(.system(.caption2, design: .rounded).weight(.medium))
+        }
+        .foregroundStyle(active ? Color.accentColor : .white.opacity(0.65))
+        .padding(.horizontal, 8).padding(.vertical, 4)
+        .background(Capsule().fill(active ? Color.accentColor.opacity(0.18)
+                                          : Color.white.opacity(0.08)))
     }
 
     // MARK: - Task row

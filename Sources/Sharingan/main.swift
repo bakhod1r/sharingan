@@ -672,6 +672,20 @@ if let outDir = HeadlessRender.outputDirectory(for: "--render-dev-preview") {
                         .environment(\.colorScheme, .dark),
                     to: "\(outDir)/tasks-tab.png",
                     size: NSSize(width: 480, height: 760))
+        // The focus-task picker — its sort/filter chip bar sits between the
+        // header and the list.
+        writeHosted(TaskPickerSheet(timer: timer)
+                        .environment(\.colorScheme, .dark),
+                    to: "\(outDir)/task-picker.png",
+                    size: NSSize(width: 400, height: 480))
+        // The weekly board's header (sort/filter circles + week nav), backlog
+        // and the first days — the full board is wider than any shot needs.
+        writeHosted(WeeklyBoardView(timer: timer)
+                        .padding(20)
+                        .background(Color(white: 0.12))
+                        .environment(\.colorScheme, .dark),
+                    to: "\(outDir)/weekly-board.png",
+                    size: NSSize(width: 1240, height: 600))
         // The notch island, in each shape it takes. This machine has no camera
         // housing, so the HUD never instantiates at runtime here — but the view
         // is driven entirely by `NotchHUDModel`, so handing it 14"-MacBook-Pro

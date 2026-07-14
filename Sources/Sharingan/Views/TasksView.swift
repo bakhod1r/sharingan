@@ -401,13 +401,7 @@ struct TasksView: View {
     /// manual order underneath, which every mode uses as its tiebreak.
     private var sortMenu: some View {
         Menu {
-            ForEach(TaskSortMode.allCases) { mode in
-                Button {
-                    withAnimation(DS.Motion.gentle) { sortModeRaw = mode.rawValue }
-                } label: {
-                    Label(mode.label, systemImage: sortMode == mode ? "checkmark" : mode.icon)
-                }
-            }
+            TaskSortMenuItems(sortModeRaw: $sortModeRaw)
         } label: {
             Image(systemName: "arrow.up.arrow.down")
                 .font(.system(size: 12, weight: .semibold))
@@ -433,58 +427,10 @@ struct TasksView: View {
     /// chip, whose ✕ clears it. Picking the active entry toggles it off.
     private var filterMenu: some View {
         Menu {
-            Menu("Category") {
-                ForEach(store.allCategories) { c in
-                    Button {
-                        withAnimation(DS.Motion.gentle) {
-                            let on = categoryFilter == c.name
-                            categoryFilter = on ? nil : c.name
-                            tagFilter = nil; priorityFilter = nil
-                        }
-                    } label: {
-                        Label(c.name, systemImage: categoryFilter == c.name ? "checkmark" : c.icon)
-                    }
-                }
-            }
-            if !store.allTags.isEmpty {
-                Menu("Tag") {
-                    ForEach(store.allTags, id: \.self) { t in
-                        Button {
-                            withAnimation(DS.Motion.gentle) {
-                                let on = tagFilter == t
-                                tagFilter = on ? nil : t
-                                categoryFilter = nil; priorityFilter = nil
-                            }
-                        } label: {
-                            Label("#\(t)", systemImage: tagFilter == t ? "checkmark" : "number")
-                        }
-                    }
-                }
-            }
-            Menu("Priority") {
-                ForEach(TaskPriority.levels(custom: timer.settings.customPriorityLevels)) { p in
-                    Button {
-                        withAnimation(DS.Motion.gentle) {
-                            let on = priorityFilter == p
-                            priorityFilter = on ? nil : p
-                            categoryFilter = nil; tagFilter = nil
-                        }
-                    } label: {
-                        Label(timer.settings.priorityName(p),
-                              systemImage: priorityFilter == p ? "checkmark" : "flag.fill")
-                    }
-                }
-            }
-            if isNarrowed {
-                Divider()
-                Button(role: .destructive) {
-                    withAnimation(DS.Motion.gentle) {
-                        categoryFilter = nil; tagFilter = nil; priorityFilter = nil
-                    }
-                } label: {
-                    Label("Clear filter", systemImage: "xmark.circle")
-                }
-            }
+            TaskFilterMenuItems(store: store, settings: timer.settings,
+                                categoryFilter: $categoryFilter,
+                                tagFilter: $tagFilter,
+                                priorityFilter: $priorityFilter)
         } label: {
             Image(systemName: isNarrowed
                   ? "line.3.horizontal.decrease.circle.fill"

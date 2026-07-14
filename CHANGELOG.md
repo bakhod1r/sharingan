@@ -5,6 +5,12 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.5.0] — 2026-07-14
+
+### Added
+- Sort & filter everywhere tasks are listed: the focus-task picker ("Choose a task" / "What's next?") gets a chip bar under its header, and the weekly board gets two circle buttons by the week navigation — the board's sort orders every column and the filter narrows cards across the whole board (the header's planned-count follows). The sort choice is one shared preference, so the Tasks list, picker, and board always agree; filters stay per-view
+- The picker distinguishes "no open tasks" from "no tasks match the filter", keeping the controls visible so the filter can be cleared
+
 ## [1.4.1] — 2026-07-14
 
 ### Added

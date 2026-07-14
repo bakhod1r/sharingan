@@ -163,3 +163,101 @@ struct PriorityMenu: View {
         .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
     }
 }
+
+/// The sort menu's entries — one per `TaskSortMode`, checkmarked on the
+/// active mode. Shared by every surface with a sort control (Tasks view bar,
+/// task picker, weekly board) so the mode list never drifts between them.
+/// Hosts wrap this in their own `Menu` trigger; the binding is the raw value
+/// behind the shared `@AppStorage("tasks.sortMode")`, so all surfaces follow
+/// one ordering.
+struct TaskSortMenuItems: View {
+    @Binding var sortModeRaw: String
+    var body: some View {
+        let current = TaskSortMode(rawValue: sortModeRaw) ?? .manual
+        ForEach(TaskSortMode.allCases) { mode in
+            Button {
+                withAnimation(DS.Motion.gentle) { sortModeRaw = mode.rawValue }
+            } label: {
+                Label(mode.label, systemImage: current == mode ? "checkmark" : mode.icon)
+            }
+        }
+    }
+}
+
+/// The filter menu's entries — Category / Tag / Priority submenus plus a
+/// "Clear filter" row once something is picked. One dimension at a time
+/// (matching the sidebar's narrowing); picking the active entry toggles it
+/// off. Shared by the Tasks view bar, the task picker, and the weekly board;
+/// hosts wrap it in their own `Menu` trigger and bind their narrowing state.
+struct TaskFilterMenuItems: View {
+    @ObservedObject var store: TaskStore
+    /// Priority names and custom levels for the Priority submenu.
+    let settings: PomodoroSettings
+    @Binding var categoryFilter: String?
+    @Binding var tagFilter: String?
+    @Binding var priorityFilter: SharinganCore.TaskPriority?
+
+    var body: some View {
+        Menu("Category") {
+            ForEach(store.allCategories) { c in
+                Button {
+                    let on = categoryFilter == c.name
+                    set(category: on ? nil : c.name)
+                } label: {
+                    Label(c.name, systemImage: categoryFilter == c.name ? "checkmark" : c.icon)
+                }
+            }
+        }
+        if !store.allTags.isEmpty {
+            Menu("Tag") {
+                ForEach(store.allTags, id: \.self) { t in
+                    Button {
+                        let on = tagFilter == t
+                        set(tag: on ? nil : t)
+                    } label: {
+                        Label("#\(t)", systemImage: tagFilter == t ? "checkmark" : "number")
+                    }
+                }
+            }
+        }
+        Menu("Priority") {
+            ForEach(SharinganCore.TaskPriority.levels(custom: settings.customPriorityLevels)) { p in
+                Button {
+                    let on = priorityFilter == p
+                    set(priority: on ? nil : p)
+                } label: {
+                    Label(settings.priorityName(p),
+                          systemImage: priorityFilter == p ? "checkmark" : "flag.fill")
+                }
+            }
+        }
+        if categoryFilter != nil || tagFilter != nil || priorityFilter != nil {
+            Divider()
+            Button(role: .destructive) { set() } label: {
+                Label("Clear filter", systemImage: "xmark.circle")
+            }
+        }
+    }
+
+    /// Sets exactly one dimension (or none), clearing the others.
+    private func set(category: String? = nil, tag: String? = nil,
+                     priority: SharinganCore.TaskPriority? = nil) {
+        withAnimation(DS.Motion.gentle) {
+            categoryFilter = category
+            tagFilter = tag
+            priorityFilter = priority
+        }
+    }
+}
+
+/// Applies the one-dimension narrowing (category / tag / priority) to a flat
+/// task list — the picker's and the board's counterpart of `TasksView.
+/// narrowed(_:)`, which works on grouped sections.
+func narrowTasks(_ items: [TaskItem], category: String?, tag: String?,
+                 priority: SharinganCore.TaskPriority?) -> [TaskItem] {
+    var out = items
+    if let c = category { out = out.filter { $0.category == c } }
+    if let t = tag { out = out.filter { $0.tags.contains(t) } }
+    if let p = priority { out = out.filter { $0.priority == p } }
+    return out
+}

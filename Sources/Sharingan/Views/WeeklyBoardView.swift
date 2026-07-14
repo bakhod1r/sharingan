@@ -19,8 +19,27 @@ struct WeeklyBoardView: View {
     @State private var backlogDraft = ""
     /// Task being edited in the full editor sheet (click a card, or context menu → Edit…).
     @State private var editorTask: TaskItem?
+    /// Same ordering the Tasks list uses — one shared preference; applies
+    /// within every column.
+    @AppStorage("tasks.sortMode") private var sortModeRaw = TaskSortMode.manual.rawValue
+    private var sortMode: TaskSortMode { TaskSortMode(rawValue: sortModeRaw) ?? .manual }
+    /// One-dimension narrowing (category / tag / priority) across the board.
+    @State private var categoryFilter: String?
+    @State private var tagFilter: String?
+    @State private var priorityFilter: TaskPriority?
+    private var isNarrowed: Bool {
+        categoryFilter != nil || tagFilter != nil || priorityFilter != nil
+    }
 
     private let columnWidth: CGFloat = 204
+
+    /// A column's cards as shown: narrowed by the filter, in the shared sort
+    /// order (the store already hands columns over in manual order).
+    private func boardItems(_ items: [TaskItem]) -> [TaskItem] {
+        narrowTasks(items, category: categoryFilter, tag: tagFilter,
+                    priority: priorityFilter)
+            .sorted(by: sortMode.inOrder)
+    }
 
     private var cal: Calendar { Calendar.current }
     private var accent: Color { timer.settings.theme.accent }
@@ -34,9 +53,10 @@ struct WeeklyBoardView: View {
         (0..<7).compactMap { cal.date(byAdding: .day, value: $0, to: weekStart) }
     }
 
-    /// Count of open tasks planned within the visible week.
+    /// Count of open tasks planned within the visible week — filtered, so the
+    /// header agrees with the cards actually on the board.
     private var plannedThisWeek: Int {
-        days.reduce(0) { $0 + store.tasksPlanned(on: $1).count }
+        days.reduce(0) { $0 + boardItems(store.tasksPlanned(on: $1)).count }
     }
 
     private var hasAnyOpenTask: Bool { store.tasks.contains { !$0.isDone } }
@@ -107,6 +127,9 @@ struct WeeklyBoardView: View {
                 .transition(.opacity.combined(with: .scale))
             }
 
+            sortMenu
+            filterMenu
+
             HStack(spacing: 6) {
                 navButton("chevron.left") { weekOffset -= 1 }
                 Text(rangeLabel)
@@ -122,6 +145,45 @@ struct WeeklyBoardView: View {
                     .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 1))
             )
         }
+    }
+
+    /// Sort + filter, styled like the week-nav circles. Sort applies within
+    /// every column; the filter narrows cards across the whole board.
+    private var sortMenu: some View {
+        Menu {
+            TaskSortMenuItems(sortModeRaw: $sortModeRaw)
+        } label: {
+            menuCircle("arrow.up.arrow.down", active: sortMode != .manual)
+        }
+        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+        .help(sortMode == .manual ? "Sort tasks" : "Sorted by \(sortMode.label)")
+        .accessibilityLabel("Sort tasks")
+    }
+
+    private var filterMenu: some View {
+        Menu {
+            TaskFilterMenuItems(store: store, settings: timer.settings,
+                                categoryFilter: $categoryFilter,
+                                tagFilter: $tagFilter,
+                                priorityFilter: $priorityFilter)
+        } label: {
+            menuCircle(isNarrowed ? "line.3.horizontal.decrease.circle.fill"
+                                  : "line.3.horizontal.decrease.circle",
+                       active: isNarrowed)
+        }
+        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+        .help("Filter by category, tag, or priority")
+        .accessibilityLabel("Filter tasks")
+    }
+
+    private func menuCircle(_ icon: String, active: Bool) -> some View {
+        Image(systemName: icon)
+            .font(.system(size: 13, weight: .bold))
+            .foregroundStyle(active ? accent : .white)
+            .frame(width: 28, height: 28)
+            .background(Circle().fill(active ? accent.opacity(0.2)
+                                             : Color.white.opacity(0.08)))
+            .contentShape(Circle())
     }
 
     private func navButton(_ icon: String, _ action: @escaping () -> Void) -> some View {
@@ -149,7 +211,7 @@ struct WeeklyBoardView: View {
     // MARK: - Columns
 
     private var backlogColumn: some View {
-        let items = store.unscheduledTasks
+        let items = boardItems(store.unscheduledTasks)
         return columnContainer(
             id: "unscheduled", isToday: false, isWeekend: false,
             header: AnyView(backlogHeader(count: items.count)),
@@ -158,7 +220,7 @@ struct WeeklyBoardView: View {
     }
 
     private func dayColumn(_ day: Date) -> some View {
-        let items = store.tasksPlanned(on: day)
+        let items = boardItems(store.tasksPlanned(on: day))
         let isToday = cal.isDateInToday(day)
         return columnContainer(
             id: dayKey(day), isToday: isToday, isWeekend: cal.isDateInWeekend(day),
