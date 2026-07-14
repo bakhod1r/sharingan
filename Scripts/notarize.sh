@@ -17,7 +17,8 @@ TARGET="${1:?usage: notarize.sh <file>}"
 KEYFILE="$(mktemp -t asc_key)"
 mv "$KEYFILE" "$KEYFILE.p8"
 KEYFILE="$KEYFILE.p8"
-trap 'rm -f "$KEYFILE"' EXIT
+ZIPDIR=""
+trap 'rm -f "$KEYFILE"; [[ -n "$ZIPDIR" ]] && rm -rf "$ZIPDIR"' EXIT
 printf '%s\n' "$ASC_KEY_P8" > "$KEYFILE"
 AUTH=(--key "$KEYFILE" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID")
 
@@ -27,7 +28,8 @@ AUTH=(--key "$KEYFILE" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID")
 # a .dmg is both submitted and stapled directly.
 SUBMIT="$TARGET"
 if [[ "$TARGET" == *.app ]]; then
-  SUBMIT="$(mktemp -d)/$(basename "$TARGET").zip"
+  ZIPDIR="$(mktemp -d)"
+  SUBMIT="$ZIPDIR/$(basename "$TARGET").zip"
   ditto -c -k --keepParent "$TARGET" "$SUBMIT"
 fi
 

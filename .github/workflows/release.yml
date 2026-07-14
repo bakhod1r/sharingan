@@ -23,6 +23,10 @@ jobs:
           MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
           MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
         run: |
+          if [[ -z "$MACOS_CERT_P12" ]]; then
+            echo "no signing secrets — building unsigned (fork or pre-setup)"
+            exit 0
+          fi
           KEYCHAIN=build.keychain
           KEYCHAIN_PW="$(uuidgen)"
           security create-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
@@ -48,6 +52,9 @@ jobs:
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
         run: Scripts/make-dmg.sh
+      - name: Delete temporary keychain
+        if: always()
+        run: security delete-keychain build.keychain 2>/dev/null || true
       - name: Extract release notes from CHANGELOG
         run: |
           awk '/^## \[/{ if (found) exit; found=1; next } found' CHANGELOG.md > /tmp/notes.md
@@ -65,6 +72,10 @@ jobs:
         env:
           SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
         run: |
+          if [[ -z "$SPARKLE_ED_PRIVATE_KEY" ]]; then
+            echo "no SPARKLE_ED_PRIVATE_KEY — skipping appcast update"
+            exit 0
+          fi
           # The feed, the Pages site, the release asset and this appcast commit
           # must all live in ONE repo. Cut a release from a fork or a mirror and
           # the appcast lands somewhere Pages never serves — every installed
