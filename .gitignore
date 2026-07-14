@@ -22,6 +22,8 @@ Package.resolved
 
 
 /docs/
+# Superpowers SDD docs (specs/plans) stay local — untracked since the repo went public
+/docs/superpowers/
 
 # SDD scratch (plans, briefs, reports)
 .superpowers/

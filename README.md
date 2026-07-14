@@ -8,15 +8,15 @@
 A menu-bar Pomodoro timer, a full task manager, and guided eye exercises — in one liquid-glass app.</p>
 
 <p align="center">
-  <a href="https://github.com/bakhod1r/Blink/releases/latest"><img src="https://img.shields.io/github/v/release/bakhod1r/Blink?color=E5484D" alt="Latest release"></a>
+  <a href="https://github.com/bakhod1r/sharingan/releases/latest"><img src="https://img.shields.io/github/v/release/bakhod1r/sharingan?color=E5484D" alt="Latest release"></a>
   <img src="https://img.shields.io/badge/macOS-14%2B-000000?logo=apple&logoColor=white" alt="macOS 14+">
   <img src="https://img.shields.io/badge/Swift-5.9%2B-F05138?logo=swift&logoColor=white" alt="Swift 5.9+">
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/bakhod1r/Blink?color=3E63DD" alt="MIT license"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/bakhod1r/sharingan?color=3E63DD" alt="MIT license"></a>
 </p>
 
 <p align="center">
   <a href="https://bakhod1r.github.io/Blink/"><b>Website</b></a> ·
-  <a href="https://github.com/bakhod1r/Blink/releases/latest"><b>Download</b></a> ·
+  <a href="https://github.com/bakhod1r/sharingan/releases/latest"><b>Download</b></a> ·
   <a href="CHANGELOG.md"><b>Changelog</b></a> ·
   <a href="docs/TECHNICAL.md"><b>Full feature reference</b></a>
 </p>
@@ -38,13 +38,13 @@ screen locks for a real break with guided eye drills — optionally verified by
 the camera. A complete task system with natural-language input (English +
 Uzbek) keeps the work itself organized.
 
-> The repo is named **Blink** (the app's original name); the app, bundle, and
-> all modules are **Sharingan**. Pure SwiftPM — no Xcode project required.
+> Formerly known as **Blink** — you may still see the old name in the site URL
+> and history. Pure SwiftPM — no Xcode project required.
 
 ## Install
 
 **Download** — grab `Sharingan.dmg` from the
-[latest release](https://github.com/bakhod1r/Blink/releases/latest) and drag
+[latest release](https://github.com/bakhod1r/sharingan/releases/latest) and drag
 the app into Applications.
 
 Builds are not notarized yet: on first launch, right-click the app →
@@ -53,7 +53,7 @@ Builds are not notarized yet: on first launch, right-click the app →
 **Build from source** — requires macOS 14+ and Xcode command-line tools:
 
 ```bash
-git clone https://github.com/bakhod1r/Blink.git && cd Blink
+git clone https://github.com/bakhod1r/sharingan.git && cd sharingan
 Scripts/install.sh          # build dist/Sharingan.app and install to /Applications
 Scripts/install-cli.sh      # optional: put the `tired` CLI on your PATH
 ```
