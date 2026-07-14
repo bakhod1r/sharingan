@@ -96,7 +96,17 @@
 - Six themes: Liquid Glass, Frosted, Midnight, Cream, Neon, and Mono.
 - Liquid-glass design throughout.
 - Main window sections: Timer, Tasks, Week, Progress, and Settings.
-- Menu-bar popover with timer, tasks, and week tabs plus today's goal.
+- Menu-bar popover with timer, tasks, and week tabs plus today's goal. The
+  popover pins its own `NSAppearance` to dark: `NSApp.appearance` does not reach
+  it because an `NSPopover` resolves appearance from its anchor view (the
+  status-item button in the system menu bar), so under Light mode the dark-glass
+  content used to render white-on-light.
+- Text fields submit through a single `.onSubmit` — the legacy
+  `TextField(onCommit:)` initializer is banned (`SubmitWiringTests` lints for
+  it). On macOS `onCommit` fires on Return *and again* on end-editing with the
+  field editor's stale text re-synced into the binding, which double-added
+  every quick-add task; some fields even had the same handler wired through
+  both `onCommit:` and `.onSubmit`.
 - Floating timer: an always-on-top panel that joins all Spaces, is draggable, has size presets, and auto shows/hides around breaks.
 - Notch HUD: an island over the MacBook camera housing — live ears while a session runs, the user's open tasks and quick actions on hover. Configurable (see below); absent, and disabled in Settings, on a Mac without a notch.
 - Confirmation prompt before quitting while a focus session is running.

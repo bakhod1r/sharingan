@@ -38,6 +38,13 @@ final class MenuBarController: NSObject {
 
         let popover = NSPopover()
         popover.behavior = .transient
+        // NSPopover resolves its appearance from the view it's anchored to —
+        // the status-item button in the system menu bar — NOT from
+        // NSApp.appearance. Under system Light mode that renders the popover
+        // chrome light while the content's dark-glass design hardcodes white
+        // text (unreadable). Pin the popover itself to dark like the rest of
+        // the app (see applicationDidFinishLaunching).
+        popover.appearance = NSAppearance(named: .darkAqua)
         let hosting = NSHostingController(rootView: MenuBarView(timer: timer))
         // Let the popover size itself to the SwiftUI content's natural height
         // (the view fixes its own 360pt width). A hard-coded 720 was clipping the
