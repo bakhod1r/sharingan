@@ -137,7 +137,7 @@ public final class SharinganCoordinator: ObservableObject {
         cliObservers["add"]      = CLIBridge.observe(CLIBridge.darwinCommandAdd)     { [weak self] p in self?.cliAdjust(payload: p, negative: false) }
         cliObservers["remove"]   = CLIBridge.observe(CLIBridge.darwinCommandRemove)  { [weak self] p in self?.cliAdjust(payload: p, negative: true) }
         cliObservers["setDur"]   = CLIBridge.observe(CLIBridge.darwinCommandSetDuration) { [weak self] p in self?.cliSetDuration(p) }
-        cliObservers["taskAdd"]   = CLIBridge.observe(CLIBridge.darwinCommandTaskAdd)   { [weak self] p in self?.cliTaskAdd(p) }
+        cliObservers["taskAdd"]   = CLIBridge.observe(CLIBridge.darwinCommandTaskAdd)   { [weak self] p in self?.cliTaskAdd(p, store: .shared) }
         cliObservers["taskDone"]  = CLIBridge.observe(CLIBridge.darwinCommandTaskDone)  { [weak self] p in self?.cliTaskDone(p) }
         cliObservers["taskStart"] = CLIBridge.observe(CLIBridge.darwinCommandTaskStart) { [weak self] p in self?.cliTaskStart(p) }
         cliObservers["taskQueue"] = CLIBridge.observe(CLIBridge.darwinCommandTaskQueue) { [weak self] p in self?.cliTaskQueue(p) }
@@ -169,7 +169,7 @@ public final class SharinganCoordinator: ObservableObject {
         case .reset:
             timer.stop()
         case .addTask(let text):
-            cliTaskAdd(text)
+            cliTaskAdd(text, store: .shared)
         case .toggleFloating:
             floatingController?.toggleFloating(timer: timer)
         case .show:
@@ -177,19 +177,26 @@ public final class SharinganCoordinator: ObservableObject {
         }
     }
 
-    private func cliTaskAdd(_ payload: String?) {
+    /// Internal (not private) with an injectable store so tests can assert
+    /// exactly-once adds without touching the real database. (No `.shared`
+    /// default: a MainActor-isolated default argument trips Swift 6.)
+    func cliTaskAdd(_ payload: String?, store: TaskStore) {
         guard let p = payload?.trimmingCharacters(in: .whitespacesAndNewlines),
               !p.isEmpty else { return }
+        // Whole documents (CLI heredocs, multi-line URL payloads) bulk-import,
+        // same as every add field in the UI. Headless path — duplicates are
+        // skipped silently, there is no one to ask.
+        if store.importIfDocument(p) != nil { return }
         let parsed = TaskInputParser.parse(p)
         // A line of pure tokens ("ertaga 15:00") parses to an empty title —
         // fall back to the raw text so the add never silently vanishes.
-        TaskStore.shared.add(title: parsed.title.isEmpty ? p : parsed.title,
-                             tags: parsed.tags,
-                             dueDate: parsed.dueDate,
-                             estimatedPomodoros: parsed.estimatedPomodoros,
-                             recurrence: parsed.recurrence,
-                             project: parsed.project,
-                             priority: parsed.priority)
+        store.add(title: parsed.title.isEmpty ? p : parsed.title,
+                  tags: parsed.tags,
+                  dueDate: parsed.dueDate,
+                  estimatedPomodoros: parsed.estimatedPomodoros,
+                  recurrence: parsed.recurrence,
+                  project: parsed.project,
+                  priority: parsed.priority)
     }
 
     private func cliTaskDone(_ payload: String?) {

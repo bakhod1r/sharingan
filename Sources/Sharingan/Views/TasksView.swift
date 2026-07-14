@@ -498,9 +498,11 @@ struct TasksView: View {
                     .foregroundStyle(.white.opacity(0.7))
                 Spacer()
                 if !importText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    let dupCount = store.partitionByDuplicateTitle(parsed).duplicates.count
                     Text(parsed.isEmpty
                          ? "Nothing recognized"
-                         : "\(parsed.count) task\(parsed.count == 1 ? "" : "s") recognized")
+                         : "\(parsed.count) task\(parsed.count == 1 ? "" : "s") recognized"
+                           + (dupCount > 0 ? " · \(dupCount) already exist" : ""))
                         .font(.system(.caption2, design: .rounded).weight(.medium))
                         .foregroundStyle(parsed.isEmpty ? Color.orange.opacity(0.9) : Color.dsSecondary)
                 }
@@ -516,11 +518,12 @@ struct TasksView: View {
 
     private func runImport(_ tasks: [TaskItem]) {
         guard !tasks.isEmpty else { return }
-        withAnimation(DS.Motion.standard) {
-            for t in tasks { store.insert(t) }
-        }
+        let (fresh, duplicates) = store.partitionByDuplicateTitle(tasks)
+        withAnimation(DS.Motion.standard) { store.insertAll(fresh) }
         importText = ""
         showImportSheet = false
+        ImportDuplicatePrompt.resolve(.init(inserted: fresh.count, duplicates: duplicates),
+                                      store: store)
     }
 
     /// A `.md`/`.json`/`.txt` file dropped on the task list opens the import
@@ -1828,9 +1831,11 @@ struct TasksView: View {
 
     private func add() {
         // A pasted document (multi-line, fenced, or JSON) bulk-imports right
-        // from the composer — same parser as the import sheet.
-        if store.importIfDocument(newTitle) > 0 {
+        // from the composer — same parser as the import sheet. Duplicates
+        // (same title as an open task) are held back behind a prompt.
+        if let result = store.importIfDocument(newTitle) {
             newTitle = ""
+            ImportDuplicatePrompt.resolve(result, store: store)
             return
         }
         commitTagDraft()   // fold any half-typed tag in before saving

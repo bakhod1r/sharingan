@@ -85,18 +85,77 @@ struct TaskImportEndToEndTests {
     @Test func addFieldHookImportsDocumentsOnly() {
         let store = TaskStore(fileURL: tempURL())
         // One quick-add line — not a document; caller should single-add it.
-        #expect(store.importIfDocument("hisobot yozish p1 ertaga") == 0)
+        #expect(store.importIfDocument("hisobot yozish p1 ertaga") == nil)
         #expect(store.tasks.isEmpty)
         // A pasted markdown doc imports in bulk.
-        #expect(store.importIfDocument("# One p1\n# Two ~2") == 2)
+        #expect(store.importIfDocument("# One p1\n# Two ~2")?.inserted == 2)
         #expect(store.tasks.count == 2)
         // Single-line JSON counts as a document too.
-        #expect(store.importIfDocument(#"{"title": "From JSON"}"#) == 1)
+        #expect(store.importIfDocument(#"{"title": "From JSON"}"#)?.inserted == 1)
         // Fenced content likewise.
-        #expect(store.importIfDocument("```json\n[{\"title\": \"Fenced\"}]\n```") == 1)
+        #expect(store.importIfDocument("```json\n[{\"title\": \"Fenced\"}]\n```")?.inserted == 1)
         // JSON-looking garbage yields nothing — caller falls back.
-        #expect(store.importIfDocument("[not json") == 0)
+        #expect(store.importIfDocument("[not json") == nil)
         #expect(store.tasks.count == 4)
+    }
+
+    // "Template tashlasa double task qo'shmasin": re-importing a document
+    // holds back tasks whose titles are already on the open list — they are
+    // returned for the UI's "add anyway?" prompt, never inserted silently.
+    @Test func duplicateTitlesAreHeldBackNotInserted() {
+        let store = TaskStore(fileURL: tempURL())
+        let doc = "# Write report p1\n# Read 20 pages ~1"
+        #expect(store.importIfDocument(doc)?.inserted == 2)
+
+        // Same template pasted again: nothing inserted, both held back.
+        let again = store.importIfDocument(doc)
+        #expect(again?.inserted == 0)
+        #expect(again?.duplicates.count == 2)
+        #expect(store.tasks.count == 2)
+
+        // The user says "add anyway" → the held-back copies go in.
+        store.insertAll(again?.duplicates ?? [])
+        #expect(store.tasks.count == 4)
+    }
+
+    @Test func duplicateMatchIsCaseInsensitiveAndBatchAware() {
+        let store = TaskStore(fileURL: tempURL())
+        store.add(title: "Write Report")
+        let result = store.importIfDocument("# write report\n# Fresh one\n# fresh ONE")
+        // "write report" duplicates the existing task; the second "fresh one"
+        // duplicates the first inside the same batch.
+        #expect(result?.inserted == 1)
+        #expect(result?.duplicates.count == 2)
+    }
+
+    @Test func completedTasksDoNotBlockReimport() {
+        let store = TaskStore(fileURL: tempURL())
+        store.add(title: "Daily review")
+        store.toggleDone(store.tasks[0].id)
+        let result = store.importIfDocument("# Daily review\n# Other")
+        #expect(result?.inserted == 2)
+        #expect(result?.duplicates.isEmpty == true)
+    }
+
+    // Exactly-once add through the coordinator (the sharingan:// URL and
+    // `tired` CLI path) — guards the double-add regression at the app level,
+    // and documents that this path bulk-imports documents too.
+    @Test func cliAddIsExactlyOnceAndImportsDocuments() {
+        let store = TaskStore(fileURL: tempURL())
+        let coord = SharinganCoordinator(timer: PomodoroTimer())
+        coord.cliTaskAdd("hisobot yozish p1", store: store)
+        #expect(store.tasks.count == 1)
+        #expect(store.tasks[0].title == "hisobot yozish")
+        coord.cliTaskAdd("# One ~1\n# Two ~2", store: store)
+        #expect(store.tasks.count == 3)
+        // Empty payloads add nothing.
+        coord.cliTaskAdd("   ", store: store)
+        coord.cliTaskAdd(nil, store: store)
+        #expect(store.tasks.count == 3)
+        // Headless path: re-importing the same document skips duplicates
+        // silently (no UI to ask through).
+        coord.cliTaskAdd("# One ~1\n# Two ~2", store: store)
+        #expect(store.tasks.count == 3)
     }
 
     @Test func importAppendsBelowExistingTasks() {

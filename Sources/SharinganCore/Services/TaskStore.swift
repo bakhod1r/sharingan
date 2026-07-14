@@ -281,21 +281,68 @@ public final class TaskStore: ObservableObject {
         persist()
     }
 
+    /// What a document import did: `inserted` went straight in; `duplicates`
+    /// were held back because an open task already carries the same title
+    /// (or an earlier task in the same document does). The caller asks the
+    /// user and, on consent, inserts them via `insertAll`.
+    public struct DocumentImport {
+        public let inserted: Int
+        public let duplicates: [TaskItem]
+        public init(inserted: Int, duplicates: [TaskItem]) {
+            self.inserted = inserted
+            self.duplicates = duplicates
+        }
+    }
+
     /// Bulk-import hook for every "add a task" text path: when the submitted
     /// text is a whole document rather than one quick-add line — it has
-    /// multiple lines, or is fenced/JSON — it runs `TaskImportParser` and
-    /// inserts everything it yields, returning the count. Plain one-line
-    /// input returns 0 and the caller proceeds with its normal single add.
+    /// multiple lines, or is fenced/JSON — it runs `TaskImportParser`,
+    /// inserts the fresh tasks, and returns what happened (duplicates held
+    /// back for the caller to confirm). Returns nil when the text is not a
+    /// document (or parses to nothing) and the caller should proceed with
+    /// its normal single add.
     @discardableResult
-    public func importIfDocument(_ raw: String, now: Date = Date()) -> Int {
+    public func importIfDocument(_ raw: String, now: Date = Date()) -> DocumentImport? {
         let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         let looksLikeDocument = t.contains("\n") || t.hasPrefix("```")
             || t.hasPrefix("{") || t.hasPrefix("[")
-        guard looksLikeDocument else { return 0 }
+        guard looksLikeDocument else { return nil }
         let imported = TaskImportParser.parse(t, now: now)
-        guard !imported.isEmpty else { return 0 }
-        for task in imported { insert(task) }
-        return imported.count
+        guard !imported.isEmpty else { return nil }
+        let (fresh, duplicates) = partitionByDuplicateTitle(imported)
+        for task in fresh { insert(task) }
+        return DocumentImport(inserted: fresh.count, duplicates: duplicates)
+    }
+
+    /// Splits incoming tasks into fresh ones and duplicates. A duplicate
+    /// carries the same normalized (trimmed, case-folded) title as an OPEN
+    /// task already on the list — or as an earlier task in the same batch.
+    /// Completed tasks don't block a title from coming back.
+    public func partitionByDuplicateTitle(_ incoming: [TaskItem])
+        -> (fresh: [TaskItem], duplicates: [TaskItem]) {
+        var seen = Set(tasks.filter { !$0.isDone }
+            .map { Self.normalizedTitle($0.title) })
+        var fresh: [TaskItem] = []
+        var duplicates: [TaskItem] = []
+        for task in incoming {
+            let key = Self.normalizedTitle(task.title)
+            if seen.contains(key) {
+                duplicates.append(task)
+            } else {
+                seen.insert(key)
+                fresh.append(task)
+            }
+        }
+        return (fresh, duplicates)
+    }
+
+    /// Inserts a batch (e.g. user-confirmed duplicates), bottom of the list.
+    public func insertAll(_ batch: [TaskItem]) {
+        for task in batch { insert(task) }
+    }
+
+    private static func normalizedTitle(_ s: String) -> String {
+        s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
     /// Inserts a fully-formed task (e.g. one instantiated from a template) at

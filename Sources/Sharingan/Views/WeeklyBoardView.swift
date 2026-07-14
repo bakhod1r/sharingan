@@ -199,11 +199,14 @@ struct WeeklyBoardView: View {
     private func addBacklog() {
         let t = backlogDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
+        // Whole pasted documents import in bulk; a line adds one task.
+        var documentResult: TaskStore.DocumentImport?
         withAnimation(DS.Motion.standard) {
-            // Whole pasted documents import in bulk; a line adds one task.
-            if store.importIfDocument(t) == 0 { store.add(title: t) }
+            documentResult = store.importIfDocument(t)
+            if documentResult == nil { store.add(title: t) }
         }
         backlogDraft = ""
+        if let documentResult { ImportDuplicatePrompt.resolve(documentResult, store: store) }
     }
 
     private func dayHeader(_ day: Date, isToday: Bool, count: Int) -> some View {

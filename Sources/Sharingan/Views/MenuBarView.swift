@@ -863,8 +863,9 @@ struct MenuBarView: View {
         let raw = quickTitle.trimmingCharacters(in: .whitespaces)
         guard !raw.isEmpty else { return }
         // Whole pasted documents import in bulk; a line quick-adds.
-        if tasks.importIfDocument(raw) > 0 {
+        if let result = tasks.importIfDocument(raw) {
             quickTitle = ""
+            ImportDuplicatePrompt.resolve(result, store: tasks)
             return
         }
         let parsed = TaskInputParser.parse(raw, now: Date())

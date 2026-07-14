@@ -33,17 +33,21 @@ final class QuickAddWindowManager: QuickAddController {
 
         let view = QuickAddTaskView(
             onSubmit: { [weak self] raw in
-                // Whole pasted documents import in bulk; a line quick-adds.
-                if TaskStore.shared.importIfDocument(raw) == 0 {
-                    let p = TaskInputParser.parse(raw)
-                    TaskStore.shared.add(title: p.title.isEmpty ? raw : p.title,
-                                         tags: p.tags,
-                                         dueDate: p.dueDate,
-                                         estimatedPomodoros: p.estimatedPomodoros,
-                                         recurrence: p.recurrence,
-                                         project: p.project,
-                                         priority: p.priority)
+                // Whole pasted documents import in bulk (duplicates behind a
+                // prompt, after the panel is gone); a line quick-adds.
+                if let result = TaskStore.shared.importIfDocument(raw) {
+                    self?.hideQuickAdd()
+                    ImportDuplicatePrompt.resolve(result, store: .shared)
+                    return
                 }
+                let p = TaskInputParser.parse(raw)
+                TaskStore.shared.add(title: p.title.isEmpty ? raw : p.title,
+                                     tags: p.tags,
+                                     dueDate: p.dueDate,
+                                     estimatedPomodoros: p.estimatedPomodoros,
+                                     recurrence: p.recurrence,
+                                     project: p.project,
+                                     priority: p.priority)
                 self?.hideQuickAdd()
             },
             onCancel: { [weak self] in self?.hideQuickAdd() }

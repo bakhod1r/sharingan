@@ -288,10 +288,12 @@ struct TaskPickerSheet: View {
         let title = newTitle.trimmingCharacters(in: .whitespaces)
         guard !title.isEmpty else { return }
         // A pasted document imports in bulk and focus starts on its first task.
-        let imported = store.importIfDocument(title)
-        if imported > 0 {
+        let countBefore = store.tasks.count
+        if let result = store.importIfDocument(title) {
+            ImportDuplicatePrompt.resolve(result, store: store)
+            let added = store.tasks.count - countBefore
             let first = store.tasks.sorted { $0.sortOrder < $1.sortOrder }
-                .suffix(imported).first
+                .suffix(added).first
             if let first { store.setActive(first.id) }
             newTitle = ""
             finish(with: first?.id)
