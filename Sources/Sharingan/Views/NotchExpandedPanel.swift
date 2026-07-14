@@ -292,7 +292,11 @@ struct NotchExpandedPanel: View {
                     .font(.system(size: 13))
                     // The running row's control takes the phase color — it is the
                     // task the timer is counting down, tied to the clock above it.
-                    .foregroundStyle(isRunning ? model.phase.glow : Color.dsSecondary)
+                    // Through the theme so Mono desaturates it (`notchPhaseAccent`)
+                    // rather than dropping one saturated glyph onto a grey panel.
+                    .foregroundStyle(isRunning
+                        ? timer.settings.theme.notchPhaseAccent(model.phase)
+                        : Color.dsSecondary)
             }
             .buttonStyle(.plain)
             .help(isRunning ? "Pause “\(task.title)”" : "Focus on “\(task.title)”")
@@ -301,17 +305,20 @@ struct NotchExpandedPanel: View {
         .frame(height: NotchGeometry.taskRowContentHeight)
         .padding(.vertical, NotchGeometry.taskRowPadding)
         .padding(.horizontal, 6)
-        // The active row is the phase accent the app puts on a live row — a
-        // phase-tinted fill and a hairline of the same, the way the rest of Blink
-        // marks the row that is running.
+        // The active row is the accent the app puts on a live row — a tinted fill
+        // and a hairline of the same, the way the rest of Blink marks the row that
+        // is running. It stays phase-colored: the active row means "the task the
+        // clock is counting down", which is phase information. Mono is the one
+        // exception (`notchPhaseAccent`) — a colored fill would break its
+        // monochrome, so there the highlight is the near-white accent instead.
         .background {
             if isActive {
-                let phase = model.phase.gradient
+                let tint = timer.settings.theme.notchPhaseAccent(model.phase)
                 RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
-                    .fill((phase.first ?? .white).opacity(0.18))
+                    .fill(tint.opacity(0.18))
                     .overlay(
                         RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
-                            .stroke((phase.first ?? .white).opacity(0.4), lineWidth: 1))
+                            .stroke(tint.opacity(0.4), lineWidth: 1))
             }
         }
     }
@@ -370,6 +377,12 @@ struct NotchExpandedPanel: View {
                 .frame(height: 24)
                 .glass(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous),
                        material: .regular)
+                // A whisper of the theme accent on the chip's edge — enough to tie
+                // the quick actions to the theme, faint enough (0.22) that Mono's
+                // near-white reads as a neutral rim and never shouts. A stroke, so
+                // it dresses the chip without touching its measured footprint.
+                .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
+                    .stroke(timer.settings.theme.accent.opacity(0.22), lineWidth: 1))
                 .contentShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
         }
         .buttonStyle(.pressableSubtle)
@@ -386,7 +399,10 @@ struct NotchExpandedPanel: View {
             Spacer(minLength: 0)
             Label("\(timer.stats.streak.currentStreak)", systemImage: "flame.fill")
                 .font(.system(size: 9, weight: .medium, design: .rounded))
-                .foregroundStyle(Color.dsSecondary)
+                // The streak is the app's own achievement, not a phase reading —
+                // so the flame burns in the theme accent (warm amber on Cream,
+                // magenta on Neon, near-white on Mono), one interactive color.
+                .foregroundStyle(timer.settings.theme.accent)
                 .help("\(timer.stats.streak.currentStreak)-day streak")
         }
     }

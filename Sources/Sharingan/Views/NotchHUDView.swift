@@ -154,10 +154,12 @@ struct NotchHUDView: View {
                 }
                 // Hover acknowledgement: a hairline traced on the island's own
                 // silhouette, so it can only ever light pixels the island
-                // already paints. Inside the clip, like everything else.
+                // already paints. Inside the clip, like everything else. It is
+                // the theme accent, not white — hovering is interactive, not
+                // phase-semantic, so it takes the app's one interactive color.
                 .overlay {
                     IslandShape(silhouette: l.silhouette)
-                        .stroke(Color.white.opacity(
+                        .stroke(timer.settings.theme.accent.opacity(
                             model.pointerInside ? NotchMotion.hoverHairline : 0),
                                 lineWidth: 1)
                         .animation(NotchMotion.hover(reduceMotion: reduce),
@@ -175,18 +177,19 @@ struct NotchHUDView: View {
         }
     }
 
-    /// The body's glass — Blink's dark-glass material, a phase-tinted accent and
-    /// a hairline, painted over the black base for the part of the island below
-    /// the menu bar. Same recipe as the menu-bar popover and the Today panel
-    /// (`.regularMaterial` + a low-opacity phase gradient + a `Color.dsHairline`
-    /// ring), so the island reads as the same family, seen through the notch.
+    /// The body's glass — Blink's dark-glass material, the **theme** wash and a
+    /// hairline, painted over the black base for the part of the island below the
+    /// menu bar. Same recipe as the menu-bar popover and the Today panel
+    /// (`.regularMaterial` + a low-opacity *theme* gradient + a hairline ring), so
+    /// the island reads as the same glass as them, seen through the notch, and
+    /// follows the theme with them.
     ///
     /// Only the wide states have a body worth glazing. The flat states (`idle`,
     /// `live`) live entirely in the menu-bar row — their `layout.body` is a few
     /// points tall — so they are left as the pure-black hardware lip they always
-    /// were. The gradient is an *accent*, not a wash: a faint diagonal tie for
-    /// cohesion, and a glow concentrated behind the timer that has faded out
-    /// before it reaches the task rows.
+    /// were. Two layers: the theme gradient as the surface wash, and above it the
+    /// one thing that is phase-semantic here — a glow behind the timer that says
+    /// which phase you are in, faded out before it reaches the task rows.
     @ViewBuilder
     private func bodyGlass(_ l: NotchLayout) -> some View {
         let body = l.body
@@ -198,25 +201,31 @@ struct NotchHUDView: View {
                 bottomTrailingRadius: s.cornerRadius,
                 topTrailingRadius: s.bodyTopRadius,
                 style: .continuous)
-            let phase = model.phase.gradient
+            let theme = timer.settings.theme
             shape
                 .fill(.regularMaterial)
                 .overlay {
-                    // A faint diagonal phase tie — the cohesion the popover and
-                    // the Today panel get from their theme wash, kept subtle.
-                    LinearGradient(colors: phase,
+                    // The surface wash is the THEME, not the phase — the same tint
+                    // the Today panel and the floating pill wear over the same dark
+                    // material, so the island is one glass with them. 0.20 keeps it
+                    // dark enough that Cream/Frosted warm or frost the glass without
+                    // lightening it past the white text on top.
+                    LinearGradient(colors: theme.gradient,
                                    startPoint: .topLeading, endPoint: .bottomTrailing)
-                        .opacity(0.13)
+                        .opacity(0.20)
                 }
                 .overlay {
-                    // The accent proper: a phase glow behind the timer, gone
-                    // before it reaches the tasks.
+                    // The one phase-semantic mark on the body: a soft glow behind
+                    // the clock, gone before it reaches the tasks. Mono desaturates
+                    // it to its near-white accent (`notchPhaseAccent`) so the
+                    // surface stays monochrome; every other theme keeps the phase
+                    // color, because that color is the message.
                     LinearGradient(
-                        colors: [(phase.first ?? .clear).opacity(0.32), .clear],
+                        colors: [theme.notchPhaseAccent(model.phase).opacity(0.32), .clear],
                         startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.55))
                 }
                 .clipShape(shape)
-                .overlay { shape.stroke(Color.dsHairline, lineWidth: 1) }
+                .overlay { shape.stroke(islandHairline(theme), lineWidth: 1) }
                 .animation(NotchMotion.phaseFade(reduceMotion: motion.isOn),
                            value: model.phase)
                 .frame(width: body.width, height: body.height)
@@ -224,10 +233,22 @@ struct NotchHUDView: View {
         }
     }
 
-    /// The live ears' glass — the body's recipe (`.regularMaterial`, the faint
-    /// phase wash, `Color.dsHairline`), cut down to the two slabs either side
-    /// of the cutout, so the live island reads as the same material family as
-    /// the expanded panel instead of a flat black bar. **The cutout span
+    /// The island's edge hairline. Neutral (`Color.dsHairline`) on every theme
+    /// but Neon — the flashy one — where the rim lights up with the neon gradient
+    /// itself, the single loud gesture that theme earns. Applied to the body and
+    /// the ears alike, so the whole silhouette reads as one neon-lit tube rather
+    /// than a rim that only appears when the island opens.
+    private func islandHairline(_ theme: SharinganTheme) -> AnyShapeStyle {
+        guard theme == .neon else { return AnyShapeStyle(Color.dsHairline) }
+        return AnyShapeStyle(LinearGradient(
+            colors: theme.gradient.map { $0.opacity(0.7) },
+            startPoint: .topLeading, endPoint: .bottomTrailing))
+    }
+
+    /// The live ears' glass — the body's recipe (`.regularMaterial`, the theme
+    /// wash, the same hairline), cut down to the two slabs either side of the
+    /// cutout, so the live island reads as the same material family as the
+    /// expanded panel instead of a flat black bar. **The cutout span
     /// itself stays pure black**: it is imitating the camera housing, exactly
     /// like the idle lip, so the glass stops at the hardware's edges and the
     /// black in the middle keeps reading as hardware rather than as a tinted
@@ -265,19 +286,21 @@ struct NotchHUDView: View {
             bottomTrailingRadius: bottomTrailingRadius,
             topTrailingRadius: 0,
             style: .continuous)
-        let phase = model.phase.gradient
+        let theme = timer.settings.theme
         return shape
             .fill(.regularMaterial)
             .overlay {
-                // The same faint diagonal phase tie the body wears — an accent,
-                // not a wash: the ears are a 41pt strip against the menu bar,
-                // and anything louder would fight the labels sitting on it.
-                LinearGradient(colors: phase,
+                // The body's wash, cut down to the ears: the THEME gradient over
+                // the dark material, so the live island is the same glass as the
+                // expanded panel and follows the theme with it. Kept to 0.20 — the
+                // ears are a 41pt strip against the menu bar with the two labels
+                // sitting right on it.
+                LinearGradient(colors: theme.gradient,
                                startPoint: .topLeading, endPoint: .bottomTrailing)
-                    .opacity(0.13)
+                    .opacity(0.20)
             }
             .clipShape(shape)
-            .overlay { shape.stroke(Color.dsHairline, lineWidth: 1) }
+            .overlay { shape.stroke(islandHairline(theme), lineWidth: 1) }
             .animation(NotchMotion.phaseFade(reduceMotion: motion.isOn),
                        value: model.phase)
             .frame(width: width, height: l.island.height)
@@ -301,7 +324,7 @@ struct NotchHUDView: View {
         case .activity:
             if let activity = model.state.activity {
                 NotchActivityView(activity: activity, model: model, layout: l,
-                                  reduceMotion: reduce)
+                                  theme: timer.settings.theme, reduceMotion: reduce)
                     // A second announcement arriving while the first is still up
                     // (a focus phase completing rolls straight into "Break time")
                     // never changes `state.size`, so without an identity tied to
@@ -332,6 +355,9 @@ struct NotchActivityView: View {
     let activity: NotchActivity
     @ObservedObject var model: NotchHUDModel
     let layout: NotchLayout
+    /// The active theme, so the announcement icon's glow follows it (chiefly so
+    /// Mono desaturates it, via `notchPhaseAccent`, like the rest of the island).
+    let theme: SharinganTheme
     let reduceMotion: Bool
 
     /// Flipped in `onAppear`, which is what stages the arrival. A `.transition`
@@ -349,8 +375,9 @@ struct NotchActivityView: View {
             Image(systemName: activity.systemImage)
                 .font(.system(size: 14, weight: .semibold))
                 // The phase color the body glow already carries — the icon reads
-                // as the same accent instead of a bare white glyph.
-                .foregroundStyle(model.phase.glow)
+                // as the same accent instead of a bare white glyph. Routed
+                // through the theme so Mono desaturates it in step with the glow.
+                .foregroundStyle(theme.notchPhaseAccent(model.phase))
                 .scaleEffect(settled ? 1 : NotchMotion.announceIconScale)
                 .rotationEffect(.degrees(settled ? 0 : NotchMotion.announceIconTilt))
                 .opacity(landed ? 1 : 0)
@@ -422,5 +449,20 @@ struct IslandShape: Shape {
 
     func path(in rect: CGRect) -> Path {
         Path(NotchGeometry.islandPath(in: rect, silhouette: silhouette))
+    }
+}
+
+extension SharinganTheme {
+    /// A phase-semantic accent — the glow behind the clock, the active-row tint,
+    /// the running row's control, the announcement icon — resolved for this
+    /// theme. It is the phase's own color everywhere, because that color *is* the
+    /// information (blue = focus, green = break). The sole exception is Mono,
+    /// whose one rule is "nothing saturated but the near-white accent": there a
+    /// blue focus glow would be the single loud thing on an otherwise grey
+    /// island, so it yields to `accent`. The phase stays readable on Mono
+    /// regardless — the progress line and the dot beside the task name keep the
+    /// raw phase color, the two marks the notch pins as phase-always.
+    func notchPhaseAccent(_ phase: PomodoroPhase) -> Color {
+        self == .mono ? accent : phase.glow
     }
 }
