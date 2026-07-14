@@ -246,6 +246,10 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     /// Show the MM:SS countdown next to the menu-bar icon while a session
     /// is engaged (off = icon only).
     public var showMenuBarCountdown: Bool = true
+    /// Spin the Sharingan mark — the menu-bar tomoe and (while the main
+    /// window is open) the Dock icon rotate slowly. Runtime-only; the .icns
+    /// on disk stays static.
+    public var animateIcon: Bool = true
     /// Toggle macOS Focus during focus sessions by running user-created
     /// Shortcuts (there is no public Focus API).
     public var dndEnabled: Bool = false
@@ -410,6 +414,7 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
         customPriorityLevels = try c.decodeIfPresent([Int].self, forKey: .customPriorityLevels) ?? d.customPriorityLevels
         tagStyles = try c.decodeIfPresent([String: TagStyle].self, forKey: .tagStyles) ?? d.tagStyles
         showMenuBarCountdown = try c.decodeIfPresent(Bool.self, forKey: .showMenuBarCountdown) ?? d.showMenuBarCountdown
+        animateIcon = try c.decodeIfPresent(Bool.self, forKey: .animateIcon) ?? d.animateIcon
         dndEnabled = try c.decodeIfPresent(Bool.self, forKey: .dndEnabled) ?? d.dndEnabled
         dndShortcutOn = try c.decodeIfPresent(String.self, forKey: .dndShortcutOn) ?? d.dndShortcutOn
         dndShortcutOff = try c.decodeIfPresent(String.self, forKey: .dndShortcutOff) ?? d.dndShortcutOff
