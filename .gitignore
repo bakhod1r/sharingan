@@ -33,3 +33,4 @@ Package.resolved
 *.p12
 *.p8
 *.provisionprofile
+*.certSigningRequest
