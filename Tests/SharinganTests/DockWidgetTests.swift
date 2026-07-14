@@ -172,4 +172,45 @@ struct DockWidgetTests {
         #expect(DockWidgetGeometry.expandAnchor(alignment: .center, visibleFrame: right, fullFrame: full) == .trailing)
         #expect(DockWidgetGeometry.expandAnchor(alignment: .center, visibleFrame: bottom, fullFrame: full) == .center)
     }
+
+    // MARK: - Draggable pill: custom-position clamp + hover anchor
+
+    @Test("clamp keeps a dragged-in custom origin inside the visible frame")
+    func clampKeepsCustomOriginOnScreen() {
+        let vis = CGRect(x: 0, y: 70, width: 1600, height: 905)
+        let size = CGSize(width: 320, height: 56)
+
+        // Dragged off-screen to the bottom-left → pinned to the near edges.
+        let low = DockWidgetGeometry.clamp(origin: CGPoint(x: -200, y: -50),
+                                           size: size, visibleFrame: vis)
+        #expect(low.x == vis.minX)
+        #expect(low.y == vis.minY)
+
+        // Dragged off-screen to the top-right → pinned to the far edges.
+        let high = DockWidgetGeometry.clamp(origin: CGPoint(x: 3000, y: 3000),
+                                            size: size, visibleFrame: vis)
+        #expect(high.x == vis.maxX - size.width)
+        #expect(high.y == vis.maxY - size.height)
+
+        // Already inside → unchanged.
+        let inside = CGPoint(x: 100, y: 200)
+        #expect(DockWidgetGeometry.clamp(origin: inside, size: size, visibleFrame: vis) == inside)
+    }
+
+    @Test("custom-position hover anchor follows which screen half the pill sits in")
+    func customExpandAnchorFollowsScreenHalf() {
+        let vis = CGRect(x: 0, y: 70, width: 1600, height: 905)
+        let size = CGSize(width: 320, height: 56)
+
+        // Pill's midX left of the screen's midX → opens rightward.
+        #expect(DockWidgetGeometry.expandAnchor(customOrigin: CGPoint(x: 0, y: 100),
+                                                 size: size, visibleFrame: vis) == .leading)
+        // Exactly at the midpoint → leading (boundary is inclusive, per spec).
+        let atMid = CGPoint(x: vis.midX - size.width / 2, y: 100)
+        #expect(DockWidgetGeometry.expandAnchor(customOrigin: atMid,
+                                                 size: size, visibleFrame: vis) == .leading)
+        // Pill's midX right of the screen's midX → opens leftward.
+        #expect(DockWidgetGeometry.expandAnchor(customOrigin: CGPoint(x: 1200, y: 100),
+                                                 size: size, visibleFrame: vis) == .trailing)
+    }
 }

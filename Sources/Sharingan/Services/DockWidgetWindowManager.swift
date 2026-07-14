@@ -16,10 +16,17 @@ final class DockWidgetWindowManager: DockWidgetController {
     private var panel: NSPanel?
     private var hosting: NSHostingView<DockWidgetView>?
     private var screenObserver: NSObjectProtocol?
+    private var moveObserver: NSObjectProtocol?
     /// The timer whose settings drive size/alignment/opacity — read fresh in
     /// `reposition()` and `applySettings()` rather than snapshotted once, so a
     /// live Settings change (from `syncDockWidget()`) takes effect immediately.
     private weak var timer: PomodoroTimer?
+    private static let posKeyX = "sharingan.dockwidget.x"
+    private static let posKeyY = "sharingan.dockwidget.y"
+    /// Set around every programmatic `setFrame` (dock-anchored placement,
+    /// settings-driven resize) so the `didMoveNotification` observer below can
+    /// tell those apart from an actual user drag and only persist the latter.
+    private var isRepositioning = false
 
     func showDockWidget(timer: PomodoroTimer) {
         self.timer = timer
@@ -44,9 +51,12 @@ final class DockWidgetWindowManager: DockWidgetController {
         // around the transparent window (same reasoning as the floating timer).
         panel.hasShadow = false
         panel.hidesOnDeactivate = false
-        // Pinned to the Dock — not user-draggable; placement is recomputed
-        // whenever the screen layout (and thus the Dock) changes.
-        panel.isMovable = false
+        // Draggable to a custom position (persisted below); dock-anchored
+        // placement in `reposition()` still recomputes on screen changes as
+        // long as no custom position has been dragged in.
+        panel.isMovable = true
+        // Borderless panels only drag from their body when this is set.
+        panel.isMovableByWindowBackground = true
         panel.isFloatingPanel = true
 
         let hosting = NSHostingView(rootView: DockWidgetView(timer: timer))
@@ -56,6 +66,8 @@ final class DockWidgetWindowManager: DockWidgetController {
         self.panel = panel
         applySettings()
         reposition()
+        // Present BEFORE the move observer below registers, so the initial
+        // placement (and the 0.97→1 settle) isn't persisted as a user drag.
         WindowAnimator.present(panel, makeKey: false)
 
         screenObserver = NotificationCenter.default.addObserver(
@@ -64,12 +76,31 @@ final class DockWidgetWindowManager: DockWidgetController {
         ) { _ in
             MainActor.assumeIsolated { DockWidgetWindowManager.shared.reposition() }
         }
+        // Persist position on drag — but only real drags: every programmatic
+        // setFrame (dock placement, settings resize) brackets itself with
+        // `isRepositioning`, which this observer checks before writing.
+        moveObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didMoveNotification, object: panel, queue: .main
+        ) { [weak panel] _ in
+            guard let panel else { return }
+            let origin = panel.frame.origin
+            MainActor.assumeIsolated {
+                guard !DockWidgetWindowManager.shared.isRepositioning else { return }
+                let d = UserDefaults.standard
+                d.set(Double(origin.x), forKey: DockWidgetWindowManager.posKeyX)
+                d.set(Double(origin.y), forKey: DockWidgetWindowManager.posKeyY)
+            }
+        }
     }
 
     func hideDockWidget() {
         if let screenObserver {
             NotificationCenter.default.removeObserver(screenObserver)
             self.screenObserver = nil
+        }
+        if let moveObserver {
+            NotificationCenter.default.removeObserver(moveObserver)
+            self.moveObserver = nil
         }
         guard let panel else { return }
         self.panel = nil
@@ -80,6 +111,23 @@ final class DockWidgetWindowManager: DockWidgetController {
         }
     }
 
+    /// Clears any dragged-in custom position and snaps back to the
+    /// Dock-anchored placement — the pill's "Return to Dock" context-menu
+    /// action.
+    func returnToDock() {
+        let d = UserDefaults.standard
+        d.removeObject(forKey: Self.posKeyX)
+        d.removeObject(forKey: Self.posKeyY)
+        reposition()
+    }
+
+    /// The user-dragged position, if one has been persisted.
+    private func customOrigin() -> CGPoint? {
+        let d = UserDefaults.standard
+        guard d.object(forKey: Self.posKeyX) != nil else { return nil }
+        return CGPoint(x: d.double(forKey: Self.posKeyX), y: d.double(forKey: Self.posKeyY))
+    }
+
     /// Live-apply appearance settings to the current panel: the full preset
     /// frame (hover expansion happens inside the view, not by resizing the
     /// window) and the opacity clamp, same idea as `FloatingWindowManager`.
@@ -88,18 +136,23 @@ final class DockWidgetWindowManager: DockWidgetController {
         let preset = settings.dockWidgetSize
         var frame = panel.frame
         frame.size = NSSize(width: preset.width, height: preset.height)
+        isRepositioning = true
         panel.setFrame(frame, display: true)
+        isRepositioning = false
         panel.alphaValue = CGFloat(min(max(settings.dockWidgetOpacity, 0.3), 1.0))
     }
 
     /// Flush against the Dock's inner edge — beside it, centered, on a
     /// vertical Dock; above it, at the Position setting's end, on a
-    /// horizontal one. The Dock's side and thickness fall out of the
-    /// difference between the screen's full frame and its visibleFrame
-    /// (`DockWidgetGeometry.side`); with the Dock auto-hidden the two
-    /// (nearly) coincide and it reads as bottom, so the pill rests at the
-    /// screen edge instead. The math itself lives in SharinganCore
-    /// (`DockWidgetGeometry`) so it is unit-testable without an `NSScreen`.
+    /// horizontal one — UNLESS the pill has been dragged to a custom
+    /// position, in which case that position wins (clamped back into the
+    /// visible frame on screen changes) and dock placement is skipped. The
+    /// Dock's side and thickness fall out of the difference between the
+    /// screen's full frame and its visibleFrame (`DockWidgetGeometry.side`);
+    /// with the Dock auto-hidden the two (nearly) coincide and it reads as
+    /// bottom, so the pill rests at the screen edge instead. The math itself
+    /// lives in SharinganCore (`DockWidgetGeometry`) so it is unit-testable
+    /// without an `NSScreen`.
     private func reposition() {
         guard let panel, let screen = NSScreen.main, let t = timer else { return }
         let vis = screen.visibleFrame
@@ -107,11 +160,21 @@ final class DockWidgetWindowManager: DockWidgetController {
         let preset = t.settings.dockWidgetSize
         let alignment = t.settings.dockWidgetAlignment
         let s = CGSize(width: preset.width, height: preset.height)
-        let origin = DockWidgetGeometry.origin(size: s, alignment: alignment,
+
+        let origin: CGPoint
+        let anchor: DockWidgetAlignment
+        if let custom = customOrigin() {
+            origin = DockWidgetGeometry.clamp(origin: custom, size: s, visibleFrame: vis)
+            anchor = DockWidgetGeometry.expandAnchor(customOrigin: origin, size: s, visibleFrame: vis)
+        } else {
+            origin = DockWidgetGeometry.origin(size: s, alignment: alignment,
                                                visibleFrame: vis, fullFrame: full)
-        panel.setFrame(NSRect(origin: origin, size: s), display: true)
-        let anchor = DockWidgetGeometry.expandAnchor(alignment: alignment,
+            anchor = DockWidgetGeometry.expandAnchor(alignment: alignment,
                                                       visibleFrame: vis, fullFrame: full)
+        }
+        isRepositioning = true
+        panel.setFrame(NSRect(origin: origin, size: s), display: true)
+        isRepositioning = false
         hosting?.rootView = DockWidgetView(timer: t, anchor: anchor)
     }
 }

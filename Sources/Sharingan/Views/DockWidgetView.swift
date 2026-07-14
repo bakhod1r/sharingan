@@ -70,6 +70,11 @@ struct DockWidgetView: View {
         .onHover { hovering = $0 }
         .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.78),
                    value: hovering)
+        // Right-click: a way back to the Dock after a manual drag (no-op
+        // while already docked — reposition() just re-derives the same spot).
+        .contextMenu {
+            Button("Return to Dock") { DockWidgetWindowManager.shared.returnToDock() }
+        }
     }
 
     private var timeText: some View {

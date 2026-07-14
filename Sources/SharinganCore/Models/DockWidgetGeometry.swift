@@ -47,4 +47,21 @@ public enum DockWidgetGeometry {
         case .bottom: return alignment
         }
     }
+
+    /// Clamp a custom (user-dragged) origin for a widget of `size` into
+    /// `visibleFrame`, keeping a repositioned pill on screen after a display
+    /// change — same idea as `FloatingWindowManager.clamped`.
+    public static func clamp(origin: CGPoint, size: CGSize, visibleFrame vis: CGRect) -> CGPoint {
+        let x = min(max(origin.x, vis.minX), max(vis.minX, vis.maxX - size.width))
+        let y = min(max(origin.y, vis.minY), max(vis.minY, vis.maxY - size.height))
+        return CGPoint(x: x, y: y)
+    }
+
+    /// Hover-expand anchor for a custom-positioned (undocked) pill: whichever
+    /// half of the screen its frame's midX falls in — left half opens
+    /// rightward (`.leading`), right half opens leftward (`.trailing`).
+    public static func expandAnchor(customOrigin origin: CGPoint, size: CGSize,
+                                    visibleFrame vis: CGRect) -> DockWidgetAlignment {
+        (origin.x + size.width / 2) <= vis.midX ? .leading : .trailing
+    }
 }
