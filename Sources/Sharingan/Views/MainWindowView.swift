@@ -89,6 +89,7 @@ struct MainWindowView: View {
                     navRow(.tasks)
                     navRow(.week)
                     navRow(.stats)
+                    navRow(.report)
                     navRow(.settings)
                     categoriesSection
                     tagsSection
@@ -898,6 +899,10 @@ struct MainWindowView: View {
                     StatsExtrasView(stats: timer.stats,
                                     accent: timer.settings.theme.accent)
                 }
+            }
+        case .report:
+            detailScaffold(title: "Report") {
+                ReportView(timer: timer)
             }
         case .settings:
             SettingsView(timer: timer, settings: $timer.settings)
