@@ -134,7 +134,7 @@
   redraws the bundled icon bitmap rotated into `NSApp.applicationIconImage`
   only under the `.regular` activation policy and restores the shipped
   artwork when the tile disappears or the spinner idles. Controlled by
-  `settings.animateIcon` (Settings → Timer → Menu bar → "Spin the
+  `settings.animateIcon` (Settings → General → Appearance → "Spin the
   Sharingan", default on); the spinner also idles under macOS Reduce Motion
   and while screens sleep. Preview frames:
   `--render-menubar-icon <path> [rotationDegrees]`.

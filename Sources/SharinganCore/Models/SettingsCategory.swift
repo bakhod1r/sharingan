@@ -91,7 +91,8 @@ public enum SettingsCategory: String, CaseIterable, Identifiable, Hashable, Send
         case .general:
             return ["theme", "appearance", "liquid", "glass",
                     "auto-start", "auto start", "sound", "alarm", "chime",
-                    "notification", "launch at login", "startup"]
+                    "notification", "launch at login", "startup",
+                    "menu bar icon", "dock", "spin", "animate", "animation"]
         case .voice:
             return ["tts", "voice", "speak", "spoken", "announcement", "rate", "pitch"]
         case .shortcuts:

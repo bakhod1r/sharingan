@@ -10,7 +10,7 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 ### Added
 - Duplicate-safe import: pasting the same template twice no longer doubles the list — imported tasks whose title already exists on an open task (or earlier in the same document) are held back and a prompt asks "Skip Duplicates / Add Anyway"; the import sheet's counter shows "· N already exist" live. Completed tasks don't block a title from coming back
 - The `sharingan://add-task` URL and `tired task add` CLI now bulk-import whole documents too (duplicates skipped silently — there's no one to ask headless)
-- The Sharingan spins: the menu-bar tomoe (and the Dock icon while the main window is open) rotate slowly, in phase — turn it off in Settings → Timer → Menu bar → "Spin the Sharingan". Pauses automatically under macOS Reduce Motion and while your screens sleep
+- The Sharingan spins: the menu-bar tomoe (and the Dock icon while the main window is open) rotate slowly, in phase — turn it off in Settings → General → Appearance → "Spin the Sharingan". Pauses automatically under macOS Reduce Motion and while your screens sleep
 - Clicking a task's title in the notch island opens the main window on the Tasks section, scrolled to that task with a short highlight flash — the done box and the play button on either side keep working as before
 
 ## [1.1.0] — 2026-07-14
