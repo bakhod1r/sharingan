@@ -61,3 +61,135 @@ struct FocusLogPersistenceTests {
         #expect(Set(loaded) == Set(entries))
     }
 }
+
+@Suite("Focus log crediting")
+struct FocusLogCreditingTests {
+    @MainActor private func freshStore() throws -> TaskStore {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("focuscredit-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return TaskStore(fileURL: dir.appendingPathComponent("t.sqlite"))
+    }
+
+    @MainActor @Test func sameDayCreditsMergeIntoOneRow() throws {
+        let store = try freshStore()
+        store.add(title: "Write report")
+        let id = store.tasks[0].id
+        store.incrementPomodoro(id, seconds: 1500)
+        store.incrementPomodoro(id, seconds: 1500)
+        let rows = store.focusEntries(on: Date())
+        #expect(rows.count == 1)
+        #expect(rows[0].count == 2)
+        #expect(rows[0].seconds == 3000)
+        #expect(rows[0].title == "Write report")
+        #expect(store.tasks[0].pomodorosDone == 2)
+    }
+
+    @MainActor @Test func activeSubtaskGetsItsOwnRowTaskRowStaysAggregate() throws {
+        let store = try freshStore()
+        store.add(title: "Parent")
+        let id = store.tasks[0].id
+        store.addSubtask(id, title: "Child")
+        let sid = store.tasks[0].subtasks[0].id
+        store.setActive(id)
+        store.activeSubtaskID = sid
+        store.incrementPomodoro(id, seconds: 1500)
+        let rows = store.focusEntries(on: Date())
+        #expect(rows.count == 2)
+        let taskRow = rows.first { $0.subtaskID == nil }
+        let subRow = rows.first { $0.subtaskID == sid }
+        #expect(taskRow?.count == 1 && taskRow?.seconds == 1500)
+        #expect(subRow?.count == 1 && subRow?.seconds == 1500)
+        #expect(subRow?.title == "Child")
+        // Totals must count task-level rows only — no double counting.
+        let totals = store.focusDayTotals(on: Date())
+        #expect(totals.count == 1)
+        #expect(totals.seconds == 1500)
+    }
+
+    @MainActor @Test func differentDaysGetDifferentRowsAndHistoryIsNewestFirst() throws {
+        let store = try freshStore()
+        store.add(title: "T")
+        let id = store.tasks[0].id
+        let today = Date()
+        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: today)!
+        store.incrementPomodoro(id, seconds: 1500, on: yesterday)
+        store.incrementPomodoro(id, seconds: 900, on: today)
+        #expect(store.focusEntries(on: yesterday).count == 1)
+        #expect(store.focusEntries(on: today).count == 1)
+        let history = store.focusHistory(for: id, days: 14)
+        #expect(history.count == 2)
+        #expect(history[0].seconds == 900)   // today first
+        #expect(history[1].seconds == 1500)
+    }
+
+    @MainActor @Test func deletingTheTaskKeepsItsHistory() throws {
+        let store = try freshStore()
+        store.add(title: "Doomed")
+        let id = store.tasks[0].id
+        store.incrementPomodoro(id, seconds: 1500)
+        store.delete(id)
+        #expect(store.focusEntries(on: Date()).count == 1)
+        #expect(store.focusEntries(on: Date())[0].title == "Doomed")
+    }
+
+    @MainActor @Test func logSurvivesStoreReload() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("focusreload-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let url = dir.appendingPathComponent("t.sqlite")
+        var id: UUID?
+        do {
+            let store = TaskStore(fileURL: url)
+            store.add(title: "Persist me")
+            id = store.tasks[0].id
+            store.incrementPomodoro(id!, seconds: 1500)
+        }
+        let store2 = TaskStore(fileURL: url)
+        let rows = store2.focusEntries(on: Date())
+        #expect(rows.count == 1)
+        #expect(rows[0].taskID == id)
+        #expect(rows[0].seconds == 1500)
+    }
+
+    @MainActor @Test func staleSubtaskCreditsOnlyTheTask() throws {
+        let store = try freshStore()
+        store.add(title: "Parent")
+        let id = store.tasks[0].id
+        store.addSubtask(id, title: "Gone")
+        let sid = store.tasks[0].subtasks[0].id
+        store.setActive(id)
+        var edited = store.tasks[0]
+        edited.subtasks.removeAll()          // subtask deleted mid-session
+        store.update(edited)
+        store.activeSubtaskID = sid          // simulate the stale pointer
+        store.incrementPomodoro(id, seconds: 1500)
+        let rows = store.focusEntries(on: Date())
+        #expect(rows.count == 1)             // task row only, no subtask row
+        #expect(rows[0].subtaskID == nil)
+        #expect(store.activeSubtaskID == nil)
+    }
+
+    @MainActor @Test func renameRefreshesSnapshotTitleOnNextCredit() throws {
+        let store = try freshStore()
+        store.add(title: "Old name")
+        let id = store.tasks[0].id
+        store.incrementPomodoro(id, seconds: 900)
+        var renamed = store.tasks[0]
+        renamed.title = "New name"
+        store.update(renamed)
+        store.incrementPomodoro(id, seconds: 900)
+        let rows = store.focusEntries(on: Date())
+        #expect(rows.count == 1)
+        #expect(rows[0].title == "New name")
+    }
+
+    @MainActor @Test func legacyWrapperStillCreditsCounters() throws {
+        let store = try freshStore()
+        store.add(title: "Old path")
+        let id = store.tasks[0].id
+        store.incrementPomodoro(id)
+        #expect(store.tasks[0].pomodorosDone == 1)
+        #expect(store.focusEntries(on: Date())[0].seconds == 0)
+    }
+}

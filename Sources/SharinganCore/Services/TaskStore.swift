@@ -46,6 +46,9 @@ public final class TaskStore: ObservableObject {
     /// real use (at which point `allTags` reports them via task frequency
     /// like any other tag) or are removed again.
     @Published public private(set) var customTags: [String] = []
+    /// Per-day focus attribution rows (see FocusLogEntry). Grows at credit
+    /// time only; task deletion leaves history untouched.
+    @Published public private(set) var focusLog: [FocusLogEntry] = []
 
     private let database: TaskDatabase?
 
@@ -79,6 +82,7 @@ public final class TaskStore: ObservableObject {
         load()
         loadCategories()
         loadTags()
+        loadFocusLog()
         migrateLegacyJSONIfNeeded(dbDir: dbURL.deletingLastPathComponent())
     }
 
@@ -685,18 +689,76 @@ public final class TaskStore: ObservableObject {
 
     /// Records one completed pomodoro against the given task. The task counter
     /// is the aggregate source of truth; the active subtask (if any, and still
-    /// open) additionally receives an attribution credit.
-    public func incrementPomodoro(_ id: UUID) {
+    /// open) additionally receives an attribution credit. `seconds` is the
+    /// completed session's real length and lands in the per-day focus log
+    /// alongside the counters.
+    public func incrementPomodoro(_ id: UUID, seconds: TimeInterval, on date: Date = Date()) {
         guard let i = tasks.firstIndex(where: { $0.id == id }) else { return }
         tasks[i].pomodorosDone += 1
+        let day = Calendar.current.startOfDay(for: date)
+        logCredit(day: day, taskID: id, subtaskID: nil,
+                  title: tasks[i].title, seconds: seconds)
         if id == activeTaskID, let sid = activeSubtaskID {
             if let j = tasks[i].subtasks.firstIndex(where: { $0.id == sid && !$0.isDone }) {
                 tasks[i].subtasks[j].pomodorosDone += 1
+                logCredit(day: day, taskID: id, subtaskID: sid,
+                          title: tasks[i].subtasks[j].title, seconds: seconds)
             } else {
                 activeSubtaskID = nil   // stale: deleted or completed mid-session
             }
         }
         persist()
+        persistFocusLog()
+    }
+
+    /// Compatibility wrapper for callers without a session length (CLI, tests).
+    public func incrementPomodoro(_ id: UUID) {
+        incrementPomodoro(id, seconds: 0)
+    }
+
+    /// Merges one credit into the matching (day, task, subtask) row, or opens
+    /// a new one. Refreshes the title snapshot so renames propagate.
+    private func logCredit(day: Date, taskID: UUID, subtaskID: UUID?,
+                           title: String, seconds: TimeInterval) {
+        if let k = focusLog.firstIndex(where: {
+            $0.day == day && $0.taskID == taskID && $0.subtaskID == subtaskID
+        }) {
+            focusLog[k].count += 1
+            focusLog[k].seconds += seconds
+            focusLog[k].title = title
+        } else {
+            focusLog.append(FocusLogEntry(day: day, taskID: taskID, subtaskID: subtaskID,
+                                          title: title, count: 1, seconds: seconds))
+        }
+    }
+
+    // MARK: - Focus log queries
+
+    /// All rows for one calendar day (task-level and subtask rows).
+    public func focusEntries(on day: Date) -> [FocusLogEntry] {
+        let d = Calendar.current.startOfDay(for: day)
+        return focusLog.filter { $0.day == d }
+    }
+
+    /// One task's rows (its own and its subtasks') over the last `days`
+    /// calendar days, newest day first.
+    public func focusHistory(for taskID: UUID, days: Int,
+                             from date: Date = Date()) -> [FocusLogEntry] {
+        let cal = Calendar.current
+        guard days > 0,
+              let cutoff = cal.date(byAdding: .day, value: -(days - 1),
+                                    to: cal.startOfDay(for: date)) else { return [] }
+        return focusLog
+            .filter { $0.taskID == taskID && $0.day >= cutoff }
+            .sorted { $0.day > $1.day }
+    }
+
+    /// Day totals from task-level rows only (subtask rows are already
+    /// contained in their task's row — summing both would double count).
+    public func focusDayTotals(on day: Date) -> (count: Int, seconds: TimeInterval) {
+        let rows = focusEntries(on: day).filter { $0.subtaskID == nil }
+        return (rows.reduce(0) { $0 + $1.count },
+                rows.reduce(0) { $0 + $1.seconds })
     }
 
     public func setActive(_ id: UUID?) {
@@ -743,6 +805,14 @@ public final class TaskStore: ObservableObject {
 
     private func loadTags() {
         customTags = database?.loadTags() ?? []
+    }
+
+    private func loadFocusLog() {
+        focusLog = database?.loadFocusLog() ?? []
+    }
+
+    private func persistFocusLog() {
+        database?.saveFocusLog(focusLog)
     }
 
     private func persistTags() {
