@@ -4,7 +4,7 @@
 > whenever a feature is added, changed, or removed, update this document in the
 > same change.**
 
-- Version: 1.5.0
+- Version: 1.5.1
 - Platform: macOS 14+, lives in the menu bar
 
 ---

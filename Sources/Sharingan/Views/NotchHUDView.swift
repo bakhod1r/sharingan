@@ -127,16 +127,27 @@ struct NotchHUDView: View {
         if model.state.size == .hidden {
             EmptyView()
         } else {
-            IslandShape(silhouette: l.silhouette)
-                // The cutout span stays pure black — it is imitating the camera
-                // housing. Everything the island *adds* to the hardware is
-                // dressed in Blink's dark glass on top of it: the expanded
-                // body below the menu bar (`bodyGlass`) and the live ears
-                // either side of the cutout (`earGlass`). Idle — exactly the
-                // cutout, nothing added — stays all black, and every pixel of
-                // it sits behind the housing: on a light menu bar the closed
-                // island shows nothing at all.
-                .fill(.black)
+            ZStack(alignment: .top) {
+                IslandShape(silhouette: l.silhouette)
+                    // The cutout span stays pure black — it is imitating the
+                    // camera housing. Everything the island *adds* to the
+                    // hardware is dressed in Blink's dark glass on top of it:
+                    // the expanded body below the menu bar (`bodyGlass`) and
+                    // the live ears either side of the cutout (`earGlass`).
+                    // Idle — exactly the cutout, nothing added — stays all
+                    // black, and every pixel of it sits behind the housing.
+                    //
+                    // In `.live` the black ALSO stops at the cutout: the 4pt
+                    // lip below it belongs to the progress line alone (drawn
+                    // by `NotchEars`), so a running island paints no black a
+                    // light menu bar could show as a droplet under the notch.
+                    // The silhouette (and with it the clip, the hover stroke
+                    // and the hit mask) still spans the lip — only the black
+                    // fill is held back.
+                    .fill(.black)
+                    .frame(height: blackFillHeight(l))
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .overlay(alignment: .topLeading) { bodyGlass(l) }
                 .overlay(alignment: .topLeading) { earGlass(l) }
                 .overlay(alignment: .top) {
@@ -177,6 +188,14 @@ struct NotchHUDView: View {
                 .clipShape(IslandShape(silhouette: l.silhouette))
                 .transition(.opacity)
         }
+    }
+
+    /// How far down the island's black fill runs. Full height everywhere but
+    /// `.live`, where it stops at the hardware cutout: the lip strip below is
+    /// the progress line's row, not more housing (nil = unconstrained).
+    private func blackFillHeight(_ l: NotchLayout) -> CGFloat? {
+        guard model.state.size == .live else { return nil }
+        return max(0, l.island.height - NotchGeometry.liveLipHeight)
     }
 
     /// The body's surface — the app window's tone, **flattened**. The window's

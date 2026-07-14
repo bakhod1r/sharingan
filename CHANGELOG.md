@@ -5,6 +5,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.5.1] — 2026-07-14
+
+### Fixed
+- The black strip under the notch while a session runs is gone: the live island's black now stops at the hardware cutout, exactly like idle — the 4pt lip below it belongs to the progress line alone (the accent line and its faint track, no black backing). The silhouette, hover stroke, and click mask are unchanged
+
 ## [1.5.0] — 2026-07-14
 
 ### Added
