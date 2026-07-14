@@ -552,10 +552,11 @@ struct TasksView: View {
                 .disabled(newTitle.trimmingCharacters(in: .whitespaces).isEmpty)
                 .accessibilityLabel("Add task")
 
-                TextField("Add a task…", text: $newTitle, onCommit: add)
+                TextField("Add a task…", text: $newTitle)
                     .textFieldStyle(.plain)
                     .font(.system(.title3, design: .rounded))
                     .focused($composerFocused)
+                    .onSubmit(add)
             }
 
             // Smart-parse preview — chips for every token the quick-add syntax
@@ -885,8 +886,7 @@ struct TasksView: View {
                         .foregroundStyle(Color.dsSecondary)
                         .frame(width: 20)
                     if templateRenameID == t.id {
-                        TextField("Name", text: $templateRenameText,
-                                  onCommit: { commitTemplateRename(t.id) })
+                        TextField("Name", text: $templateRenameText)
                             .textFieldStyle(.plain)
                             .font(.system(.caption, design: .rounded).weight(.medium))
                             .onSubmit { commitTemplateRename(t.id) }
@@ -1051,9 +1051,10 @@ struct TasksView: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Color(hex: newCatColor))
                     .frame(width: 20)
-                TextField("New category name", text: $newCatName, onCommit: addCategory)
+                TextField("New category name", text: $newCatName)
                     .textFieldStyle(.plain)
                     .font(.system(.caption, design: .rounded).weight(.medium))
+                    .onSubmit(addCategory)
                 Button("Add", action: addCategory)
                     .buttonStyle(.borderless)
                     .disabled(newCatName.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -1144,7 +1145,7 @@ struct TasksView: View {
                 .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
 
                 if renamingCategory == c.name {
-                    TextField("Name", text: $renameText, onCommit: { commitRename(c.name) })
+                    TextField("Name", text: $renameText)
                         .textFieldStyle(.plain)
                         .font(.system(.caption, design: .rounded).weight(.medium))
                         .onSubmit { commitRename(c.name) }
@@ -1314,7 +1315,7 @@ struct TasksView: View {
                 TextField("Add step…", text: Binding(
                     get: { subtaskDrafts[task.id] ?? "" },
                     set: { subtaskDrafts[task.id] = $0 }
-                ), onCommit: { commitSubtask(task.id) })
+                ))
                     .textFieldStyle(.plain)
                     .font(.system(.caption, design: .rounded))
                     .onSubmit { commitSubtask(task.id) }

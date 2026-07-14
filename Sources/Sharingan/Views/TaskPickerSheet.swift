@@ -242,10 +242,11 @@ struct TaskPickerSheet: View {
     private var footer: some View {
         VStack(spacing: 10) {
             HStack(spacing: 8) {
-                TextField("New task…", text: $newTitle, onCommit: addAndStart)
+                TextField("New task…", text: $newTitle)
                     .textFieldStyle(.plain)
                     .font(.system(.body, design: .rounded))
                     .foregroundStyle(.white)
+                    .onSubmit(addAndStart)
                 Button(action: addAndStart) {
                     Image(systemName: "plus.circle.fill")
                         .font(.system(size: 22))

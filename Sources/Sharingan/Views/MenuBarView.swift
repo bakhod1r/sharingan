@@ -245,7 +245,7 @@ struct MenuBarView: View {
                 Image(systemName: "plus.circle.fill")
                     .font(.system(size: 18))
                     .foregroundStyle(.tint)
-                TextField("Add a task…", text: $quickTitle, onCommit: quickAdd)
+                TextField("Add a task…", text: $quickTitle)
                     .textFieldStyle(.plain)
                     .font(.system(.callout, design: .rounded))
                     .onSubmit(quickAdd)
@@ -472,7 +472,7 @@ struct MenuBarView: View {
             .buttonStyle(.pressableSubtle)
 
             if editingTaskID == task.id {
-                TextField("Task name", text: $editingText, onCommit: { commitEdit(task) })
+                TextField("Task name", text: $editingText)
                     .textFieldStyle(.plain)
                     .font(.system(.callout, design: .rounded).weight(.medium))
                     .focused($editFieldFocused)
@@ -774,7 +774,7 @@ struct MenuBarView: View {
                 TextField("Add step…", text: Binding(
                     get: { subtaskDrafts[task.id] ?? "" },
                     set: { subtaskDrafts[task.id] = $0 }
-                ), onCommit: { commitSubtask(task.id) })
+                ))
                     .textFieldStyle(.plain)
                     .font(.system(.caption, design: .rounded))
                     .onSubmit { commitSubtask(task.id) }
