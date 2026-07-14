@@ -15,7 +15,7 @@ A menu-bar Pomodoro timer, a full task manager, and guided eye exercises — in 
 </p>
 
 <p align="center">
-  <a href="https://bakhod1r.github.io/Blink/"><b>Website</b></a> ·
+  <a href="https://bakhod1r.github.io/sharingan/"><b>Website</b></a> ·
   <a href="https://github.com/bakhod1r/sharingan/releases/latest"><b>Download</b></a> ·
   <a href="CHANGELOG.md"><b>Changelog</b></a>
 </p>
