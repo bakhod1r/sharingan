@@ -5,6 +5,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.19.1] — 2026-07-14
+
+### Fixed
+- Floating widget task picker dismissed itself before a task could be picked: with expand-on-hover on, moving the pointer off the pill (on its way into the picker) collapsed the pill, removing the ▶︎ button the popover was anchored to. An open picker now pins the pill expanded, and closing it collapses with the same spring.
+
 ## [1.19.0] — 2026-07-14
 
 ### Fixed

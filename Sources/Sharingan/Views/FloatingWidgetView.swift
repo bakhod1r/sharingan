@@ -39,8 +39,13 @@ struct FloatingWidgetView: View {
     /// and scales linearly with whichever size is chosen.
     private var k: CGFloat { preset.height / 56 }
     /// Off = always fully open; on = compact (ring + time) at rest, full pill
-    /// under the pointer — the Dock's now-playing widgets' behavior.
-    private var expanded: Bool { !timer.settings.dockWidgetExpandOnHover || hovering }
+    /// under the pointer — the Dock's now-playing widgets' behavior. An open
+    /// task picker pins the pill expanded: the pointer leaves the pill on its
+    /// way into the popover, and collapsing would remove the ▶︎ button the
+    /// popover is anchored to — dismissing it before a task can be picked.
+    private var expanded: Bool {
+        !timer.settings.dockWidgetExpandOnHover || hovering || showTaskPicker
+    }
     private var containerAlignment: Alignment {
         switch anchor {
         case .leading:  return .leading
@@ -82,6 +87,10 @@ struct FloatingWidgetView: View {
         .onHover { hovering = $0 }
         .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.78),
                    value: hovering)
+        // The picker closing (pointer long gone) must collapse with the same
+        // spring, not snap.
+        .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.78),
+                   value: showTaskPicker)
         // Right-click: a way back to the Dock after a manual drag (no-op
         // while already docked — reposition() just re-derives the same spot).
         .contextMenu {
