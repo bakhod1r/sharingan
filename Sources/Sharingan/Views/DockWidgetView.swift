@@ -93,5 +93,6 @@ struct DockWidgetView: View {
         .buttonStyle(.plain)
         .disabled(!enabled)
         .help(help)
+        .accessibilityLabel(help)
     }
 }
