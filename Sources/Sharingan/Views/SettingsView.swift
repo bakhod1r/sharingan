@@ -360,6 +360,11 @@ struct SettingsView: View {
                 Section("Menu bar") {
                     ToggleRow(title: "Show countdown in menu bar",
                               isOn: $settings.showMenuBarCountdown)
+                    ToggleRow(title: "Spin the Sharingan",
+                              isOn: $settings.animateIcon)
+                    Text("The tomoe rotate slowly in the menu bar and Dock. Pauses when macOS Reduce Motion is on.")
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.6))
                 }
 
         case .notch:
