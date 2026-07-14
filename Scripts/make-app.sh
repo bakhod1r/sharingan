@@ -166,6 +166,21 @@ echo "  ✓ $WIDGET.appex"
 # "Sharingan can't be opened" dialog.
 xattr -cr "$APP" 2>/dev/null || true
 
+# Developer ID apps carry iCloud/push entitlements only via an embedded
+# provisioning profile — codesign accepts the entitlements without one, and
+# then CloudKit fails at runtime with a bare "not entitled". No profile ⇒
+# build an app WITHOUT the iCloud entitlements rather than a broken one.
+# The profile must land in the bundle BEFORE the app's codesign call: the
+# signature seals Contents/, and adding it afterwards breaks the seal.
+if [[ -n "${PROVISION_PROFILE_FILE:-}" && -f "${PROVISION_PROFILE_FILE}" ]]; then
+  cp "$PROVISION_PROFILE_FILE" "$APP/Contents/embedded.provisionprofile"
+  ENTITLEMENTS="$ROOT/Resources/App.entitlements"
+  echo "  ✓ provisioning profile embedded (iCloud enabled)"
+else
+  ENTITLEMENTS="$ROOT/Resources/App-NoCloud.entitlements"
+  echo "  ⚠ no provisioning profile — building without iCloud entitlements"
+fi
+
 # Sign inside-out: the appex first, WITH its entitlements (sandbox + app
 # group — chronod won't load an unsandboxed widget, and the app group is how
 # it reads the snapshot the app writes). Then the outer app with its own
@@ -208,7 +223,7 @@ if [[ -n "${SIGN_IDENTITY:-}" ]]; then
     --entitlements "$ROOT/Resources/Widget.entitlements" "$APPEX"
   echo "  ✓ appex signed"
   codesign --force --sign "$SIGN_IDENTITY" --options runtime --timestamp \
-    --entitlements "$ROOT/Resources/App.entitlements" "$APP"
+    --entitlements "$ENTITLEMENTS" "$APP"
   echo "  ✓ app signed (Developer ID)"
 else
   sign_sparkle - 2>/dev/null \
@@ -217,7 +232,7 @@ else
     --entitlements "$ROOT/Resources/Widget.entitlements" \
     "$APPEX" 2>/dev/null && echo "  ✓ appex ad-hoc signed" || echo "  ! appex codesign skipped"
   codesign --force --sign - \
-    --entitlements "$ROOT/Resources/App.entitlements" \
+    --entitlements "$ENTITLEMENTS" \
     "$APP" 2>/dev/null && echo "  ✓ ad-hoc signed" || echo "  ! codesign skipped"
 fi
 

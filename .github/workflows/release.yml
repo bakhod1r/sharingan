@@ -49,6 +49,19 @@ jobs:
             | sed -nE 's/.*"(Developer ID Application[^"]+)".*/\1/p' | head -1)"
           [ -n "$IDENTITY" ] || { echo "no Developer ID identity found"; exit 1; }
           echo "SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+      # iCloud entitlements only survive signing when the build embeds a
+      # provisioning profile — without the secret, make-app.sh falls back to
+      # App-NoCloud.entitlements and the release simply ships without sync.
+      - name: Stage provisioning profile
+        env:
+          PROVISION_PROFILE: ${{ secrets.PROVISION_PROFILE }}
+        run: |
+          if [[ -z "$PROVISION_PROFILE" ]]; then
+            echo "no PROVISION_PROFILE secret — building without iCloud entitlements"
+            exit 0
+          fi
+          echo "$PROVISION_PROFILE" | base64 --decode > "$RUNNER_TEMP/sharingan.provisionprofile"
+          echo "PROVISION_PROFILE_FILE=$RUNNER_TEMP/sharingan.provisionprofile" >> "$GITHUB_ENV"
       # Notarization credentials go straight to the build as env — Scripts/
       # notarize.sh writes the key to a temp file itself and shreds it on
       # exit, so the .p8 never lands anywhere the workspace can leak it.
