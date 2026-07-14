@@ -201,6 +201,55 @@ public final class PomodoroTimer: ObservableObject {
         isRunning ? pause() : start()
     }
 
+    /// The real phase behind `.paused` (which masks it) — what a sync
+    /// publisher must report, or a paused break would mirror as "paused
+    /// nothing" on the other Mac.
+    public var effectivePhase: PomodoroPhase {
+        phase == .paused ? previousPhase : phase
+    }
+
+    /// Mirrors another Mac's session in lockstep (iCloud timer sync).
+    ///
+    /// Aligned to the wall clock, not to durations: a running session adopts
+    /// the remote's absolute `endsAt`, so both Macs end the phase at the same
+    /// moment regardless of fetch latency. A paused session freezes at the
+    /// remaining time computed against `asOf` (the pause moment on the other
+    /// Mac), so it reads identically however late the record arrives.
+    ///
+    /// This is the ONE programmatic entry point that can set a phase directly
+    /// with an explicit deadline — the sharingan:// / CLI paths can only walk
+    /// the normal transitions, which cannot represent "be 7 minutes into the
+    /// other Mac's break".
+    public func applyMirroredSession(phase remotePhase: PomodoroPhase,
+                                     isPaused: Bool,
+                                     startedAt: Date,
+                                     endsAt: Date?,
+                                     asOf: Date,
+                                     now: Date = Date()) {
+        guard remotePhase != .paused else { return }   // isPaused carries that
+        isRunning = false
+        cancelLoop()
+        cancelRepeatJob()
+        let referenceEnd = endsAt ?? now
+        let total = max(1, referenceEnd.timeIntervalSince(startedAt))
+        durationOverride = total
+        let remaining = max(0, referenceEnd.timeIntervalSince(isPaused ? asOf : now))
+        remainingSeconds = remaining
+        elapsedSeconds = max(0, total - remaining)
+        syncPrecise()
+        if isPaused {
+            previousPhase = remotePhase
+            phase = .paused
+        } else {
+            phase = remotePhase
+            fiveMinSent = false
+            flashSent = false
+            isFlashing = false
+            isRunning = true
+            runLoop()
+        }
+    }
+
     public func addTime(_ seconds: TimeInterval) {
         // Extend the session total too, otherwise count-up recomputes remaining
         // from settings every tick and the adjustment vanishes. Updating both

@@ -41,6 +41,18 @@ public final class SharinganCoordinator: ObservableObject {
     private var cliObservers: [String: Any] = [:]
     private var snapshotCancellable: AnyCancellable?
 
+    /// iCloud sync, when the user has turned it on (owned by the AppDelegate).
+    private weak var syncEngine: CloudSyncEngine?
+    private var syncCancellable: AnyCancellable?
+    /// The last timer state pushed to sync — publish only when the session
+    /// payload really changed (the phase/isRunning sinks fire on every
+    /// assignment, including no-op rewrites).
+    private var lastPublishedTimer: ActiveTimerState?
+    /// True while a fetched remote session is being applied, so the resulting
+    /// phase/isRunning emissions don't publish straight back to CloudKit
+    /// (A starts → B applies → B re-publishes → A re-applies, forever).
+    private var isApplyingRemoteTimer = false
+
     /// `focusQueue`, when given (tests), backs the queue with an isolated
     /// UserDefaults suite; the app default persists to `.standard`.
     public init(timer: PomodoroTimer, focusQueue: FocusQueue? = nil) {
@@ -152,6 +164,90 @@ public final class SharinganCoordinator: ObservableObject {
             .sink { tasks in
                 CLIBridge.writeTaskSnapshot(CLIBridge.taskSnapshotEntries(from: tasks))
             }
+    }
+
+    // MARK: - Timer sync (iCloud lockstep)
+
+    /// UserDefaults key for the "Mirror timer across Macs" toggle. Default ON
+    /// while sync is on — absent key reads as true.
+    public static let timerMirrorDefaultsKey = "sync.timerMirror"
+
+    public static func timerMirrorEnabled(defaults: UserDefaults = .standard) -> Bool {
+        guard defaults.object(forKey: timerMirrorDefaultsKey) != nil else { return true }
+        return defaults.bool(forKey: timerMirrorDefaultsKey)
+    }
+
+    /// Wires the sync engine in: fetched remote sessions drive this Mac's
+    /// timer (subject to the mirror toggle), and local phase transitions
+    /// publish through `publishTimerToSync()` (called from the phase and
+    /// isRunning sinks in `observe()` — the narrowest seam that sees every
+    /// start/pause/resume/stop/complete without touching the tick loop).
+    public func installSync(engine: CloudSyncEngine) {
+        syncEngine = engine
+        syncCancellable = engine.$remoteTimer
+            .receive(on: DispatchQueue.main)
+            .compactMap { $0 }
+            .sink { [weak self] state in self?.applyRemoteTimer(state) }
+    }
+
+    public func uninstallSync() {
+        syncEngine = nil
+        syncCancellable = nil
+    }
+
+    /// This Mac's session as an ActiveTimerState snapshot (see that type for
+    /// the wall-clock contract).
+    func currentTimerState(now: Date = Date()) -> ActiveTimerState {
+        let isPaused = timer.phase == .paused
+        // A non-running, non-paused timer is idle: stopped, freshly reset, or
+        // waiting at a pending phase. Waiting states deliberately mirror as
+        // idle too — "the timer is not running" is the truth both Macs share.
+        let idle = !timer.isRunning && !isPaused
+        let remaining = max(0, timer.remainingSeconds)
+        return ActiveTimerState(
+            deviceID: DeviceIdentity.current,
+            deviceName: DeviceIdentity.name,
+            phase: idle ? ActiveTimerState.idlePhase : timer.effectivePhase.rawValue,
+            startedAt: now.addingTimeInterval(-max(0, timer.elapsedSeconds)),
+            endsAt: idle ? nil : now.addingTimeInterval(remaining),
+            isPaused: isPaused,
+            taskTitle: TaskStore.shared.activeTask?.title,
+            updatedAt: now)
+    }
+
+    private func publishTimerToSync() {
+        guard let syncEngine, !isApplyingRemoteTimer else { return }
+        let state = currentTimerState()
+        if let last = lastPublishedTimer, last.samePayload(as: state) { return }
+        lastPublishedTimer = state
+        syncEngine.publishActiveTimer(state)
+    }
+
+    private func applyRemoteTimer(_ state: ActiveTimerState) {
+        guard Self.timerMirrorEnabled() else { return }
+        isApplyingRemoteTimer = true
+        // Remember the remote payload as "already published" so the echo of
+        // this apply (if any sink slips through) is deduped by content too.
+        lastPublishedTimer = ActiveTimerState(
+            deviceID: DeviceIdentity.current, deviceName: DeviceIdentity.name,
+            phase: state.phase, startedAt: state.startedAt, endsAt: state.endsAt,
+            isPaused: state.isPaused, taskTitle: state.taskTitle,
+            updatedAt: state.updatedAt)
+        if state.isIdle {
+            timer.stop()
+        } else if let phase = PomodoroPhase(rawValue: state.phase), phase != .paused {
+            timer.applyMirroredSession(phase: phase,
+                                       isPaused: state.isPaused,
+                                       startedAt: state.startedAt,
+                                       endsAt: state.endsAt,
+                                       asOf: state.updatedAt)
+        }
+        // The suppression flag must outlive this turn: the phase/isRunning
+        // sinks re-deliver via DispatchQueue.main, i.e. on a LATER queue slot
+        // — which is already enqueued by now, so clearing behind them is safe.
+        DispatchQueue.main.async { [weak self] in
+            self?.isApplyingRemoteTimer = false
+        }
     }
 
     /// Dispatch a parsed `sharingan://` URL command through the exact same
@@ -346,6 +442,9 @@ public final class SharinganCoordinator: ObservableObject {
                 self.refreshAppBlocker()
                 self.syncDND()
                 self.publishSnapshot()
+                // Start/pause/resume/stop all flip isRunning — the timer-sync
+                // publish rides this sink (deduped by payload inside).
+                self.publishTimerToSync()
             }
             .store(in: &cancellables)
 
@@ -372,6 +471,9 @@ public final class SharinganCoordinator: ObservableObject {
             .sink { [weak self] _ in
                 self?.publishSnapshot()
                 self?.refreshAppBlocker()
+                // Skip/complete change the phase without necessarily flipping
+                // isRunning (auto-start) — publish here too, deduped inside.
+                self?.publishTimerToSync()
             }
             .store(in: &cancellables)
         // The CLI reconstructs a running countdown from `updatedAt`, so the
