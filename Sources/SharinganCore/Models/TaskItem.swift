@@ -13,11 +13,19 @@ public struct Subtask: Identifiable, Codable, Equatable, Sendable {
     public var pomodoroKind: PomodoroKind?
     /// Per-step priority flag (`.none` = unflagged, the default).
     public var priority: TaskPriority
+    /// Jira issue key when this subtask mirrors a Jira sub-task issue, e.g.
+    /// WT-702. Lets worklog and status changes target the sub-task issue itself,
+    /// not just its parent. nil for ordinary local subtasks.
+    public var jiraKey: String?
+    /// Jira's stable issue ID for the mirrored sub-task.
+    public var jiraIssueID: String?
 
     public init(id: UUID = UUID(), title: String, isDone: Bool = false,
                 estimatedPomodoros: Int? = nil, pomodorosDone: Int = 0,
                 pomodoroKind: PomodoroKind? = nil,
-                priority: TaskPriority = .none) {
+                priority: TaskPriority = .none,
+                jiraKey: String? = nil,
+                jiraIssueID: String? = nil) {
         self.id = id
         self.title = title
         self.isDone = isDone
@@ -25,7 +33,12 @@ public struct Subtask: Identifiable, Codable, Equatable, Sendable {
         self.pomodorosDone = pomodorosDone
         self.pomodoroKind = pomodoroKind
         self.priority = priority
+        self.jiraKey = jiraKey
+        self.jiraIssueID = jiraIssueID
     }
+
+    /// True when this subtask mirrors a Jira sub-task issue.
+    public var isJiraLinked: Bool { jiraKey?.isEmpty == false }
 
     // Pomodoro/priority fields were added after subtasks first shipped —
     // decode them as optional so older persisted rows (subtasks JSON column)
@@ -39,6 +52,8 @@ public struct Subtask: Identifiable, Codable, Equatable, Sendable {
         pomodorosDone = try c.decodeIfPresent(Int.self, forKey: .pomodorosDone) ?? 0
         pomodoroKind = ((try? c.decodeIfPresent(PomodoroKind.self, forKey: .pomodoroKind)) ?? nil)
         priority = try c.decodeIfPresent(TaskPriority.self, forKey: .priority) ?? .none
+        jiraKey = try c.decodeIfPresent(String.self, forKey: .jiraKey)
+        jiraIssueID = try c.decodeIfPresent(String.self, forKey: .jiraIssueID)
     }
 }
 
@@ -259,6 +274,9 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
     public var jiraIssueID: String?
     /// Site host only (not a full URL), e.g. example.atlassian.net.
     public var jiraSiteHost: String?
+    /// The Jira issue type this task came from ("Epic", "Story", "Bug", "Task",
+    /// "Sub-task"). Drives the type badge; nil for tasks not from Jira.
+    public var jiraIssueType: String?
 
     public init(id: UUID = UUID(),
                 title: String,
@@ -281,7 +299,8 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
                 pomodoroKind: PomodoroKind? = nil,
                 jiraKey: String? = nil,
                 jiraIssueID: String? = nil,
-                jiraSiteHost: String? = nil) {
+                jiraSiteHost: String? = nil,
+                jiraIssueType: String? = nil) {
         self.id = id
         self.title = title
         self.category = category
@@ -304,6 +323,7 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         self.jiraKey = jiraKey
         self.jiraIssueID = jiraIssueID
         self.jiraSiteHost = jiraSiteHost
+        self.jiraIssueType = jiraIssueType
     }
 
     // Defensive decoding: several fields (category, tags, pomodorosDone) were
@@ -335,6 +355,7 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         jiraKey = try c.decodeIfPresent(String.self, forKey: .jiraKey)
         jiraIssueID = try c.decodeIfPresent(String.self, forKey: .jiraIssueID)
         jiraSiteHost = try c.decodeIfPresent(String.self, forKey: .jiraSiteHost)
+        jiraIssueType = try c.decodeIfPresent(String.self, forKey: .jiraIssueType)
     }
 
     /// True when the task has a past deadline and isn't finished.

@@ -53,7 +53,8 @@ final class TaskDatabase {
             modifiedAt REAL,
             jiraKey TEXT,
             jiraIssueID TEXT,
-            jiraSiteHost TEXT
+            jiraSiteHost TEXT,
+            jiraIssueType TEXT
         );
         """)
         exec("""
@@ -131,6 +132,9 @@ final class TaskDatabase {
         if !tableHasColumn("tasks", "jiraSiteHost") {
             exec("ALTER TABLE tasks ADD COLUMN jiraSiteHost TEXT;")
         }
+        if !tableHasColumn("tasks", "jiraIssueType") {
+            exec("ALTER TABLE tasks ADD COLUMN jiraIssueType TEXT;")
+        }
     }
 
     /// True when `PRAGMA table_info` lists the column — guards ALTER TABLE,
@@ -153,7 +157,7 @@ final class TaskDatabase {
         let sql = """
         SELECT id,title,category,tags,isDone,pomodorosDone,createdAt,dueDate,\
         sortOrder,estimatedPomodoros,plannedDate,notes,subtasks,recurrence,project,priority,\
-        completedAt,pomodoroKind,modifiedAt,jiraKey,jiraIssueID,jiraSiteHost \
+        completedAt,pomodoroKind,modifiedAt,jiraKey,jiraIssueID,jiraSiteHost,jiraIssueType \
         FROM tasks;
         """
         var stmt: OpaquePointer?
@@ -182,6 +186,7 @@ final class TaskDatabase {
             t.jiraKey = isNull(stmt, 19) ? nil : text(stmt, 19)
             t.jiraIssueID = isNull(stmt, 20) ? nil : text(stmt, 20)
             t.jiraSiteHost = isNull(stmt, 21) ? nil : text(stmt, 21)
+            t.jiraIssueType = isNull(stmt, 22) ? nil : text(stmt, 22)
             out.append(t)
         }
         return out
@@ -193,8 +198,8 @@ final class TaskDatabase {
             let sql = """
             INSERT INTO tasks (id,title,category,tags,isDone,pomodorosDone,createdAt,dueDate,\
             sortOrder,estimatedPomodoros,plannedDate,notes,subtasks,recurrence,project,priority,\
-            completedAt,pomodoroKind,modifiedAt,jiraKey,jiraIssueID,jiraSiteHost) \
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);
+            completedAt,pomodoroKind,modifiedAt,jiraKey,jiraIssueID,jiraSiteHost,jiraIssueType) \
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);
             """
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
@@ -228,6 +233,8 @@ final class TaskDatabase {
                 else { sqlite3_bind_null(stmt, 21) }
                 if let jiraSiteHost = t.jiraSiteHost { bindText(stmt, 22, jiraSiteHost) }
                 else { sqlite3_bind_null(stmt, 22) }
+                if let jiraIssueType = t.jiraIssueType { bindText(stmt, 23, jiraIssueType) }
+                else { sqlite3_bind_null(stmt, 23) }
                 guard sqlite3_step(stmt) == SQLITE_DONE else { return false }
             }
             return true

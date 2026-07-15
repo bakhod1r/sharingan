@@ -300,18 +300,26 @@ struct TasksView: View {
     private func taskList(_ groups: [(category: String, items: [TaskItem])]) -> some View {
         let window = capped(groups)
         return ScrollViewReader { proxy in
-            // Lazy: a Jira sync can drop 100+ tasks into one category, and an
-            // eager VStack renders every row up front — enough to freeze the
-            // window. LazyVStack builds rows as they scroll into view; the
-            // sentinel below grows the window a page at a time.
-            LazyVStack(alignment: .leading, spacing: 16) {
+            // Lazy — and FLAT. A whole category used to be one child (a plain
+            // VStack), so a 100-row group rendered all its rows the moment the
+            // group was realized and stuttered on every window bump. Rows are
+            // direct LazyVStack children now, so each one materializes only as
+            // it scrolls into view; the sentinel grows the window a page at a
+            // time.
+            LazyVStack(alignment: .leading, spacing: 6) {
                 if filter == .completed {
                     ForEach(doneGroups(groups), id: \.label) { group in
-                        doneSection(group.label, group.items)
+                        doneSectionHeader(group.label, count: group.items.count)
+                        ForEach(group.items) { task in
+                            row(task).id(task.id)   // scroll anchor for reveal deep-links
+                        }
                     }
                 } else {
                     ForEach(window.groups, id: \.category) { group in
-                        section(group.category, group.items)
+                        sectionHeader(group.category, count: group.items.count)
+                        ForEach(group.items) { task in
+                            rowBlock(task)
+                        }
                     }
                     if window.hasMore {
                         loadMoreSentinel
@@ -392,24 +400,20 @@ struct TasksView: View {
     }
 
     /// One completion-day section of the Done history.
-    private func doneSection(_ label: String, _ items: [TaskItem]) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Image(systemName: "checkmark.circle")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Color.dsTertiary)
-                Text(label).dsSectionLabel()
-                Spacer()
-                Text("\(items.count)")
-                    .font(.system(.caption2, design: .rounded).weight(.bold).monospacedDigit())
-                    .foregroundStyle(Color.dsSecondary)
-                    .padding(.horizontal, 7).padding(.vertical, 2)
-                    .background(Capsule().fill(Color.white.opacity(0.06)))
-            }
-            ForEach(items) { task in
-                row(task).id(task.id)   // scroll anchor for reveal deep-links
-            }
+    private func doneSectionHeader(_ label: String, count: Int) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "checkmark.circle")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(Color.dsTertiary)
+            Text(label).dsSectionLabel()
+            Spacer()
+            Text("\(count)")
+                .font(.system(.caption2, design: .rounded).weight(.bold).monospacedDigit())
+                .foregroundStyle(Color.dsSecondary)
+                .padding(.horizontal, 7).padding(.vertical, 2)
+                .background(Capsule().fill(Color.white.opacity(0.06)))
         }
+        .padding(.top, 10)
     }
 
     // MARK: - Smart views (filter + search)
@@ -1498,36 +1502,40 @@ struct TasksView: View {
 
     // MARK: - Section
 
-    private func section(_ category: String, _ items: [TaskItem]) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Image(systemName: store.icon(for: category))
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Color(hex: store.color(for: category)))
-                Text(category).dsSectionLabel()
-                Spacer()
-                Text("\(items.count)")
-                    .font(.system(.caption2, design: .rounded).weight(.bold).monospacedDigit())
-                    .foregroundStyle(Color.dsSecondary)
-                    .padding(.horizontal, 7).padding(.vertical, 2)
-                    .background(Capsule().fill(Color.white.opacity(0.06)))
-            }
-            ForEach(items) { task in
-                VStack(spacing: 4) {
-                    row(task)
-                        .draggable(task.id.uuidString)
-                        .dropDestination(for: String.self) { dropped, _ in
-                            guard let s = dropped.first, let id = UUID(uuidString: s) else { return false }
-                            store.moveTask(id, before: task.id)
-                            return true
-                        }
-                    if expanded.contains(task.id) {
-                        subtaskPanel(task)
-                    }
+    /// Group header, a standalone lazy child — the top padding recreates the
+    /// old 16pt inter-group gap on top of the list's 6pt row spacing.
+    private func sectionHeader(_ category: String, count: Int) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: store.icon(for: category))
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(Color(hex: store.color(for: category)))
+            Text(category).dsSectionLabel()
+            Spacer()
+            Text("\(count)")
+                .font(.system(.caption2, design: .rounded).weight(.bold).monospacedDigit())
+                .foregroundStyle(Color.dsSecondary)
+                .padding(.horizontal, 7).padding(.vertical, 2)
+                .background(Capsule().fill(Color.white.opacity(0.06)))
+        }
+        .padding(.top, 10)
+    }
+
+    /// One task row as its own lazy child: drag/drop + the expanded subtask
+    /// panel travel with the row.
+    private func rowBlock(_ task: TaskItem) -> some View {
+        VStack(spacing: 4) {
+            row(task)
+                .draggable(task.id.uuidString)
+                .dropDestination(for: String.self) { dropped, _ in
+                    guard let s = dropped.first, let id = UUID(uuidString: s) else { return false }
+                    store.moveTask(id, before: task.id)
+                    return true
                 }
-                .id(task.id)   // scroll anchor for reveal deep-links
+            if expanded.contains(task.id) {
+                subtaskPanel(task)
             }
         }
+        .id(task.id)   // scroll anchor for reveal deep-links
     }
 
     /// Slim controls row atop an expanded panel (only for multi-step tasks):
