@@ -16,6 +16,11 @@ struct FloatingWidgetTaskPickerView: View {
     var onDismiss: () -> Void
 
     private static let maxRows = 8
+    /// How long the pointer may stay off the popover before it auto-closes —
+    /// the panel it's hosted in never becomes key, so there's no reliable
+    /// "click outside to dismiss"; this hover-timeout stands in for it.
+    private static let autoDismissDelay: TimeInterval = 1
+    @State private var autoDismissTask: DispatchWorkItem?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -35,6 +40,18 @@ struct FloatingWidgetTaskPickerView: View {
         .frame(width: 240)
         .fixedSize(horizontal: false, vertical: true)
         .background(.regularMaterial)
+        .onHover { inside in
+            autoDismissTask?.cancel()
+            autoDismissTask = nil
+            guard !inside else { return }
+            let task = DispatchWorkItem { onDismiss() }
+            autoDismissTask = task
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.autoDismissDelay, execute: task)
+        }
+        .onDisappear {
+            autoDismissTask?.cancel()
+            autoDismissTask = nil
+        }
     }
 
     /// Same entry point every task-row play button uses
