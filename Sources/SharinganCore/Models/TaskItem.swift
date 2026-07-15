@@ -253,6 +253,12 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
     public var completedAt: Date?
     /// Pomodoro size to run against this task (nil = app default).
     public var pomodoroKind: PomodoroKind?
+    /// Jira issue key, e.g. SHR-123.
+    public var jiraKey: String?
+    /// Jira's stable issue ID string.
+    public var jiraIssueID: String?
+    /// Site host only (not a full URL), e.g. example.atlassian.net.
+    public var jiraSiteHost: String?
 
     public init(id: UUID = UUID(),
                 title: String,
@@ -272,7 +278,10 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
                 project: String? = nil,
                 priority: TaskPriority = .none,
                 completedAt: Date? = nil,
-                pomodoroKind: PomodoroKind? = nil) {
+                pomodoroKind: PomodoroKind? = nil,
+                jiraKey: String? = nil,
+                jiraIssueID: String? = nil,
+                jiraSiteHost: String? = nil) {
         self.id = id
         self.title = title
         self.category = category
@@ -292,6 +301,9 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         self.priority = priority
         self.completedAt = completedAt
         self.pomodoroKind = pomodoroKind
+        self.jiraKey = jiraKey
+        self.jiraIssueID = jiraIssueID
+        self.jiraSiteHost = jiraSiteHost
     }
 
     // Defensive decoding: several fields (category, tags, pomodorosDone) were
@@ -320,6 +332,9 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         priority = try c.decodeIfPresent(TaskPriority.self, forKey: .priority) ?? .none
         completedAt = try c.decodeIfPresent(Date.self, forKey: .completedAt)
         pomodoroKind = ((try? c.decodeIfPresent(PomodoroKind.self, forKey: .pomodoroKind)) ?? nil)
+        jiraKey = try c.decodeIfPresent(String.self, forKey: .jiraKey)
+        jiraIssueID = try c.decodeIfPresent(String.self, forKey: .jiraIssueID)
+        jiraSiteHost = try c.decodeIfPresent(String.self, forKey: .jiraSiteHost)
     }
 
     /// True when the task has a past deadline and isn't finished.
@@ -348,6 +363,16 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
     public func isPlannedToday(now: Date = Date()) -> Bool {
         guard let plannedDate else { return false }
         return Calendar.current.isDate(plannedDate, inSameDayAs: now)
+    }
+
+    public var isJiraLinked: Bool {
+        guard let jiraKey, let jiraSiteHost else { return false }
+        return !jiraKey.isEmpty && !jiraSiteHost.isEmpty
+    }
+
+    public var jiraBrowseURL: URL? {
+        guard let jiraKey, let jiraSiteHost, !jiraKey.isEmpty, !jiraSiteHost.isEmpty else { return nil }
+        return URL(string: "https://\(jiraSiteHost)/browse/\(jiraKey)")
     }
 }
 

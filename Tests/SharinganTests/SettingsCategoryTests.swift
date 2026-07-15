@@ -4,11 +4,12 @@ import Testing
 @Suite("Settings categories")
 struct SettingsCategoryTests {
 
-    @Test("all 10 categories are present, General first, Notch right after Timer")
+    @Test("all 11 categories are present, Integrations follows General, Notch right after Timer")
     func allCasesPresent() {
-        #expect(SettingsCategory.allCases.count == 10)
+        #expect(SettingsCategory.allCases.count == 11)
         #expect(SettingsCategory.allCases.first == .general)
         let cases = SettingsCategory.allCases
+        #expect(cases.dropFirst().first == .integrations)
         let timerIdx = cases.firstIndex(of: .timer)!
         #expect(cases[timerIdx + 1] == .notch)
     }
@@ -47,8 +48,15 @@ struct SettingsCategoryTests {
     @Test("hasAdvancedRows is false exactly for General, Voice, and Shortcuts")
     func advancedRows() {
         for cat in SettingsCategory.allCases {
-            let expected = !(cat == .general || cat == .voice || cat == .shortcuts)
+            let expected = !(cat == .general || cat == .integrations || cat == .voice || cat == .shortcuts)
             #expect(cat.hasAdvancedRows == expected)
+        }
+    }
+
+    @Test("Integrations is searchable by Jira terms")
+    func integrationsKeywords() {
+        for query in ["jira", "worklog", "api token", "transition"] {
+            #expect(SettingsCategory.integrations.matches(query))
         }
     }
 }

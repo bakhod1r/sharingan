@@ -50,7 +50,10 @@ final class TaskDatabase {
             priority INTEGER NOT NULL DEFAULT 0,
             completedAt REAL,
             pomodoroKind TEXT,
-            modifiedAt REAL
+            modifiedAt REAL,
+            jiraKey TEXT,
+            jiraIssueID TEXT,
+            jiraSiteHost TEXT
         );
         """)
         exec("""
@@ -119,6 +122,15 @@ final class TaskDatabase {
             exec("ALTER TABLE tasks ADD COLUMN modifiedAt REAL;")
             exec("UPDATE tasks SET modifiedAt = createdAt WHERE modifiedAt IS NULL;")
         }
+        if !tableHasColumn("tasks", "jiraKey") {
+            exec("ALTER TABLE tasks ADD COLUMN jiraKey TEXT;")
+        }
+        if !tableHasColumn("tasks", "jiraIssueID") {
+            exec("ALTER TABLE tasks ADD COLUMN jiraIssueID TEXT;")
+        }
+        if !tableHasColumn("tasks", "jiraSiteHost") {
+            exec("ALTER TABLE tasks ADD COLUMN jiraSiteHost TEXT;")
+        }
     }
 
     /// True when `PRAGMA table_info` lists the column — guards ALTER TABLE,
@@ -141,7 +153,7 @@ final class TaskDatabase {
         let sql = """
         SELECT id,title,category,tags,isDone,pomodorosDone,createdAt,dueDate,\
         sortOrder,estimatedPomodoros,plannedDate,notes,subtasks,recurrence,project,priority,\
-        completedAt,pomodoroKind,modifiedAt \
+        completedAt,pomodoroKind,modifiedAt,jiraKey,jiraIssueID,jiraSiteHost \
         FROM tasks;
         """
         var stmt: OpaquePointer?
@@ -167,6 +179,9 @@ final class TaskDatabase {
             t.completedAt = date(stmt, 16)
             t.pomodoroKind = text(stmt, 17).flatMap(PomodoroKind.init(rawValue:))
             t.modifiedAt = date(stmt, 18) ?? t.createdAt
+            t.jiraKey = isNull(stmt, 19) ? nil : text(stmt, 19)
+            t.jiraIssueID = isNull(stmt, 20) ? nil : text(stmt, 20)
+            t.jiraSiteHost = isNull(stmt, 21) ? nil : text(stmt, 21)
             out.append(t)
         }
         return out
@@ -178,8 +193,8 @@ final class TaskDatabase {
             let sql = """
             INSERT INTO tasks (id,title,category,tags,isDone,pomodorosDone,createdAt,dueDate,\
             sortOrder,estimatedPomodoros,plannedDate,notes,subtasks,recurrence,project,priority,\
-            completedAt,pomodoroKind,modifiedAt) \
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);
+            completedAt,pomodoroKind,modifiedAt,jiraKey,jiraIssueID,jiraSiteHost) \
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);
             """
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
@@ -207,6 +222,12 @@ final class TaskDatabase {
                 if let k = t.pomodoroKind { bindText(stmt, 18, k.rawValue) }
                 else { sqlite3_bind_null(stmt, 18) }
                 bindDate(stmt, 19, t.modifiedAt)
+                if let jiraKey = t.jiraKey { bindText(stmt, 20, jiraKey) }
+                else { sqlite3_bind_null(stmt, 20) }
+                if let jiraIssueID = t.jiraIssueID { bindText(stmt, 21, jiraIssueID) }
+                else { sqlite3_bind_null(stmt, 21) }
+                if let jiraSiteHost = t.jiraSiteHost { bindText(stmt, 22, jiraSiteHost) }
+                else { sqlite3_bind_null(stmt, 22) }
                 guard sqlite3_step(stmt) == SQLITE_DONE else { return false }
             }
             return true

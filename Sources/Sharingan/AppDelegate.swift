@@ -423,6 +423,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Always built (so Settings has a status to show), started only while
     /// the "Sync with iCloud" toggle is on.
     var syncEngine: CloudSyncEngine?
+    /// Always built so the Integrations page can reflect stored Jira state.
+    var jiraService: JiraService?
     /// The app menu's "Sync Now" item — hidden while sync is off/unavailable,
     /// mirroring the updater item's pattern.
     var syncMenuItem: NSMenuItem?
@@ -506,6 +508,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.syncEngine = sync
         AppServices.syncEngine = sync
         coord.installSync(engine: sync)
+        let jira = JiraService()
+        self.jiraService = jira
+        AppServices.jiraService = jira
         syncStatusCancellable = sync.$status
             .receive(on: DispatchQueue.main)
             .sink { [weak self] status in self?.syncStatusChanged(status) }

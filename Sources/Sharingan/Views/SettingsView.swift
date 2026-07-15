@@ -800,6 +800,11 @@ struct SettingsView: View {
                     SettingsSyncSection(engine: engine)
                 }
 
+        case .integrations:
+                if let jira = AppServices.jiraService {
+                    SettingsJiraSection(jira: jira)
+                }
+
         case .voice:
                 Section("Voice guidance (TTS)") {
                     ToggleRow(title: "Spoken instructions",
@@ -1220,7 +1225,7 @@ struct SettingsView: View {
                         .foregroundStyle(.white.opacity(0.65))
                 }
 
-        case .general, .voice, .shortcuts:
+        case .general, .integrations, .voice, .shortcuts:
                 EmptyView()
         }
     }
@@ -1442,6 +1447,7 @@ private extension SettingsCategory {
     var tint: Color {
         switch self {
         case .timer:     return .blue
+        case .integrations: return .pink
         case .notch:     return .cyan
         case .tasks:     return .mint
         case .breaks:    return .teal

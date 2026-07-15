@@ -3,19 +3,20 @@ import Foundation
 /// Groups of settings, shown as drill-down rows on the root Settings screen.
 /// Lives in Core (not the view) so search and page metadata stay testable.
 public enum SettingsCategory: String, CaseIterable, Identifiable, Hashable, Sendable {
-    case general, timer, notch, tasks, breaks, focus, eyeCare, sharingan, voice, shortcuts
+    case general, integrations, timer, notch, tasks, breaks, focus, eyeCare, sharingan, voice, shortcuts
 
     public var id: String { rawValue }
 
     /// Whether the category's detail page has a trailing "Advanced settings"
     /// accordion. General, Voice, and Shortcuts show all their rows always.
     public var hasAdvancedRows: Bool {
-        !(self == .general || self == .voice || self == .shortcuts)
+        !(self == .general || self == .integrations || self == .voice || self == .shortcuts)
     }
 
     public var title: String {
         switch self {
         case .timer:     return "Pomodoro"
+        case .integrations: return "Integrations"
         case .notch:     return "Notch HUD"
         case .tasks:     return "Tasks & Planning"
         case .breaks:    return "Breaks"
@@ -31,6 +32,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable, Hashable, Send
     public var subtitle: String {
         switch self {
         case .timer:     return "Durations, mode, repeat, Floating widget"
+        case .integrations: return "Jira connection, sync behavior, worklogs"
         case .notch:     return "Island, ears, what it shows"
         case .tasks:     return "Goal, estimates, weekly planning, badges"
         case .breaks:    return "Break screen, ambience, brightness"
@@ -46,6 +48,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable, Hashable, Send
     public var icon: String {
         switch self {
         case .timer:     return "timer"
+        case .integrations: return "link"
         case .notch:     return "rectangle.topthird.inset.filled"
         case .tasks:     return "checklist"
         case .breaks:    return "cup.and.saucer.fill"
@@ -67,6 +70,9 @@ public enum SettingsCategory: String, CaseIterable, Identifiable, Hashable, Send
                     "countdown", "count up", "repeat", "endless",
                     "opacity", "size", "small", "medium", "large", "preset",
                     "today panel", "panel", "desktop", "widget", "dock"]
+        case .integrations:
+            return ["jira", "atlassian", "api token", "board", "sprint",
+                    "worklog", "issue", "sync", "transition", "status"]
         case .notch:
             return ["notch", "island", "dynamic island", "hud",
                     "ears", "camera housing", "menu bar", "live activity"]

@@ -14,6 +14,9 @@ enum AppServices {
     /// the same constructed-by-generic-hosts reason as the coordinator.
     static weak var syncEngine: CloudSyncEngine?
 
+    /// The single Jira integration service, owned by the AppDelegate.
+    static weak var jiraService: JiraService?
+
     /// Preview/detached fallback so views always have a queue to observe.
     private static let orphanQueue = FocusQueue()
 
