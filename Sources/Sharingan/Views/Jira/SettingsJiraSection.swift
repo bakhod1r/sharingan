@@ -124,6 +124,7 @@ struct SettingsJiraSection: View {
 
         case .connected:
             siteRow
+            syncRow
             note("Sharingan reads and updates the Jira issues you link to tasks. It never sees your Atlassian password.")
 
         default:
@@ -183,6 +184,30 @@ struct SettingsJiraSection: View {
                           site.id != jira.activeSiteID else { return }
                     Task { await jira.switchSite(site) }
                 })
+    }
+
+    /// Pulls the issues assigned to me into the task list. The result of the
+    /// last run stays visible so a sync that imported nothing still reads as
+    /// "done", not "nothing happened".
+    @ViewBuilder
+    private var syncRow: some View {
+        HStack(spacing: 12) {
+            Button("Sync my issues") { Task { await jira.syncAssignedIssues() } }
+                .buttonStyle(.glass)
+                .disabled(jira.isWorking)
+            if jira.isWorking {
+                ProgressView().controlSize(.small).progressViewStyle(.circular)
+            }
+            Spacer(minLength: 8)
+            if let sync = jira.lastSync {
+                Text(sync.label)
+                    .font(.system(.callout, design: .rounded))
+                    .foregroundStyle(sync.failed ? Color.red.opacity(0.9) : Color.dsSecondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+        }
+        .frame(minHeight: 24)
     }
 
     // MARK: - Behavior

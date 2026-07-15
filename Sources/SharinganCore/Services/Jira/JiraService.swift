@@ -202,6 +202,8 @@ public final class JiraService: ObservableObject {
     @Published public private(set) var availableSites: [JiraAccessibleResource] = []
     @Published public private(set) var isWorking = false
     @Published public private(set) var lastErrorMessage: String?
+    /// Outcome of the most recent `syncAssignedIssues()`, for the Settings row.
+    @Published public private(set) var lastSync: JiraSyncSummary?
 
     private let defaults: UserDefaults
     private let store: JiraTokenStore
@@ -477,6 +479,83 @@ public final class JiraService: ObservableObject {
     /// hand out the same issue *key*, and a row fetched from the old site would
     /// otherwise be served as the new site's. The cache is refetchable, so
     /// deleting the foreign rows is cheaper than teaching every read to filter.
+    // MARK: - Issue sync
+
+    /// The default filter: issues assigned to me that aren't done, newest first.
+    public static let assignedOpenJQL =
+        "assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC"
+
+    /// The Jira fields worth fetching — everything the mapper reads. Asking for
+    /// only these keeps each page small.
+    private static let syncFields = [
+        "summary", "status", "priority", "labels", "components",
+        "duedate", "timetracking", "project", "issuetype", "updated",
+    ]
+
+    /// Pulls the issues assigned to me into the task list.
+    ///
+    /// Fresh issues become tasks; issues already linked to a task are reconciled
+    /// through `JiraFieldMapper.merge` against the last-seen cache snapshot, so a
+    /// Jira-side change lands locally without clobbering local pomodoro progress.
+    /// This is pull-only for now — conflicts are counted and surfaced, but local
+    /// edits are not yet pushed back (that lands with the worklog/transition
+    /// work). Paginates to a safety ceiling so a huge backlog can't run forever.
+    @discardableResult
+    public func syncAssignedIssues(jql: String = JiraService.assignedOpenJQL) async -> JiraSyncSummary {
+        guard hasProjectAccess, let host = siteHost else {
+            let empty = JiraSyncSummary(imported: 0, updated: 0, conflicts: 0,
+                                        failed: true, message: "Connect to a Jira site you can browse first.")
+            lastSync = empty
+            return empty
+        }
+
+        isWorking = true
+        lastErrorMessage = nil
+        defer { isWorking = false }
+
+        let pushEstimate = defaults.bool(forKey: Self.pushEstimateDefaultsKey)
+        var imported = 0, updated = 0, conflicts = 0
+        var token: String? = nil
+        var pagesLeft = 20  // ceiling: 20 × 50 = 1000 issues
+
+        do {
+            repeat {
+                let page = try await client.searchJQL(jql: jql, maxResults: 50,
+                                                      nextPageToken: token,
+                                                      fields: Self.syncFields)
+                for issue in page.issues {
+                    if let existing = TaskStore.shared.tasks.first(where: { $0.jiraIssueID == issue.id }) {
+                        let outcome = JiraFieldMapper.merge(
+                            local: existing, remote: issue,
+                            lastSeen: issueCache?.issue(id: issue.id),
+                            pushEstimate: pushEstimate)
+                        TaskStore.shared.update(outcome.mergedTask)
+                        conflicts += outcome.conflicts.count
+                        updated += 1
+                    } else {
+                        let task = JiraFieldMapper.taskItem(from: issue, siteHost: host)
+                        if TaskStore.shared.upsertJiraTask(task) { imported += 1 }
+                    }
+                    issueCache?.upsertIssue(JiraFieldMapper.snapshot(from: issue, siteHost: host))
+                }
+                token = page.nextPageToken
+                pagesLeft -= 1
+            } while token != nil && pagesLeft > 0
+
+            let summary = JiraSyncSummary(imported: imported, updated: updated,
+                                          conflicts: conflicts, failed: false, message: nil)
+            lastSync = summary
+            return summary
+        } catch {
+            let why = (error as? JiraError)?.userMessage ?? error.localizedDescription
+            lastErrorMessage = why
+            let summary = JiraSyncSummary(imported: imported, updated: updated,
+                                          conflicts: conflicts, failed: true, message: why)
+            lastSync = summary
+            return summary
+        }
+    }
+
     private func dropCachedIssues(foreignTo host: String) {
         guard let issueCache else { return }
         for cached in issueCache.allIssues() where cached.siteHost != host {
@@ -581,5 +660,32 @@ extension JiraService: JiraTokenProviding {
 
     public nonisolated func cloudID() async throws -> String {
         try await tokens.cloudID()
+    }
+}
+
+/// What one `syncAssignedIssues()` did, for the Settings row and any toast.
+public struct JiraSyncSummary: Equatable, Sendable {
+    public let imported: Int
+    public let updated: Int
+    public let conflicts: Int
+    public let failed: Bool
+    public let message: String?
+
+    public init(imported: Int, updated: Int, conflicts: Int, failed: Bool, message: String?) {
+        self.imported = imported
+        self.updated = updated
+        self.conflicts = conflicts
+        self.failed = failed
+        self.message = message
+    }
+
+    /// A short, user-facing recap ("8 imported · 4 updated").
+    public var label: String {
+        if failed { return message ?? "Sync failed." }
+        var parts: [String] = []
+        if imported > 0 { parts.append("\(imported) imported") }
+        if updated > 0 { parts.append("\(updated) updated") }
+        if conflicts > 0 { parts.append("\(conflicts) conflict\(conflicts == 1 ? "" : "s")") }
+        return parts.isEmpty ? "Already up to date" : parts.joined(separator: " · ")
     }
 }

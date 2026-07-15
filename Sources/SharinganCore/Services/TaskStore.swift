@@ -917,6 +917,48 @@ public final class TaskStore: ObservableObject {
         persist()
     }
 
+    /// Inserts a Jira-linked task, or replaces the one already linked to the
+    /// same issue. Returns `true` when it was a fresh insert.
+    ///
+    /// Matching is by `jiraIssueID` (stable across key renames), not `id` — the
+    /// caller builds the item from a Jira issue and has no local UUID for it.
+    /// On replace, the stored task's own `id` is kept so views and the focus
+    /// queue don't lose their reference; the caller is responsible for having
+    /// merged local-only progress (pomodoro counts, done state) into `item`
+    /// already via `JiraFieldMapper.merge`.
+    @discardableResult
+    public func upsertJiraTask(_ item: TaskItem) -> Bool {
+        guard let issueID = item.jiraIssueID else { return false }
+        if let i = tasks.firstIndex(where: { $0.jiraIssueID == issueID }) {
+            var replaced = item
+            replaced.id = tasks[i].id
+            replaced.sortOrder = tasks[i].sortOrder
+            tasks[i] = replaced
+            syncDueNotifications(for: replaced)
+            persist()
+            return false
+        }
+        ensureCategoryExists(item.category)
+        var inserted = item
+        inserted.sortOrder = (tasks.map(\.sortOrder).max() ?? 0) + 1
+        tasks.append(inserted)
+        syncDueNotifications(for: inserted)
+        persist()
+        return true
+    }
+
+    /// Creates a category for an imported Jira project if neither a preset nor a
+    /// custom category already carries the name. Jira project keys ("WT",
+    /// "SHRGN") become their own coloured group so work issues stay visually
+    /// separate from personal tasks.
+    private func ensureCategoryExists(_ name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let known = TaskCategory.presets.map(\.name) + customCategories.map(\.name)
+        guard !known.contains(trimmed) else { return }
+        _ = addCategory(name: trimmed, colorHex: "#4F8DFD", icon: "ticket.fill")
+    }
+
     public func update(_ item: TaskItem) {
         guard let i = tasks.firstIndex(where: { $0.id == item.id }) else { return }
         tasks[i] = item
