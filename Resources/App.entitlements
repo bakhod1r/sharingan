@@ -2,6 +2,13 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- Required for CloudKit to trust the binary↔profile pairing at runtime:
+	     the embedded provisioning profile carries this value too, but cloudd
+	     reads it from the SEALED entitlements, not the profile — omitting it
+	     here reads as "(null)" to cloudd and permanently denies CloudKit
+	     access no matter how correct the profile is. -->
+	<key>com.apple.application-identifier</key>
+	<string>89LCRZKZ48.com.bakhod1r.sharingan</string>
 	<!-- No sandbox on the app itself (it never had one); the app group grants
 	     clean access to the widget snapshot container on macOS 15+, where
 	     unentitled access to Group Containers can prompt or be denied. -->
