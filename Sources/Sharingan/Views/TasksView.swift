@@ -271,7 +271,10 @@ struct TasksView: View {
     /// reads chronologically, newest first.
     private func taskList(_ groups: [(category: String, items: [TaskItem])]) -> some View {
         ScrollViewReader { proxy in
-            VStack(alignment: .leading, spacing: 16) {
+            // Lazy: a Jira sync can drop 100+ tasks into one category, and an
+            // eager VStack renders every row up front — enough to freeze the
+            // window. LazyVStack builds rows as they scroll into view.
+            LazyVStack(alignment: .leading, spacing: 16) {
                 if filter == .completed {
                     ForEach(doneGroups(groups), id: \.label) { group in
                         doneSection(group.label, group.items)
