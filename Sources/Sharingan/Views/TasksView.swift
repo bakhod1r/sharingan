@@ -72,6 +72,12 @@ struct TasksView: View {
     /// Smart-view filter + free-text search over the list.
     @State private var filter: TaskFilter = .all
     @State private var search = ""
+    /// Infinite scroll: how many task rows are rendered right now. A sync can
+    /// land 100+ tasks; we reveal a page at a time and grow the window (with an
+    /// animation) as the sentinel at the bottom scrolls into view. Reset to the
+    /// first page whenever the filter or search changes what's on screen.
+    @State private var revealLimit = TasksView.revealPageSize
+    private static let revealPageSize = 20
     /// List ordering inside each category group — persisted across launches.
     @AppStorage("tasks.sortMode") private var sortModeRaw = TaskSortMode.manual.rawValue
     private var sortMode: TaskSortMode { TaskSortMode(rawValue: sortModeRaw) ?? .manual }
@@ -229,6 +235,28 @@ struct TasksView: View {
         }
     }
 
+    /// Truncates the grouped list to `revealLimit` rows total, dropping empty
+    /// groups. Returns the capped groups and whether anything was held back, so
+    /// the list can show a "load more" sentinel.
+    private func capped(_ groups: [(category: String, items: [TaskItem])])
+        -> (groups: [(category: String, items: [TaskItem])], hasMore: Bool) {
+        var remaining = revealLimit
+        var out: [(category: String, items: [TaskItem])] = []
+        var total = 0
+        for g in groups {
+            total += g.items.count
+            guard remaining > 0 else { continue }
+            if g.items.count <= remaining {
+                out.append(g)
+                remaining -= g.items.count
+            } else {
+                out.append((g.category, Array(g.items.prefix(remaining))))
+                remaining = 0
+            }
+        }
+        return (out, total > revealLimit)
+    }
+
     /// "Filtered by …" pill (category / tag / priority) with a clear button.
     @ViewBuilder
     private var narrowFilterChip: some View {
@@ -270,26 +298,55 @@ struct TasksView: View {
     /// The Done view regroups by completion day instead of category — history
     /// reads chronologically, newest first.
     private func taskList(_ groups: [(category: String, items: [TaskItem])]) -> some View {
-        ScrollViewReader { proxy in
+        let window = capped(groups)
+        return ScrollViewReader { proxy in
             // Lazy: a Jira sync can drop 100+ tasks into one category, and an
             // eager VStack renders every row up front — enough to freeze the
-            // window. LazyVStack builds rows as they scroll into view.
+            // window. LazyVStack builds rows as they scroll into view; the
+            // sentinel below grows the window a page at a time.
             LazyVStack(alignment: .leading, spacing: 16) {
                 if filter == .completed {
                     ForEach(doneGroups(groups), id: \.label) { group in
                         doneSection(group.label, group.items)
                     }
                 } else {
-                    ForEach(groups, id: \.category) { group in
+                    ForEach(window.groups, id: \.category) { group in
                         section(group.category, group.items)
+                    }
+                    if window.hasMore {
+                        loadMoreSentinel
                     }
                 }
             }
+            .animation(.easeOut(duration: 0.25), value: revealLimit)
             // Both hooks matter: onChange for a reveal that arrives while the
             // list is on screen, onAppear for one consumed before it was (the
             // deep-link flipped the matrix / empty state back into the list).
             .onAppear { scrollToRevealed(proxy) }
             .onChange(of: revealedTaskID) { scrollToRevealed(proxy) }
+            // A changed filter/search/sort re-lists from the top, so shrink the
+            // window back to the first page.
+            .onChange(of: filter) { revealLimit = Self.revealPageSize }
+            .onChange(of: search) { revealLimit = Self.revealPageSize }
+            .onChange(of: sortMode) { revealLimit = Self.revealPageSize }
+        }
+    }
+
+    /// Sits below the last rendered row. When it scrolls into view it grows the
+    /// window by one page — the animation on `revealLimit` fades the new rows in.
+    private var loadMoreSentinel: some View {
+        HStack(spacing: 8) {
+            ProgressView().controlSize(.small).progressViewStyle(.circular)
+            Text("Loading more…")
+                .font(.system(.caption, design: .rounded))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.25)) {
+                revealLimit += Self.revealPageSize
+            }
         }
     }
 
