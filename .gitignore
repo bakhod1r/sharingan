@@ -34,3 +34,6 @@ Package.resolved
 *.p8
 *.provisionprofile
 *.certSigningRequest
+
+# Local release credentials (source .env.release before make dmg) — never committed
+.env*
