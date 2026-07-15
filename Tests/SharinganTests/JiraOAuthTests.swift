@@ -413,7 +413,9 @@ struct JiraOAuthTests {
 
     /// Ephemeral range, so a test run never fights the real 53682 listener or CI.
     private static func randomEphemeralPort() -> UInt16 {
-        UInt16.random(in: 49152...65500)
+        // Disjoint from JiraIntegrationTests' 57001...65500 — parallel suites
+        // on one range collided on a port once; see the twin comment there.
+        UInt16.random(in: 49152...57000)
     }
 
     // MARK: - Token store

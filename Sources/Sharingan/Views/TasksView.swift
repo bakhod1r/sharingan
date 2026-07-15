@@ -1620,6 +1620,11 @@ struct TasksView: View {
                         .foregroundStyle(sub.isDone ? AnyShapeStyle(.secondary)
                                          : isTarget ? AnyShapeStyle(Color.accentColor)
                                          : AnyShapeStyle(.primary))
+                    // A nested Jira sub-task keeps its own key — worklogs and
+                    // transitions target the sub-task issue, not the parent.
+                    if let key = sub.jiraKey, sub.isJiraLinked {
+                        JiraIssueBadge(key: key, issueType: "Sub-task", size: 8)
+                    }
                     Spacer()
                     if timer.settings.showPomodoroBadges,
                        sub.pomodorosDone > 0 || sub.estimatedPomodoros != nil {
@@ -1701,9 +1706,14 @@ struct TasksView: View {
         let hasMeta = !task.tags.isEmpty || task.dueDate != nil
             || task.recurrence != .none || task.project != nil
             || task.subtaskProgress.total > 0 || task.priority != .none
-            || task.pomodoroKind != nil
+            || task.pomodoroKind != nil || task.isJiraLinked
         if hasMeta {
             HStack(spacing: 7) {
+                // Leads the row: the key answers "where did this come from"
+                // before anything else on the line.
+                if let key = task.jiraKey, task.isJiraLinked {
+                    JiraIssueBadge(key: key, issueType: task.jiraIssueType)
+                }
                 if let due = task.dueDate {
                     Label(dueText(due), systemImage: "calendar")
                         .foregroundStyle(task.isOverdue() ? Color.red : Color.dsSecondary)

@@ -236,6 +236,9 @@ public final class JiraService: ObservableObject {
     /// host they were fetched from, and a switch must not let the old site's
     /// issues masquerade as the new one's.
     private let issueCache: JiraStorage?
+    /// The task list syncs write into — injectable so tests run against a
+    /// throwaway store instead of the app's.
+    private let taskStore: TaskStore
     /// Held between `connect()` surfacing a site list and `selectSite(_:)`.
     private var pendingTokens: JiraOAuth.Tokens?
     private var restoreTask: Task<Void, Never>?
@@ -262,6 +265,7 @@ public final class JiraService: ObservableObject {
                 callbackPort: UInt16 = JiraOAuth.callbackPort,
                 openURL: (@Sendable (URL) -> Void)? = nil,
                 issueCache: JiraStorage? = nil,
+                taskStore: TaskStore? = nil,
                 restoreOnInit: Bool = true,
                 legacyDeleteToken: @escaping @Sendable (String, String) -> Void = {
                     KeychainStore.delete(service: $0, account: $1)
@@ -273,6 +277,7 @@ public final class JiraService: ObservableObject {
         self.callbackPort = callbackPort
         self.openURL = openURL
         self.issueCache = issueCache
+        self.taskStore = taskStore ?? .shared
 
         let oauth = oauthConfig.map { JiraOAuth(config: $0, session: oauthSession) }
         let provider = JiraOAuthTokenProvider(store: store, oauth: oauth)
@@ -526,7 +531,7 @@ public final class JiraService: ObservableObject {
     /// only these keeps each page small.
     private static let syncFields = [
         "summary", "status", "priority", "labels", "components",
-        "duedate", "timetracking", "project", "issuetype", "updated",
+        "duedate", "timetracking", "project", "issuetype", "updated", "parent",
     ]
 
     /// Pulls the issues assigned to me into the task list.
@@ -556,32 +561,88 @@ public final class JiraService: ObservableObject {
 
         let pushEstimate = defaults.bool(forKey: Self.pushEstimateDefaultsKey)
         var imported = 0, updated = 0, conflicts = 0
-        var token: String? = nil
-        var pagesLeft = 20  // ceiling: 20 × 50 = 1000 issues
 
         do {
+            // 1. Collect everything first — hierarchy can only be built over
+            //    the whole set (a sub-task's parent may be pages away).
+            var all: [JiraIssue] = []
+            var token: String? = nil
+            var pagesLeft = 20  // ceiling: 20 × 50 = 1000 issues
             repeat {
                 let page = try await client.searchJQL(jql: jql, maxResults: 50,
                                                       nextPageToken: token,
                                                       fields: Self.syncFields)
-                for issue in page.issues {
-                    if let existing = TaskStore.shared.tasks.first(where: { $0.jiraIssueID == issue.id }) {
-                        let outcome = JiraFieldMapper.merge(
-                            local: existing, remote: issue,
-                            lastSeen: issueCache?.issue(id: issue.id),
-                            pushEstimate: pushEstimate)
-                        TaskStore.shared.update(outcome.mergedTask)
-                        conflicts += outcome.conflicts.count
-                        updated += 1
-                    } else {
-                        let task = JiraFieldMapper.taskItem(from: issue, siteHost: host)
-                        if TaskStore.shared.upsertJiraTask(task) { imported += 1 }
-                    }
-                    issueCache?.upsertIssue(JiraFieldMapper.snapshot(from: issue, siteHost: host))
-                }
+                all += page.issues
                 token = page.nextPageToken
                 pagesLeft -= 1
             } while token != nil && pagesLeft > 0
+
+            var hierarchy = JiraFieldMapper.buildHierarchy(issues: all)
+
+            // 2. Orphan sub-tasks: their parents aren't assigned to me, so the
+            //    search never returned them. One batched key-in query brings
+            //    the parents in; the sub-task then nests like any other.
+            let missingParentKeys = Set(hierarchy.orphanSubtasks.compactMap(\.fields.parent?.key))
+                .subtracting(hierarchy.parents.map(\.key))
+            if !missingParentKeys.isEmpty {
+                let keyList = missingParentKeys.sorted().joined(separator: ",")
+                let parentPage = try await client.searchJQL(
+                    jql: "key in (\(keyList))", maxResults: 50, fields: Self.syncFields)
+                hierarchy = JiraFieldMapper.buildHierarchy(issues: all + parentPage.issues)
+            }
+
+            // 3. Upsert parents with their sub-tasks nested. Flat twins — the
+            //    pre-hierarchy imports of these sub-tasks — donate their
+            //    progress and are deleted.
+            for parentIssue in hierarchy.parents {
+                let subIssues = hierarchy.subtasks(forParentKey: parentIssue.key)
+
+                var task: TaskItem
+                let existing = taskStore.tasks.first { $0.jiraIssueID == parentIssue.id }
+                if let existing {
+                    let outcome = JiraFieldMapper.merge(
+                        local: existing, remote: parentIssue,
+                        lastSeen: issueCache?.issue(id: parentIssue.id),
+                        pushEstimate: pushEstimate)
+                    task = outcome.mergedTask
+                    conflicts += outcome.conflicts.count
+                    updated += 1
+                } else {
+                    task = JiraFieldMapper.taskItem(from: parentIssue, siteHost: host)
+                }
+                task.jiraIssueType = parentIssue.fields.issuetype?.name ?? task.jiraIssueType
+
+                let twins = taskStore.tasks.filter { candidate in
+                    candidate.id != task.id
+                        && subIssues.contains { $0.id == candidate.jiraIssueID }
+                }
+                let nested = JiraFieldMapper.nestSubtasks(into: task, remote: subIssues,
+                                                          absorbing: twins)
+                if existing != nil {
+                    taskStore.update(nested.parent)
+                } else if taskStore.upsertJiraTask(nested.parent) {
+                    imported += 1
+                }
+                for absorbedID in nested.absorbedTaskIDs {
+                    taskStore.delete(absorbedID)
+                }
+
+                issueCache?.upsertIssue(JiraFieldMapper.snapshot(from: parentIssue, siteHost: host))
+                for sub in subIssues {
+                    issueCache?.upsertIssue(JiraFieldMapper.snapshot(from: sub, siteHost: host))
+                }
+            }
+
+            // 4. Sub-tasks whose parent couldn't be fetched at all fall back to
+            //    the old flat import — visible beats lost.
+            for orphan in hierarchy.orphanSubtasks
+            where !hierarchy.parents.contains(where: { $0.key == orphan.fields.parent?.key }) {
+                let task = JiraFieldMapper.taskItem(from: orphan, siteHost: host)
+                if taskStore.tasks.first(where: { $0.jiraIssueID == orphan.id }) == nil {
+                    if taskStore.upsertJiraTask(task) { imported += 1 }
+                }
+                issueCache?.upsertIssue(JiraFieldMapper.snapshot(from: orphan, siteHost: host))
+            }
 
             let summary = JiraSyncSummary(imported: imported, updated: updated,
                                           conflicts: conflicts, failed: false, message: nil)

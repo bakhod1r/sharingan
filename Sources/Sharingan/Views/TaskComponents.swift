@@ -58,6 +58,37 @@ struct TaskTagOverflow: View {
 /// used to spell it "☑2/2" in a *different* font; that copy is gone. The size
 /// defaults to the 10pt semibold rounded the main window's meta row already
 /// sets, so the main window renders exactly what it rendered before.
+/// Marks a task that mirrors a Jira issue: the key in a capsule tinted by the
+/// issue type — Epic purple, Story green, Bug red, Sub-task grey, Task (and
+/// anything unrecognized) blue. Doubles as the "came from Jira" marker.
+struct JiraIssueBadge: View {
+    let key: String
+    let issueType: String?
+    var size: CGFloat = 9
+
+    private var tint: Color {
+        switch issueType?.lowercased() {
+        case "epic":                return Color(hex: "#904EE2")
+        case "story":               return Color(hex: "#36B37E")
+        case "bug":                 return Color(hex: "#FF5630")
+        case "sub-task", "subtask": return Color(hex: "#9AA3AF")
+        default:                    return Color(hex: "#4F8DFD")
+        }
+    }
+
+    var body: some View {
+        Text(key)
+            .font(.system(size: size, weight: .bold, design: .monospaced))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1.5)
+            .background(Capsule().fill(tint.opacity(0.14)))
+            .overlay(Capsule().strokeBorder(tint.opacity(0.35), lineWidth: 0.5))
+            .help("\(issueType ?? "Issue") from Jira — \(key)")
+            .accessibilityLabel("Jira \(issueType ?? "issue") \(key)")
+    }
+}
+
 struct SubtaskProgressBadge: View {
     let done: Int
     let total: Int

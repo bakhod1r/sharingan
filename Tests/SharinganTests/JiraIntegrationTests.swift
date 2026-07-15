@@ -560,6 +560,64 @@ struct JiraIntegrationTests {
         #expect(TestURLProtocol.requests.count == before)
     }
 
+    // MARK: - Hierarchy-aware sync
+
+    @Test("sync nests sub-tasks under parents, batch-fetches missing parents, absorbs flat twins")
+    @MainActor
+    func syncBuildsHierarchy() async throws {
+        defer { TestURLProtocol.reset() }
+        let suite = "jira-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("jira-sync-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let tasks = TaskStore(fileURL: dir.appendingPathComponent("t.sqlite"))
+        // An earlier flat import of sub-task WT-702: progress must transfer
+        // into the nested subtask and the flat task must go.
+        let twin = TaskItem(title: "Write endpoint", pomodorosDone: 2,
+                            jiraKey: "WT-702", jiraIssueID: "3",
+                            jiraSiteHost: "wayll.atlassian.net")
+        tasks.upsertJiraTask(twin)
+
+        let port = Self.randomEphemeralPort()
+        let session = TestURLProtocol.session(handler: Self.hierarchySyncHandler())
+        let service = JiraService(defaults: defaults,
+                                  store: FakeKeychain().makeStore(defaults: defaults),
+                                  oauthConfig: Self.testConfig,
+                                  oauthSession: session,
+                                  apiSession: session,
+                                  callbackPort: port,
+                                  openURL: { simulateBrowserCallback(authorizeURL: $0, port: port) },
+                                  taskStore: tasks,
+                                  restoreOnInit: false)
+        #expect(await service.connect())
+
+        let summary = await service.syncAssignedIssues()
+        #expect(!summary.failed)
+
+        // The parent landed once, with its sub-task nested — not as two rows.
+        let parent = try #require(tasks.tasks.first { $0.jiraKey == "WT-689" })
+        #expect(parent.jiraIssueType == "Story")
+        let sub = try #require(parent.subtasks.first { $0.jiraKey == "WT-702" })
+        #expect(sub.pomodorosDone == 2)
+        #expect(!tasks.tasks.contains { $0.id == twin.id })
+        #expect(!tasks.tasks.contains { $0.jiraKey == "WT-702" })
+
+        // The orphan sub-task's parent (assigned to someone else, so not in
+        // the search results) was batch-fetched and nested the same way.
+        let fetched = try #require(tasks.tasks.first { $0.jiraKey == "WT-999" })
+        #expect(fetched.subtasks.contains { $0.jiraKey == "WT-800" })
+        let keyInQueries = TestURLProtocol.requests.filter {
+            $0.url?.path.hasSuffix("/search/jql") == true
+                && String(data: $0.body ?? Data(), encoding: .utf8)?.contains("key in") == true
+        }
+        #expect(keyInQueries.count == 1)
+    }
+
     // MARK: - The refresh hazard
 
     @Test("concurrent accessToken() callers trigger exactly ONE refresh")
@@ -1429,7 +1487,11 @@ struct JiraIntegrationTests {
 
     /// Ephemeral range, so a test run never fights the real 53682 listener or CI.
     static func randomEphemeralPort() -> UInt16 {
-        UInt16.random(in: 49152...65500)
+        // Disjoint from JiraOAuthTests' 49152...57000: the suites run in
+        // parallel and a shared range let two listeners collide on one port —
+        // connect() then failed fast with port-in-use, a one-in-thousands
+        // flake that actually happened.
+        UInt16.random(in: 57001...65500)
     }
 
     /// Stubs the whole 3LO flow: token exchange, cloudId lookup, and the two
@@ -1459,6 +1521,44 @@ struct JiraIntegrationTests {
             default:
                 return (try TestURLProtocol.response(for: request, status: 404), Data())
             }
+        }
+    }
+
+    /// Single-site OAuth flow plus a search endpoint that serves a small
+    /// hierarchy: parent WT-689 with sub-task WT-702, and orphan sub-task
+    /// WT-800 whose parent WT-999 is NOT in the assigned set — it only comes
+    /// back when the service batch-fetches it with a `key in (…)` query.
+    static func hierarchySyncHandler() -> @Sendable (URLRequest) throws -> (HTTPURLResponse, Data) {
+        let base = oauthFlowHandler(canBrowseProjects: true)
+        return { request in
+            guard request.url?.path == "/ex/jira/cloud-1/rest/api/3/search/jql" else {
+                return try base(request)
+            }
+            let body = String(data: request.bodyData ?? Data(), encoding: .utf8) ?? ""
+            if body.contains("key in") {
+                return (try TestURLProtocol.jsonResponse(for: request, status: 200), Data("""
+                {"issues": [
+                  {"id":"9","key":"WT-999","fields":{
+                    "summary":"Teammate's parent","issuetype":{"name":"Task","subtask":false},
+                    "status":{"name":"In Progress","statusCategory":{"key":"indeterminate"}}}}
+                ]}
+                """.utf8))
+            }
+            return (try TestURLProtocol.jsonResponse(for: request, status: 200), Data("""
+            {"issues": [
+              {"id":"1","key":"WT-689","fields":{
+                "summary":"API to terminate all sessions","issuetype":{"name":"Story","subtask":false},
+                "status":{"name":"In Progress","statusCategory":{"key":"indeterminate"}}}},
+              {"id":"3","key":"WT-702","fields":{
+                "summary":"Write endpoint","issuetype":{"name":"Sub-task","subtask":true},
+                "status":{"name":"To Do","statusCategory":{"key":"new"}},
+                "parent":{"id":"1","key":"WT-689"}}},
+              {"id":"8","key":"WT-800","fields":{
+                "summary":"Orphan step","issuetype":{"name":"Sub-task","subtask":true},
+                "status":{"name":"To Do","statusCategory":{"key":"new"}},
+                "parent":{"id":"9","key":"WT-999"}}}
+            ]}
+            """.utf8))
         }
     }
 
