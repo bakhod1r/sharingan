@@ -113,6 +113,7 @@ public final class PomodoroTimer: ObservableObject {
 
     public func start() {
         guard !isRunning else { return }
+        isMirroredSession = false
         if phase == .paused { phase = previousPhase }
         isRunning = true
         fiveMinSent = false
@@ -133,6 +134,7 @@ public final class PomodoroTimer: ObservableObject {
     }
 
     public func stop() {
+        isMirroredSession = false
         isRunning = false
         cancelLoop()
         cancelRepeatJob()
@@ -149,6 +151,7 @@ public final class PomodoroTimer: ObservableObject {
         // Skipping while paused must advance from the REAL phase — falling
         // into transitionToNext's `.paused: break` arm changed nothing yet
         // still wiped durationOverride and repeatIndex.
+        isMirroredSession = false
         if phase == .paused { phase = previousPhase }
         // Kill the tick loop BEFORE transitioning (pause/stop/phaseComplete all
         // do). A live in-flight tick wakes ≤200 ms later and writes the dead
@@ -208,6 +211,14 @@ public final class PomodoroTimer: ObservableObject {
         phase == .paused ? previousPhase : phase
     }
 
+    /// True while this timer is a lockstep copy of another Mac's session.
+    /// A mirrored phase that runs out completes passively: the owner Mac
+    /// decides (and publishes) what comes next, so `phaseComplete` must not
+    /// auto-start the following phase here — doing so made every synced Mac
+    /// race the owner and kick off its own pomodoro after a break. Any local
+    /// control action (start/stop/skip) takes ownership and clears it.
+    public private(set) var isMirroredSession = false
+
     /// Mirrors another Mac's session in lockstep (iCloud timer sync).
     ///
     /// Aligned to the wall clock, not to durations: a running session adopts
@@ -227,6 +238,7 @@ public final class PomodoroTimer: ObservableObject {
                                      asOf: Date,
                                      now: Date = Date()) {
         guard remotePhase != .paused else { return }   // isPaused carries that
+        isMirroredSession = true
         isRunning = false
         cancelLoop()
         cancelRepeatJob()
@@ -385,13 +397,15 @@ public final class PomodoroTimer: ObservableObject {
         // endless runs the normal focus↔break cycle forever, so it must NOT skip
         // the break — it just keeps auto-advancing (see transitionToNext).
         let repeatCfg = settings.repeatConfig
-        let willRepeat = repeatCfg.enabled
+        let willRepeat = !isMirroredSession
+            && repeatCfg.enabled
             && !repeatCfg.endless
             && phase == .focus
             && repeatIndex < repeatCfg.count - 1
         NotificationCenter.default.post(name: .phaseDidComplete, object: self,
                                         userInfo: ["phase": phase,
                                                    "willRepeat": willRepeat,
+                                                   "mirrored": isMirroredSession,
                                                    // The completed session's real
                                                    // length; count-up also ends at
                                                    // totalSeconds. Captured here
@@ -403,7 +417,11 @@ public final class PomodoroTimer: ObservableObject {
             scheduleRepeat()
             return
         }
-        transitionToNext(auto: true)
+        // A mirrored phase completes passively: the OWNER Mac auto-starts the
+        // next phase and publishes it, and this Mac follows that record —
+        // auto-starting here too raced the owner and spawned a second,
+        // locally-owned session (a surprise pomodoro right after the break).
+        transitionToNext(auto: !isMirroredSession)
     }
 
     private func scheduleRepeat() {

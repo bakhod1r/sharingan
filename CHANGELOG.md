@@ -5,6 +5,27 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.5.0] — 2026-07-15
+
+### Added
+- A break synced in from another Mac now blocks this screen too: the mirrored
+  Mac shows the same full-screen break overlay (eye exercises, ambience, dim,
+  app blocker) instead of just counting the break down in the corner.
+
+### Changed
+- Timer mirroring no longer clobbers a session you started locally: each Mac
+  can run its own independent session (different tasks, different lengths),
+  and a remote session is mirrored only while this Mac's timer is idle.
+- A mirrored phase completes passively: the Mac that owns the session decides
+  (and publishes) what comes next, so the mirroring Mac no longer auto-starts
+  a surprise pomodoro right after a synced break, and no longer double-credits
+  the synced task's pomodoro count or advances the focus queue a second time.
+
+### Fixed
+- SharinganCoordinator now only reacts to its own timer's phase completions
+  (the subscription was unfiltered, so preview/test timers could tear down the
+  real break overlay).
+
 ## [1.4.0] — 2026-07-15
 
 ### Added

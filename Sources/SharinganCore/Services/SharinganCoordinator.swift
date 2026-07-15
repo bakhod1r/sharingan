@@ -223,8 +223,18 @@ public final class SharinganCoordinator: ObservableObject {
         syncEngine.publishActiveTimer(state)
     }
 
-    private func applyRemoteTimer(_ state: ActiveTimerState) {
+    // Internal (not private) so tests can drive fetched records directly.
+    func applyRemoteTimer(_ state: ActiveTimerState) {
         guard Self.timerMirrorEnabled() else { return }
+        // Independent sessions may run side by side (a 10-min on one Mac, a
+        // 25-min on the other): a remote record only drives this timer while
+        // it is idle — nothing local to clobber — or while it is already the
+        // mirror of the remote session (so the owner's pause/skip/stop keeps
+        // landing). A locally-owned running or paused session is never
+        // overwritten by sync.
+        let engaged = timer.isRunning || timer.phase == .paused
+        guard !engaged || timer.isMirroredSession else { return }
+        let wasBreak = engaged && timer.effectivePhase.isBreak
         isApplyingRemoteTimer = true
         // Remember the remote payload as "already published" so the echo of
         // this apply (if any sink slips through) is deduped by content too.
@@ -241,6 +251,18 @@ public final class SharinganCoordinator: ObservableObject {
                                        startedAt: state.startedAt,
                                        endsAt: state.endsAt,
                                        asOf: state.updatedAt)
+        }
+        // Mirrored phase changes never post `.phaseDidComplete`, so the break
+        // overlay must be driven from HERE: a record that lands this Mac in a
+        // break blocks this screen (eye exercises) too, and one that leaves
+        // the break tears the overlay down again.
+        let isBreakNow = timer.isMirroredSession
+            && (timer.isRunning || timer.phase == .paused)
+            && timer.effectivePhase.isBreak
+        if isBreakNow && !wasBreak {
+            beginBreakSideEffects()
+        } else if wasBreak && !isBreakNow {
+            endBreakSideEffects()
         }
         // The suppression flag must outlive this turn: the phase/isRunning
         // sinks re-deliver via DispatchQueue.main, i.e. on a LATER queue slot
@@ -382,7 +404,10 @@ public final class SharinganCoordinator: ObservableObject {
     // menu or a drag/scroll (event-tracking mode) would stall the break
     // overlay, alarm, and DND toggle until tracking ends.
     private func observe() {
-        NotificationCenter.default.publisher(for: .phaseDidComplete)
+        // `object: timer`, not any timer: previews and tests build their own
+        // PomodoroTimer instances, and an unfiltered subscription made every
+        // coordinator react to every timer's completions.
+        NotificationCenter.default.publisher(for: .phaseDidComplete, object: timer)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] note in self?.handlePhaseComplete(note) }
             .store(in: &cancellables)
@@ -651,15 +676,21 @@ public final class SharinganCoordinator: ObservableObject {
         guard let phase = note.userInfo?["phase"] as? PomodoroPhase else { return }
         syncDND()
         let willRepeat = note.userInfo?["willRepeat"] as? Bool ?? false
+        let mirrored = note.userInfo?["mirrored"] as? Bool ?? false
         switch phase {
         case .focus:
-            // A completed focus still counts as a pomodoro for the active task.
-            if let taskID = TaskStore.shared.activeTaskID {
-                let seconds = note.userInfo?["seconds"] as? TimeInterval ?? 0
-                TaskStore.shared.incrementPomodoro(taskID, seconds: seconds)
+            // Synced data is credited by the session's OWNER Mac only — the
+            // task syncs over, so a mirror crediting it too double-counted
+            // the pomodoro and advanced the queue twice.
+            if !mirrored {
+                // A completed focus still counts as a pomodoro for the active task.
+                if let taskID = TaskStore.shared.activeTaskID {
+                    let seconds = note.userInfo?["seconds"] as? TimeInterval ?? 0
+                    TaskStore.shared.incrementPomodoro(taskID, seconds: seconds)
+                }
+                // The finished session hands the active slot to the next queued task.
+                advanceQueueAfterFocus(store: TaskStore.shared)
             }
-            // The finished session hands the active slot to the next queued task.
-            advanceQueueAfterFocus(store: TaskStore.shared)
             AlarmSoundService.shared.playSelected()
 
             // Repetition: no break happens, so skip the entire break sequence
@@ -676,38 +707,53 @@ public final class SharinganCoordinator: ObservableObject {
                 title: "Sharingan",
                 body: "Focus complete. Starting break.",
                 identifier: "sharingan.focusDone")
-            ReminderService.shared.pauseForBreak()
-            if let p = breakPresenter, timer.settings.blockScreenDuringBreak {
-                p.presentBreak(
-                    timer: timer,
-                    onTapSkip: { [weak self] in self?.timer.skip() }
-                )
-            }
-            speakBreakStart()
-            startAmbience()
-            startBrightnessDim()
-            refreshAppBlocker()
+            beginBreakSideEffects()
         case .shortBreak, .longBreak:
             NotificationService.shared.notify(
                 title: "Sharingan",
                 body: "Break complete. Back to focus.",
                 identifier: "sharingan.breakDone")
             AlarmSoundService.shared.playSelected()
-            breakPresenter?.dismissAll()
-            BreakAmbienceService.shared.stop()
-            restoreBrightness()
-            refreshAppBlocker()
-            // Belt-and-suspenders: BreakView.onDisappear stops the camera, but make
-            // sure it's released even if the break was dismissed some other way.
-            EyeTracker.shared.stop()
-            CameraService.shared.stop()
+            endBreakSideEffects()
             speakFocusStart()
-            ReminderService.shared.resumeForFocus()
             // Queue drained and nothing active → ask the UI for the next task.
             evaluateTaskPickAfterBreak(store: TaskStore.shared)
         case .paused:
             break
         }
+    }
+
+    /// Everything that makes a break tangible on this screen — overlay (eye
+    /// exercises), TTS, ambience, dim, blocker. Shared by the local
+    /// phase-complete path and the mirrored-session path, so a break synced
+    /// in from another Mac blocks this screen exactly like a local one.
+    private func beginBreakSideEffects() {
+        ReminderService.shared.pauseForBreak()
+        if let p = breakPresenter, timer.settings.blockScreenDuringBreak {
+            p.presentBreak(
+                timer: timer,
+                onTapSkip: { [weak self] in self?.timer.skip() }
+            )
+        }
+        speakBreakStart()
+        startAmbience()
+        startBrightnessDim()
+        refreshAppBlocker()
+    }
+
+    /// The teardown twin of `beginBreakSideEffects` — also shared by both
+    /// paths, so a mirrored break that ends (or is skipped on the owner Mac)
+    /// releases this screen too.
+    private func endBreakSideEffects() {
+        breakPresenter?.dismissAll()
+        BreakAmbienceService.shared.stop()
+        restoreBrightness()
+        refreshAppBlocker()
+        // Belt-and-suspenders: BreakView.onDisappear stops the camera, but make
+        // sure it's released even if the break was dismissed some other way.
+        EyeTracker.shared.stop()
+        CameraService.shared.stop()
+        ReminderService.shared.resumeForFocus()
     }
 
     // MARK: - Focus queue
