@@ -1,49 +1,44 @@
 import Foundation
 
-/// Thin Jira Cloud REST client.
+/// Supplies the two things every OAuth 2.0 (3LO) request needs: a *currently
+/// valid* access token and the cloudId of the site to talk to.
 ///
-/// The actor owns the current credentials so every request can be made with a
-/// simple `await client.myself()` call from UI code.
+/// `accessToken()` is expected to refresh transparently and to be safe to call
+/// concurrently — the client calls it on every request and again after a 401,
+/// and must never end up driving two refreshes at once (Atlassian rotates
+/// refresh tokens, so a double refresh logs the user out). Serializing that is
+/// the provider's job, not the client's; see `JiraOAuthTokenProvider`.
+public protocol JiraTokenProviding: Sendable {
+    /// A valid access token, refreshing first if the current one is stale.
+    func accessToken() async throws -> String
+    /// The Atlassian cloudId resolved at connect time.
+    func cloudID() async throws -> String
+}
+
+/// Thin Jira Cloud REST client, speaking OAuth 2.0 (3LO) through Atlassian's
+/// gateway.
+///
+/// Under 3LO nothing is addressed at the customer's site host: every REST and
+/// Agile call goes to `https://api.atlassian.com/ex/jira/{cloudId}/…` with a
+/// bearer token. The client deliberately owns **no** credentials — no site, no
+/// secret, no refresh logic. It asks `tokens` for a bearer token per request and
+/// otherwise stays a dumb pipe.
 public actor JiraClient {
 
-    public struct Configuration: Equatable, Sendable {
-        public let siteURL: URL
-        public let email: String
-        public let apiToken: String
-
-        public init(siteURL: URL, email: String, apiToken: String) {
-            self.siteURL = siteURL
-            self.email = email
-            self.apiToken = apiToken
-        }
-
-        public var host: String {
-            siteURL.host?.lowercased() ?? siteURL.absoluteString.lowercased()
-        }
-    }
+    /// Atlassian's OAuth gateway. Every request path is prefixed with
+    /// `/ex/jira/{cloudId}`.
+    public static let gatewayBaseURL = URL(string: "https://api.atlassian.com")!
 
     private let session: URLSession
-    private var configuration: Configuration?
+    private let tokens: JiraTokenProviding
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
-    public init(session: URLSession = .shared, configuration: Configuration? = nil) {
+    public init(tokens: JiraTokenProviding, session: URLSession = .shared) {
+        self.tokens = tokens
         self.session = session
-        self.configuration = configuration
         decoder.dateDecodingStrategy = .iso8601
         encoder.dateEncodingStrategy = .iso8601
-    }
-
-    public func configure(siteURL: URL, email: String, apiToken: String) {
-        configuration = Configuration(siteURL: siteURL, email: email, apiToken: apiToken)
-    }
-
-    public func clearConfiguration() {
-        configuration = nil
-    }
-
-    public func currentConfiguration() -> Configuration? {
-        configuration
     }
 
     public func myself() async throws -> JiraMyself {
@@ -177,6 +172,23 @@ public actor JiraClient {
         return try await request(path: "/rest/api/3/issue/\(issueKey)/editmeta", method: "GET")
     }
 
+    // MARK: - Permissions
+
+    /// The account's permissions, as a preflight after connect.
+    ///
+    /// This exists because Jira's search is silent about permission: a
+    /// `POST /search/jql` naming a project the account cannot browse answers
+    /// `200 {"issues":[],"isLast":true}` — identical to a project that simply has
+    /// no matching issues. Without this call "you have no access" and "you have
+    /// no issues" are the same screen, and the honest failure ("connected, but
+    /// this account can't see any projects") is unreachable.
+    public func getMyPermissions(permissions: [String] = JiraPermissionKey.preflight) async throws -> JiraPermissionsResponse {
+        let queryItems = [
+            URLQueryItem(name: "permissions", value: permissions.joined(separator: ","))
+        ]
+        return try await request(path: "/rest/api/3/mypermissions", method: "GET", queryItems: queryItems)
+    }
+
     // MARK: - Agile API (Boards, Sprints)
 
     public func getBoards(startAt: Int = 0, maxResults: Int = 50) async throws -> JiraBoardListResponse {
@@ -214,37 +226,24 @@ public actor JiraClient {
                                               method: String,
                                               body: Data? = nil,
                                               queryItems: [URLQueryItem] = []) async throws -> Response {
-        guard let configuration else { throw JiraError.notConfigured }
+        let cloudID = try await tokens.cloudID()
+        let url = try Self.gatewayURL(cloudID: cloudID, path: path, queryItems: queryItems)
 
-        var components = URLComponents(url: configuration.siteURL, resolvingAgainstBaseURL: false)
-        components?.path = path
-        components?.queryItems = queryItems.isEmpty ? nil : queryItems
-        guard let url = components?.url else {
-            throw JiraError.network("Invalid Jira URL.")
-        }
+        var (data, http) = try await send(url: url,
+                                          method: method,
+                                          body: body,
+                                          token: try await tokens.accessToken())
 
-        var request = URLRequest(url: url)
-        request.httpMethod = method
-        request.timeoutInterval = 30
-        request.httpBody = body
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if body != nil {
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        }
-        request.setValue(Self.basicAuth(email: configuration.email,
-                                        token: configuration.apiToken),
-                         forHTTPHeaderField: "Authorization")
-
-        let data: Data
-        let response: URLResponse
-        do {
-            (data, response) = try await session.data(for: request)
-        } catch {
-            throw JiraError.network(error.localizedDescription)
-        }
-
-        guard let http = response as? HTTPURLResponse else {
-            throw JiraError.network("Invalid response from Jira.")
+        // One 401 can mean the token went stale a moment ago (clock skew, or a
+        // token revoked server-side). Ask the provider once more — it may hand
+        // back a freshly refreshed token — and retry exactly once. A second 401
+        // is a real authorization failure; there is no loop here by design, the
+        // refreshing lives entirely behind `tokens`.
+        if http.statusCode == 401 {
+            (data, http) = try await send(url: url,
+                                          method: method,
+                                          body: body,
+                                          token: try await tokens.accessToken())
         }
 
         guard (200..<300).contains(http.statusCode) else {
@@ -262,10 +261,50 @@ public actor JiraClient {
         }
     }
 
-    private static func basicAuth(email: String, token: String) -> String {
-        let raw = "\(email):\(token)"
-        let encoded = Data(raw.utf8).base64EncodedString()
-        return "Basic \(encoded)"
+    private func send(url: URL,
+                      method: String,
+                      body: Data?,
+                      token: String) async throws -> (Data, HTTPURLResponse) {
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.timeoutInterval = 30
+        request.httpBody = body
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if body != nil {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        }
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        do {
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                throw JiraError.network("Invalid response from Jira.")
+            }
+            return (data, http)
+        } catch let error as JiraError {
+            throw error
+        } catch {
+            throw JiraError.network(error.localizedDescription)
+        }
+    }
+
+    /// Builds `https://api.atlassian.com/ex/jira/{cloudId}{path}`.
+    ///
+    /// The prefix is *prepended to* `path`, never assigned over the base URL's
+    /// path. An earlier version did `components.path = path`, which was harmless
+    /// only because the old Basic-auth base URL had an empty path; doing that
+    /// here would erase `/ex/jira/{cloudId}` and quietly aim every request at the
+    /// gateway root.
+    static func gatewayURL(cloudID: String, path: String, queryItems: [URLQueryItem]) throws -> URL {
+        guard var components = URLComponents(url: gatewayBaseURL, resolvingAgainstBaseURL: false) else {
+            throw JiraError.network("Invalid Jira URL.")
+        }
+        components.path = "\(gatewayBaseURL.path)/ex/jira/\(cloudID)\(path)"
+        components.queryItems = queryItems.isEmpty ? nil : queryItems
+        guard let url = components.url else {
+            throw JiraError.network("Invalid Jira URL.")
+        }
+        return url
     }
 
     private static func mapError(statusCode: Int,
@@ -297,4 +336,47 @@ public actor JiraClient {
             return .api(status: statusCode, messages: ["Jira request failed (\(statusCode))."])
         }
     }
+}
+
+// MARK: - Permission models
+
+/// The permission keys the connect preflight asks about.
+public enum JiraPermissionKey {
+    /// Without this the account sees no projects at all — everything else is moot.
+    public static let browseProjects = "BROWSE_PROJECTS"
+    public static let createIssues = "CREATE_ISSUES"
+    public static let workOnIssues = "WORK_ON_ISSUES"
+
+    public static let preflight = [browseProjects, createIssues, workOnIssues]
+}
+
+/// One entry of `GET /rest/api/3/mypermissions`.
+public struct JiraPermission: Decodable, Equatable, Sendable {
+    public let id: String?
+    public let key: String?
+    public let name: String?
+    public let havePermission: Bool
+
+    public init(id: String? = nil, key: String? = nil, name: String? = nil, havePermission: Bool) {
+        self.id = id
+        self.key = key
+        self.name = name
+        self.havePermission = havePermission
+    }
+}
+
+public struct JiraPermissionsResponse: Decodable, Equatable, Sendable {
+    /// Keyed by permission key, e.g. `BROWSE_PROJECTS`.
+    public let permissions: [String: JiraPermission]
+
+    public init(permissions: [String: JiraPermission]) {
+        self.permissions = permissions
+    }
+
+    public func has(_ key: String) -> Bool {
+        permissions[key]?.havePermission == true
+    }
+
+    /// The one that decides whether this account can see anything at all.
+    public var canBrowseProjects: Bool { has(JiraPermissionKey.browseProjects) }
 }

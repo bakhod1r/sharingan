@@ -60,6 +60,29 @@ if BUILD_NUM="$(git -C "$ROOT" rev-list --count HEAD 2>/dev/null)"; then
   plutil -replace CFBundleVersion -string "$BUILD_NUM" "$APP/Contents/Info.plist"
 fi
 
+# Jira OAuth app credentials, baked in from the environment (.env.release
+# locally, repo secrets in CI). Atlassian's 3LO has no PKCE and demands a
+# client_secret, so a shipped app has to carry one; the XOR mask below only
+# keeps it out of `strings` and secret scanners — it is NOT a security
+# boundary (see JiraAppCredentials.swift). Absent env = no baked credentials,
+# and the app says "OAuth not configured in this build" rather than failing at
+# the authorize step.
+mask_secret() {  # $1 = plaintext → base64(XOR(plaintext, mask))
+  MASK_INPUT="$1" python3 - <<'PY'
+import base64, os
+mask = b"Sharingan-Jira-v1"
+raw = os.environ["MASK_INPUT"].encode()
+print(base64.b64encode(bytes(b ^ mask[i % len(mask)] for i, b in enumerate(raw))).decode())
+PY
+}
+if [[ -n "${JIRA_CLIENT_ID:-}" && -n "${JIRA_CLIENT_SECRET:-}" ]]; then
+  plutil -replace SHIntegrationAppID  -string "$(mask_secret "$JIRA_CLIENT_ID")"     "$APP/Contents/Info.plist"
+  plutil -replace SHIntegrationAppKey -string "$(mask_secret "$JIRA_CLIENT_SECRET")" "$APP/Contents/Info.plist"
+  echo "  ✓ Jira OAuth credentials baked in"
+else
+  echo "  ⚠︎ JIRA_CLIENT_ID/JIRA_CLIENT_SECRET unset — Jira OAuth disabled in this build"
+fi
+
 # SwiftPM resource bundles (sounds, animations, icons) live in Contents/Resources,
 # where codesign can seal them cleanly. They are resolved at runtime via
 # Bundle.main.resourceURL (see Sources/*/ResourceBundle.swift) rather than the

@@ -508,7 +508,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.syncEngine = sync
         AppServices.syncEngine = sync
         coord.installSync(engine: sync)
-        let jira = JiraService()
+        // The browser-open is injected: SharinganCore has no AppKit, so the
+        // OAuth consent page can only be opened from the app layer.
+        let jira = JiraService(openURL: { url in
+            Task { @MainActor in NSWorkspace.shared.open(url) }
+        })
         self.jiraService = jira
         AppServices.jiraService = jira
         syncStatusCancellable = sync.$status
