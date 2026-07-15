@@ -5,6 +5,26 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.6.1] — 2026-07-15
+
+### Fixed
+- Hovering a task row to reveal its edit/delete buttons could flicker
+  on/off in a loop — inserting them shifted the Play button under the
+  cursor, which toggled hover state right back off.
+- The menu-bar popover's translucent tab bar and stats strip let the main
+  window's sidebar bleed through when both were open at once, garbling
+  the tab labels. The main window now hides itself while the popover is
+  showing and comes back when it closes.
+- Widened the popover from 360 to 460pt — task rows and the composer's
+  filter chips needed more room than that and were clipping on both edges.
+
+### Changed
+- Replaced the flat segmented tab picker (Pomodoro/Tasks/Week/Report)
+  with a custom liquid-glass pill that glides to the selected tab.
+- Skip / Reset / +5m / -5m / Exit break now share the Start button's
+  theme-accent capsule treatment instead of neutral glass, so the control
+  stack reads as one themed family.
+
 ## [1.6.0] — 2026-07-15
 
 ### Fixed

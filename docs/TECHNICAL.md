@@ -4,7 +4,7 @@
 > whenever a feature is added, changed, or removed, update this document in the
 > same change.**
 
-- Version: 1.6.0
+- Version: 1.6.1
 - Platform: macOS 14+, lives in the menu bar
 
 ---
@@ -130,6 +130,23 @@
   it because an `NSPopover` resolves appearance from its anchor view (the
   status-item button in the system menu bar), so under Light mode the dark-glass
   content used to render white-on-light.
+- **Since 1.6.1**: the tab bar (Pomodoro/Tasks/Week/Report) is a custom
+  liquid-glass control (`MenuBarView.liquidGlassTabBar`) — a translucent
+  capsule track with a `matchedGeometryEffect` pill that glides to the
+  selected tab, filled with the same `[accent, accent.opacity(0.82)]`
+  gradient as the Start button — replacing the flat `.segmented` Picker.
+  The tab bar and the Today/Cycle/Streak stats strip are capped to 640 pt
+  and centered so the wider Week-tab popover doesn't stretch them
+  edge-to-edge. The standard (non-Week) popover width grew from 360 to
+  460 pt — task rows plus the composer's filter chips needed more room
+  and were clipping on both edges at 360. `GlassButton`'s non-prominent
+  style (Skip/Reset/+5m/-5m/Exit break) now tints with the theme accent
+  instead of neutral glass, matching Start's capsule language.
+  `MenuBarController` orders the main window out while the popover is
+  showing and restores it on close (`MainWindowManager.hideTemporarily`/
+  `restore`) — with both open at once, the popover's translucent
+  materials sampled the main window behind it, bleeding its sidebar color
+  through the tab bar and stats text.
 - Popover task rows degrade whole, never squash: the title (layout-priority 1,
   one line) wins width first; step + pomodoro progress badges are `fixedSize`
   and never drop; the decorations sit in one `ViewThatFits` ladder of
