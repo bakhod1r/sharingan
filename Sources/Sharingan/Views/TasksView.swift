@@ -315,10 +315,10 @@ struct TasksView: View {
                     }
                     if window.hasMore {
                         loadMoreSentinel
+                            .transition(.opacity)
                     }
                 }
             }
-            .animation(.easeOut(duration: 0.25), value: revealLimit)
             // Both hooks matter: onChange for a reveal that arrives while the
             // list is on screen, onAppear for one consumed before it was (the
             // deep-link flipped the matrix / empty state back into the list).
