@@ -57,6 +57,7 @@ struct BreakView: View {
                         GlassButton(label: "Exit break",
                                     systemImage: "xmark.circle.fill",
                                     tint: .white.opacity(0.9),
+                                    accent: timer.settings.theme.accent,
                                     action: onTapSkip)
                             .frame(maxWidth: 220)
                             .padding(.bottom, 40)

@@ -41,7 +41,13 @@ struct GlassButton: View {
                 .overlay(Capsule().stroke(Color.white.opacity(0.25), lineWidth: 1))
                 .shadow(color: accent.opacity(0.5), radius: 10, y: 4)
         } else {
-            Color.clear.glassCapsule(material: .regular)
+            // Same capsule language as the prominent Start button, one step
+            // quieter: a translucent theme-accent fill instead of neutral
+            // glass, so every control in the stack reads as one themed family.
+            Capsule()
+                .fill(LinearGradient(colors: [accent.opacity(0.30), accent.opacity(0.18)],
+                                     startPoint: .top, endPoint: .bottom))
+                .overlay(Capsule().stroke(accent.opacity(0.40), lineWidth: 1))
         }
     }
 }

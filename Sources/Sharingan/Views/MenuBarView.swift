@@ -27,7 +27,27 @@ struct MenuBarView: View {
     @State private var editorTask: TaskItem?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private enum Tab: Hashable { case timer, tasks, week, report }
+    private enum Tab: Hashable, CaseIterable {
+        case timer, tasks, week, report
+
+        var title: String {
+            switch self {
+            case .timer: return "Pomodoro"
+            case .tasks: return "Tasks"
+            case .week: return "Week"
+            case .report: return "Report"
+            }
+        }
+        var icon: String {
+            switch self {
+            case .timer: return "timer"
+            case .tasks: return "checklist"
+            case .week: return "calendar"
+            case .report: return "list.bullet.rectangle"
+            }
+        }
+    }
+    @Namespace private var tabPillNS
 
     /// Fixed height for the switchable tab area so the popover keeps one height
     /// across tabs. Sized to fit the timer tab's controls (the stats strip is
@@ -37,6 +57,12 @@ struct MenuBarView: View {
     /// Outer popover padding — also part of the Week-tab width math below, so
     /// tweaking one can't silently clip the board.
     private static let outerPadding: CGFloat = 18
+
+    /// Popover width for every tab except Week. The task rows carry a dense
+    /// trailing cluster (estimate badge, chevron, hover actions, Focus button)
+    /// plus the composer's filter row; 360 pt clipped both edges, so the
+    /// content sets the floor here.
+    private static let standardWidth: CGFloat = 460
 
     /// Week-tab popover width: the full 8-column board plus padding, capped to
     /// the current screen so narrow displays keep every column reachable via
@@ -49,14 +75,13 @@ struct MenuBarView: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            Picker("", selection: $tab) {
-                Label("Pomodoro", systemImage: "timer").tag(Tab.timer)
-                Label("Tasks", systemImage: "checklist").tag(Tab.tasks)
-                Label("Week", systemImage: "calendar").tag(Tab.week)
-                Label("Report", systemImage: "list.bullet.rectangle").tag(Tab.report)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+            // Capped so the Week tab's wider popover doesn't stretch the tab
+            // bar edge-to-edge — it stays a compact, centered control like
+            // the rest of the chrome, while the board below manages its own
+            // full-bleed horizontal scroll.
+            liquidGlassTabBar
+                .frame(maxWidth: 640)
+                .frame(maxWidth: .infinity)
 
             // Fixed-height area so switching Timer ↔ Tasks never resizes the
             // popover. Content is top-aligned; an over-long list scrolls within.
@@ -96,9 +121,11 @@ struct MenuBarView: View {
 
             // Today / Cycle / Streak — pinned below the scroll so it's always
             // fully visible on both tabs, never clipped by the fixed height.
-            Divider().overlay(Color.dsHairline)
+            Divider().overlay(Color.dsHairline).frame(maxWidth: 640).frame(maxWidth: .infinity)
             statsStrip
-            Divider().overlay(Color.dsHairline)
+                .frame(maxWidth: 640)
+                .frame(maxWidth: .infinity)
+            Divider().overlay(Color.dsHairline).frame(maxWidth: 640).frame(maxWidth: .infinity)
             footer
         }
         .onAppear { heartbeat = true }
@@ -107,7 +134,7 @@ struct MenuBarView: View {
         // 7 day columns); NSHostingController tracks preferredContentSize, so
         // the popover follows this frame automatically. Capped to the screen —
         // when it can't fit, the board's horizontal scroll takes over.
-        .frame(width: tab == .week ? Self.weekPopoverWidth : 360)
+        .frame(width: tab == .week ? Self.weekPopoverWidth : Self.standardWidth)
         .animation(DS.Motion.standard, value: tab)
         // One app accent: controls follow the chosen theme, not system blue.
         .tint(timer.settings.theme.accent)
@@ -116,6 +143,58 @@ struct MenuBarView: View {
                            accent: timer.settings.theme.accent,
                            settings: timer.settings)
         }
+    }
+
+    /// Liquid-glass tab bar — a translucent capsule track with a floating
+    /// glass pill that glides to the selected tab, replacing the flat
+    /// `.segmented` picker with the same material language as the rest of
+    /// the popover's glass surfaces.
+    private var liquidGlassTabBar: some View {
+        let segment = RoundedRectangle(cornerRadius: 9, style: .continuous)
+        return HStack(spacing: 2) {
+            ForEach(Tab.allCases, id: \.self) { t in
+                let selected = tab == t
+                Button {
+                    withAnimation(DS.Motion.standard) { tab = t }
+                } label: {
+                    Label(t.title, systemImage: t.icon)
+                        .font(.system(.callout, design: .rounded).weight(selected ? .semibold : .medium))
+                        .foregroundStyle(selected ? .white : .white.opacity(0.6))
+                        .labelStyle(.titleOnly)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 7)
+                        .background {
+                            if selected {
+                                let accent = timer.settings.theme.accent
+                                segment
+                                    .fill(LinearGradient(colors: [accent, accent.opacity(0.82)],
+                                                          startPoint: .top, endPoint: .bottom))
+                                    // A glass sheen over the saturated accent —
+                                    // vibrant like the app's other selected
+                                    // pills, with a glossy highlight on top.
+                                    .overlay(alignment: .top) {
+                                        LinearGradient(colors: [.white.opacity(0.5), .clear],
+                                                       startPoint: .top, endPoint: .center)
+                                            .blendMode(.screen)
+                                            .clipShape(segment)
+                                    }
+                                    .overlay(segment.stroke(Color.white.opacity(0.25), lineWidth: 1))
+                                    .liquidShadow(color: accent.opacity(0.5), radius: 10, y: 4)
+                                    .matchedGeometryEffect(id: "tabPill", in: tabPillNS)
+                            }
+                        }
+                        .contentShape(segment)
+                }
+                .buttonStyle(.pressableSubtle)
+            }
+        }
+        .padding(3)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color.white.opacity(0.14), lineWidth: 1))
+        )
     }
 
     // MARK: - Tabs
@@ -951,20 +1030,24 @@ struct MenuBarView: View {
             HStack(spacing: 8) {
                 GlassButton(label: "Skip",
                             systemImage: "forward.end.fill",
+                            accent: timer.settings.theme.accent,
                             action: { timer.skip() })
                 GlassButton(label: "Reset",
                             systemImage: "arrow.counterclockwise",
                             tint: .red.opacity(0.95),
+                            accent: timer.settings.theme.accent,
                             action: { timer.stop() })
             }
             HStack(spacing: 8) {
                 GlassButton(label: "+5m",
                             systemImage: "plus",
                             tint: .green.opacity(0.95),
+                            accent: timer.settings.theme.accent,
                             action: { timer.addTime(300) })
                 GlassButton(label: "-5m",
                             systemImage: "minus",
                             tint: .orange.opacity(0.95),
+                            accent: timer.settings.theme.accent,
                             action: { timer.removeTime(300) })
             }
             autoModeToggle

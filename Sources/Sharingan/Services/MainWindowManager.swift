@@ -52,4 +52,17 @@ final class MainWindowManager: NSObject, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
     }
+
+    /// Whether the main window is currently on screen — used by the menu-bar
+    /// popover to avoid opening on top of it (translucent `.thinMaterial`
+    /// chrome lets an overlapping window behind bleed through the glass).
+    var isOnScreen: Bool { window?.isVisible ?? false }
+
+    /// Temporarily orders the window out (not closed — `windowWillClose`
+    /// doesn't fire, so the app stays `.regular` and no state is lost) while
+    /// the menu-bar popover is showing.
+    func hideTemporarily() { window?.orderOut(nil) }
+
+    /// Brings the window back after the popover that hid it closes.
+    func restore() { window?.makeKeyAndOrderFront(nil) }
 }

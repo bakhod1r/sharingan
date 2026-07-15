@@ -1770,15 +1770,19 @@ struct TasksView: View {
             // appears on hover — separated from the primary Focus button so the
             // row reads calm at rest and Delete never sits under the cursor's
             // path to Play.
-            if hovered {
-                HStack(spacing: 1) {
-                    rowActionButton("pencil", "Edit task…") { editorTask = task }
-                    rowActionButton("trash", "Delete task", danger: true) { store.delete(task.id) }
-                }
-                .padding(2)
-                .background(Capsule().fill(Color.white.opacity(0.07)))
-                .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .trailing)))
+            // Always present (not conditionally inserted) so hovering never
+            // changes the row's layout width — a conditional insert here would
+            // shove the Play button left under the cursor, causing the row's
+            // hover state to flicker on/off in a feedback loop.
+            HStack(spacing: 1) {
+                rowActionButton("pencil", "Edit task…") { editorTask = task }
+                rowActionButton("trash", "Delete task", danger: true) { store.delete(task.id) }
             }
+            .padding(2)
+            .background(Capsule().fill(Color.white.opacity(0.07)))
+            .opacity(hovered ? 1 : 0)
+            .scaleEffect(hovered ? 1 : 0.9, anchor: .trailing)
+            .allowsHitTesting(hovered)
 
             // Primary action: Focus. A filled circle so it's unmistakably THE
             // button — accent when active/hovered, calm at rest.

@@ -7,13 +7,18 @@ import SharinganCore
 /// works reliably without Xcode/xcbuild (unlike SwiftUI MenuBarExtra
 /// which sometimes fails to register at runtime with CLI toolchain).
 @MainActor
-final class MenuBarController: NSObject {
+final class MenuBarController: NSObject, NSPopoverDelegate {
     static let shared = MenuBarController()
 
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
     weak var timer: PomodoroTimer?
     weak var coordinator: SharinganCoordinator?
+
+    /// True when this popover session hid the main window and owes it a
+    /// restore on close (only restore what we hid — never steal focus if the
+    /// window was already closed).
+    private var hidMainWindowForPopover = false
 
     /// The state the current button image was drawn for — the bitmap is
     /// re-rendered only when this changes (integer percent / phase / idle),
@@ -48,6 +53,7 @@ final class MenuBarController: NSObject {
         // text (unreadable). Pin the popover itself to dark like the rest of
         // the app (see applicationDidFinishLaunching).
         popover.appearance = NSAppearance(named: .darkAqua)
+        popover.delegate = self
         let hosting = NSHostingController(rootView: MenuBarView(timer: timer))
         // Let the popover size itself to the SwiftUI content's natural height
         // (the view fixes its own 360pt width). A hard-coded 720 was clipping the
@@ -379,6 +385,7 @@ final class MenuBarController: NSObject {
     func showPopover() {
         guard let popover, let button = statusItem?.button, !popover.isShown else { return }
         NSApp.activate(ignoringOtherApps: true)
+        hideMainWindowIfNeeded()
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
     }
 
@@ -387,9 +394,27 @@ final class MenuBarController: NSObject {
         if popover.isShown {
             popover.performClose(nil)
         } else {
+            hideMainWindowIfNeeded()
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         }
     }
+
+    /// The popover's glass materials sample whatever's behind its own window —
+    /// including the main window, if it's open — so an overlapping main
+    /// window bleeds through the tab bar and stats strip. Order it out for the
+    /// popover's duration and bring it back when the popover closes.
+    private func hideMainWindowIfNeeded() {
+        guard MainWindowManager.shared.isOnScreen else { return }
+        MainWindowManager.shared.hideTemporarily()
+        hidMainWindowForPopover = true
+    }
+
+    func popoverDidClose(_ notification: Notification) {
+        guard hidMainWindowForPopover else { return }
+        hidMainWindowForPopover = false
+        MainWindowManager.shared.restore()
+    }
+
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
