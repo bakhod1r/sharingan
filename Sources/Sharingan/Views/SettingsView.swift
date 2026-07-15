@@ -420,6 +420,7 @@ struct SettingsView: View {
                             }
                             .labelsHidden()
                             .pickerStyle(.menu)
+                            .glassMenu()
                             .fixedSize()
                         }
                         Text("The ears are the strips beside the notch: the countdown on the left, the task on the right. They sit in the menu bar row, so they can cover your app's menus and status items — dropping one gives those pixels back, clicks included. The progress line stays either way.")
@@ -454,6 +455,7 @@ struct SettingsView: View {
                         Text("60 min before").tag(60)
                     }
                     .pickerStyle(.menu)
+                    .glassMenu()
                     Text("A “Due soon” notification ahead of each task's due time, on top of the one at the deadline itself.")
                         .font(.system(.caption2, design: .rounded))
                         .foregroundStyle(.white.opacity(0.6))
@@ -519,6 +521,7 @@ struct SettingsView: View {
                         }
                     }
                     .pickerStyle(.menu)
+                    .glassMenu()
 
                     HStack(spacing: 8) {
                         Button("Preview") {
@@ -656,6 +659,7 @@ struct SettingsView: View {
                         }
                         .labelsHidden()
                         .pickerStyle(.menu)
+                        .glassMenu()
                         .fixedSize()
                     }
                     Text("Used everywhere the mark appears: break screen, desktop wallpaper, the menu-bar icon and the Dock icon.")
@@ -676,6 +680,7 @@ struct SettingsView: View {
                         }
                         .labelsHidden()
                         .pickerStyle(.menu)
+                        .glassMenu()
                         .fixedSize()
                     }
                     Text("One flat tone across the whole break screen. Graphite matches the design video; Slate is a touch lighter.")
@@ -722,6 +727,7 @@ struct SettingsView: View {
                         }
                     }
                     .pickerStyle(.menu)
+                    .glassMenu()
 
                     ToggleRow(title: "Spin the Sharingan",
                               isOn: $settings.animateIcon)
@@ -758,6 +764,7 @@ struct SettingsView: View {
                         }
                     }
                     .pickerStyle(.menu)
+                    .glassMenu()
 
                 }
 
@@ -875,6 +882,7 @@ struct SettingsView: View {
                         }
                     }
                     .pickerStyle(.menu)
+                    .glassMenu()
 
                     ToggleRow(title: "Flash at 5 seconds left",
                               isOn: $settings.flashAtFiveSecLeft)
@@ -1111,6 +1119,7 @@ struct SettingsView: View {
                             }
                             .labelsHidden()
                             .pickerStyle(.menu)
+                            .glassMenu()
                             .fixedSize()
                         }
                     }
@@ -1173,6 +1182,7 @@ struct SettingsView: View {
                         }
                         .labelsHidden()
                         .pickerStyle(.menu)
+                        .glassMenu()
                         .fixedSize()
                     }
 

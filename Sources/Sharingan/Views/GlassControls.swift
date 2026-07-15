@@ -69,3 +69,23 @@ struct GlassButtonStyle: ButtonStyle {
 extension ButtonStyle where Self == GlassButtonStyle {
     static var glass: GlassButtonStyle { GlassButtonStyle() }
 }
+
+/// Dresses a `.pickerStyle(.menu)` dropdown in the same glass capsule as
+/// `GlassSegmentedPicker`/`.glass` buttons. AppKit still renders the actual
+/// pop-up menu (SwiftUI has no supported hook into that chrome), but the
+/// closed-state control — the part visible everywhere in Settings — now
+/// matches the rest of the liquid-glass surface instead of sitting there as
+/// a plain system control.
+struct GlassMenuStyle: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .tint(.white)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .glassCapsule()
+    }
+}
+
+extension View {
+    func glassMenu() -> some View { modifier(GlassMenuStyle()) }
+}
