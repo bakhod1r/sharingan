@@ -189,7 +189,17 @@ public final class JiraService: ObservableObject {
 
     @Published public private(set) var status: ConnectionStatus = .disconnected
     @Published public private(set) var currentUser: JiraUserIdentity?
+    /// Host of the **active session's** site. Never read off `availableSites` —
+    /// that list is a menu of what could be picked, not a record of what is.
     @Published public private(set) var siteHost: String?
+    /// cloudId of the active session — the picker's selection.
+    @Published public private(set) var activeSiteID: String?
+    /// Every site this grant can reach. One OAuth grant covers all of them, so
+    /// this is a menu the user may pick from at any time while connected, not
+    /// just during connect. Deliberately not persisted: refetching is one cheap
+    /// request and is always current, whereas a stale list offers sites the
+    /// account has since lost.
+    @Published public private(set) var availableSites: [JiraAccessibleResource] = []
     @Published public private(set) var isWorking = false
     @Published public private(set) var lastErrorMessage: String?
 
@@ -201,6 +211,10 @@ public final class JiraService: ObservableObject {
     private let openURL: (@Sendable (URL) -> Void)?
     private let tokens: JiraOAuthTokenProvider
     private let client: JiraClient
+    /// The issue cache, when the app wired one in. Site-scoped: rows carry the
+    /// host they were fetched from, and a switch must not let the old site's
+    /// issues masquerade as the new one's.
+    private let issueCache: JiraStorage?
     /// Held between `connect()` surfacing a site list and `selectSite(_:)`.
     private var pendingTokens: JiraOAuth.Tokens?
     private var restoreTask: Task<Void, Never>?
@@ -226,6 +240,7 @@ public final class JiraService: ObservableObject {
                 apiSession: URLSession = .shared,
                 callbackPort: UInt16 = JiraOAuth.callbackPort,
                 openURL: (@Sendable (URL) -> Void)? = nil,
+                issueCache: JiraStorage? = nil,
                 restoreOnInit: Bool = true,
                 legacyDeleteToken: @escaping @Sendable (String, String) -> Void = {
                     KeychainStore.delete(service: $0, account: $1)
@@ -236,6 +251,7 @@ public final class JiraService: ObservableObject {
         self.oauthSession = oauthSession
         self.callbackPort = callbackPort
         self.openURL = openURL
+        self.issueCache = issueCache
 
         let oauth = oauthConfig.map { JiraOAuth(config: $0, session: oauthSession) }
         let provider = JiraOAuthTokenProvider(store: store, oauth: oauth)
@@ -312,6 +328,7 @@ public final class JiraService: ObservableObject {
                     "This Atlassian account has no Jira site Sharingan can reach."
                 ])
             }
+            availableSites = resources
             guard resources.count == 1 else {
                 // More than one site: never guess. The wrong pick silently syncs
                 // against someone else's project.
@@ -372,7 +389,9 @@ public final class JiraService: ObservableObject {
         let host = URL(string: session.siteURL)?.host ?? session.siteURL
         currentUser = user
         siteHost = host
+        activeSiteID = session.cloudID
         store.accountName = user.displayName
+        dropCachedIssues(foreignTo: host)
 
         let permissions = try await client.getMyPermissions()
         if permissions.canBrowseProjects {
@@ -383,6 +402,86 @@ public final class JiraService: ObservableObject {
         status = .noProjectAccess(site: host, user: user)
         lastErrorMessage = nil
         return false
+    }
+
+    // MARK: - Sites
+
+    /// Re-reads the sites this grant can reach. Best-effort: a failure leaves the
+    /// last known list in place rather than emptying the picker under the user.
+    ///
+    /// This needs no consent and no new token — `accessible-resources` answers
+    /// for the whole grant, which is exactly why switching sites is possible at
+    /// all.
+    @discardableResult
+    public func refreshAvailableSites() async -> Bool {
+        guard let oauthConfig else { return false }
+        do {
+            let token = try await tokens.accessToken()
+            let oauth = JiraOAuth(config: oauthConfig, session: oauthSession)
+            let sites = try await oauth.accessibleResources(accessToken: token)
+            guard !sites.isEmpty else { return false }
+            availableSites = sites
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// Points the live session at another Atlassian site.
+    ///
+    /// One 3LO grant covers every site in `availableSites`, so this is a cloudId
+    /// swap — no browser, no consent, no token refresh. What it *does* need is
+    /// the preflight run again: permissions are per-site, so a site the grant can
+    /// reach may still have no browsable project.
+    ///
+    /// If the new site doesn't answer, the previous session is put back: a failed
+    /// switch must not leave the app pointing at a site it cannot talk to.
+    @discardableResult
+    public func switchSite(_ resource: JiraAccessibleResource) async -> Bool {
+        guard isConnected else {
+            lastErrorMessage = "Connect to Jira before switching site."
+            return false
+        }
+        guard let previous = await tokens.currentSession() else {
+            fail(with: JiraError.notConfigured)
+            return false
+        }
+        guard previous.cloudID != resource.id else { return true }
+
+        var session = previous
+        session.cloudID = resource.id
+        session.siteURL = resource.url
+
+        isWorking = true
+        lastErrorMessage = nil
+        do {
+            try store.save(session)
+            await tokens.adopt(session)
+            // Switching to a site the account can reach over OAuth but can't
+            // browse is not a usable switch — report it as failure so the UI
+            // can steer back, even though the session is technically connected.
+            let hasAccess = try await identityAndPermissions(session: session)
+            isWorking = false
+            return hasAccess
+        } catch {
+            try? store.save(previous)
+            await tokens.adopt(previous)
+            fail(with: error, unauthorizedMeansReconsent: true)
+            return false
+        }
+    }
+
+    /// Forgets cached issues belonging to any site but the active one.
+    ///
+    /// `jira_issues` is keyed by issue id and carries `site_host`; two sites can
+    /// hand out the same issue *key*, and a row fetched from the old site would
+    /// otherwise be served as the new site's. The cache is refetchable, so
+    /// deleting the foreign rows is cheaper than teaching every read to filter.
+    private func dropCachedIssues(foreignTo host: String) {
+        guard let issueCache else { return }
+        for cached in issueCache.allIssues() where cached.siteHost != host {
+            issueCache.deleteIssue(id: cached.issueID)
+        }
     }
 
     // MARK: - Restore / disconnect
@@ -398,6 +497,8 @@ public final class JiraService: ObservableObject {
             status = .disconnected
             currentUser = nil
             siteHost = nil
+            activeSiteID = nil
+            availableSites = []
             return
         }
 
@@ -406,6 +507,9 @@ public final class JiraService: ObservableObject {
         lastErrorMessage = nil
         do {
             _ = try await identityAndPermissions(session: session)
+            // Only once the session is known good: an unreachable site says
+            // nothing about which sites exist.
+            await refreshAvailableSites()
         } catch {
             fail(with: error, unauthorizedMeansReconsent: true)
         }
@@ -420,6 +524,8 @@ public final class JiraService: ObservableObject {
         pendingTokens = nil
         currentUser = nil
         siteHost = nil
+        activeSiteID = nil
+        availableSites = []
         lastErrorMessage = nil
         isWorking = false
         status = oauthConfig == nil ? .notConfigured : .disconnected

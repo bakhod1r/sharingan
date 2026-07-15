@@ -133,9 +133,34 @@ struct SettingsJiraSection: View {
         }
     }
 
+    /// One Atlassian grant reaches every site the account can see, so switching
+    /// is a pick, not a re-login. With a single site there is nothing to pick, so
+    /// the row stays the plain read-only fact it always was.
     @ViewBuilder
     private var siteRow: some View {
-        if let host = jira.siteHost {
+        if jira.availableSites.count > 1 {
+            HStack(spacing: 12) {
+                Text("Site")
+                    .font(.system(.body, design: .rounded))
+                    .foregroundStyle(.white)
+                Spacer(minLength: 8)
+                if jira.isWorking {
+                    ProgressView()
+                        .controlSize(.small)
+                        .progressViewStyle(.circular)
+                }
+                Picker("", selection: siteSelection) {
+                    ForEach(jira.availableSites, id: \.id) { site in
+                        Text(URL(string: site.url)?.host ?? site.name).tag(site.id)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .glassMenu()
+                .disabled(jira.isWorking)
+            }
+            .frame(minHeight: 24)
+        } else if let host = jira.siteHost {
             HStack(spacing: 12) {
                 Text("Site")
                     .font(.system(.body, design: .rounded))
@@ -147,6 +172,17 @@ struct SettingsJiraSection: View {
             }
             .frame(minHeight: 24)
         }
+    }
+
+    /// Reads from the *active session*, never from the site list — the list says
+    /// what could be selected, `activeSiteID` says what is.
+    private var siteSelection: Binding<String> {
+        Binding(get: { jira.activeSiteID ?? "" },
+                set: { id in
+                    guard let site = jira.availableSites.first(where: { $0.id == id }),
+                          site.id != jira.activeSiteID else { return }
+                    Task { await jira.switchSite(site) }
+                })
     }
 
     // MARK: - Behavior

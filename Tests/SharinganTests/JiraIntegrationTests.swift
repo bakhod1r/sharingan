@@ -373,6 +373,191 @@ struct JiraIntegrationTests {
         }
         #expect(resources.map(\.id) == ["cloud-1", "cloud-2"])
         #expect(resources.map(\.name) == ["Wayll", "Other"])
+        // The same list is what Settings offers later, while connected.
+        #expect(service.availableSites.map(\.id) == ["cloud-1", "cloud-2"])
+    }
+
+    // MARK: - Switching site while connected
+
+    @Test("switchSite re-aims subsequent requests at the new cloudId, with no re-auth")
+    @MainActor
+    func jiraServiceSwitchSiteChangesCloudID() async throws {
+        defer { TestURLProtocol.reset() }
+        let suite = "jira-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let store = FakeKeychain().makeStore(defaults: defaults)
+        let port = Self.randomEphemeralPort()
+        let session = TestURLProtocol.session(handler: Self.multiSiteHandler())
+        let service = JiraService(defaults: defaults,
+                                  store: store,
+                                  oauthConfig: Self.testConfig,
+                                  oauthSession: session,
+                                  apiSession: session,
+                                  callbackPort: port,
+                                  openURL: { simulateBrowserCallback(authorizeURL: $0, port: port) },
+                                  restoreOnInit: false)
+
+        _ = await service.connect()
+        let sites = service.availableSites
+        #expect(await service.selectSite(try #require(sites.first)))
+        #expect(service.siteHost == "wayll.atlassian.net")
+        #expect(service.activeSiteID == "cloud-1")
+
+        TestURLProtocol.clearRequests()
+        let switched = await service.switchSite(try #require(sites.last))
+
+        #expect(switched)
+        #expect(service.hasProjectAccess)
+        // The real behaviour: the wire, not just a property.
+        let myself = try #require(TestURLProtocol.requests.first { $0.url?.path.hasSuffix("/rest/api/3/myself") == true })
+        #expect(myself.url?.absoluteString == "https://api.atlassian.com/ex/jira/cloud-2/rest/api/3/myself")
+        #expect(TestURLProtocol.requests.allSatisfy { $0.url?.path.hasPrefix("/ex/jira/cloud-1/") != true })
+        // Permissions are per-site, so the preflight has to run again.
+        #expect(TestURLProtocol.requests.contains {
+            $0.url?.host == "api.atlassian.com"
+                && $0.url?.path == "/ex/jira/cloud-2/rest/api/3/mypermissions"
+        })
+        // One grant covers every site: switching must cost neither a refresh nor
+        // a trip back to the consent page.
+        #expect(!TestURLProtocol.requests.contains { $0.url?.path == "/oauth/token" })
+
+        // Display follows the active session.
+        #expect(service.siteHost == "other.atlassian.net")
+        #expect(service.activeSiteID == "cloud-2")
+
+        // Persisted, and the same after a cold restore.
+        let saved = try #require(store.load())
+        #expect(saved.cloudID == "cloud-2")
+        #expect(saved.siteURL == "https://other.atlassian.net")
+        #expect(saved.refreshToken == "rt-1")
+
+        let restored = JiraService(defaults: defaults,
+                                   store: store,
+                                   oauthConfig: Self.testConfig,
+                                   oauthSession: session,
+                                   apiSession: session,
+                                   openURL: { _ in Issue.record("restore must not open a browser") },
+                                   restoreOnInit: false)
+        await restored.restore()
+        #expect(restored.siteHost == "other.atlassian.net")
+        #expect(restored.activeSiteID == "cloud-2")
+        #expect(restored.availableSites.map(\.id) == ["cloud-1", "cloud-2"])
+    }
+
+    @Test("switching to a site the account can't browse lands in no-project-access")
+    @MainActor
+    func jiraServiceSwitchSiteWithoutBrowsePermission() async throws {
+        defer { TestURLProtocol.reset() }
+        let suite = "jira-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let port = Self.randomEphemeralPort()
+        let session = TestURLProtocol.session(handler: Self.multiSiteHandler(canBrowseOnCloud2: false))
+        let service = JiraService(defaults: defaults,
+                                  store: FakeKeychain().makeStore(defaults: defaults),
+                                  oauthConfig: Self.testConfig,
+                                  oauthSession: session,
+                                  apiSession: session,
+                                  callbackPort: port,
+                                  openURL: { simulateBrowserCallback(authorizeURL: $0, port: port) },
+                                  restoreOnInit: false)
+
+        _ = await service.connect()
+        let sites = service.availableSites
+        _ = await service.selectSite(try #require(sites.first))
+        #expect(service.hasProjectAccess)
+
+        let switched = await service.switchSite(try #require(sites.last))
+
+        // OAuth reaches the site; Jira still won't show it a single project.
+        #expect(!switched)
+        #expect(service.isConnected)
+        #expect(!service.hasProjectAccess)
+        #expect(service.status == .noProjectAccess(site: "other.atlassian.net",
+                                                   user: JiraUserIdentity(accountId: "abc123",
+                                                                          displayName: "Dev User",
+                                                                          emailAddress: "dev@example.com")))
+    }
+
+    @Test("switching sites drops cached issues belonging to the old site")
+    @MainActor
+    func jiraServiceSwitchSitePurgesForeignCache() async throws {
+        defer { TestURLProtocol.reset() }
+        let suite = "jira-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent("jira-switch-\(UUID().uuidString).sqlite").path
+        let storage = try #require(JiraStorage(path: path))
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        // Same key, two sites — exactly the collision that makes a stale row a
+        // lie rather than merely stale.
+        storage.upsertIssue(CachedJiraIssue(issueID: "1", issueKey: "SHR-1",
+                                            siteHost: "wayll.atlassian.net", summary: "Old site"))
+        storage.upsertIssue(CachedJiraIssue(issueID: "2", issueKey: "SHR-1",
+                                            siteHost: "other.atlassian.net", summary: "New site"))
+
+        let port = Self.randomEphemeralPort()
+        let session = TestURLProtocol.session(handler: Self.multiSiteHandler())
+        let service = JiraService(defaults: defaults,
+                                  store: FakeKeychain().makeStore(defaults: defaults),
+                                  oauthConfig: Self.testConfig,
+                                  oauthSession: session,
+                                  apiSession: session,
+                                  callbackPort: port,
+                                  openURL: { simulateBrowserCallback(authorizeURL: $0, port: port) },
+                                  issueCache: storage,
+                                  restoreOnInit: false)
+
+        _ = await service.connect()
+        let sites = service.availableSites
+        _ = await service.selectSite(try #require(sites.first))
+        // Connecting to wayll already evicts the other site's row.
+        #expect(storage.allIssues().map(\.issueID) == ["1"])
+
+        _ = await service.switchSite(try #require(sites.last))
+
+        // Nothing from wayll may now answer to a lookup on the new site.
+        #expect(storage.allIssues().isEmpty)
+        #expect(storage.issue(key: "SHR-1") == nil)
+    }
+
+    @Test("a single-site account has nothing to pick between")
+    @MainActor
+    func jiraServiceSingleSiteHasNoPicker() async throws {
+        defer { TestURLProtocol.reset() }
+        let suite = "jira-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let port = Self.randomEphemeralPort()
+        let session = TestURLProtocol.session(handler: Self.oauthFlowHandler(canBrowseProjects: true))
+        let service = JiraService(defaults: defaults,
+                                  store: FakeKeychain().makeStore(defaults: defaults),
+                                  oauthConfig: Self.testConfig,
+                                  oauthSession: session,
+                                  apiSession: session,
+                                  callbackPort: port,
+                                  openURL: { simulateBrowserCallback(authorizeURL: $0, port: port) },
+                                  restoreOnInit: false)
+
+        #expect(await service.connect())
+
+        // Settings keys the picker off this count: one site, one read-only row.
+        #expect(service.availableSites.map(\.id) == ["cloud-1"])
+        #expect(service.activeSiteID == "cloud-1")
+        // Switching to the site already in use is a no-op, not a round-trip.
+        let before = TestURLProtocol.requests.count
+        #expect(await service.switchSite(try #require(service.availableSites.first)))
+        #expect(TestURLProtocol.requests.count == before)
     }
 
     // MARK: - The refresh hazard
@@ -1276,6 +1461,51 @@ struct JiraIntegrationTests {
             }
         }
     }
+
+    /// Two-site variant: `accessible-resources` returns cloud-1 (wayll) and
+    /// cloud-2 (other), and both sites answer `myself`/`mypermissions` under
+    /// their own gateway prefix. `canBrowseOnCloud2` lets a test model a site
+    /// the account can reach over OAuth but has no browsable projects in.
+    static func multiSiteHandler(canBrowseOnCloud2: Bool = true)
+    -> @Sendable (URLRequest) throws -> (HTTPURLResponse, Data) {
+        { request in
+            let path = request.url?.path ?? ""
+
+            func myself() throws -> (HTTPURLResponse, Data) {
+                (try TestURLProtocol.jsonResponse(for: request, status: 200), Data("""
+                {"accountId":"abc123","displayName":"Dev User","emailAddress":"dev@example.com","active":true}
+                """.utf8))
+            }
+            func permissions(_ can: Bool) throws -> (HTTPURLResponse, Data) {
+                (try TestURLProtocol.jsonResponse(for: request, status: 200), Data("""
+                {"permissions":{
+                  "BROWSE_PROJECTS":{"id":"10","key":"BROWSE_PROJECTS","name":"Browse Projects","havePermission":\(can)},
+                  "CREATE_ISSUES":{"id":"11","key":"CREATE_ISSUES","name":"Create Issues","havePermission":\(can)},
+                  "WORK_ON_ISSUES":{"id":"12","key":"WORK_ON_ISSUES","name":"Work On Issues","havePermission":\(can)}
+                }}
+                """.utf8))
+            }
+
+            switch path {
+            case "/oauth/token":
+                return (try TestURLProtocol.jsonResponse(for: request, status: 200), tokenPayload)
+            case "/oauth/token/accessible-resources":
+                return (try TestURLProtocol.jsonResponse(for: request, status: 200), Data("""
+                [{"id":"cloud-1","url":"https://wayll.atlassian.net","name":"Wayll","scopes":["read:jira-work"]},
+                 {"id":"cloud-2","url":"https://other.atlassian.net","name":"Other","scopes":["read:jira-work"]}]
+                """.utf8))
+            case "/ex/jira/cloud-1/rest/api/3/myself",
+                 "/ex/jira/cloud-2/rest/api/3/myself":
+                return try myself()
+            case "/ex/jira/cloud-1/rest/api/3/mypermissions":
+                return try permissions(true)
+            case "/ex/jira/cloud-2/rest/api/3/mypermissions":
+                return try permissions(canBrowseOnCloud2)
+            default:
+                return (try TestURLProtocol.response(for: request, status: 404), Data())
+            }
+        }
+    }
 }
 
 // MARK: - Test doubles
@@ -1466,6 +1696,14 @@ private final class TestURLProtocol: URLProtocol, @unchecked Sendable {
     static func reset() {
         lock.lock(); defer { lock.unlock() }
         _handler = nil
+        _requests = []
+    }
+
+    /// Empties the request log but keeps the handler, so a test can assert on
+    /// only the traffic from the step it's exercising. `reset()` drops the
+    /// handler too, which would strand every request that follows.
+    static func clearRequests() {
+        lock.lock(); defer { lock.unlock() }
         _requests = []
     }
 
