@@ -402,6 +402,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// mirroring the updater item's pattern.
     var syncMenuItem: NSMenuItem?
     private var syncStatusCancellable: AnyCancellable?
+    private var updaterIdleCancellable: AnyCancellable?
+    private var settingsApplyObserver: NSObjectProtocol?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -454,6 +456,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MenuBarController.shared.install(timer: timer, coordinator: coord)
         NotchWindowManager.shared.install(timer: timer, coordinator: coord)
 
+        // Silent updates install only between sessions: safe = nothing
+        // running, nothing paused, no break overlay up. Poke the updater
+        // whenever the timer goes idle so a download that finished
+        // mid-session installs right after the session ends.
+        UpdaterService.shared.isSafeToInstall = { [weak timer] in
+            guard let timer else { return false }
+            return timer.isIdleAtFocus && !BreakWindowManager.shared.isBlocking
+        }
+        updaterIdleCancellable = timer.$isRunning
+            .removeDuplicates()
+            .filter { !$0 }
+            .receive(on: DispatchQueue.main)
+            .sink { _ in UpdaterService.shared.installOpportunity() }
+
         // Desktop widget (WidgetKit): keep the appex's snapshot file fresh.
         WidgetSnapshotPublisher.shared.install(timer: timer)
 
@@ -471,6 +487,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if UserDefaults.standard.bool(forKey: CloudSyncEngine.syncEnabledKey) {
             sync.start()
             SettingsSync.start()
+        }
+        // A remote settings change lands in UserDefaults, but the running
+        // timer holds its own decoded copy — reload it so the other Mac's
+        // change (timer mode, durations, theme…) shows up without a relaunch.
+        // Reassigning `settings` runs the same didSet/sink pipeline as an
+        // in-app edit, so widgets, panels, and shortcuts all follow.
+        settingsApplyObserver = NotificationCenter.default.addObserver(
+            forName: SettingsSync.didApplyRemoteNotification, object: nil,
+            queue: .main
+        ) { [weak timer] _ in
+            MainActor.assumeIsolated {
+                timer?.settings = PomodoroTimer.savedSettings()
+            }
         }
 
         // Phase 3 fetch fallbacks: silent push is best-effort, so also pull

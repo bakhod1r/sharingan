@@ -50,6 +50,13 @@ extension NSUbiquitousKeyValueStore: KeyValueStore {}
 ///     is per-install.
 public enum SettingsSync {
 
+    /// Posted (main queue) after `applyRemote` actually changed at least one
+    /// local default, so live objects (the running PomodoroTimer's settings)
+    /// can reload without an app restart — writing the blob to UserDefaults
+    /// alone changed nothing on screen until relaunch.
+    public static let didApplyRemoteNotification =
+        Notification.Name("sharingan.settingsSync.didApplyRemote")
+
     /// The allowlist. Every key here is a deliberate cross-Mac intent;
     /// see the type comment for why everything else stays home.
     public static let syncedKeys: [String] = [
@@ -65,12 +72,18 @@ public enum SettingsSync {
     /// erase another Mac's setting just because this one never touched it.
     public static func pushLocal(defaults: UserDefaults = .standard,
                                  kv: KeyValueStore = NSUbiquitousKeyValueStore.default) {
+        var wrote = false
         for key in syncedKeys {
-            if let value = defaults.object(forKey: key) {
+            if let value = defaults.object(forKey: key),
+               !(value as AnyObject).isEqual(kv.object(forKey: key)) {
                 kv.set(value, forKey: key)
+                wrote = true
             }
         }
-        kv.synchronize()
+        // Unchanged values are skipped above, so applying a remote change
+        // (which lands in defaults and re-triggers a push) can't ping-pong
+        // the same bytes back to the cloud forever.
+        if wrote { kv.synchronize() }
     }
 
     /// Copies allowlisted values from the KV store into UserDefaults —
@@ -83,14 +96,23 @@ public enum SettingsSync {
                                    changedKeys: [String]? = nil) {
         let keys = changedKeys.map { Set($0).intersection(syncedKeys) }
             ?? Set(syncedKeys)
+        var changed = false
         for key in keys {
-            if let value = kv.object(forKey: key) {
+            if let value = kv.object(forKey: key),
+               !(value as AnyObject).isEqual(defaults.object(forKey: key)) {
                 defaults.set(value, forKey: key)
+                changed = true
             }
+        }
+        if changed {
+            NotificationCenter.default.post(name: didApplyRemoteNotification,
+                                            object: nil)
         }
     }
 
     private static var observer: NSObjectProtocol?
+    private static var localObserver: NSObjectProtocol?
+    private static var pushDebounce: Timer?
 
     /// Begins mirroring: pulls whatever iCloud already has, pushes local
     /// values for keys iCloud lacks, and observes external changes.
@@ -112,17 +134,38 @@ public enum SettingsSync {
                 applyRemote(kv: ubiquitous, defaults: defaults, changedKeys: changed)
             }
         }
+        // Local changes push as they happen, not only at launch: the defaults
+        // domain fires on every persist, the debounce coalesces bursts, and
+        // pushLocal's value-equality skip makes untouched keys free — so a
+        // settings flip on this Mac reaches the other Macs in seconds.
+        localObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification,
+            object: defaults,
+            queue: .main
+        ) { _ in
+            pushDebounce?.invalidate()
+            pushDebounce = Timer.scheduledTimer(withTimeInterval: 2,
+                                                repeats: false) { _ in
+                pushLocal(defaults: defaults, kv: kv)
+            }
+        }
         // Remote first (another Mac's newer intent wins on first launch),
         // then push so keys only this Mac has ever set reach the cloud.
         applyRemote(kv: kv, defaults: defaults)
         pushLocal(defaults: defaults, kv: kv)
     }
 
-    /// Removes the external-change observer (idempotent).
+    /// Removes the observers (idempotent).
     public static func stop() {
         if let observer {
             NotificationCenter.default.removeObserver(observer)
             self.observer = nil
         }
+        if let localObserver {
+            NotificationCenter.default.removeObserver(localObserver)
+            self.localObserver = nil
+        }
+        pushDebounce?.invalidate()
+        pushDebounce = nil
     }
 }

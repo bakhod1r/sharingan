@@ -677,6 +677,10 @@ public final class SharinganCoordinator: ObservableObject {
         syncDND()
         let willRepeat = note.userInfo?["willRepeat"] as? Bool ?? false
         let mirrored = note.userInfo?["mirrored"] as? Bool ?? false
+        // A mirrored phase just ran out — the owner Mac is publishing what
+        // comes next right now. Fetch immediately instead of waiting for the
+        // poll, so the follow-up (break start, next focus) lands in seconds.
+        if mirrored { syncEngine?.fetchChanges() }
         switch phase {
         case .focus:
             // Synced data is credited by the session's OWNER Mac only — the
@@ -703,6 +707,12 @@ public final class SharinganCoordinator: ObservableObject {
                 return
             }
 
+            // A mirrored focus rolls to a *pending* break (the owner Mac
+            // decides when the break actually starts), so presenting the
+            // overlay here froze its countdown at full length. The overlay
+            // comes up when the owner's break record applies in
+            // `applyRemoteTimer` — with a live, ticking session behind it.
+            if mirrored { return }
             NotificationService.shared.notify(
                 title: "Sharingan",
                 body: "Focus complete. Starting break.",
@@ -715,6 +725,9 @@ public final class SharinganCoordinator: ObservableObject {
                 identifier: "sharingan.breakDone")
             AlarmSoundService.shared.playSelected()
             endBreakSideEffects()
+            // Mirror Macs only tear the overlay down — the owner Mac runs the
+            // "what's next" ceremony (TTS, task pick) and publishes the result.
+            guard !mirrored else { return }
             speakFocusStart()
             // Queue drained and nothing active → ask the UI for the next task.
             evaluateTaskPickAfterBreak(store: TaskStore.shared)

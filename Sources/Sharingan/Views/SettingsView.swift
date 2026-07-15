@@ -354,19 +354,11 @@ struct SettingsView: View {
                         .foregroundStyle(.white.opacity(0.6))
 
                     if settings.dockWidgetEnabled {
-                        Picker("Size", selection: $settings.dockWidgetSize) {
-                            ForEach(FloatingWidgetSize.allCases, id: \.self) { size in
-                                Text(size.label).tag(size)
-                            }
-                        }
-                        .pickerStyle(.segmented)
+                        GlassSegmentedPicker(selection: $settings.dockWidgetSize,
+                                             cases: FloatingWidgetSize.allCases) { $0.label }
 
-                        Picker("Position", selection: $settings.dockWidgetAlignment) {
-                            ForEach(FloatingWidgetAlignment.allCases, id: \.self) { alignment in
-                                Text(alignment.label).tag(alignment)
-                            }
-                        }
-                        .pickerStyle(.segmented)
+                        GlassSegmentedPicker(selection: $settings.dockWidgetAlignment,
+                                             cases: FloatingWidgetAlignment.allCases) { $0.label }
 
                         ToggleRow(title: "Expand on hover",
                                   isOn: $settings.dockWidgetExpandOnHover)
@@ -471,12 +463,8 @@ struct SettingsView: View {
                     Text("Copy a template, fill it in (or have an AI write it), then paste it into Tasks → \(Image(systemName: "square.and.arrow.down")) — every task feature is covered: priority, category, project, tags, due, planned day, estimate, repeat, pomodoro size, subtasks, notes. Dropping a .md/.json file on the task list works too.")
                         .font(.system(.caption2, design: .rounded))
                         .foregroundStyle(.white.opacity(0.6))
-                    Picker("", selection: $importTemplateFormat) {
-                        Text("Markdown").tag(0)
-                        Text("JSON").tag(1)
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.segmented)
+                    GlassSegmentedPicker(selection: $importTemplateFormat,
+                                        options: [(0, "Markdown"), (1, "JSON")])
                     ScrollView {
                         Text(importTemplateFormat == 0
                              ? TaskImportParser.markdownTemplate
@@ -538,9 +526,9 @@ struct SettingsView: View {
                                 BreakAmbienceService.Ambience(rawValue: settings.ambienceSound) ?? .rain
                             )
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.glass)
                         Button("Stop") { BreakAmbienceService.shared.stop() }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(.glass)
                     }
                 }
 
@@ -787,8 +775,7 @@ struct SettingsView: View {
                             .font(.system(.body, design: .rounded).weight(.semibold).monospacedDigit())
                             .foregroundStyle(Color.dsSecondary)
                         Button("Check Now…") { UpdaterService.shared.checkForUpdates(nil) }
-                            .buttonStyle(.pressableSubtle)
-                            .font(.system(.caption, design: .rounded).weight(.semibold))
+                            .buttonStyle(.glass)
                     }
                     .frame(minHeight: 24)
                     if !UpdaterService.shared.isAvailable {
@@ -879,12 +866,8 @@ struct SettingsView: View {
         switch cat {
         case .timer:
                 Section("Timer mode") {
-                    Picker("Mode", selection: $settings.timerMode) {
-                        ForEach(TimerMode.allCases, id: \.self) { mode in
-                            Text(mode.label).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
+                    GlassSegmentedPicker(selection: $settings.timerMode,
+                                         cases: TimerMode.allCases) { $0.label }
 
                     Picker("Time format", selection: $settings.timeFormat) {
                         ForEach(TimeDisplayFormat.allCases, id: \.self) { f in

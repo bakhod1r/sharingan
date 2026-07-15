@@ -7,11 +7,12 @@ import XCTest
 /// tests must not have).
 private final class FakeKV: KeyValueStore {
     var values: [String: Any] = [:]
+    var synchronizeSpy: (() -> Void)?
     func object(forKey key: String) -> Any? { values[key] }
     func set(_ value: Any?, forKey key: String) {
         if let value { values[key] = value } else { values.removeValue(forKey: key) }
     }
-    @discardableResult func synchronize() -> Bool { true }
+    @discardableResult func synchronize() -> Bool { synchronizeSpy?(); return true }
 }
 
 final class SettingsSyncTests: XCTestCase {
@@ -147,5 +148,60 @@ final class SettingsSyncTests: XCTestCase {
 
         XCTAssertEqual(defaults.string(forKey: "tasks.sortMode"), "priority")
         XCTAssertEqual(defaults.string(forKey: "report.sortMode"), "time")
+    }
+
+    // MARK: - Push/apply no-op dedup (the two-Mac ping-pong regression)
+
+    /// Pushing the exact value already in the KV store must not re-write it
+    /// (and therefore not call synchronize()) — otherwise applying a remote
+    /// change (which lands in `defaults`) triggers a push of the same bytes
+    /// straight back, forever bouncing between two Macs.
+    func testPushIsANoOpWhenValueAlreadyMatchesRemote() {
+        let defaults = freshDefaults(#function)
+        defaults.set("priority", forKey: "tasks.sortMode")
+        let kv = FakeKV()
+        kv.values["tasks.sortMode"] = "priority"
+        var synced = 0
+        kv.synchronizeSpy = { synced += 1 }
+
+        SettingsSync.pushLocal(defaults: defaults, kv: kv)
+
+        XCTAssertEqual(synced, 0)
+    }
+
+    func testPushWritesOnlyChangedKeys() {
+        let defaults = freshDefaults(#function)
+        defaults.set("priority", forKey: "tasks.sortMode")
+        defaults.set("name", forKey: "report.sortMode")
+        let kv = FakeKV()
+        kv.values["tasks.sortMode"] = "priority"     // unchanged
+        kv.values["report.sortMode"] = "time"        // stale — must push
+
+        SettingsSync.pushLocal(defaults: defaults, kv: kv)
+
+        XCTAssertEqual(kv.values["report.sortMode"] as? String, "name")
+    }
+
+    /// `applyRemote` posts `didApplyRemoteNotification` only when it actually
+    /// changed something local — a no-op apply must not wake up every
+    /// observer (the running timer would reload its settings for nothing).
+    func testApplyRemoteNotificationFiresOnlyWhenSomethingChanged() {
+        let defaults = freshDefaults(#function)
+        defaults.set("manual", forKey: "tasks.sortMode")
+        let kv = FakeKV()
+        kv.values["tasks.sortMode"] = "manual"   // identical — no-op apply
+
+        var fired = 0
+        let obs = NotificationCenter.default.addObserver(
+            forName: SettingsSync.didApplyRemoteNotification, object: nil, queue: nil
+        ) { _ in fired += 1 }
+        defer { NotificationCenter.default.removeObserver(obs) }
+
+        SettingsSync.applyRemote(kv: kv, defaults: defaults)
+        XCTAssertEqual(fired, 0)
+
+        kv.values["tasks.sortMode"] = "priority"   // now a real change
+        SettingsSync.applyRemote(kv: kv, defaults: defaults)
+        XCTAssertEqual(fired, 1)
     }
 }

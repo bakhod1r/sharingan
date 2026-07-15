@@ -123,9 +123,12 @@ public final class CloudSyncEngine: ObservableObject {
             try? await self.engine?.fetchChanges()
         }
 
-        // Phase 3 fallback for Macs the silent push doesn't reach (push is
-        // best-effort): poll every 15 minutes while sync is on.
-        fallbackTimer = Timer.scheduledTimer(withTimeInterval: 15 * 60,
+        // Fallback for Macs the silent push doesn't reach (the Developer ID
+        // build carries no aps-environment entitlement, so in practice this
+        // IS the delivery path): poll every 60 seconds while sync is on —
+        // cheap against CloudKit, and it keeps mirrored timers, breaks and
+        // settings landing within a minute worst-case instead of 15.
+        fallbackTimer = Timer.scheduledTimer(withTimeInterval: 60,
                                              repeats: true) { [weak self] _ in
             Task { @MainActor in self?.fetchChanges() }
         }

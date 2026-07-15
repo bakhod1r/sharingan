@@ -5,6 +5,35 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.6.0] — 2026-07-15
+
+### Fixed
+- A break mirrored from another Mac showed a frozen "time left" — the
+  overlay was presented at focus-complete against a *pending* break with no
+  live deadline yet. It now comes up when the owner Mac's break record
+  actually arrives, so the countdown ticks from the start.
+- Settings changes (timer mode, durations, theme, anything in the synced
+  blob) made on one Mac now actually reach the other Mac's running app: the
+  applied value used to land only in `UserDefaults`, which the live
+  `PomodoroTimer` never re-read until relaunch.
+- iCloud settings sync stopped a slow ping-pong: pushing/applying identical
+  values back and forth (remote change → apply → local-change observer →
+  push the same bytes back) is now skipped by value comparison.
+
+### Changed
+- Local settings edits push to iCloud immediately (2 s debounced) instead of
+  only at the next explicit `SettingsSync.start()`.
+- The sync fallback poll dropped from 15 minutes to 60 seconds — mirrored
+  timers, breaks, and settings now land in about a minute worst-case instead
+  of a quarter hour.
+- Sparkle updates are fully silent: checked and downloaded automatically in
+  the background, then installed (with a relaunch) the moment no focus/break
+  session is running — no "update available" dialog, no manual step.
+- Settings' segmented controls (Timer mode, Floating widget size/position,
+  import template format) and the plain action buttons (ambience Preview/
+  Stop, Check Now…) now render as the app's liquid-glass capsule style
+  instead of the stock AppKit controls.
+
 ## [1.5.0] — 2026-07-15
 
 ### Added
