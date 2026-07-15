@@ -159,10 +159,15 @@ public struct JiraParentRef: Decodable, Equatable, Sendable {
 }
 
 public struct JiraStatus: Decodable, Equatable, Sendable {
+    /// Status id — the only reliable key for board-column mapping, since a
+    /// custom workflow renames statuses freely. Optional: some trimmed status
+    /// objects omit it.
+    public let id: String?
     public let name: String
     public let statusCategory: JiraStatusCategory
 
-    public init(name: String, statusCategory: JiraStatusCategory) {
+    public init(id: String? = nil, name: String, statusCategory: JiraStatusCategory) {
+        self.id = id
         self.name = name
         self.statusCategory = statusCategory
     }
@@ -172,13 +177,14 @@ public struct JiraStatus: Decodable, Equatable, Sendable {
     // failing the whole page of issues.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(String.self, forKey: .id)
         name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
         statusCategory = try container.decodeIfPresent(JiraStatusCategory.self, forKey: .statusCategory)
             ?? JiraStatusCategory(key: "undefined", name: "", colorName: nil)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case name, statusCategory
+        case id, name, statusCategory
     }
 }
 
@@ -470,11 +476,29 @@ public struct JiraTransition: Decodable, Equatable, Sendable {
     public let id: String
     public let name: String
     public let to: JiraStatus
+    /// True when applying this transition opens a Jira field screen (e.g. a
+    /// required resolution) that Sharingan can't render — the board refuses it
+    /// and sends the user to Jira instead.
+    public let hasScreen: Bool
 
-    public init(id: String, name: String, to: JiraStatus) {
+    /// Alias for `to`, spelled the way the board code reads it.
+    public var toStatus: JiraStatus? { to }
+
+    public init(id: String, name: String, to: JiraStatus, hasScreen: Bool = false) {
         self.id = id
         self.name = name
         self.to = to
+        self.hasScreen = hasScreen
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, name, to, hasScreen }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(String.self, forKey: .id) ?? ""
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
+        to = try c.decode(JiraStatus.self, forKey: .to)
+        hasScreen = try c.decodeIfPresent(Bool.self, forKey: .hasScreen) ?? false
     }
 }
 
