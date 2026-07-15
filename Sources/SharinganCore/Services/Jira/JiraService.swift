@@ -204,6 +204,25 @@ public final class JiraService: ObservableObject {
     @Published public private(set) var lastErrorMessage: String?
     /// Outcome of the most recent `syncAssignedIssues()`, for the Settings row.
     @Published public private(set) var lastSync: JiraSyncSummary?
+    /// Projects (Atlassian "spaces") on the active site the account can browse.
+    /// Populated by `refreshProjects()`; empty until then.
+    @Published public private(set) var availableProjects: [JiraProject] = []
+
+    public static let selectedProjectDefaultsKey = "jira.selectedProject"
+
+    /// The project a sync restricts to, or nil for "everything assigned to me".
+    /// Persisted so the choice survives relaunch.
+    public var selectedProjectKey: String? {
+        get { defaults.string(forKey: Self.selectedProjectDefaultsKey) }
+        set {
+            if let newValue, !newValue.isEmpty {
+                defaults.set(newValue, forKey: Self.selectedProjectDefaultsKey)
+            } else {
+                defaults.removeObject(forKey: Self.selectedProjectDefaultsKey)
+            }
+            objectWillChange.send()
+        }
+    }
 
     private let defaults: UserDefaults
     private let store: JiraTokenStore
@@ -485,6 +504,24 @@ public final class JiraService: ObservableObject {
     public static let assignedOpenJQL =
         "assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC"
 
+    /// The same, restricted to one project ("space").
+    static func assignedOpenJQL(project key: String) -> String {
+        "assignee = currentUser() AND statusCategory != Done AND project = \"\(key)\" ORDER BY updated DESC"
+    }
+
+    /// Loads the browsable projects on the active site for the Settings picker.
+    /// Best-effort: a failure leaves the list as-is rather than dropping the
+    /// connection, since the picker is a convenience, not a requirement.
+    public func refreshProjects() async {
+        guard hasProjectAccess else { return }
+        do {
+            let response = try await client.getProjects(maxResults: 50)
+            availableProjects = response.values
+        } catch {
+            // Keep whatever we had; surface nothing — this is a background refresh.
+        }
+    }
+
     /// The Jira fields worth fetching — everything the mapper reads. Asking for
     /// only these keeps each page small.
     private static let syncFields = [
@@ -501,7 +538,11 @@ public final class JiraService: ObservableObject {
     /// edits are not yet pushed back (that lands with the worklog/transition
     /// work). Paginates to a safety ceiling so a huge backlog can't run forever.
     @discardableResult
-    public func syncAssignedIssues(jql: String = JiraService.assignedOpenJQL) async -> JiraSyncSummary {
+    public func syncAssignedIssues(jql explicitJQL: String? = nil) async -> JiraSyncSummary {
+        // Default to the selected project ("space"), or everything assigned when
+        // none is chosen. An explicit argument overrides both (used by tests).
+        let jql = explicitJQL ?? selectedProjectKey.map(Self.assignedOpenJQL(project:))
+            ?? Self.assignedOpenJQL
         guard hasProjectAccess, let host = siteHost else {
             let empty = JiraSyncSummary(imported: 0, updated: 0, conflicts: 0,
                                         failed: true, message: "Connect to a Jira site you can browse first.")

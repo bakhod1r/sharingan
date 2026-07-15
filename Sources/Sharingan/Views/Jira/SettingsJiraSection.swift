@@ -124,8 +124,10 @@ struct SettingsJiraSection: View {
 
         case .connected:
             siteRow
+            projectRow
             syncRow
             note("Sharingan reads and updates the Jira issues you link to tasks. It never sees your Atlassian password.")
+                .task { await jira.refreshProjects() }
 
         default:
             if let message = jira.lastErrorMessage {
@@ -184,6 +186,36 @@ struct SettingsJiraSection: View {
                           site.id != jira.activeSiteID else { return }
                     Task { await jira.switchSite(site) }
                 })
+    }
+
+    /// Restricts the sync to one Jira project ("space"), or "All my issues".
+    /// Scoping matters here: an account assigned across several projects pulls
+    /// hundreds of issues otherwise.
+    @ViewBuilder
+    private var projectRow: some View {
+        HStack(spacing: 12) {
+            Text("Space")
+                .font(.system(.body, design: .rounded))
+                .foregroundStyle(.white)
+            Spacer(minLength: 8)
+            Picker("", selection: projectSelection) {
+                Text("All my issues").tag("")
+                ForEach(jira.availableProjects, id: \.key) { project in
+                    Text("\(project.name) (\(project.key))").tag(project.key)
+                }
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+            .glassMenu()
+            .disabled(jira.isWorking)
+        }
+        .frame(minHeight: 24)
+    }
+
+    /// "" is the sentinel for "no project chosen — sync everything assigned".
+    private var projectSelection: Binding<String> {
+        Binding(get: { jira.selectedProjectKey ?? "" },
+                set: { jira.selectedProjectKey = $0.isEmpty ? nil : $0 })
     }
 
     /// Pulls the issues assigned to me into the task list. The result of the
