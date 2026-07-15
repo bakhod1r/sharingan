@@ -5,6 +5,17 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.3.1] — 2026-07-15
+
+### Fixed
+- iCloud sync actually connects now. CloudKit requires the app's sealed
+  entitlements to carry `com.apple.application-identifier` — the provisioning
+  profile alone isn't consulted — so 1.3.0 builds were denied with "Could not
+  determine iCloud account status" even when everything in the portal was
+  right. Verified live: the container is approved and records upload.
+- Floating widget's task picker closes itself a second after the pointer
+  leaves it.
+
 ## [1.3.0] — 2026-07-15
 
 ### Added
