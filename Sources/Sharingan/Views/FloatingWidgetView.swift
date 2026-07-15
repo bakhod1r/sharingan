@@ -69,7 +69,10 @@ struct FloatingWidgetView: View {
             if expanded {
                 VStack(alignment: .leading, spacing: 2) {
                     titleRow
-                    timeText
+                    HStack(spacing: 6 * k) {
+                        timeText
+                        pomodoroDots
+                    }
                 }
                 Spacer(minLength: 8 * k)
                 controls
@@ -120,6 +123,32 @@ struct FloatingWidgetView: View {
         .frame(width: 30 * k, height: 30 * k)
         .opacity(timer.isRunning ? 1 : 0.55)
         .animation(.snappy(duration: 0.3), value: timer.progress)
+    }
+
+    /// Pomodoro dot row next to the time: the active task's estimate when it
+    /// has one, else the user's finite Repeat ×N selection, else 3 — see
+    /// `FloatingWidgetPomodoroDots` for the (unit-tested) priority logic.
+    private var pomodoroDots: some View {
+        let rc = timer.settings.repeatConfig
+        let task = tasks.activeTask
+        let dots = FloatingWidgetPomodoroDots.plan(
+            taskEstimate: task?.effectiveEstimate,
+            taskDone: task?.pomodorosDone ?? 0,
+            repeatEnabled: rc.enabled, repeatEndless: rc.endless,
+            repeatCount: rc.count,
+            sessionsDone: rc.enabled && !rc.endless
+                ? timer.repeatIndex : timer.cyclesCompletedInRound)
+        return HStack(spacing: 3 * k) {
+            ForEach(0..<dots.total, id: \.self) { i in
+                Circle()
+                    .fill(i < dots.filled
+                          ? AnyShapeStyle(phaseColors.first ?? .white)
+                          : AnyShapeStyle(.white.opacity(0.22)))
+                    .frame(width: 5 * k, height: 5 * k)
+            }
+        }
+        .help("\(dots.filled) of \(dots.total) pomodoros")
+        .accessibilityLabel("\(dots.filled) of \(dots.total) pomodoros")
     }
 
     @ViewBuilder

@@ -256,4 +256,48 @@ struct FloatingWidgetTests {
         // this binding keeps resolving to a real shortcut instead of going dead.
         #expect(GlobalShortcut(rawValue: "showFloating") == .showFloating)
     }
+
+    // MARK: - Pomodoro dots
+
+    @Test("task estimate wins over repeat and default")
+    func dotsTaskEstimateWins() {
+        let d = FloatingWidgetPomodoroDots.plan(taskEstimate: 5, taskDone: 2,
+                                                repeatEnabled: true, repeatEndless: false,
+                                                repeatCount: 2, sessionsDone: 1)
+        #expect(d.total == 5 && d.filled == 2)
+    }
+
+    @Test("no estimate → the user's finite repeat selection")
+    func dotsRepeatSelection() {
+        let d = FloatingWidgetPomodoroDots.plan(taskEstimate: nil, taskDone: 0,
+                                                repeatEnabled: true, repeatEndless: false,
+                                                repeatCount: 4, sessionsDone: 3)
+        #expect(d.total == 4 && d.filled == 3)
+    }
+
+    @Test("no estimate, no finite repeat → 3 dots")
+    func dotsDefaultThree() {
+        let idle = FloatingWidgetPomodoroDots.plan(taskEstimate: nil, taskDone: 0,
+                                                   repeatEnabled: false, repeatEndless: false,
+                                                   repeatCount: 1, sessionsDone: 0)
+        #expect(idle.total == 3 && idle.filled == 0)
+        // Endless repeat has no meaningful count — fall back to the default too.
+        let endless = FloatingWidgetPomodoroDots.plan(taskEstimate: nil, taskDone: 0,
+                                                      repeatEnabled: true, repeatEndless: true,
+                                                      repeatCount: 99, sessionsDone: 2)
+        #expect(endless.total == 3 && endless.filled == 2)
+    }
+
+    @Test("totals clamp to 1…maxDots and filled clamps to total")
+    func dotsClamped() {
+        let big = FloatingWidgetPomodoroDots.plan(taskEstimate: 20, taskDone: 12,
+                                                  repeatEnabled: false, repeatEndless: false,
+                                                  repeatCount: 1, sessionsDone: 0)
+        #expect(big.total == FloatingWidgetPomodoroDots.maxDots)
+        #expect(big.filled == FloatingWidgetPomodoroDots.maxDots)
+        let zero = FloatingWidgetPomodoroDots.plan(taskEstimate: 0, taskDone: -1,
+                                                   repeatEnabled: false, repeatEndless: false,
+                                                   repeatCount: 0, sessionsDone: 0)
+        #expect(zero.total == 1 && zero.filled == 0)
+    }
 }

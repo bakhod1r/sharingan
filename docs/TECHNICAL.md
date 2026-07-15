@@ -4,7 +4,7 @@
 > whenever a feature is added, changed, or removed, update this document in the
 > same change.**
 
-- Version: 1.3.1
+- Version: 1.4.0
 - Platform: macOS 14+, lives in the menu bar
 
 ---
@@ -434,8 +434,14 @@ dynamic mode.
   (Sources/Sharingan/Services) owns the panel's lifecycle and placement;
   `FloatingWidgetView` (Sources/Sharingan/Views) is the SwiftUI pill itself —
   a mini progress ring, the active task title (or "No task selected"), the
-  remaining time, and the three transport buttons, which disable rather than
-  hide so the pill never changes shape under the pointer.
+  remaining time, a pomodoro dot row, and the three transport buttons, which
+  disable rather than hide so the pill never changes shape under the pointer.
+  The dot row's count is decided by `FloatingWidgetPomodoroDots`
+  (SharinganCore/Models), a pure unit-tested helper: the active task's
+  `effectiveEstimate` wins (filled by its `pomodorosDone`), else the user's
+  finite Repeat ×N selection (filled by `repeatIndex`), else 3 dots (filled
+  by `cyclesCompletedInRound`); totals clamp to 1…8 (`maxDots`) so a huge
+  estimate can't stretch the pill.
   `FloatingWidgetController` (protocol,
   SharinganCore/Services/SharinganCoordinator.swift) is the seam
   `SharinganCoordinator` calls through (`showFloatingWidget(timer:)` /

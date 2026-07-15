@@ -5,6 +5,14 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-07-15
+
+### Added
+- Floating widget shows a pomodoro dot row next to the time: the active
+  task's estimate when it has one (filled by its completed pomodoros),
+  otherwise the user's finite Repeat ×N selection, otherwise 3 dots —
+  capped at 8 so a big estimate can't stretch the pill.
+
 ## [1.3.1] — 2026-07-15
 
 ### Fixed
