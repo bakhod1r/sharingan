@@ -3,7 +3,7 @@ import Foundation
 /// The fields a merge decided to send back to Jira. A nil member means "don't
 /// push this field" — distinct from "push an empty value", which Jira treats as
 /// a clear.
-public struct JiraPushFields: Equatable, Sendable {
+public struct JiraPushFields: Codable, Equatable, Sendable {
     public var summary: String?
     /// Jira's priority *name* ("High"/"Medium"/"Low"). `TaskPriority.none` has
     /// no Jira equivalent, so it never pushes.
