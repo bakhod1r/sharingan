@@ -1088,14 +1088,9 @@ struct MenuBarView: View {
 
     private var footer: some View {
         HStack(spacing: 14) {
-            Button {
-                MainWindowManager.shared.show()
-            } label: {
-                Label("Open window", systemImage: "macwindow")
-                    .font(.system(.callout, design: .rounded).weight(.medium))
+            if let engine = AppServices.syncEngine {
+                SyncFooterButton(engine: engine)
             }
-            .buttonStyle(.pressableSubtle)
-            .foregroundStyle(.secondary)
 
             Button { openAppSettings() } label: {
                 Image(systemName: "gearshape.fill")
@@ -1126,5 +1121,36 @@ struct MenuBarView: View {
     private func openAppSettings() {
         AppRouter.shared.openSettings()
         MainWindowManager.shared.show()
+    }
+}
+
+/// Footer "Sync" button — triggers `CloudSyncEngine.syncNow()` and spins its
+/// icon while a round trip is in flight. Disabled unless the user has turned
+/// iCloud sync on and no sync is already running.
+private struct SyncFooterButton: View {
+    @ObservedObject var engine: CloudSyncEngine
+    @AppStorage(CloudSyncEngine.syncEnabledKey) private var syncEnabled = false
+
+    var body: some View {
+        Button { engine.syncNow() } label: {
+            Label("Sync", systemImage: "arrow.triangle.2.circlepath")
+                .font(.system(.callout, design: .rounded).weight(.medium))
+                .rotationEffect(.degrees(engine.status.isActive ? 360 : 0))
+                .animation(
+                    engine.status.isActive
+                        ? .linear(duration: 1).repeatForever(autoreverses: false)
+                        : .default,
+                    value: engine.status.isActive)
+        }
+        .buttonStyle(.pressableSubtle)
+        .foregroundStyle(.secondary)
+        .disabled(!canSyncNow)
+        .opacity(canSyncNow ? 1 : 0.4)
+        .help(syncEnabled ? "Sync Now" : "Turn on iCloud sync in Settings first")
+    }
+
+    private var canSyncNow: Bool {
+        if case .idle = engine.status { return syncEnabled }
+        return false
     }
 }
