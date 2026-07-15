@@ -191,11 +191,19 @@ public actor JiraClient {
 
     // MARK: - Agile API (Boards, Sprints)
 
-    public func getBoards(startAt: Int = 0, maxResults: Int = 50) async throws -> JiraBoardListResponse {
-        let queryItems = [
+    /// - Parameter projectKeyOrId: When set, the Agile API returns only the
+    ///   boards scoped to that project — a board key ("SHR") or numeric id both
+    ///   work. Left nil, it lists every board the account can see.
+    public func getBoards(projectKeyOrId: String? = nil,
+                          startAt: Int = 0,
+                          maxResults: Int = 50) async throws -> JiraBoardListResponse {
+        var queryItems = [
             URLQueryItem(name: "startAt", value: String(startAt)),
             URLQueryItem(name: "maxResults", value: String(maxResults))
         ]
+        if let projectKeyOrId, !projectKeyOrId.isEmpty {
+            queryItems.append(URLQueryItem(name: "projectKeyOrId", value: projectKeyOrId))
+        }
         return try await request(path: "/rest/agile/1.0/board", method: "GET", queryItems: queryItems)
     }
 
