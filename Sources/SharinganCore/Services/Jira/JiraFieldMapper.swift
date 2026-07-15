@@ -210,7 +210,99 @@ public enum JiraFieldMapper {
             priority: priority(fromJiraName: fields.priority?.name),
             jiraKey: issue.key,
             jiraIssueID: issue.id,
-            jiraSiteHost: siteHost)
+            jiraSiteHost: siteHost,
+            jiraIssueType: fields.issuetype?.name)
+    }
+
+    // MARK: - Hierarchy
+
+    /// Issues split into top-level parents and the sub-tasks grouped under
+    /// them. A "sub-task" is decided by the issue type's `subtask` flag, never
+    /// by the presence of `parent` — Stories in team-managed projects carry
+    /// their Epic as `parent` and must stay top-level.
+    public struct JiraHierarchy: Equatable, Sendable {
+        public let parents: [JiraIssue]
+        /// Sub-tasks whose parent isn't in the fetched set (e.g. the parent is
+        /// assigned to someone else) — the caller resolves these separately.
+        public let orphanSubtasks: [JiraIssue]
+        private let byParentKey: [String: [JiraIssue]]
+
+        init(parents: [JiraIssue], orphanSubtasks: [JiraIssue],
+             byParentKey: [String: [JiraIssue]]) {
+            self.parents = parents
+            self.orphanSubtasks = orphanSubtasks
+            self.byParentKey = byParentKey
+        }
+
+        public func subtasks(forParentKey key: String) -> [JiraIssue] {
+            byParentKey[key] ?? []
+        }
+    }
+
+    /// Groups sub-tasks under their parents, preserving input order on both
+    /// levels. Pure — feed it a page of search results.
+    public static func buildHierarchy(issues: [JiraIssue]) -> JiraHierarchy {
+        let parents = issues.filter { $0.fields.issuetype?.subtask != true }
+        let parentKeys = Set(parents.map(\.key))
+        var byParentKey: [String: [JiraIssue]] = [:]
+        var orphans: [JiraIssue] = []
+        for issue in issues where issue.fields.issuetype?.subtask == true {
+            if let parentKey = issue.fields.parent?.key, parentKeys.contains(parentKey) {
+                byParentKey[parentKey, default: []].append(issue)
+            } else {
+                orphans.append(issue)
+            }
+        }
+        return JiraHierarchy(parents: parents, orphanSubtasks: orphans,
+                             byParentKey: byParentKey)
+    }
+
+    /// A Jira sub-task as a Sharingan subtask, keeping its own Jira identity so
+    /// worklogs and transitions can target the sub-task issue itself.
+    public static func subtask(from issue: JiraIssue) -> Subtask {
+        Subtask(title: issue.fields.summary ?? issue.key,
+                isDone: issue.fields.status?.statusCategory.key == "done",
+                estimatedPomodoros: pomodoros(fromEstimateSeconds: issue.fields.timeoriginalestimate),
+                jiraKey: issue.key,
+                jiraIssueID: issue.id)
+    }
+
+    /// Merges remote sub-tasks into a parent task's subtask list.
+    ///
+    /// Matching is by `jiraIssueID`. An already-nested subtask keeps its local
+    /// identity and pomodoro progress but takes Jira's title/estimate/done
+    /// state (Jira owns issue fields). Local-only subtasks survive untouched.
+    /// `flatTasks` are earlier flat imports of the same sub-tasks: their
+    /// progress transfers into the nested subtask and their ids come back in
+    /// `absorbedTaskIDs` so the caller can delete them.
+    public static func nestSubtasks(into parent: TaskItem,
+                                    remote: [JiraIssue],
+                                    absorbing flatTasks: [TaskItem] = [])
+    -> (parent: TaskItem, absorbedTaskIDs: [UUID]) {
+        var updated = parent
+        var subs = parent.subtasks
+        var absorbed: [UUID] = []
+
+        for issue in remote {
+            if let i = subs.firstIndex(where: { $0.jiraIssueID == issue.id }) {
+                subs[i].title = issue.fields.summary ?? subs[i].title
+                subs[i].isDone = issue.fields.status?.statusCategory.key == "done"
+                if let est = pomodoros(fromEstimateSeconds: issue.fields.timeoriginalestimate) {
+                    subs[i].estimatedPomodoros = est
+                }
+                subs[i].jiraKey = issue.key
+            } else {
+                var fresh = subtask(from: issue)
+                if let twin = flatTasks.first(where: { $0.jiraIssueID == issue.id }) {
+                    fresh.pomodorosDone = twin.pomodorosDone
+                    absorbed.append(twin.id)
+                }
+                subs.append(fresh)
+            }
+        }
+
+        updated.subtasks = subs
+        return (updated, absorbed)
     }
 
     // MARK: - Three-way merge

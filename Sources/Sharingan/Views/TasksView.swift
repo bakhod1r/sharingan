@@ -1174,11 +1174,18 @@ struct TasksView: View {
                             .foregroundStyle(.white.opacity(0.6)).frame(width: 22, height: 22)
                     }
                     .buttonStyle(.pressableSubtle).help("Rename")
-                    Button { templates.delete(t.id) } label: {
-                        Image(systemName: "trash").font(.system(size: 11))
-                            .foregroundStyle(.red.opacity(0.8)).frame(width: 22, height: 22)
+                    Menu {
+                        Button(role: .destructive) { templates.delete(t.id) } label: {
+                            Label("Delete template", systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis").font(.system(size: 11))
+                            .foregroundStyle(.white.opacity(0.6)).frame(width: 22, height: 22)
+                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(.pressableSubtle).help("Delete template")
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
                 }
                 .padding(.vertical, 3)
             }
@@ -1441,11 +1448,18 @@ struct TasksView: View {
                             .foregroundStyle(.white.opacity(0.6)).frame(width: 22, height: 22)
                     }
                     .buttonStyle(.pressableSubtle).help("Rename")
-                    Button { store.deleteCategory(c.name) } label: {
-                        Image(systemName: "trash").font(.system(size: 11))
-                            .foregroundStyle(.red.opacity(0.8)).frame(width: 22, height: 22)
+                    Menu {
+                        Button(role: .destructive) { store.deleteCategory(c.name) } label: {
+                            Label("Delete category", systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis").font(.system(size: 11))
+                            .foregroundStyle(.white.opacity(0.6)).frame(width: 22, height: 22)
+                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(.pressableSubtle).help("Delete category")
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
                 }
             }
             colorRow(selected: c.colorHex) { store.setColor(for: c.name, colorHex: $0) }
@@ -1842,10 +1856,26 @@ struct TasksView: View {
             // changes the row's layout width — a conditional insert here would
             // shove the Play button left under the cursor, causing the row's
             // hover state to flicker on/off in a feedback loop.
-            HStack(spacing: 1) {
-                rowActionButton("pencil", "Edit task…") { editorTask = task }
-                rowActionButton("trash", "Delete task", danger: true) { store.delete(task.id) }
+            // Destructive actions hide behind "…" — a bare trash button on the
+            // row invites misclicks and reads noisy.
+            Menu {
+                Button { editorTask = task } label: {
+                    Label("Edit task…", systemImage: "pencil")
+                }
+                Divider()
+                Button(role: .destructive) { store.delete(task.id) } label: {
+                    Label("Delete task", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .frame(width: 24, height: 22)
+                    .contentShape(Capsule())
             }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
             .padding(2)
             .background(Capsule().fill(Color.white.opacity(0.07)))
             .opacity(hovered ? 1 : 0)

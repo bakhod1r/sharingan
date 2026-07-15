@@ -113,8 +113,11 @@ public struct JiraIssueFields: Decodable, Equatable, Sendable {
     public let resolution: JiraResolution?
     public let fixVersions: [JiraVersion]?
     public let customfield_10020: JiraSprint?
+    /// The parent issue, present on sub-tasks (and on Story→Epic links in
+    /// team-managed projects). Drives nesting on import.
+    public let parent: JiraParentRef?
 
-    public init(summary: String?, status: JiraStatus?, priority: JiraPriority?, labels: [String]?, duedate: String?, timeoriginalestimate: Int?, description: JiraADFDocument?, project: JiraProject?, issuetype: JiraIssueType?, components: [JiraComponent]?, updated: String?, assignee: JiraUser?, reporter: JiraUser?, created: String?, resolution: JiraResolution?, fixVersions: [JiraVersion]?, customfield_10020: JiraSprint?) {
+    public init(summary: String?, status: JiraStatus?, priority: JiraPriority?, labels: [String]?, duedate: String?, timeoriginalestimate: Int?, description: JiraADFDocument?, project: JiraProject?, issuetype: JiraIssueType?, components: [JiraComponent]?, updated: String?, assignee: JiraUser?, reporter: JiraUser?, created: String?, resolution: JiraResolution?, fixVersions: [JiraVersion]?, customfield_10020: JiraSprint?, parent: JiraParentRef? = nil) {
         self.summary = summary
         self.status = status
         self.priority = priority
@@ -132,6 +135,26 @@ public struct JiraIssueFields: Decodable, Equatable, Sendable {
         self.resolution = resolution
         self.fixVersions = fixVersions
         self.customfield_10020 = customfield_10020
+        self.parent = parent
+    }
+}
+
+/// Minimal reference to a sub-task's parent issue.
+public struct JiraParentRef: Decodable, Equatable, Sendable {
+    public let id: String
+    public let key: String
+
+    public init(id: String, key: String) {
+        self.id = id
+        self.key = key
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, key }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(String.self, forKey: .id) ?? ""
+        key = try c.decodeIfPresent(String.self, forKey: .key) ?? ""
     }
 }
 

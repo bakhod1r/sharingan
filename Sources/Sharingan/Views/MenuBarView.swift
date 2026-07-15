@@ -617,15 +617,22 @@ struct MenuBarView: View {
             }
             .buttonStyle(.pressableSubtle)
 
-            // Delete — revealed on hover so the dense row stays uncluttered.
-            Button { tasks.delete(task.id) } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 11))
+            // Delete hides behind "…" — revealed on hover so the dense row
+            // stays uncluttered, and never a bare trash button.
+            Menu {
+                Button(role: .destructive) { tasks.delete(task.id) } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.secondary)
                     .frame(width: 20, height: 20)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.pressableSubtle)
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
             .opacity(hoveredTask == task.id ? 1 : 0)
             .animation(DS.Motion.hover, value: hoveredTask)
             .help("Delete task")
