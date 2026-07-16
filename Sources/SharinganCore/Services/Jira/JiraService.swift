@@ -615,6 +615,25 @@ public final class JiraService: ObservableObject, JiraPomodoroHooks {
             linked.jiraIssueID = ref.id
             linked.jiraSiteHost = host
             linked.jiraIssueType = issueType
+
+            // Create each not-yet-linked subtask as a real Jira sub-task under
+            // the new parent, so a converted multi-step task keeps its shape.
+            // A subtask failing is not fatal — the parent is already created and
+            // linked; the subtask stays local and can be retried.
+            let unlinkedSubs = linked.subtasks.contains { $0.jiraKey == nil }
+            if unlinkedSubs, let subType = await subtaskIssueTypeName(forProjectKey: project) {
+                for i in linked.subtasks.indices where linked.subtasks[i].jiraKey == nil {
+                    let sub = linked.subtasks[i]
+                    if let subRef = try? await client.createIssue(fields: JiraIssueCreateFields(
+                        projectKey: project, issueTypeName: subType, summary: sub.title,
+                        estimateSeconds: JiraFieldMapper.estimateSeconds(fromPomodoros: sub.estimatedPomodoros),
+                        parentKey: ref.key)) {
+                        linked.subtasks[i].jiraKey = subRef.key
+                        linked.subtasks[i].jiraIssueID = subRef.id
+                    }
+                }
+            }
+
             isApplyingRemote = true
             taskStore.update(linked)
             isApplyingRemote = false
@@ -626,6 +645,32 @@ public final class JiraService: ObservableObject, JiraPomodoroHooks {
             return false
         }
     }
+
+    /// A cache of each project's sub-task issue-type name, keyed by project key.
+    /// Resolved once per project — the value doesn't change between syncs.
+    private var subtaskTypeCache: [String: String] = [:]
+
+    /// The name of a sub-task issue type in the given project ("Sub-task" in
+    /// company-managed projects, "Subtask" in team-managed ones), or nil when
+    /// the project has none (so the caller skips sub-task creation rather than
+    /// 400ing). Looked up via the project's numeric id, which the issue-type
+    /// endpoint requires.
+    private func subtaskIssueTypeName(forProjectKey key: String) async -> String? {
+        if let cached = subtaskTypeCache[key] { return cached }
+        guard let projectID = availableProjects.first(where: { $0.key == key })?.id else { return nil }
+        guard let types = try? await client.getIssueTypes(projectId: projectID) else { return nil }
+        guard let name = types.values.first(where: { $0.subtask })?.name else { return nil }
+        subtaskTypeCache[key] = name
+        return name
+    }
+
+    #if DEBUG
+    /// Seeds `availableProjects` for tests that create issues without a full
+    /// connect (which is what populates the real list).
+    func setAvailableProjectsForTesting(_ projects: [JiraProject]) {
+        availableProjects = projects
+    }
+    #endif
 
     /// Local tasks eligible to be pushed to Jira: not yet linked and not done,
     /// optionally scoped to one category. The Settings "Convert to Jira" action

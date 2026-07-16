@@ -141,6 +141,67 @@ struct JiraCreateIssueTests {
         #expect((fields?["issuetype"] as? [String: Any])?["name"] as? String == "Story")
     }
 
+    @Test("createIssueFields encodes a parent reference for sub-tasks")
+    func createFieldsEncodesParent() async throws {
+        defer { CreateStubProtocol.handler = nil }
+        let recorder = RequestRecorder()
+        let client = stubClient { request in
+            recorder.record(request)
+            return (HTTPURLResponse(url: request.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!,
+                    Data(#"{"id":"1","key":"SHRGN-9"}"#.utf8))
+        }
+        _ = try await client.createIssue(fields: JiraIssueCreateFields(
+            projectKey: "SHRGN", issueTypeName: "Sub-task", summary: "step",
+            parentKey: "SHRGN-8"))
+        let body = try JSONSerialization.jsonObject(with: try #require(recorder.last?.body)) as? [String: Any]
+        let fields = body?["fields"] as? [String: Any]
+        #expect((fields?["parent"] as? [String: Any])?["key"] as? String == "SHRGN-8")
+    }
+
+    @Test("creating from a task with subtasks creates each as a linked Jira sub-task")
+    @MainActor
+    func createFromTaskCreatesSubtasks() async throws {
+        defer { CreateStubProtocol.handler = nil }
+        let keys = Counter()
+        let recorder = RequestRecorder()
+        let (service, tasks) = try makeService { request in
+            recorder.record(request)
+            let path = request.url?.path ?? ""
+            if path.hasSuffix("/issuetype/project") {
+                return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                        Data(#"[{"id":"1","name":"Task","subtask":false},{"id":"5","name":"Sub-task","subtask":true}]"#.utf8))
+            }
+            let n = keys.next()
+            return (HTTPURLResponse(url: request.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!,
+                    Data("{\"id\":\"20\(n)\",\"key\":\"SHRGN-\(n)\"}".utf8))
+        }
+        service.setAvailableProjectsForTesting([JiraProject(key: "SHRGN", name: "Sh", id: "10005")])
+        tasks.add(title: "Parent task", category: "Inbox", priority: .medium)
+        var task = try #require(tasks.tasks.first { $0.title == "Parent task" })
+        task.subtasks = [Subtask(title: "Step one"), Subtask(title: "Step two")]
+        tasks.update(task)
+
+        #expect(await service.createIssue(from: task, projectKey: "SHRGN"))
+
+        let linked = try #require(tasks.tasks.first { $0.id == task.id })
+        #expect(linked.isJiraLinked)
+        #expect(linked.subtasks.count == 2)
+        #expect(linked.subtasks.allSatisfy { $0.jiraKey != nil && $0.jiraIssueID != nil })
+        let subtaskCreates = recorder.all.filter { req in
+            guard req.path?.hasSuffix("/issue") == true,
+                  let body = req.body,
+                  let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
+                  let fields = json["fields"] as? [String: Any] else { return false }
+            return fields["parent"] != nil
+        }
+        #expect(subtaskCreates.count == 2)
+        let firstSub = try JSONSerialization.jsonObject(
+            with: try #require(subtaskCreates.first?.body)) as? [String: Any]
+        let subFields = firstSub?["fields"] as? [String: Any]
+        #expect((subFields?["issuetype"] as? [String: Any])?["name"] as? String == "Sub-task")
+        #expect((subFields?["parent"] as? [String: Any])?["key"] as? String == linked.jiraKey)
+    }
+
     @Test("bulk push creates issues only for unlinked, undone tasks and links them")
     @MainActor
     func bulkPushConvertsUnlinkedTasks() async throws {
@@ -191,6 +252,10 @@ private final class RequestRecorder: @unchecked Sendable {
     var last: (path: String?, method: String?, body: Data?)? {
         lock.lock(); defer { lock.unlock() }
         return requests.last
+    }
+    var all: [(path: String?, method: String?, body: Data?)] {
+        lock.lock(); defer { lock.unlock() }
+        return requests
     }
 }
 
