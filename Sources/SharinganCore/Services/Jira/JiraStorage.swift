@@ -350,6 +350,19 @@ public final class JiraStorage {
         _ = sqlite3_step(stmt)
     }
 
+    /// The live queued item for an issue/op pair, if any — the coalesce lookup:
+    /// a second edit to the same issue replaces this item's payload instead of
+    /// growing the queue.
+    public func pendingItem(issueKey: String, op: JiraOutboxOp) -> OutboxItem? {
+        var stmt: OpaquePointer?
+        let sql = "\(Self.outboxSelect) WHERE issue_key = ? AND op = ? AND failed = 0 LIMIT 1;"
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
+        defer { sqlite3_finalize(stmt) }
+        bindText(stmt, 1, issueKey)
+        bindText(stmt, 2, op.rawValue)
+        return readItems(stmt).first
+    }
+
     /// Queued items whose backoff has elapsed, oldest first. Skips failed items.
     public func dueItems(now: Date = Date()) -> [OutboxItem] {
         var stmt: OpaquePointer?

@@ -214,6 +214,51 @@ public enum JiraFieldMapper {
             jiraIssueType: fields.issuetype?.name)
     }
 
+    // MARK: - Change capture (local edit → queued push)
+
+    /// What a local edit changed, diffed against the last-seen snapshot — the
+    /// outbound half of two-way sync. No remote fetch is involved: the snapshot
+    /// is what Jira looked like at the previous sync, so anything differing
+    /// from it is a local change worth queueing.
+    ///
+    /// Components imported into `tags` are held out of the label push — Jira
+    /// tracks components separately, and pushing one as a label would duplicate
+    /// it on the issue.
+    public static func pushFields(local: TaskItem,
+                                  lastSeen: CachedJiraIssue,
+                                  pushEstimate: Bool = false) -> JiraPushFields {
+        var push = JiraPushFields()
+
+        if local.title != lastSeen.summary {
+            push.summary = local.title
+        }
+
+        if priority(fromJiraName: lastSeen.priorityName) != local.priority,
+           let name = jiraPriorityName(from: local.priority) {
+            push.priorityName = name
+        }
+
+        let componentTags = Set(lastSeen.components)
+        let localLabels = local.tags
+            .filter { !componentTags.contains($0) }
+            .map(jiraLabel(from:))
+        if Set(localLabels) != Set(lastSeen.labels) {
+            push.labels = localLabels
+        }
+
+        if let due = jiraDueDate(from: local.dueDate), due != lastSeen.dueDate {
+            push.duedate = due
+        }
+
+        if pushEstimate,
+           let seconds = estimateSeconds(fromPomodoros: local.estimatedPomodoros),
+           seconds != lastSeen.estimateSeconds {
+            push.timeoriginalestimate = seconds
+        }
+
+        return push
+    }
+
     // MARK: - Hierarchy
 
     /// Issues split into top-level parents and the sub-tasks grouped under

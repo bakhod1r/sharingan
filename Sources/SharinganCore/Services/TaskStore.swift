@@ -959,6 +959,10 @@ public final class TaskStore: ObservableObject {
         _ = addCategory(name: trimmed, colorHex: "#4F8DFD", icon: "ticket.fill")
     }
 
+    /// Observes saves of Jira-linked tasks so local edits can queue for push.
+    /// Set once by the app at launch; nil (tests, CLI) means no capture.
+    public var jiraChangeObserver: ((TaskItem) -> Void)?
+
     public func update(_ item: TaskItem) {
         guard let i = tasks.firstIndex(where: { $0.id == item.id }) else { return }
         tasks[i] = item
@@ -971,6 +975,7 @@ public final class TaskStore: ObservableObject {
         // otherwise never fire (they were only scheduled at creation time).
         syncDueNotifications(for: item)
         persist()
+        if item.isJiraLinked { jiraChangeObserver?(item) }
     }
 
     /// Records one completed pomodoro against the given task. The task counter

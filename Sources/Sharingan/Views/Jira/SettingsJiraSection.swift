@@ -125,7 +125,11 @@ struct SettingsJiraSection: View {
         case .connected:
             siteRow
             projectRow
+            directionRow
             syncRow
+            if jira.syncMode == .twoWay {
+                pushRow
+            }
             note("Sharingan reads and updates the Jira issues you link to tasks. It never sees your Atlassian password.")
                 .task { await jira.refreshProjects() }
 
@@ -216,6 +220,52 @@ struct SettingsJiraSection: View {
     private var projectSelection: Binding<String> {
         Binding(get: { jira.selectedProjectKey ?? "" },
                 set: { jira.selectedProjectKey = $0.isEmpty ? nil : $0 })
+    }
+
+    /// One-way (Jira → Sharingan) or two-way. Local edits only queue for push
+    /// in two-way mode; pull mode leaves Jira untouched.
+    @ViewBuilder
+    private var directionRow: some View {
+        HStack(spacing: 12) {
+            Text("Sync direction")
+                .font(.system(.body, design: .rounded))
+                .foregroundStyle(.white)
+            Spacer(minLength: 8)
+            Picker("", selection: Binding(
+                get: { jira.syncMode.rawValue },
+                set: { jira.syncMode = JiraService.SyncMode(rawValue: $0) ?? .pull })) {
+                Text("Jira → Sharingan").tag(JiraService.SyncMode.pull.rawValue)
+                Text("Two-way").tag(JiraService.SyncMode.twoWay.rawValue)
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+            .glassMenu()
+        }
+        .frame(minHeight: 24)
+    }
+
+    /// Drains the queued local edits. The count keeps the queue honest — a
+    /// number that never reaches zero is how the user learns a push is stuck.
+    @ViewBuilder
+    private var pushRow: some View {
+        HStack(spacing: 12) {
+            Button("Push changes now") { Task { await jira.pushNow() } }
+                .buttonStyle(.glass)
+                .disabled(jira.isWorking || jira.pendingPushCount == 0)
+            Spacer(minLength: 8)
+            let pending = jira.pendingPushCount
+            let failed = jira.failedPushItems.count
+            if failed > 0 {
+                Text("\(failed) couldn't be sent")
+                    .font(.system(.callout, design: .rounded))
+                    .foregroundStyle(Color.red.opacity(0.9))
+            } else {
+                Text(pending == 0 ? "Nothing queued" : "\(pending) pending")
+                    .font(.system(.callout, design: .rounded))
+                    .foregroundStyle(Color.dsSecondary)
+            }
+        }
+        .frame(minHeight: 24)
     }
 
     /// Pulls the issues assigned to me into the task list. The result of the

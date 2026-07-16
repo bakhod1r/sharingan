@@ -513,6 +513,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let jira = JiraService(
             openURL: { url in Task { @MainActor in NSWorkspace.shared.open(url) } },
             issueCache: JiraStorage(path: JiraStorage.defaultDatabaseURL().path))
+        // Local edits to linked tasks queue for push (two-way mode); the poll
+        // pulls Jira's side and drains the queue on its own clock.
+        TaskStore.shared.jiraChangeObserver = { [weak jira] task in
+            jira?.taskDidChange(task)
+        }
+        jira.startPolling()
         self.jiraService = jira
         AppServices.jiraService = jira
         syncStatusCancellable = sync.$status

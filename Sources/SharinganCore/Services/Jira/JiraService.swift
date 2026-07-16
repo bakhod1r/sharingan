@@ -503,6 +503,96 @@ public final class JiraService: ObservableObject {
     /// hand out the same issue *key*, and a row fetched from the old site would
     /// otherwise be served as the new site's. The cache is refetchable, so
     /// deleting the foreign rows is cheaper than teaching every read to filter.
+    // MARK: - Sync direction + change capture
+
+    public static let syncModeDefaultsKey = "jira.syncMode"
+
+    /// One-way (`pull`, the default) or two-way. In pull mode local edits never
+    /// queue — Jira stays the untouched source of truth.
+    public enum SyncMode: String, Sendable {
+        case pull, twoWay
+    }
+
+    public var syncMode: SyncMode {
+        get { SyncMode(rawValue: defaults.string(forKey: Self.syncModeDefaultsKey) ?? "") ?? .pull }
+        set { defaults.set(newValue.rawValue, forKey: Self.syncModeDefaultsKey); objectWillChange.send() }
+    }
+
+    /// True while a sync is writing Jira's own values into the task store —
+    /// those writes echo through the change observer and must not be captured
+    /// as local edits (they'd bounce straight back to Jira).
+    private var isApplyingRemote = false
+
+    /// Called (via the TaskStore observer) whenever a Jira-linked task changes
+    /// locally. Diffs against the last-seen snapshot and queues a `fields` op;
+    /// repeated edits to one issue coalesce into a single queued item carrying
+    /// the latest cumulative diff.
+    public func taskDidChange(_ task: TaskItem) {
+        guard syncMode == .twoWay, !isApplyingRemote,
+              let issueID = task.jiraIssueID, let key = task.jiraKey,
+              let issueCache,
+              let lastSeen = issueCache.issue(id: issueID) else { return }
+
+        let push = JiraFieldMapper.pushFields(
+            local: task, lastSeen: lastSeen,
+            pushEstimate: defaults.bool(forKey: Self.pushEstimateDefaultsKey))
+        guard !push.isEmpty,
+              let data = try? JSONEncoder().encode(push),
+              let payload = String(data: data, encoding: .utf8) else { return }
+
+        // Reusing the queued item's id turns enqueue's upsert into the coalesce.
+        let existing = issueCache.pendingItem(issueKey: key, op: .fields)
+        issueCache.enqueue(OutboxItem(id: existing?.id ?? UUID(),
+                                      issueKey: key, op: .fields, payload: payload,
+                                      createdAt: existing?.createdAt ?? Date()))
+        objectWillChange.send()
+    }
+
+    // MARK: - Push (drain the queue)
+
+    /// Sends every due queued write now — the "Push now" button and the poll's
+    /// second half. Safe to call in pull mode (the queue is simply empty).
+    @discardableResult
+    public func pushNow() async -> (sent: Int, failed: Int) {
+        guard let issueCache else { return (0, 0) }
+        let flusher = JiraOutboxFlusher(client: client, storage: issueCache)
+        let result = await flusher.flush()
+        objectWillChange.send()
+        return result
+    }
+
+    /// Queued-but-unsent writes, for the Settings row.
+    public var pendingPushCount: Int { issueCache?.pendingCount() ?? 0 }
+
+    /// Permanently failed writes awaiting Retry/Dismiss.
+    public var failedPushItems: [OutboxItem] { issueCache?.failedItems() ?? [] }
+
+    // MARK: - Poll
+
+    private var pollTask: Task<Void, Never>?
+
+    /// Pull on a timer, then (in two-way mode) push the queue. Reads the
+    /// interval each lap, so a Settings change applies without a restart;
+    /// 0 pauses polling but keeps the loop alive so re-enabling works.
+    public func startPolling() {
+        pollTask?.cancel()
+        pollTask = Task { [weak self] in
+            while !Task.isCancelled {
+                let minutes = self?.defaults.integer(forKey: Self.pollMinutesDefaultsKey) ?? 0
+                let wait = minutes > 0 ? minutes : 1
+                try? await Task.sleep(nanoseconds: UInt64(wait) * 60 * 1_000_000_000)
+                guard let self, !Task.isCancelled, minutes > 0, self.hasProjectAccess else { continue }
+                await self.syncAssignedIssues()
+                if self.syncMode == .twoWay { await self.pushNow() }
+            }
+        }
+    }
+
+    public func stopPolling() {
+        pollTask?.cancel()
+        pollTask = nil
+    }
+
     // MARK: - Issue sync
 
     /// The default filter: issues assigned to me that aren't done, newest first.
@@ -557,7 +647,10 @@ public final class JiraService: ObservableObject {
 
         isWorking = true
         lastErrorMessage = nil
-        defer { isWorking = false }
+        // Everything this sync writes into the store is Jira's own state coming
+        // back — the change observer must not re-queue it as a local edit.
+        isApplyingRemote = true
+        defer { isWorking = false; isApplyingRemote = false }
 
         let pushEstimate = defaults.bool(forKey: Self.pushEstimateDefaultsKey)
         var imported = 0, updated = 0, conflicts = 0
