@@ -11,6 +11,12 @@ struct SettingsSyncSection: View {
     @ObservedObject var engine: CloudSyncEngine
     @AppStorage(CloudSyncEngine.syncEnabledKey) private var syncEnabled = false
     @AppStorage(SharinganCoordinator.timerMirrorDefaultsKey) private var timerMirror = true
+    @AppStorage(CloudSyncEngine.syncRetryMaxMinutesKey)
+    private var retryMaxMinutes = CloudSyncEngine.defaultRetryMaxMinutes
+
+    /// How long, at most, to wait between retries of a push the server keeps
+    /// rejecting — the ceiling the exponential backoff flattens out at.
+    private let retryOptions = [1, 2, 5, 10, 15]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
@@ -49,6 +55,29 @@ struct SettingsSyncSection: View {
                 if syncEnabled {
                     ToggleRow(title: "Mirror timer across Macs", isOn: $timerMirror)
                     Text("Starting, pausing, or finishing a session on one Mac does the same on the others. Turn this off to sync tasks without sharing the timer.")
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(.secondary)
+
+                    HStack(spacing: 12) {
+                        Text("Retry at most every")
+                            .font(.system(.body, design: .rounded))
+                            .foregroundStyle(.white)
+                        Spacer(minLength: 8)
+                        Picker("", selection: Binding(
+                            get: { retryMaxMinutes },
+                            set: { m in
+                                retryMaxMinutes = m
+                                engine.setRetryCapMinutes(m)
+                            })) {
+                            ForEach(retryOptions, id: \.self) { m in
+                                Text(m == 1 ? "1 minute" : "\(m) minutes").tag(m)
+                            }
+                        }
+                        .labelsHidden()
+                        .fixedSize()
+                    }
+                    .frame(minHeight: 24)
+                    Text("How long, at most, to wait between retries when iCloud keeps rejecting a change. Shorter recovers faster; longer is gentler on battery and quota.")
                         .font(.system(.caption2, design: .rounded))
                         .foregroundStyle(.secondary)
                 }

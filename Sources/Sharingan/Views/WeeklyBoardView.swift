@@ -403,32 +403,28 @@ struct WeeklyBoardView: View {
 
             let showBadge = timer.settings.showPomodoroBadges
                 && (task.pomodorosDone > 0 || task.effectiveEstimate != nil)
-            let hasMeta = task.dueDate != nil || task.subtaskProgress.total > 0
-                || showBadge || !task.tags.isEmpty || task.priority != .none
+            let hasMeta = task.dueDate != nil || showBadge || task.priority != .none
             if hasMeta {
+                // A day column is narrow, so this lane carries only the three
+                // things worth glancing at — flag, due, pomodoro count. Tags and
+                // subtask progress live on the card's editor and the task list;
+                // crowding them in here left every chip wrapping character by
+                // character ("J u l 1 6"). `.lineLimit(1)` + `.fixedSize()` keep
+                // each chip on one line at its natural width.
                 HStack(spacing: 7) {
                     if task.priority != .none, let hex = timer.settings.priorityColorHex(task.priority) {
                         Image(systemName: "flag.fill")
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(Color(hex: hex))
                             .help(timer.settings.priorityName(task.priority))
+                            .fixedSize()
                     }
                     if let due = task.dueDate {
                         Label(shortDue(due), systemImage: "calendar")
                             .labelStyle(.titleAndIcon)
                             .font(.system(size: 10, weight: .semibold, design: .rounded))
                             .foregroundStyle(task.isOverdue() ? Color.red : .white.opacity(0.55))
-                    }
-                    if let tag = task.tags.first {
-                        Text("#\(tag)")
-                            .font(.system(size: 10, weight: .semibold, design: .rounded))
-                            .foregroundStyle(color)
-                    }
-                    if task.subtaskProgress.total > 0 {
-                        Label("\(task.subtaskProgress.done)/\(task.subtaskProgress.total)", systemImage: "checklist")
-                            .font(.system(size: 10, design: .rounded))
-                            .foregroundStyle(task.subtaskProgress.done == task.subtaskProgress.total
-                                             ? Color.green : .white.opacity(0.55))
+                            .fixedSize()
                     }
                     Spacer(minLength: 0)
                     if showBadge {
@@ -436,8 +432,10 @@ struct WeeklyBoardView: View {
                              ?? "🍅\(task.pomodorosDone)")
                             .font(.system(size: 10, design: .rounded))
                             .foregroundStyle(.white.opacity(0.6))
+                            .fixedSize()
                     }
                 }
+                .lineLimit(1)
             }
         }
         .padding(.leading, 12).padding(.trailing, 9).padding(.vertical, 9)

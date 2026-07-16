@@ -31,7 +31,15 @@ struct MainWindowView: View {
     @State private var hoveredRowKey: String?
     /// Accordion state of the sidebar groups, persisted across launches.
     @AppStorage("sidebar.collapsed.categories") private var catsCollapsed = false
+    @AppStorage("sidebar.collapsed.projects") private var projsCollapsed = false
     @AppStorage("sidebar.collapsed.tags") private var tagsCollapsed = false
+    /// Inline "new project" popover state (sidebar Projects +).
+    @State private var showAddProject = false
+    @State private var newProjName = ""
+    @State private var newProjColor = TaskCategory.palette[0]
+    /// Project whose rename/recolor editor popover is open.
+    @State private var editingProject: String?
+    @State private var editProjName = ""
     @AppStorage("sidebar.collapsed.priority") private var prioCollapsed = false
 
     private var accent: Color { timer.settings.theme.accent }
@@ -92,6 +100,7 @@ struct MainWindowView: View {
                     navRow(.report)
                     navRow(.settings)
                     categoriesSection
+                    projectsSection
                     tagsSection
                     prioritySection
                 }
@@ -199,6 +208,144 @@ struct MainWindowView: View {
         guard tasks.addCategory(name: newCatName, colorHex: newCatColor) != nil else { return }
         newCatName = ""
         showAddCategory = false
+    }
+
+    /// Projects — the second grouping axis, managed exactly like categories:
+    /// "+" registers a project, a row click narrows the Tasks list, the hover
+    /// pencil opens rename/recolor/delete.
+    @ViewBuilder
+    private var projectsSection: some View {
+        let counts = Dictionary(grouping: tasks.tasks.filter { !$0.isDone && $0.project != nil },
+                                by: { $0.project ?? "" }).mapValues(\.count)
+        sectionHeader("Projects", collapsed: $projsCollapsed,
+                      addHelp: "New project") {
+            showAddProject = true
+        }
+        .popover(isPresented: $showAddProject, arrowEdge: .trailing) {
+            addProjectPopover
+        }
+        if !projsCollapsed {
+            ForEach(tasks.allProjects) { proj in
+                projectRow(proj, count: counts[proj.name] ?? 0)
+            }
+        }
+    }
+
+    private var addProjectPopover: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("New project").dsSectionLabel()
+            TextField("Name", text: $newProjName)
+                .textFieldStyle(DarkGlassFieldStyle())
+                .frame(width: 180)
+                .onSubmit(commitNewProject)
+            HStack(spacing: 6) {
+                ForEach(TaskCategory.palette, id: \.self) { hex in
+                    Button { newProjColor = hex } label: {
+                        Circle()
+                            .fill(Color(hex: hex))
+                            .frame(width: 16, height: 16)
+                            .overlay(Circle().stroke(.white.opacity(newProjColor == hex ? 0.9 : 0),
+                                                     lineWidth: 2))
+                    }
+                    .buttonStyle(.pressableSubtle)
+                }
+            }
+            Button("Add", action: commitNewProject)
+                .disabled(newProjName.trimmingCharacters(in: .whitespaces).isEmpty)
+        }
+        .padding(14)
+    }
+
+    private func commitNewProject() {
+        guard tasks.addProject(name: newProjName, colorHex: newProjColor) != nil else { return }
+        newProjName = ""
+        showAddProject = false
+    }
+
+    /// Project row — mirrors `categoryRow`, but every project is user-owned so
+    /// rename/delete are always available.
+    private func projectRow(_ proj: TaskCategory, count: Int) -> some View {
+        let key = "proj:\(proj.name)"
+        return Button { router.openTasks(project: proj.name) } label: {
+            HStack(spacing: 11) {
+                Image(systemName: proj.icon)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color(hex: proj.colorHex))
+                    .frame(width: 20, alignment: .center)
+                Text(proj.name)
+                    .font(.system(size: 13, design: .rounded))
+                    .foregroundStyle(.white.opacity(count > 0 ? 0.75 : 0.45))
+                    .lineLimit(1)
+                Spacer()
+                if hoveredRowKey == key {
+                    editPencil {
+                        editProjName = ""
+                        editingProject = proj.name
+                    }
+                } else if count > 0 {
+                    Text("\(count)")
+                        .font(.system(size: 11, design: .rounded).monospacedDigit())
+                        .foregroundStyle(.white.opacity(0.45))
+                }
+            }
+            .padding(.horizontal, 10).padding(.vertical, 7)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.pressableSubtle)
+        .padding(.horizontal, 8)
+        .onHover { inside in
+            if inside { hoveredRowKey = key }
+            else if hoveredRowKey == key { hoveredRowKey = nil }
+        }
+        .popover(isPresented: Binding(
+            get: { editingProject == proj.name },
+            set: { if !$0 { editingProject = nil } }
+        ), arrowEdge: .trailing) {
+            projectEditorPopover(proj)
+        }
+    }
+
+    /// Rename + color editor for a project, with delete (tasks fall back to
+    /// "no project") at the bottom.
+    private func projectEditorPopover(_ proj: TaskCategory) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(proj.name).dsSectionLabel()
+            TextField(proj.name, text: $editProjName)
+                .textFieldStyle(DarkGlassFieldStyle())
+                .frame(width: 180)
+                .onSubmit {
+                    if tasks.renameProject(proj.name, to: editProjName) {
+                        editingProject = nil
+                    }
+                }
+            HStack(spacing: 6) {
+                ForEach(TaskCategory.palette, id: \.self) { hex in
+                    Button {
+                        tasks.setProjectColor(proj.name, colorHex: hex)
+                    } label: {
+                        Circle()
+                            .fill(Color(hex: hex))
+                            .frame(width: 16, height: 16)
+                            .overlay(Circle().stroke(
+                                .white.opacity(tasks.projectColor(proj.name) == hex ? 0.9 : 0),
+                                lineWidth: 2))
+                    }
+                    .buttonStyle(.pressableSubtle)
+                }
+            }
+            HStack {
+                Spacer()
+                Button(role: .destructive) {
+                    tasks.deleteProject(proj.name)
+                    editingProject = nil
+                } label: {
+                    Text("Delete project")
+                        .foregroundStyle(.red.opacity(0.9))
+                }
+            }
+            .font(.system(.caption, design: .rounded))
+        }
+        .padding(14)
     }
 
     /// Precreate a tag with no color UI — per-tag icon/color live on the

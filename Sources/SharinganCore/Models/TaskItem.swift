@@ -253,6 +253,9 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
     public var completedAt: Date?
     /// Pomodoro size to run against this task (nil = app default).
     public var pomodoroKind: PomodoroKind?
+    /// When the task was moved to Trash (nil = live). A trashed task stays in
+    /// the store so it can be restored, but every normal query filters it out.
+    public var trashedAt: Date?
 
     public init(id: UUID = UUID(),
                 title: String,
@@ -272,7 +275,8 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
                 project: String? = nil,
                 priority: TaskPriority = .none,
                 completedAt: Date? = nil,
-                pomodoroKind: PomodoroKind? = nil) {
+                pomodoroKind: PomodoroKind? = nil,
+                trashedAt: Date? = nil) {
         self.id = id
         self.title = title
         self.category = category
@@ -292,6 +296,7 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         self.priority = priority
         self.completedAt = completedAt
         self.pomodoroKind = pomodoroKind
+        self.trashedAt = trashedAt
     }
 
     // Defensive decoding: several fields (category, tags, pomodorosDone) were
@@ -320,11 +325,22 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         priority = try c.decodeIfPresent(TaskPriority.self, forKey: .priority) ?? .none
         completedAt = try c.decodeIfPresent(Date.self, forKey: .completedAt)
         pomodoroKind = ((try? c.decodeIfPresent(PomodoroKind.self, forKey: .pomodoroKind)) ?? nil)
+        trashedAt = try c.decodeIfPresent(Date.self, forKey: .trashedAt)
     }
 
-    /// True when the task has a past deadline and isn't finished.
+    /// True while the task is in the Trash.
+    public var isTrashed: Bool { trashedAt != nil }
+
+    /// True when the task has a past deadline and isn't finished. A date-only
+    /// due (midnight, no time of day) is missed only once its whole day has
+    /// passed — otherwise every date-only "today" deadline would read overdue
+    /// from the first second of the day.
     public func isOverdue(now: Date = Date()) -> Bool {
         guard let dueDate, !isDone else { return false }
+        if DueDate.isDateOnly(dueDate) {
+            let cal = Calendar.current
+            return cal.startOfDay(for: dueDate) < cal.startOfDay(for: now)
+        }
         return dueDate < now
     }
 

@@ -194,6 +194,11 @@ public final class TaskStore: ObservableObject {
     @Published public var activeSubtaskID: UUID?
     /// User-created categories, persisted alongside (and merged after) the presets.
     @Published public private(set) var customCategories: [TaskCategory] = []
+    /// User-created projects — a second colour/icon-tagged axis above category,
+    /// managed exactly like categories (registry, not free text). Reuses the
+    /// `TaskCategory` shape (name/colour/icon); projects have no presets, so the
+    /// list is whatever the user has added. A task's `project` is the name.
+    @Published public private(set) var customProjects: [TaskCategory] = []
     /// User-precreated tags (sidebar "+"), persisted until they either gain a
     /// real use (at which point `allTags` reports them via task frequency
     /// like any other tag) or are removed again.
@@ -255,6 +260,7 @@ public final class TaskStore: ObservableObject {
         self.database = TaskDatabase(path: dbURL.path)
         load()
         loadCategories()
+        loadProjects()
         loadTags()
         loadFocusLog()
         migrateLegacyJSONIfNeeded(dbDir: dbURL.deletingLastPathComponent())
@@ -349,6 +355,78 @@ public final class TaskStore: ObservableObject {
         persist()
     }
 
+    // MARK: - Projects (colour/icon registry, mirrors categories)
+
+    /// Registered projects plus any project name a task still references but
+    /// that was never formally registered (so in-use projects never vanish from
+    /// the sidebar). Registered ones keep their colour/icon; ad-hoc ones get a
+    /// neutral default.
+    public var allProjects: [TaskCategory] {
+        var result = customProjects
+        for name in tasks.compactMap(\.project) where !result.contains(where: { $0.name == name }) {
+            result.append(.init(name: name, colorHex: "#9AA3AF", icon: "folder.fill"))
+        }
+        return result.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    public func projectColor(_ name: String) -> String {
+        allProjects.first { $0.name == name }?.colorHex ?? "#9AA3AF"
+    }
+
+    public func projectIcon(_ name: String) -> String {
+        allProjects.first { $0.name == name }?.icon ?? "folder.fill"
+    }
+
+    /// Adds or updates a project's colour/icon. Returns the resolved name.
+    @discardableResult
+    public func addProject(name: String, colorHex: String, icon: String = "folder.fill") -> String? {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if let i = customProjects.firstIndex(where: { $0.name == trimmed }) {
+            customProjects[i].colorHex = colorHex
+            customProjects[i].icon = icon
+        } else {
+            customProjects.append(.init(name: trimmed, colorHex: colorHex, icon: icon))
+        }
+        persistProjects()
+        return trimmed
+    }
+
+    public func setProjectColor(_ name: String, colorHex: String) {
+        addProject(name: name, colorHex: colorHex, icon: projectIcon(name))
+    }
+
+    public func setProjectIcon(_ name: String, icon: String) {
+        addProject(name: name, colorHex: projectColor(name), icon: icon)
+    }
+
+    /// Renames a project and moves every task in it to the new name.
+    @discardableResult
+    public func renameProject(_ old: String, to newName: String) -> Bool {
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != old,
+              !allProjects.contains(where: { $0.name == trimmed }) else { return false }
+        if let i = customProjects.firstIndex(where: { $0.name == old }) {
+            customProjects[i].name = trimmed
+        }
+        for j in tasks.indices where tasks[j].project == old {
+            tasks[j].project = trimmed
+        }
+        persistProjects()
+        persist()
+        return true
+    }
+
+    /// Deletes a project — its tasks drop back to "no project".
+    public func deleteProject(_ name: String) {
+        customProjects.removeAll { $0.name == name }
+        for j in tasks.indices where tasks[j].project == name {
+            tasks[j].project = nil
+        }
+        persistProjects()
+        persist()
+    }
+
     // MARK: - Derived
 
     public var activeTask: TaskItem? {
@@ -375,8 +453,10 @@ public final class TaskStore: ObservableObject {
         }
     }
 
-    /// Whether a task belongs in a given smart view.
+    /// Whether a task belongs in a given smart view. Trashed tasks belong to no
+    /// smart view — they live only in the Trash section (`trashedTasks`).
     private func matches(_ task: TaskItem, _ filter: TaskFilter, now: Date = Date()) -> Bool {
+        guard task.trashedAt == nil else { return false }
         let cal = Calendar.current
         switch filter {
         case .all:
@@ -910,10 +990,66 @@ public final class TaskStore: ObservableObject {
         persistTags()
     }
 
+    /// Soft-delete: move the task to the Trash. It stays in the store (so it can
+    /// be restored) but drops out of every smart view, its deadline reminders
+    /// are cancelled, and it releases the active slot. Its focus-log history is
+    /// left untouched — restoring brings the task's stats back intact.
     public func delete(_ id: UUID) {
+        guard let i = tasks.firstIndex(where: { $0.id == id }) else { return }
+        cancelDueNotifications(for: id)
+        tasks[i].trashedAt = Date()
+        tasks[i].modifiedAt = Date()
+        if activeTaskID == id { activeTaskID = nil; activeSubtaskID = nil }
+        persist()
+    }
+
+    /// Bring a trashed task back to its lists.
+    public func restore(_ id: UUID) {
+        guard let i = tasks.firstIndex(where: { $0.id == id }) else { return }
+        tasks[i].trashedAt = nil
+        tasks[i].modifiedAt = Date()
+        syncDueNotifications(for: tasks[i])
+        persist()
+    }
+
+    /// Permanently remove a task — the irreversible delete offered only from the
+    /// Trash. Focus-log history stays (the Report resolves it as an orphan).
+    public func deletePermanently(_ id: UUID) {
         cancelDueNotifications(for: id)
         tasks.removeAll { $0.id == id }
         if activeTaskID == id { activeTaskID = nil; activeSubtaskID = nil }
+        persist()
+    }
+
+    /// Every task currently in the Trash, most-recently-trashed first.
+    public var trashedTasks: [TaskItem] {
+        tasks.filter { $0.trashedAt != nil }
+            .sorted { ($0.trashedAt ?? .distantPast) > ($1.trashedAt ?? .distantPast) }
+    }
+
+    /// Permanently drop trashed tasks whose `trashedAt` is older than
+    /// `retentionDays`. A retention of 0 keeps the Trash forever (manual purge
+    /// only). Called on launch — see `SharinganCoordinator`.
+    public func purgeExpiredTrash(retentionDays: Int, now: Date = Date()) {
+        guard retentionDays > 0 else { return }
+        let cutoff = now.addingTimeInterval(-Double(retentionDays) * 86_400)
+        let expired = tasks.filter { ($0.trashedAt ?? .distantFuture) < cutoff }
+        guard !expired.isEmpty else { return }
+        for t in expired {
+            cancelDueNotifications(for: t.id)
+            if activeTaskID == t.id { activeTaskID = nil; activeSubtaskID = nil }
+        }
+        tasks.removeAll { ($0.trashedAt ?? .distantFuture) < cutoff }
+        persist()
+    }
+
+    /// Permanently remove every trashed task (the Trash "Empty" action).
+    public func emptyTrash() {
+        for id in tasks.filter({ $0.trashedAt != nil }).map(\.id) {
+            cancelDueNotifications(for: id)
+            if activeTaskID == id { activeTaskID = nil; activeSubtaskID = nil }
+        }
+        tasks.removeAll { $0.trashedAt != nil }
         persist()
     }
 
@@ -1060,6 +1196,15 @@ public final class TaskStore: ObservableObject {
 
     private func persistCategories() {
         database?.saveCategories(customCategories)
+        if !isApplyingRemoteMerge { didPersist?() }
+    }
+
+    private func loadProjects() {
+        customProjects = database?.loadProjects() ?? []
+    }
+
+    private func persistProjects() {
+        database?.saveProjects(customProjects)
         if !isApplyingRemoteMerge { didPersist?() }
     }
 

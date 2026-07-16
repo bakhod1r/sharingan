@@ -16,7 +16,7 @@ extension TaskItem: SyncableRecord {
             plannedDate: plannedDate, notes: notes, subtasks: subtasks,
             recurrence: recurrence.stringValue, project: project,
             priority: priority.rawValue, completedAt: completedAt,
-            pomodoroKind: pomodoroKind?.rawValue))
+            pomodoroKind: pomodoroKind?.rawValue, trashedAt: trashedAt))
     }
 
     private struct SyncPayload: Encodable {
@@ -25,6 +25,7 @@ extension TaskItem: SyncableRecord {
         let sortOrder: Int, estimatedPomodoros: Int?, plannedDate: Date?
         let notes: String, subtasks: [Subtask], recurrence: String
         let project: String?, priority: Int, completedAt: Date?, pomodoroKind: String?
+        let trashedAt: Date?
     }
 }
 

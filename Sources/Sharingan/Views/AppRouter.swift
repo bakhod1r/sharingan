@@ -39,6 +39,7 @@ final class AppRouter: ObservableObject {
     // (reset to nil/false) by TasksView when it applies them.
     @Published var pendingTaskFilter: TaskFilter?
     @Published var pendingTaskCategory: String?
+    @Published var pendingTaskProject: String?
     @Published var pendingTaskTag: String?
     @Published var pendingTaskPriority: TaskPriority?
     @Published var focusTaskSearch = false
@@ -62,12 +63,14 @@ final class AppRouter: ObservableObject {
     }
 
     /// Jump to the Tasks section with an optional smart filter and at most one
-    /// narrowing dimension (category / tag / priority).
+    /// narrowing dimension (category / project / tag / priority).
     func openTasks(filter: TaskFilter? = nil, category: String? = nil,
+                   project: String? = nil,
                    tag: String? = nil, priority: TaskPriority? = nil,
                    focusSearch: Bool = false) {
         pendingTaskFilter = filter
         pendingTaskCategory = category
+        pendingTaskProject = project
         pendingTaskTag = tag
         pendingTaskPriority = priority
         focusTaskSearch = focusSearch

@@ -162,7 +162,8 @@ struct TaskEditorView: View {
                 Text("Due date").dsSectionLabel()
                 SharinganCalendar(date: Binding(
                     get: { draft.dueDate ?? Date() },
-                    set: { draft.dueDate = $0 }),
+                    // Picking a day sets a date-only due — the time is optional.
+                    set: { draft.dueDate = DueDate.dateOnly($0) }),
                     accent: accent,
                     weekStartsOnMonday: settings.weekStartsOnMonday)
                 HStack {
@@ -282,14 +283,48 @@ struct TaskEditorView: View {
     private var projectField: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Project").dsSectionLabel()
-            TextField("optional project", text: Binding(
-                get: { draft.project ?? "" },
-                set: { draft.project = $0.isEmpty ? nil : $0 }))
-                .textFieldStyle(.plain)
+            // Selectable, like category — projects are a registry now, not free
+            // text. New projects are born in the composer or the sidebar "+".
+            Menu {
+                Button {
+                    draft.project = nil
+                } label: {
+                    Label("No project", systemImage: draft.project == nil ? "checkmark" : "slash.circle")
+                }
+                if !store.allProjects.isEmpty { Divider() }
+                ForEach(store.allProjects) { p in
+                    Button {
+                        draft.project = p.name
+                    } label: {
+                        Label(p.name, systemImage: draft.project == p.name ? "checkmark" : p.icon)
+                    }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    if let project = draft.project {
+                        Image(systemName: store.projectIcon(project))
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Color(hex: store.projectColor(project)))
+                        Text(project).foregroundStyle(.white)
+                    } else {
+                        Image(systemName: "square.stack.3d.up")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Color.dsSecondary)
+                        Text("No project").foregroundStyle(Color.dsSecondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(Color.dsTertiary)
+                }
                 .font(.system(.callout, design: .rounded))
                 .padding(.vertical, 7).padding(.horizontal, 10)
                 .background(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
                     .fill(Color.white.opacity(0.05)))
+                .contentShape(Rectangle())
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
         }
     }
 
@@ -579,7 +614,7 @@ struct TaskEditorView: View {
     private func dueAt(_ days: Int) -> Date {
         let cal = Calendar.current
         let base = cal.date(byAdding: .day, value: days, to: Date()) ?? Date()
-        return cal.date(bySettingHour: 9, minute: 0, second: 0, of: base) ?? base
+        return cal.startOfDay(for: base)
     }
     private func upcomingWeekend() -> Date {
         let cal = Calendar.current
@@ -588,14 +623,14 @@ struct TaskEditorView: View {
             if cal.component(.weekday, from: d) == 7 { break }   // Saturday
             d = cal.date(byAdding: .day, value: 1, to: d) ?? d
         }
-        return cal.date(bySettingHour: 9, minute: 0, second: 0, of: d) ?? d
+        return cal.startOfDay(for: d)
     }
     private func nextMonday() -> Date {
         let cal = Calendar.current
         var d = cal.date(byAdding: .day, value: 1, to: Date()) ?? Date()
         for _ in 0..<7 { if cal.component(.weekday, from: d) == 2 { break }
             d = cal.date(byAdding: .day, value: 1, to: d) ?? d }
-        return cal.date(bySettingHour: 9, minute: 0, second: 0, of: d) ?? d
+        return cal.startOfDay(for: d)
     }
 
     private func commitTag() {

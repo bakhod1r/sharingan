@@ -250,14 +250,14 @@ struct ReportView: View {
     }
 
     private var totalsFooter: some View {
-        // Filtered days total what is on screen (task-level entries already
-        // include subtask credits); an unfiltered day keeps the store's total.
-        let totals = categoryFilter == nil
-            ? store.focusDayTotals(on: day)
-            : rows.reduce(into: (count: 0, seconds: TimeInterval(0))) {
-                $0.count += $1.entry.count
-                $0.seconds += $1.entry.seconds
-            }
+        // Sum exactly what's on screen (task-level entries already include their
+        // subtask credits). The store's day total still counts deleted/trashed
+        // tasks, which the rows now hide — reducing over `rows` keeps the footer
+        // in step with the list.
+        let totals = rows.reduce(into: (count: 0, seconds: TimeInterval(0))) {
+            $0.count += $1.entry.count
+            $0.seconds += $1.entry.seconds
+        }
         return HStack {
             Text("Total")
                 .font(.system(.caption, design: .rounded).weight(.heavy))

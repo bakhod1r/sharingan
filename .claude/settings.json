@@ -10,7 +10,9 @@
       "NotebookEdit",
       "WebFetch",
       "WebSearch",
-      "TodoWrite"
+      "TodoWrite",
+      "* build",
+      "* test"
     ],
     "deny": [
       "Bash(rm -rf /*)",

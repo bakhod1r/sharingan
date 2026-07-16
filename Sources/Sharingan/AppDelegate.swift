@@ -20,6 +20,13 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
     /// window was already closed).
     private var hidMainWindowForPopover = false
 
+    /// Global mouse-down monitor, live only while the popover is open. NSPopover's
+    /// `.transient` behaviour is unreliable for an accessory (menu-bar-only) app —
+    /// a click on the desktop or another app often leaves the popover up — so this
+    /// catches any click outside the app and dismisses it, the behaviour a menu
+    /// is expected to have. Removed on close so it never runs while idle.
+    private var outsideClickMonitor: Any?
+
     /// The state the current button image was drawn for — the bitmap is
     /// re-rendered only when this changes (integer percent / phase / idle),
     /// not on every 1 s tick.
@@ -409,10 +416,38 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         hidMainWindowForPopover = true
     }
 
+    /// Both show paths (`showPopover`, `togglePopover`) route through here, so the
+    /// outside-click monitor is armed no matter how the popover opened.
+    func popoverDidShow(_ notification: Notification) {
+        armOutsideClickMonitor()
+    }
+
     func popoverDidClose(_ notification: Notification) {
+        disarmOutsideClickMonitor()
         guard hidMainWindowForPopover else { return }
         hidMainWindowForPopover = false
         MainWindowManager.shared.restore()
+    }
+
+    private func armOutsideClickMonitor() {
+        guard outsideClickMonitor == nil else { return }
+        // Global monitors fire only for events headed to *other* apps (desktop,
+        // another window), which is exactly "outside the popover" here — the main
+        // window is ordered out for the popover's duration, so the popover and the
+        // status button are the only in-app surfaces left, and the button toggles
+        // on its own.
+        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+        ) { [weak self] _ in
+            self?.popover?.performClose(nil)
+        }
+    }
+
+    private func disarmOutsideClickMonitor() {
+        if let outsideClickMonitor {
+            NSEvent.removeMonitor(outsideClickMonitor)
+            self.outsideClickMonitor = nil
+        }
     }
 
 }
@@ -551,6 +586,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // leftover "blink.task.*" due/pre reminders and reschedule the ones
         // that still apply. No-ops after the first successful run.
         Task { await TaskStore.shared.sweepLegacyNotificationsIfNeeded() }
+
+        // Auto-purge the Trash: permanently drop tasks that have sat in it longer
+        // than the retention window (default 30 days; 0 = keep forever).
+        TaskStore.shared.purgeExpiredTrash(retentionDays: timer.settings.trashRetentionDays)
 
         // Eyes wallpaper: restore on launch if the user left it enabled.
         if timer.settings.eyesWallpaperEnabled {

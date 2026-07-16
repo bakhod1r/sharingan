@@ -250,6 +250,9 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var defaultSubtaskEstimate: Int = 0
     /// Show 🍅 done/estimate badges on task & subtask rows.
     public var showPomodoroBadges: Bool = true
+    /// Days a task stays in the Trash before it is permanently deleted
+    /// automatically. 0 = keep forever (only manual "Delete forever" removes it).
+    public var trashRetentionDays: Int = 30
     /// Custom display names for priority levels, keyed by String(rawValue).
     /// Missing keys fall back to the built-in Todoist-style labels.
     public var priorityNames: [String: String] = [:]
@@ -436,6 +439,7 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
         weekStartsOnMonday = try c.decodeIfPresent(Bool.self, forKey: .weekStartsOnMonday) ?? d.weekStartsOnMonday
         defaultSubtaskEstimate = try c.decodeIfPresent(Int.self, forKey: .defaultSubtaskEstimate) ?? d.defaultSubtaskEstimate
         showPomodoroBadges = try c.decodeIfPresent(Bool.self, forKey: .showPomodoroBadges) ?? d.showPomodoroBadges
+        trashRetentionDays = try c.decodeIfPresent(Int.self, forKey: .trashRetentionDays) ?? d.trashRetentionDays
         priorityNames = try c.decodeIfPresent([String: String].self, forKey: .priorityNames) ?? d.priorityNames
         priorityColors = try c.decodeIfPresent([String: String].self, forKey: .priorityColors) ?? d.priorityColors
         customPriorityLevels = try c.decodeIfPresent([Int].self, forKey: .customPriorityLevels) ?? d.customPriorityLevels

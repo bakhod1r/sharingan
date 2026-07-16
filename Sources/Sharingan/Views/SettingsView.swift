@@ -976,6 +976,18 @@ struct SettingsView: View {
                         .foregroundStyle(.white.opacity(0.6))
                 }
 
+                Section("Trash") {
+                    StepperRow(title: "Auto-delete after",
+                               value: $settings.trashRetentionDays,
+                               unit: settings.trashRetentionDays == 1 ? "day" : "days",
+                               range: 0...365)
+                    Text(settings.trashRetentionDays == 0
+                         ? "Deleted tasks stay in the Trash until you remove them by hand."
+                         : "Deleted tasks are permanently removed \(settings.trashRetentionDays) day\(settings.trashRetentionDays == 1 ? "" : "s") after they land in the Trash. Set to 0 to keep them forever.")
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+
         case .breaks:
                 Section("Screen brightness") {
                     ToggleRow(title: "Dim screen on break",

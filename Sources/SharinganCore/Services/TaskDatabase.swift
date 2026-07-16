@@ -7,7 +7,7 @@ import SQLite3
 /// internals route through here. Each save replaces the table contents inside a
 /// single transaction, so a crash mid-write can never leave a half-written file
 /// (the whole point of moving off the plain-JSON blob).
-final class TaskDatabase {
+final class TaskDatabase: SyncOutboxStorage {
     private var db: OpaquePointer?
 
     /// SQLite needs to copy bound strings/blobs (they're freed after the call).
@@ -60,6 +60,17 @@ final class TaskDatabase {
             icon TEXT NOT NULL
         );
         """)
+        // Projects share the categories' colour/icon shape but their own table.
+        // VARCHAR + integer surrogate PK by project convention; the natural key
+        // stays enforced through UNIQUE(name).
+        exec("""
+        CREATE TABLE IF NOT EXISTS projects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name VARCHAR(255) NOT NULL UNIQUE,
+            colorHex VARCHAR(9) NOT NULL,
+            icon VARCHAR(64) NOT NULL
+        );
+        """)
         exec("""
         CREATE TABLE IF NOT EXISTS templates (
             id TEXT PRIMARY KEY,
@@ -101,6 +112,21 @@ final class TaskDatabase {
             value BLOB NOT NULL
         );
         """)
+        // The durable push queue (see SyncOutbox). Deliberately NOT wiped by
+        // resetSyncState(): a tombstone here is the only record that a delete
+        // ever happened once the shadow is gone. VARCHAR by project convention.
+        exec("""
+        CREATE TABLE IF NOT EXISTS sync_outbox (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            record_type VARCHAR(64) NOT NULL,
+            record_name VARCHAR(255) NOT NULL,
+            kind VARCHAR(16) NOT NULL,
+            enqueued_at REAL NOT NULL,
+            attempts INTEGER NOT NULL,
+            next_attempt_at REAL NOT NULL,
+            UNIQUE (record_type, record_name)
+        );
+        """)
         // Databases created before the column shipped need it added in place
         // (CREATE IF NOT EXISTS won't touch an existing table).
         if !tableHasColumn("tasks", "completedAt") {
@@ -118,6 +144,10 @@ final class TaskDatabase {
         if !tableHasColumn("tasks", "modifiedAt") {
             exec("ALTER TABLE tasks ADD COLUMN modifiedAt REAL;")
             exec("UPDATE tasks SET modifiedAt = createdAt WHERE modifiedAt IS NULL;")
+        }
+        // Soft-delete / Trash timestamp; NULL means the task is live.
+        if !tableHasColumn("tasks", "trashedAt") {
+            exec("ALTER TABLE tasks ADD COLUMN trashedAt REAL;")
         }
     }
 
@@ -141,7 +171,7 @@ final class TaskDatabase {
         let sql = """
         SELECT id,title,category,tags,isDone,pomodorosDone,createdAt,dueDate,\
         sortOrder,estimatedPomodoros,plannedDate,notes,subtasks,recurrence,project,priority,\
-        completedAt,pomodoroKind,modifiedAt \
+        completedAt,pomodoroKind,modifiedAt,trashedAt \
         FROM tasks;
         """
         var stmt: OpaquePointer?
@@ -167,6 +197,7 @@ final class TaskDatabase {
             t.completedAt = date(stmt, 16)
             t.pomodoroKind = text(stmt, 17).flatMap(PomodoroKind.init(rawValue:))
             t.modifiedAt = date(stmt, 18) ?? t.createdAt
+            t.trashedAt = date(stmt, 19)
             out.append(t)
         }
         return out
@@ -178,8 +209,8 @@ final class TaskDatabase {
             let sql = """
             INSERT INTO tasks (id,title,category,tags,isDone,pomodorosDone,createdAt,dueDate,\
             sortOrder,estimatedPomodoros,plannedDate,notes,subtasks,recurrence,project,priority,\
-            completedAt,pomodoroKind,modifiedAt) \
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);
+            completedAt,pomodoroKind,modifiedAt,trashedAt) \
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);
             """
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
@@ -207,6 +238,7 @@ final class TaskDatabase {
                 if let k = t.pomodoroKind { bindText(stmt, 18, k.rawValue) }
                 else { sqlite3_bind_null(stmt, 18) }
                 bindDate(stmt, 19, t.modifiedAt)
+                bindDate(stmt, 20, t.trashedAt)
                 guard sqlite3_step(stmt) == SQLITE_DONE else { return false }
             }
             return true
@@ -241,6 +273,40 @@ final class TaskDatabase {
                 bindText(stmt, 1, c.name)
                 bindText(stmt, 2, c.colorHex)
                 bindText(stmt, 3, c.icon)
+                guard sqlite3_step(stmt) == SQLITE_DONE else { return false }
+            }
+            return true
+        }
+    }
+
+    // MARK: - Projects (same shape as categories, own table)
+
+    func loadProjects() -> [TaskCategory] {
+        var out: [TaskCategory] = []
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, "SELECT name,colorHex,icon FROM projects;", -1, &stmt, nil) == SQLITE_OK
+        else { return out }
+        defer { sqlite3_finalize(stmt) }
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            out.append(TaskCategory(name: text(stmt, 0) ?? "",
+                                    colorHex: text(stmt, 1) ?? "#9AA3AF",
+                                    icon: text(stmt, 2) ?? "folder.fill"))
+        }
+        return out
+    }
+
+    func saveProjects(_ projects: [TaskCategory]) {
+        transaction {
+            guard exec("DELETE FROM projects;") else { return false }
+            let sql = "INSERT INTO projects (name,colorHex,icon) VALUES (?,?,?);"
+            var stmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
+            defer { sqlite3_finalize(stmt) }
+            for p in projects {
+                sqlite3_reset(stmt)
+                bindText(stmt, 1, p.name)
+                bindText(stmt, 2, p.colorHex)
+                bindText(stmt, 3, p.icon)
                 guard sqlite3_step(stmt) == SQLITE_DONE else { return false }
             }
             return true
@@ -449,6 +515,62 @@ final class TaskDatabase {
         }
         _ = sqlite3_step(stmt)
     }
+
+    // MARK: - Sync outbox (SyncOutboxStorage)
+
+    func loadOutbox() -> [SyncOutbox.Op] {
+        var out: [SyncOutbox.Op] = []
+        var stmt: OpaquePointer?
+        let sql = "SELECT record_type, record_name, kind, enqueued_at, attempts, next_attempt_at FROM sync_outbox;"
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return out }
+        defer { sqlite3_finalize(stmt) }
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            guard let type = text(stmt, 0), let name = text(stmt, 1),
+                  let kind = SyncOutbox.Kind(rawValue: text(stmt, 2) ?? "") else { continue }
+            out.append(SyncOutbox.Op(
+                recordType: type,
+                recordName: name,
+                kind: kind,
+                enqueuedAt: Date(timeIntervalSince1970: double(stmt, 3)),
+                attempts: Int(int(stmt, 4)),
+                nextAttemptAt: Date(timeIntervalSince1970: double(stmt, 5))))
+        }
+        return out
+    }
+
+    func upsertOutbox(_ op: SyncOutbox.Op) {
+        let sql = """
+        INSERT INTO sync_outbox (record_type, record_name, kind, enqueued_at, attempts, next_attempt_at)
+        VALUES (?,?,?,?,?,?)
+        ON CONFLICT(record_type, record_name) DO UPDATE SET
+            kind = excluded.kind,
+            enqueued_at = excluded.enqueued_at,
+            attempts = excluded.attempts,
+            next_attempt_at = excluded.next_attempt_at;
+        """
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+        defer { sqlite3_finalize(stmt) }
+        bindText(stmt, 1, op.recordType)
+        bindText(stmt, 2, op.recordName)
+        bindText(stmt, 3, op.kind.rawValue)
+        sqlite3_bind_double(stmt, 4, op.enqueuedAt.timeIntervalSince1970)
+        sqlite3_bind_int64(stmt, 5, Int64(op.attempts))
+        sqlite3_bind_double(stmt, 6, op.nextAttemptAt.timeIntervalSince1970)
+        _ = sqlite3_step(stmt)
+    }
+
+    func deleteOutbox(recordType: String, recordName: String) {
+        var stmt: OpaquePointer?
+        let sql = "DELETE FROM sync_outbox WHERE record_type = ? AND record_name = ?;"
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+        defer { sqlite3_finalize(stmt) }
+        bindText(stmt, 1, recordType)
+        bindText(stmt, 2, recordName)
+        _ = sqlite3_step(stmt)
+    }
+
+    func clearOutbox() { exec("DELETE FROM sync_outbox;") }
 
     // MARK: - Low-level helpers
 

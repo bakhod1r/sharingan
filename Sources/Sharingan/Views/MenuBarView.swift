@@ -25,6 +25,12 @@ struct MenuBarView: View {
     @State private var hoveredTask: UUID?
     /// Task open in the full editor sheet (nil = closed).
     @State private var editorTask: TaskItem?
+    /// Task queued for the "move to Trash?" confirmation (nil = no prompt).
+    @State private var pendingDeleteTask: TaskItem?
+    @State private var showTrash = false
+    /// Task queued for the irreversible "delete forever?" confirmation.
+    @State private var pendingPurgeTask: TaskItem?
+    @State private var confirmEmptyTrash = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private enum Tab: Hashable, CaseIterable {
@@ -143,6 +149,37 @@ struct MenuBarView: View {
                            accent: timer.settings.theme.accent,
                            settings: timer.settings)
         }
+        .alert("Delete this task?", isPresented: Binding(
+            get: { pendingDeleteTask != nil },
+            set: { if !$0 { pendingDeleteTask = nil } })) {
+            Button("Move to Trash", role: .destructive) {
+                if let t = pendingDeleteTask { tasks.delete(t.id) }
+                pendingDeleteTask = nil
+            }
+            Button("Cancel", role: .cancel) { pendingDeleteTask = nil }
+        } message: {
+            Text(pendingDeleteTask.map { "“\($0.title)” moves to Trash — restore it from the Tasks tab." } ?? "")
+        }
+        .alert("Delete forever?", isPresented: Binding(
+            get: { pendingPurgeTask != nil },
+            set: { if !$0 { pendingPurgeTask = nil } })) {
+            Button("Delete forever", role: .destructive) {
+                if let t = pendingPurgeTask { withAnimation { tasks.deletePermanently(t.id) } }
+                pendingPurgeTask = nil
+            }
+            Button("Cancel", role: .cancel) { pendingPurgeTask = nil }
+        } message: {
+            Text(pendingPurgeTask.map { "“\($0.title)” will be gone for good. This can't be undone." } ?? "")
+        }
+        .alert("Empty Trash?", isPresented: $confirmEmptyTrash) {
+            Button("Delete \(tasks.trashedTasks.count) forever", role: .destructive) {
+                withAnimation { tasks.emptyTrash() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            let n = tasks.trashedTasks.count
+            Text("This permanently deletes \(n) task\(n == 1 ? "" : "s") in the Trash.")
+        }
     }
 
     /// Liquid-glass tab bar — a translucent capsule track with a floating
@@ -151,9 +188,21 @@ struct MenuBarView: View {
     /// the popover's glass surfaces.
     private var liquidGlassTabBar: some View {
         let segment = RoundedRectangle(cornerRadius: 9, style: .continuous)
+        let tabs = Tab.allCases
         return HStack(spacing: 2) {
-            ForEach(Tab.allCases, id: \.self) { t in
+            ForEach(Array(tabs.enumerated()), id: \.element) { idx, t in
                 let selected = tab == t
+                // Hairline separator between two *unselected* neighbours — the
+                // macOS segmented look in the reference. It vanishes next to the
+                // accent pill so the pill never butts against a line.
+                if idx > 0 {
+                    let prevSelected = tab == tabs[idx - 1]
+                    Rectangle()
+                        .fill(Color.white.opacity(0.14))
+                        .frame(width: 1, height: 16)
+                        .opacity(selected || prevSelected ? 0 : 1)
+                        .animation(DS.Motion.standard, value: tab)
+                }
                 Button {
                     withAnimation(DS.Motion.standard) { tab = t }
                 } label: {
@@ -166,20 +215,16 @@ struct MenuBarView: View {
                         .background {
                             if selected {
                                 let accent = timer.settings.theme.accent
+                                // Flat, clean accent pill — matches the reference:
+                                // no glossy white sheen, no coloured glow. A barely
+                                // there top-to-bottom gradient keeps it from reading
+                                // dull, a hairline border defines the edge, and a
+                                // soft neutral drop shadow gives just enough lift.
                                 segment
-                                    .fill(LinearGradient(colors: [accent, accent.opacity(0.82)],
+                                    .fill(LinearGradient(colors: [accent, accent.opacity(0.92)],
                                                           startPoint: .top, endPoint: .bottom))
-                                    // A glass sheen over the saturated accent —
-                                    // vibrant like the app's other selected
-                                    // pills, with a glossy highlight on top.
-                                    .overlay(alignment: .top) {
-                                        LinearGradient(colors: [.white.opacity(0.5), .clear],
-                                                       startPoint: .top, endPoint: .center)
-                                            .blendMode(.screen)
-                                            .clipShape(segment)
-                                    }
-                                    .overlay(segment.stroke(Color.white.opacity(0.25), lineWidth: 1))
-                                    .liquidShadow(color: accent.opacity(0.5), radius: 10, y: 4)
+                                    .overlay(segment.stroke(Color.white.opacity(0.12), lineWidth: 1))
+                                    .shadow(color: .black.opacity(0.22), radius: 3, y: 1)
                                     .matchedGeometryEffect(id: "tabPill", in: tabPillNS)
                             }
                         }
@@ -369,6 +414,88 @@ struct MenuBarView: View {
             }
 
             completedSection
+            trashSection
+        }
+    }
+
+    /// Collapsible Trash bucket for the Pomodoro tab's inline list — the same
+    /// bucket the Tasks tab shows, so a task deleted from either place can be
+    /// recovered without switching tabs. Hidden when the Trash is empty.
+    @ViewBuilder
+    private var trashSection: some View {
+        let trashed = tasks.trashedTasks
+        if !trashed.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Button {
+                        withAnimation(DS.Motion.gentle) { showTrash.toggle() }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(Color.dsTertiary)
+                                .rotationEffect(.degrees(showTrash ? 90 : 0))
+                            Image(systemName: "trash")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(Color.dsTertiary)
+                            Text("Trash").dsSectionLabel()
+                            Text("\(trashed.count)")
+                                .font(.system(.caption2, design: .rounded).weight(.semibold))
+                                .foregroundStyle(Color.dsTertiary)
+                                .padding(.horizontal, 6).padding(.vertical, 1)
+                                .background(Capsule().fill(Color.dsFill))
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.pressableSubtle)
+                    Spacer()
+                    if showTrash {
+                        Button { confirmEmptyTrash = true } label: {
+                            Text("Empty")
+                                .font(.system(.caption2, design: .rounded).weight(.semibold))
+                                .foregroundStyle(Color.red.opacity(0.8))
+                        }
+                        .buttonStyle(.pressableSubtle)
+                        .help("Delete every trashed task permanently")
+                    }
+                }
+
+                if showTrash {
+                    ForEach(trashed) { task in
+                        HStack(spacing: 10) {
+                            Text(task.title)
+                                .font(.system(.caption, design: .rounded))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                            Spacer(minLength: 6)
+                            Button {
+                                withAnimation(DS.Motion.standard) { tasks.restore(task.id) }
+                            } label: {
+                                Image(systemName: "arrow.uturn.backward")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 22, height: 22)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.pressableSubtle)
+                            .help("Restore this task")
+                            .accessibilityLabel("Restore \(task.title)")
+                            Button { pendingPurgeTask = task } label: {
+                                Image(systemName: "trash.slash")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(Color.red.opacity(0.75))
+                                    .frame(width: 22, height: 22)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.pressableSubtle)
+                            .help("Delete permanently")
+                            .accessibilityLabel("Delete \(task.title) permanently")
+                        }
+                        .padding(.horizontal, 10).padding(.vertical, 4)
+                    }
+                }
+            }
+            .padding(.top, 2)
         }
     }
 
@@ -617,18 +744,24 @@ struct MenuBarView: View {
             }
             .buttonStyle(.pressableSubtle)
 
-            // Delete — revealed on hover so the dense row stays uncluttered.
-            Button { tasks.delete(task.id) } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 11))
+            // Overflow "⋮" menu — Edit / Delete — revealed on hover so the dense
+            // row stays uncluttered. Delete moves the task to Trash (soft).
+            Menu {
+                taskMenuItems(task)
+            } label: {
+                Image(systemName: "ellipsis")
+                    .rotationEffect(.degrees(90))     // vertical ⋮
+                    .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(.secondary)
                     .frame(width: 20, height: 20)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.pressableSubtle)
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
             .opacity(hoveredTask == task.id ? 1 : 0)
             .animation(DS.Motion.hover, value: hoveredTask)
-            .help("Delete task")
+            .help("More actions")
 
             Button {
                 startFocus(on: task)
@@ -656,7 +789,13 @@ struct MenuBarView: View {
             if inside { hoveredTask = task.id }
             else if hoveredTask == task.id { hoveredTask = nil }
         }
-        .contextMenu {
+        .contextMenu { taskMenuItems(task) }
+    }
+
+    /// The full task action menu — shared by the row's right-click context menu
+    /// and its ⋮ overflow button so both offer identical actions.
+    @ViewBuilder
+    private func taskMenuItems(_ task: TaskItem) -> some View {
             Button { editorTask = task } label: {
                 Label("Edit…", systemImage: "pencil")
             }
@@ -756,10 +895,9 @@ struct MenuBarView: View {
                 Label("Move down", systemImage: "arrow.down")
             }
             Divider()
-            Button(role: .destructive) { tasks.delete(task.id) } label: {
+            Button(role: .destructive) { pendingDeleteTask = task } label: {
                 Label("Delete", systemImage: "trash")
             }
-        }
     }
 
     /// Colored bucket pill for a task's category.

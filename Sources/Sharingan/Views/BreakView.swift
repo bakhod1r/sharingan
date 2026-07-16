@@ -50,28 +50,33 @@ struct BreakView: View {
                     caption
                         .padding(.bottom, 18)
 
-                    // A break should never fully trap the user. When the exit
-                    // button is enabled it's a clear glass button; otherwise a
-                    // quiet low-key "Skip break", so there is always an escape.
-                    if showExit {
-                        GlassButton(label: "Exit break",
-                                    systemImage: "xmark.circle.fill",
-                                    tint: .white.opacity(0.9),
-                                    accent: timer.settings.theme.accent,
-                                    action: onTapSkip)
+                    // The break ends when its time is up — there is no Skip.
+                    // "Auto-start break" off parks the countdown at full length,
+                    // so Start is what begins it (never in the Settings preview,
+                    // which must not touch the real timer). "Exit break" appears
+                    // only when the user has opted into it, or in that preview.
+                    VStack(spacing: 12) {
+                        if !forceExit && !timer.isRunning {
+                            GlassButton(label: "Start break",
+                                        systemImage: "play.fill",
+                                        tint: .white.opacity(0.95),
+                                        accent: timer.settings.theme.accent) {
+                                timer.start()
+                            }
                             .frame(maxWidth: 220)
-                            .padding(.bottom, 40)
-                            .accessibilityLabel("Exit break")
-                    } else {
-                        Button(action: onTapSkip) {
-                            Text("Skip break")
-                                .font(.system(.caption, design: .rounded).weight(.medium))
-                                .foregroundStyle(.white.opacity(0.32))
+                            .accessibilityLabel("Start break")
                         }
-                        .buttonStyle(.plain)
-                        .padding(.bottom, 30)
-                        .accessibilityLabel("Skip break")
+                        if showExit {
+                            GlassButton(label: "Exit break",
+                                        systemImage: "xmark.circle.fill",
+                                        tint: .white.opacity(0.9),
+                                        accent: timer.settings.theme.accent,
+                                        action: onTapSkip)
+                                .frame(maxWidth: 220)
+                                .accessibilityLabel("Exit break")
+                        }
                     }
+                    .padding(.bottom, 40)
                 }
 
                 if timer.settings.cameraEyeTrackingEnabled,
