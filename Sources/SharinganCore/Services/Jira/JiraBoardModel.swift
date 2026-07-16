@@ -103,6 +103,16 @@ public final class JiraBoardModel: ObservableObject {
                                         sprintName: sprintName, columnsJSON: json))
     }
 
+    /// Persists each board issue as its own row in the SQLite issue cache, so
+    /// the board's tasks are stored individually (queryable, and available to
+    /// the row status chip / detail) — not only inside the board snapshot blob.
+    private func cacheIssues(_ issues: [JiraIssue]) {
+        guard let storage else { return }
+        for issue in issues {
+            storage.upsertIssue(JiraFieldMapper.snapshot(from: issue, siteHost: siteHost))
+        }
+    }
+
     /// Falls back to the cached board after a load failure. Returns true when a
     /// snapshot was shown (so the caller skips the error phase).
     private func showCachedBoard() -> Bool {
@@ -218,6 +228,7 @@ public final class JiraBoardModel: ObservableObject {
             isShowingCached = false
             phase = .loaded
             cacheLoadedBoard()
+            cacheIssues(issues)
         } catch {
             if !showCachedBoard() {
                 phase = .error
