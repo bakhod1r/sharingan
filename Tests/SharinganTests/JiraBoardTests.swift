@@ -144,7 +144,7 @@ struct JiraBoardTests {
         #expect(!jql.contains("sprint ="))
     }
 
-    @Test("an active sprint queries by sprint id and includes Done")
+    @Test("an active sprint queries by sprint id, includes Done and my backlog")
     func activeSprintQueriesBySprintId() async throws {
         defer { TestStub.reset() }
         let session = TestStub.session(handler: Fx.boardHandler())
@@ -156,6 +156,10 @@ struct JiraBoardTests {
         let jql = try #require((search.jsonObject()["jql"] as? String))
         #expect(jql.contains("sprint = 42"))
         #expect(jql.contains("assignee = currentUser()"))
+        // Freshly-created (Convert-to-Jira) issues land in the backlog, not the
+        // sprint — the board must still show my open backlog cards.
+        #expect(jql.contains("sprint is EMPTY"))
+        #expect(jql.contains("project = \"SHR\""))
     }
 
     // MARK: - Drag = transition

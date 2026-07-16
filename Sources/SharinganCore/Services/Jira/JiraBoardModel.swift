@@ -126,7 +126,14 @@ public final class JiraBoardModel: ObservableObject {
                 sprintName = sprint.name
                 // Done cards are included on purpose — a board without its Done
                 // column is a lie about where the work is.
-                jql = "sprint = \(sprint.id) AND assignee = currentUser()"
+                //
+                // My open backlog rides along: an issue created from a local task
+                // ("Convert to Jira") is filed straight into the project with no
+                // sprint, so a sprint-only query would show it in the task list
+                // but nowhere on the board. Done backlog cards stay out — they're
+                // history, not work in this sprint.
+                jql = "project = \"\(projectKey)\" AND assignee = currentUser()"
+                    + " AND (sprint = \(sprint.id) OR (sprint is EMPTY AND statusCategory != Done))"
             } else {
                 // Kanban boards (and scrum boards between sprints) have no active
                 // sprint; fall back to the whole project so the board isn't empty.
