@@ -28,19 +28,6 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
     }
 }
 
-/// The two boards inside the Board section. RawValue is persisted
-/// (`board.tab` default), so cases must stay stable.
-enum BoardTab: String, CaseIterable, Identifiable, Hashable {
-    case weekly, jira
-    var id: String { rawValue }
-    var title: String {
-        switch self {
-        case .weekly: return "Weekly"
-        case .jira:   return "Jira"
-        }
-    }
-}
-
 /// Shared navigation state so the menu-bar popover can open the main window on a
 /// specific section (e.g. the gear jumps straight to Settings).
 @MainActor
