@@ -22,6 +22,15 @@ final class RecordMapperTests: XCTestCase {
         XCTAssertEqual(back, task)
     }
 
+    func testBoardColumnIDRoundTripsThroughCKRecord() throws {
+        var task = TaskItem(title: "On the board", category: "Work")
+        task.boardColumnID = BoardColumn.Seed.inProgress
+        let record = RecordMapper.record(for: task, in: zone, systemFields: nil)
+        let back = try XCTUnwrap(RecordMapper.task(from: record))
+        XCTAssertEqual(back.boardColumnID, BoardColumn.Seed.inProgress)
+        XCTAssertEqual(back, task)
+    }
+
     func testFocusLogRoundTrips() throws {
         let entry = FocusLogEntry(day: Date(timeIntervalSince1970: 86_400), taskID: UUID(),
                                   subtaskID: UUID(), title: "Deep work", count: 3, seconds: 4500)

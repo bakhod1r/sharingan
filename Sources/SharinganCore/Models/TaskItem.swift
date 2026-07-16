@@ -278,6 +278,10 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
     /// "Sub-task"). Drives the type badge; nil for tasks not from Jira.
     public var jiraIssueType: String?
 
+    /// Which Sharingan-board column this task sits in (`BoardColumn.id`).
+    /// `nil` renders in the first column. Local + synced (CloudKit field).
+    public var boardColumnID: String?
+
     public init(id: UUID = UUID(),
                 title: String,
                 category: String = TaskCategory.presets[0].name,
@@ -300,7 +304,8 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
                 jiraKey: String? = nil,
                 jiraIssueID: String? = nil,
                 jiraSiteHost: String? = nil,
-                jiraIssueType: String? = nil) {
+                jiraIssueType: String? = nil,
+                boardColumnID: String? = nil) {
         self.id = id
         self.title = title
         self.category = category
@@ -324,6 +329,7 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         self.jiraIssueID = jiraIssueID
         self.jiraSiteHost = jiraSiteHost
         self.jiraIssueType = jiraIssueType
+        self.boardColumnID = boardColumnID
     }
 
     // Defensive decoding: several fields (category, tags, pomodorosDone) were
@@ -356,6 +362,7 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         jiraIssueID = try c.decodeIfPresent(String.self, forKey: .jiraIssueID)
         jiraSiteHost = try c.decodeIfPresent(String.self, forKey: .jiraSiteHost)
         jiraIssueType = try c.decodeIfPresent(String.self, forKey: .jiraIssueType)
+        boardColumnID = try c.decodeIfPresent(String.self, forKey: .boardColumnID)
     }
 
     /// True when the task has a past deadline and isn't finished.
