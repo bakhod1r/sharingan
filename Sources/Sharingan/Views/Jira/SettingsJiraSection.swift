@@ -18,6 +18,9 @@ struct SettingsJiraSection: View {
     @AppStorage(JiraService.pushEstimateDefaultsKey) private var pushEstimate = false
     @AppStorage(JiraService.pollMinutesDefaultsKey) private var pollMinutes = 15
 
+    @State private var showConvertConfirm = false
+    @State private var convertStatus: String?
+
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 7) {
@@ -129,6 +132,7 @@ struct SettingsJiraSection: View {
             syncRow
             if jira.syncMode == .twoWay {
                 pushRow
+                convertRow
             }
             categoryMapRow
             note("Sharingan reads and updates the Jira issues you link to tasks. It never sees your Atlassian password.")
@@ -305,6 +309,46 @@ struct SettingsJiraSection: View {
             }
         }
         .frame(minHeight: 24)
+    }
+
+    /// Seeds existing local tasks into Jira in one shot. The outbox only ever
+    /// carries *changes* to already-linked tasks, so a user whose tasks were
+    /// never pushed sees "Nothing queued" — this is how those tasks get created.
+    /// Bulk creation is team-visible, so it's gated behind a confirm alert.
+    @ViewBuilder
+    private var convertRow: some View {
+        let unlinked = jira.unlinkedTasks().count
+        HStack(spacing: 12) {
+            Button("Convert existing tasks to Jira") { showConvertConfirm = true }
+                .buttonStyle(.glass)
+                .disabled(jira.isWorking || unlinked == 0)
+            Spacer(minLength: 8)
+            Text(convertStatus ?? (unlinked == 0
+                ? "All tasks are in Jira"
+                : "\(unlinked) task\(unlinked == 1 ? "" : "s") not in Jira"))
+                .font(.system(.callout, design: .rounded))
+                .foregroundStyle(Color.dsSecondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .frame(minHeight: 24)
+        .alert("Convert \(unlinked) task\(unlinked == 1 ? "" : "s") to Jira?",
+               isPresented: $showConvertConfirm) {
+            Button("Cancel", role: .cancel) { }
+            Button("Convert") {
+                Task {
+                    convertStatus = nil
+                    let created = await jira.pushUnlinkedTasks()
+                    if let error = jira.lastErrorMessage, created == 0 {
+                        convertStatus = error
+                    } else {
+                        convertStatus = "Created \(created) issue\(created == 1 ? "" : "s")"
+                    }
+                }
+            }
+        } message: {
+            Text("This creates a Jira issue for each unlinked task. Everyone on the project can see them.")
+        }
     }
 
     /// Pulls the issues assigned to me into the task list. The result of the
