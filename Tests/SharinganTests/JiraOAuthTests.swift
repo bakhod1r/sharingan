@@ -403,6 +403,10 @@ struct JiraOAuthTests {
         }
 
         // The port must be free again — a leaked listener breaks every retry.
+        // NWListener releases the socket asynchronously after cancel, so a
+        // moment's grace here separates "still tearing down" (fine) from a real
+        // leak (the assertion below) instead of racing the two.
+        try? await Task.sleep(nanoseconds: 200_000_000)
         do {
             _ = try await oauth.awaitCallback(state: "st-1", timeout: 0.4, port: port)
             Issue.record("expected a timeout")
