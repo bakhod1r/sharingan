@@ -548,6 +548,27 @@ public final class JiraService: ObservableObject, JiraPomodoroHooks {
         objectWillChange.send()
     }
 
+    // MARK: - View-model factories
+
+    /// A board model bound to this connection, or nil when disconnected.
+    /// Reuses the service's authenticated client so the views never touch auth.
+    public func makeBoardModel() -> JiraBoardModel? {
+        guard let host = siteHost else { return nil }
+        return JiraBoardModel(client: client, siteHost: host)
+    }
+
+    /// A detail model for one issue, or nil when disconnected.
+    public func makeDetailModel(issueKey: String) -> JiraIssueDetailModel? {
+        guard let host = siteHost else { return nil }
+        return JiraIssueDetailModel(client: client, issueKey: issueKey, siteHost: host)
+    }
+
+    /// The project key a board should open — the selected space, else the first
+    /// browsable project.
+    public var boardProjectKey: String? {
+        selectedProjectKey ?? availableProjects.first?.key
+    }
+
     // MARK: - Cached status (for the row chip)
 
     /// The last-synced status name + category key for a linked issue, if cached.

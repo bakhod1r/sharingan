@@ -3,6 +3,9 @@ import AppKit
 import UniformTypeIdentifiers
 import SharinganCore
 
+/// Identifiable wrapper so a Jira issue key can drive `.sheet(item:)`.
+private struct JiraDetailKey: Identifiable { let key: String; var id: String { key } }
+
 struct TasksView: View {
     @ObservedObject var timer: PomodoroTimer
     /// When true (main window), rows flow into the parent scroll view instead of
@@ -40,6 +43,9 @@ struct TasksView: View {
     @State private var hoveredTask: UUID?
     /// Task currently open in the full editor sheet (nil = closed).
     @State private var editorTask: TaskItem?
+    /// Issue key whose Jira detail sheet is open, and whether the board sheet is.
+    @State private var jiraDetailKey: JiraDetailKey?
+    @State private var showJiraBoard = false
     /// Task being snoozed via "Pick date…" (nil = closed).
     @State private var snoozeTask: TaskItem?
     @State private var snoozeDate = Date()
@@ -141,6 +147,23 @@ struct TasksView: View {
         .sheet(item: $snoozeTask) { task in snoozeSheet(task) }
         .sheet(isPresented: $showTemplateManager) { templateManager }
         .sheet(isPresented: $showImportSheet) { importSheet }
+        .sheet(item: $jiraDetailKey) { wrapped in
+            if let model = AppServices.jiraService?.makeDetailModel(issueKey: wrapped.key) {
+                JiraIssueDetailView(model: model)
+                    .frame(minWidth: 560, minHeight: 520)
+            }
+        }
+        .sheet(isPresented: $showJiraBoard) {
+            if let jira = AppServices.jiraService,
+               let model = jira.makeBoardModel(), let project = jira.boardProjectKey {
+                JiraBoardView(model: model, projectKey: project,
+                              accent: timer.settings.theme.accent)
+                    .frame(minWidth: 760, minHeight: 540)
+            } else {
+                Text("Connect Jira in Settings to see your board.")
+                    .padding(40)
+            }
+        }
         .onDrop(of: [.fileURL], isTargeted: nil, perform: handleFileDrop)
         .alert("Save as Template", isPresented: Binding(
             get: { templateNamingTask != nil },
@@ -429,6 +452,7 @@ struct TasksView: View {
                 sortMenu
                 filterMenu
                 matrixToggle
+                jiraBoardToggle
                 importButton
                 queueChip
                 if filter == .completed, store.count(.completed) > 0 {
@@ -539,6 +563,25 @@ struct TasksView: View {
         .buttonStyle(.pressableSubtle)
         .help(showEisenhower ? "Back to the list" : "Eisenhower matrix — urgency × importance")
         .accessibilityLabel(showEisenhower ? "Show task list" : "Show Eisenhower matrix")
+    }
+
+    /// Opens the Jira sprint board — only while connected.
+    @ViewBuilder
+    private var jiraBoardToggle: some View {
+        if AppServices.jiraService?.isConnected == true {
+            Button { showJiraBoard = true } label: {
+                Image(systemName: "rectangle.split.3x1")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.dsSecondary)
+                    .frame(width: 27, height: 27)
+                    .background(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
+                        .fill(Color.dsFill))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.pressableSubtle)
+            .help("Jira sprint board")
+            .accessibilityLabel("Show Jira board")
+        }
     }
 
     private var searchField: some View {
@@ -1872,6 +1915,16 @@ struct TasksView: View {
             Menu {
                 Button { editorTask = task } label: {
                     Label("Edit task…", systemImage: "pencil")
+                }
+                if task.isJiraLinked, let key = task.jiraKey {
+                    Button { jiraDetailKey = JiraDetailKey(key: key) } label: {
+                        Label("Jira details…", systemImage: "link")
+                    }
+                    if let url = task.jiraBrowseURL {
+                        Button { NSWorkspace.shared.open(url) } label: {
+                            Label("Open in Jira", systemImage: "arrow.up.forward.app")
+                        }
+                    }
                 }
                 Divider()
                 Button(role: .destructive) { store.delete(task.id) } label: {
