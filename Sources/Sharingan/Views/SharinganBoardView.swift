@@ -1,88 +1,56 @@
 import SwiftUI
 import SharinganCore
 
-/// Sharingan's own kanban board: three frosted-glass columns — **To Do**,
-/// **In Progress**, **Done** — over the local task list, shaped after
-/// `WeeklyBoardView`/`JiraBoardView` (same column width, `.draggable`/
-/// `.dropDestination` idiom, drop-target glow and hover lift).
+/// Sharingan's own kanban board: user-defined columns (`BoardColumnStore`)
+/// over the local task list. Shaped after `WeeklyBoardView`/`JiraBoardView`
+/// — same column width, `.draggable`/`.dropDestination` idiom, drop glow and
+/// hover lift.
 ///
-/// The columns are derived from existing task state — there is no separate
-/// "status" field — which keeps every drag deterministic and reversible:
-///   • To Do        = an open task that isn't the current focus task
-///   • In Progress  = the one active/focus task (`TaskStore.activeTaskID`)
-///   • Done         = `isDone`
-/// Dragging a card just calls the matching store mutator; setting a new focus
-/// task displaces the previous one back to To Do on its own.
+/// A task names its column through `TaskItem.boardColumnID`; a task in a
+/// disabled/deleted column falls back to the first column. The one built-in
+/// coupling: a column whose role is `.done` drives `isDone`, so dragging a
+/// card in or out completes / reopens the task. Columns can be added, renamed,
+/// reordered, disabled and deleted from the header and per-column menus.
 struct SharinganBoardView: View {
     @ObservedObject var timer: PomodoroTimer
     @ObservedObject private var store = TaskStore.shared
+    @ObservedObject private var columns = BoardColumnStore.shared
 
-    /// Card currently under the pointer — lifts slightly.
     @State private var hoveredCard: UUID?
-    /// Column currently being dragged over — highlighted.
-    @State private var targetedColumn: Column?
-    /// Task open in the full editor sheet (click a card).
+    @State private var targetedColumn: String?
     @State private var editorTask: TaskItem?
-    /// Draft for the quick-add field in the To Do column.
-    @State private var todoDraft = ""
+    @State private var draft = ""
 
-    /// Same ordering the Tasks list uses — one shared preference.
+    /// Column-management text prompts.
+    @State private var addingColumn = false
+    @State private var newColumnName = ""
+    @State private var renamingColumn: BoardColumn?
+    @State private var renameText = ""
+
     @AppStorage("tasks.sortMode") private var sortModeRaw = TaskSortMode.manual.rawValue
     private var sortMode: TaskSortMode { TaskSortMode(rawValue: sortModeRaw) ?? .manual }
 
     private let columnWidth: CGFloat = 240
     private var accent: Color { timer.settings.theme.accent }
 
-    private enum Column: String, CaseIterable, Identifiable {
-        case todo, inProgress, done
-        var id: String { rawValue }
-        var title: String {
-            switch self {
-            case .todo:       return "To Do"
-            case .inProgress: return "In Progress"
-            case .done:       return "Done"
-            }
-        }
-        var icon: String {
-            switch self {
-            case .todo:       return "circle"
-            case .inProgress: return "circle.lefthalf.filled"
-            case .done:       return "checkmark.circle.fill"
-            }
-        }
-    }
-
     // MARK: - Column contents
 
-    /// Cards for a column, in the shared sort order.
-    private func items(_ column: Column) -> [TaskItem] {
+    /// Tasks shown in a column: the Done column holds every completed task;
+    /// other columns hold open tasks that resolve to them.
+    private func tasks(in column: BoardColumn) -> [TaskItem] {
         let all = store.tasks
-        let filtered: [TaskItem]
-        switch column {
-        case .todo:
-            filtered = all.filter { !$0.isDone && $0.id != store.activeTaskID }
-        case .inProgress:
-            filtered = all.filter { !$0.isDone && $0.id == store.activeTaskID }
-        case .done:
-            filtered = all.filter { $0.isDone }
+        let picked: [TaskItem]
+        if column.role == .done {
+            picked = all.filter(\.isDone)
+        } else {
+            picked = all.filter { !$0.isDone
+                && columns.resolvedColumn(for: $0.boardColumnID)?.id == column.id }
         }
-        return filtered.sorted(by: sortMode.inOrder)
+        return picked.sorted(by: sortMode.inOrder)
     }
 
-    /// The store change a drop onto `column` performs, kept reversible.
-    private func drop(_ id: UUID, into column: Column) {
-        guard let task = store.tasks.first(where: { $0.id == id }) else { return }
-        switch column {
-        case .todo:
-            if task.isDone { store.toggleDone(id) }
-            if store.activeTaskID == id { store.setActive(nil) }
-        case .inProgress:
-            if task.isDone { store.toggleDone(id) }
-            store.setActive(id)
-        case .done:
-            if store.activeTaskID == id { store.setActive(nil) }
-            if !task.isDone { store.toggleDone(id) }
-        }
+    private func drop(_ id: UUID, into column: BoardColumn) {
+        store.setBoardColumn(id, columnID: column.id, markDone: column.role == .done)
     }
 
     // MARK: - Body
@@ -92,17 +60,42 @@ struct SharinganBoardView: View {
             header
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 14) {
-                    ForEach(Column.allCases) { column in
-                        columnView(column)
-                    }
+                    ForEach(columns.enabled) { columnView($0) }
+                    addColumnTile
                 }
                 .padding(.vertical, 4)
                 .padding(.horizontal, 2)
             }
         }
+        .onAppear(perform: backfillOnce)
         .sheet(item: $editorTask) { task in
             TaskEditorView(task: task, accent: accent, settings: timer.settings)
         }
+        .alert("New column", isPresented: $addingColumn) {
+            TextField("Name", text: $newColumnName)
+            Button("Add") {
+                let name = newColumnName; newColumnName = ""
+                if !name.trimmingCharacters(in: .whitespaces).isEmpty {
+                    withAnimation(DS.Motion.standard) { columns.addColumn(name: name) }
+                }
+            }
+            Button("Cancel", role: .cancel) { newColumnName = "" }
+        }
+        .alert("Rename column", isPresented: Binding(
+            get: { renamingColumn != nil },
+            set: { if !$0 { renamingColumn = nil } })) {
+            TextField("Name", text: $renameText)
+            Button("Rename") {
+                if let col = renamingColumn { columns.rename(col.id, to: renameText) }
+                renamingColumn = nil
+            }
+            Button("Cancel", role: .cancel) { renamingColumn = nil }
+        }
+    }
+
+    /// Seed done tasks into the Done column the first time the board is shown.
+    private func backfillOnce() {
+        if let done = columns.doneColumnID { store.backfillBoardColumns(doneColumnID: done) }
     }
 
     private var header: some View {
@@ -121,32 +114,44 @@ struct SharinganBoardView: View {
             Menu {
                 TaskSortMenuItems(sortModeRaw: $sortModeRaw)
             } label: {
-                Image(systemName: "arrow.up.arrow.down")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(sortMode == .manual ? .white : accent)
-                    .frame(width: 28, height: 28)
-                    .background(Circle().fill(Color.white.opacity(0.08)))
-                    .contentShape(Circle())
+                circleIcon("arrow.up.arrow.down", active: sortMode != .manual)
             }
             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
             .help(sortMode == .manual ? "Sort tasks" : "Sorted by \(sortMode.label)")
             .accessibilityLabel("Sort tasks")
+
+            Button { newColumnName = ""; addingColumn = true } label: {
+                Label("Add column", systemImage: "plus")
+                    .font(.system(.callout, design: .rounded).weight(.semibold))
+            }
+            .buttonStyle(.glass)
+            .help("Add a board column")
         }
+    }
+
+    private func circleIcon(_ name: String, active: Bool) -> some View {
+        Image(systemName: name)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(active ? accent : .white)
+            .frame(width: 28, height: 28)
+            .background(Circle().fill(Color.white.opacity(0.08)))
+            .contentShape(Circle())
     }
 
     // MARK: - Columns
 
-    private func columnView(_ column: Column) -> some View {
-        let cards = items(column)
-        let targeted = targetedColumn == column
+    private func columnView(_ column: BoardColumn) -> some View {
+        let cards = tasks(in: column)
+        let targeted = targetedColumn == column.id
+        let isFirst = columns.enabled.first?.id == column.id
         return VStack(alignment: .leading, spacing: 12) {
             columnHeader(column, count: cards.count)
-            if column == .todo { quickAdd }
+            if isFirst { quickAdd }
             if cards.isEmpty {
                 emptyDrop(targeted: targeted)
             } else {
                 VStack(spacing: 9) {
-                    ForEach(cards) { card($0, column: column) }
+                    ForEach(cards) { card($0) }
                 }
             }
             Spacer(minLength: 0)
@@ -171,26 +176,80 @@ struct SharinganBoardView: View {
             withAnimation(DS.Motion.standard) { drop(id, into: column) }
             return true
         } isTargeted: { inside in
-            targetedColumn = inside ? column : (targetedColumn == column ? nil : targetedColumn)
+            targetedColumn = inside ? column.id : (targetedColumn == column.id ? nil : targetedColumn)
         }
     }
 
-    private func columnHeader(_ column: Column, count: Int) -> some View {
+    private func columnHeader(_ column: BoardColumn, count: Int) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: column.icon)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(column == .done ? Color.green
-                                 : column == .inProgress ? accent : Color.dsSecondary)
-            Text(column.title)
+            if column.role == .done {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.green)
+            }
+            Text(column.name)
                 .font(.system(.subheadline, design: .rounded).weight(.bold))
                 .foregroundStyle(.white)
-            Spacer()
+                .lineLimit(1)
             Text("\(count)")
                 .font(.system(.caption2, design: .rounded).weight(.bold))
                 .foregroundStyle(count == 0 ? .white.opacity(0.3) : .white.opacity(0.55))
                 .frame(minWidth: 20, minHeight: 20)
                 .background(Circle().fill(Color.white.opacity(count == 0 ? 0.03 : 0.08)))
+            Spacer()
+            columnMenu(column)
         }
+    }
+
+    private func columnMenu(_ column: BoardColumn) -> some View {
+        Menu {
+            Button { renamingColumn = column; renameText = column.name } label: {
+                Label("Rename…", systemImage: "pencil")
+            }
+            Button { withAnimation(DS.Motion.standard) { columns.move(column.id, by: -1) } } label: {
+                Label("Move left", systemImage: "arrow.left")
+            }
+            Button { withAnimation(DS.Motion.standard) { columns.move(column.id, by: 1) } } label: {
+                Label("Move right", systemImage: "arrow.right")
+            }
+            Divider()
+            Button { withAnimation(DS.Motion.standard) { columns.setEnabled(column.id, false) } } label: {
+                Label("Hide column", systemImage: "eye.slash")
+            }
+            Button(role: .destructive) {
+                withAnimation(DS.Motion.standard) { columns.delete(column.id) }
+            } label: {
+                Label("Delete column", systemImage: "trash")
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.55))
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+        .help("Column options")
+    }
+
+    private var addColumnTile: some View {
+        Button { newColumnName = ""; addingColumn = true } label: {
+            VStack(spacing: 8) {
+                Image(systemName: "plus")
+                    .font(.system(size: 20, weight: .semibold))
+                Text("Add column")
+                    .font(.system(.subheadline, design: .rounded).weight(.medium))
+            }
+            .foregroundStyle(.white.opacity(0.4))
+            .frame(width: 150, height: 120)
+            .background(
+                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                    .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6, 5]))
+                    .foregroundStyle(Color.white.opacity(0.14))
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.pressableSubtle)
     }
 
     private var quickAdd: some View {
@@ -198,26 +257,26 @@ struct SharinganBoardView: View {
             Image(systemName: "plus")
                 .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(accent)
-            TextField("Add task", text: $todoDraft)
+            TextField("Add task", text: $draft)
                 .textFieldStyle(.plain)
                 .font(.system(.caption, design: .rounded))
                 .foregroundStyle(.white)
-                .onSubmit(addTodo)
+                .onSubmit(addTask)
         }
         .padding(.horizontal, 8).padding(.vertical, 6)
         .background(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
             .fill(Color.dsFill))
     }
 
-    private func addTodo() {
-        let t = todoDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+    private func addTask() {
+        let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
         var documentResult: TaskStore.DocumentImport?
         withAnimation(DS.Motion.standard) {
             documentResult = store.importIfDocument(t)
             if documentResult == nil { store.add(title: t) }
         }
-        todoDraft = ""
+        draft = ""
         if let documentResult { ImportDuplicatePrompt.resolve(documentResult, store: store) }
     }
 
@@ -235,7 +294,7 @@ struct SharinganBoardView: View {
 
     // MARK: - Card
 
-    private func card(_ task: TaskItem, column: Column) -> some View {
+    private func card(_ task: TaskItem) -> some View {
         let color = Color(hex: store.color(for: task.category))
         let hovered = hoveredCard == task.id
         return HStack(alignment: .top, spacing: 0) {
