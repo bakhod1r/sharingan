@@ -14,21 +14,37 @@ struct BoardSectionView: View {
     @AppStorage("board.tab") private var tabRaw = BoardTab.weekly.rawValue
     private var tab: BoardTab { BoardTab(rawValue: tabRaw) ?? .weekly }
 
-    /// Created lazily on the first switch to the Jira tab; nil while
-    /// disconnected (the tab then shows the connect hint instead).
+    /// Created lazily on the first switch to the Jira tab, kept for the
+    /// window's lifetime so tab switches don't refetch.
     @State private var jiraModel: JiraBoardModel?
+
+    /// Whether Jira is integrated — the Jira tab only exists when it is.
+    private var jiraConnected: Bool { AppServices.jiraService?.isConnected == true }
+
+    /// The tabs to offer right now: always Weekly + Board, plus Jira once
+    /// integrated.
+    private var availableTabs: [BoardTab] {
+        jiraConnected ? BoardTab.allCases : BoardTab.alwaysAvailable
+    }
+
+    /// The effective selection — never the Jira tab while disconnected.
+    private var selection: BoardTab {
+        availableTabs.contains(tab) ? tab : .weekly
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             GlassSegmentedPicker(
-                selection: Binding(get: { tab },
+                selection: Binding(get: { selection },
                                    set: { tabRaw = $0.rawValue }),
-                cases: BoardTab.allCases, label: \.title)
-                .frame(width: 220)
+                cases: availableTabs, label: \.title)
+                .frame(width: jiraConnected ? 300 : 220)
 
-            switch tab {
+            switch selection {
             case .weekly:
                 WeeklyBoardView(timer: timer)
+            case .kanban:
+                SharinganBoardView(timer: timer)
             case .jira:
                 jiraBoard
             }
@@ -48,7 +64,8 @@ struct BoardSectionView: View {
         }
     }
 
-    /// Shown while Jira is disconnected (or has no browsable project).
+    /// Rare fallback: the tab is only shown while connected, but a board
+    /// model or project key can still be momentarily unavailable.
     private var connectHint: some View {
         VStack(spacing: 12) {
             Image(systemName: "rectangle.split.3x1")
@@ -64,14 +81,14 @@ struct BoardSectionView: View {
         .onAppear(perform: resolveJiraModel)
     }
 
-    /// Applies a pending deep-link tab, then re-resolves the Jira model so a
-    /// connection made while the window was open is picked up.
+    /// Applies a pending deep-link tab, then resolves the Jira model when the
+    /// Jira tab is the effective selection.
     private func consumeDeepLink() {
         if let pending = router.pendingBoardTab {
             tabRaw = pending.rawValue
             router.pendingBoardTab = nil
         }
-        if tab == .jira { resolveJiraModel() }
+        if selection == .jira { resolveJiraModel() }
     }
 
     private func resolveJiraModel() {

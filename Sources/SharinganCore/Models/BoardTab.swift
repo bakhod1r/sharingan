@@ -5,12 +5,17 @@
 /// and their spellings must stay stable — a rename would silently reset every
 /// user back to the default tab.
 public enum BoardTab: String, CaseIterable, Identifiable, Hashable, Sendable {
-    case weekly, jira
+    case weekly, kanban, jira
     public var id: String { rawValue }
     public var title: String {
         switch self {
         case .weekly: return "Weekly"
+        case .kanban: return "Board"
         case .jira:   return "Jira"
         }
     }
+
+    /// The tabs a disconnected user sees — the Jira board only appears once
+    /// Jira is integrated, so this is `allCases` minus `.jira`.
+    public static let alwaysAvailable: [BoardTab] = [.weekly, .kanban]
 }

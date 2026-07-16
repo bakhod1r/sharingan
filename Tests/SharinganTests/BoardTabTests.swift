@@ -12,20 +12,29 @@ struct BoardTabTests {
     @Test("raw values are the stable persisted strings")
     func rawValuesAreStable() {
         #expect(BoardTab.weekly.rawValue == "weekly")
+        #expect(BoardTab.kanban.rawValue == "kanban")
         #expect(BoardTab.jira.rawValue == "jira")
     }
 
-    @Test("both tabs are present, Weekly before Jira")
+    @Test("all three tabs are present, in Weekly / Board / Jira order")
     func allCasesInOrder() {
-        #expect(BoardTab.allCases == [.weekly, .jira])
+        #expect(BoardTab.allCases == [.weekly, .kanban, .jira])
+    }
+
+    /// The Jira board tab only appears once Jira is integrated; a disconnected
+    /// user sees just Weekly + Board.
+    @Test("alwaysAvailable is allCases minus the Jira tab")
+    func alwaysAvailableExcludesJira() {
+        #expect(BoardTab.alwaysAvailable == [.weekly, .kanban])
+        #expect(!BoardTab.alwaysAvailable.contains(.jira))
     }
 
     /// A missing / unknown stored value must fall back to Weekly — the exact
     /// path `BoardSectionView` takes when `board.tab` is absent or stale.
     @Test("unknown stored raw value has no case (view defaults to weekly)")
     func unknownRawValueIsNil() {
-        #expect(BoardTab(rawValue: "kanban") == nil)
-        #expect((BoardTab(rawValue: "kanban") ?? .weekly) == .weekly)
+        #expect(BoardTab(rawValue: "gantt") == nil)
+        #expect((BoardTab(rawValue: "gantt") ?? .weekly) == .weekly)
     }
 
     @Test("a persist round-trip through UserDefaults preserves the tab")
@@ -43,6 +52,7 @@ struct BoardTabTests {
     @Test("titles are the segmented-control labels")
     func titlesMatchUI() {
         #expect(BoardTab.weekly.title == "Weekly")
+        #expect(BoardTab.kanban.title == "Board")
         #expect(BoardTab.jira.title == "Jira")
     }
 }
