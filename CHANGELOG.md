@@ -5,6 +5,34 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.7.0] — 2026-07-16
+
+### Added
+- **Jira Cloud integration.** Connect with "Log in with Atlassian" (OAuth
+  2.0 3LO — no password, tokens in the Keychain); pick your site and space.
+- Sync assigned issues into the task list, scoped to a chosen project.
+  Jira sub-tasks nest under their parent task keeping their own Jira
+  identity; Epic/Story/Bug/Task carry a colour-coded type badge and a Jira
+  key marker. Import is hierarchy-aware — an earlier flat import self-heals
+  into nested sub-tasks on the next sync.
+- Two-way sync (opt-in): local edits to a linked task queue and push back
+  to Jira; a poll pulls Jira's side and drains the queue on its own clock.
+  Pull-only stays the default.
+- Move an issue's status from the task row's status chip — the workflow
+  transitions, applied straight to Jira (and its board).
+- Sprint board (mini-kanban) of your cards, drag a card between columns to
+  transition it.
+- Issue detail sheet: description, comments, full change history, worklogs
+  — without opening Jira. Post comments from here.
+- Each completed pomodoro on a linked task (or sub-task) logs a Jira
+  worklog; Jira reduces the remaining estimate itself.
+- Create a Jira issue from a local task; map each category to a project.
+
+### Changed
+- The task list renders lazily and reveals a page at a time (infinite
+  scroll), so a large Jira import no longer freezes the window.
+- Destructive row actions (delete) moved behind an "…" menu everywhere.
+
 ## [1.6.1] — 2026-07-15
 
 ### Fixed
