@@ -5,6 +5,16 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.8.0] — 2026-07-16
+
+### Changed
+- The sidebar's **Week** section is now **Board**, with two tabs: **Weekly**
+  (the 7-day planner, unchanged) and **Jira** (the sprint board, previously a
+  sheet opened from Tasks). The last-used tab is remembered; while Jira is
+  disconnected the tab shows a "Connect Jira in Settings" hint.
+- The Jira board button in the Tasks view bar now jumps to Board → Jira
+  instead of opening a sheet.
+
 ## [1.7.0] — 2026-07-16
 
 ### Added
