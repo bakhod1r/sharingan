@@ -63,12 +63,44 @@ public actor JiraOutboxFlusher {
             let push = try JSONDecoder().decode(JiraPushFields.self,
                                                 from: Data(item.payload.utf8))
             try await client.updateIssue(key: item.issueKey, fields: push.asUpdateFields)
-        case .worklog, .transition, .comment:
-            // Wired in the worklog/transition milestone; until then the row
-            // stays queued rather than being dropped or failed.
-            throw JiraError.network("op \(item.op.rawValue) not yet supported")
+        case .worklog:
+            let w = try JSONDecoder().decode(JiraWorklogPayload.self,
+                                             from: Data(item.payload.utf8))
+            // adjustEstimate=auto lets Jira reduce remaining estimate itself.
+            _ = try await client.addWorklog(issueKey: item.issueKey,
+                                            timeSpentSeconds: w.timeSpentSeconds,
+                                            started: w.started,
+                                            comment: w.comment)
+        case .transition, .comment:
+            // Transitions and comments are interactive (sent immediately from
+            // the UI), so they don't ride the queue; a stray row stays put.
+            throw JiraError.network("op \(item.op.rawValue) not queued")
         }
     }
+}
+
+/// The queued body of a `worklog` op — one completed pomodoro's time against a
+/// Jira issue. `started` is Jira's timestamp format; `timeSpentSeconds` is
+/// floored to 60 at enqueue (Jira rejects worklogs under a minute).
+public struct JiraWorklogPayload: Codable, Equatable, Sendable {
+    public var timeSpentSeconds: Int
+    public var started: String
+    public var comment: String?
+
+    public init(timeSpentSeconds: Int, started: String, comment: String? = nil) {
+        self.timeSpentSeconds = timeSpentSeconds
+        self.started = started
+        self.comment = comment
+    }
+
+    /// Jira's `started` format — a fixed POSIX formatter, because
+    /// ISO8601DateFormatter emits a colon in the zone offset that Jira rejects.
+    public static let startedFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSZZZ"
+        return f
+    }()
 }
 
 extension JiraPushFields {

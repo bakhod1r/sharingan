@@ -518,6 +518,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         TaskStore.shared.jiraChangeObserver = { [weak jira] task in
             jira?.taskDidChange(task)
         }
+        coord.jiraHooks = jira
         jira.startPolling()
         self.jiraService = jira
         AppServices.jiraService = jira

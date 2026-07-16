@@ -43,6 +43,10 @@ public final class SharinganCoordinator: ObservableObject {
 
     /// iCloud sync, when the user has turned it on (owned by the AppDelegate).
     private weak var syncEngine: CloudSyncEngine?
+    /// Jira worklog logging on pomodoro completion. Core can't see JiraService
+    /// (it lives in the app target), so it's reached through this protocol,
+    /// assigned by the AppDelegate at launch.
+    public weak var jiraHooks: JiraPomodoroHooks?
     private var syncCancellable: AnyCancellable?
     /// The last timer state pushed to sync — publish only when the session
     /// payload really changed (the phase/isRunning sinks fire on every
@@ -691,6 +695,11 @@ public final class SharinganCoordinator: ObservableObject {
                 if let taskID = TaskStore.shared.activeTaskID {
                     let seconds = note.userInfo?["seconds"] as? TimeInterval ?? 0
                     TaskStore.shared.incrementPomodoro(taskID, seconds: seconds)
+                    // Same non-mirrored guard as the credit: only the session's
+                    // owner Mac logs the worklog, so it can't double-post.
+                    jiraHooks?.pomodoroCompleted(taskID: taskID,
+                                                 subtaskID: TaskStore.shared.activeSubtaskID,
+                                                 seconds: seconds, completedAt: Date())
                 }
                 // The finished session hands the active slot to the next queued task.
                 advanceQueueAfterFocus(store: TaskStore.shared)
@@ -851,4 +860,11 @@ public final class SharinganCoordinator: ObservableObject {
                 pitch: timer.settings.ttsPitch)
         }
     }
+}
+/// How the coordinator reports a completed pomodoro to the Jira layer without
+/// depending on it. `JiraService` conforms; a nil hook (tests, CLI) is a no-op.
+@MainActor
+public protocol JiraPomodoroHooks: AnyObject {
+    func pomodoroCompleted(taskID: UUID, subtaskID: UUID?,
+                           seconds: TimeInterval, completedAt: Date)
 }

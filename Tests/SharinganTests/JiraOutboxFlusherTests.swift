@@ -79,6 +79,37 @@ struct JiraOutboxFlusherTests {
         #expect(items.isEmpty)               // backed off — not yet due
     }
 
+    @Test("a worklog op posts to the issue's worklog endpoint with adjustEstimate")
+    func worklogOpSends() async throws {
+        let (storage, _) = try tempStorage()
+        defer { FlushStubProtocol.handler = nil }
+        let payload = String(data: try JSONEncoder().encode(
+            JiraWorklogPayload(timeSpentSeconds: 1500,
+                               started: "2026-07-16T09:00:00.000+0000",
+                               comment: "Focus session from Sharingan 🍅")),
+                             encoding: .utf8)!
+        storage.enqueue(OutboxItem(issueKey: "WT-702", op: .worklog, payload: payload))
+
+        let recorder = RequestRecorder()
+        let client = stubClient { request in
+            recorder.record(request)
+            let response = HTTPURLResponse(url: request.url!, statusCode: 201,
+                                           httpVersion: nil, headerFields: nil)!
+            return (response, Data(#"{"id":"90001","self":"https://x/worklog/90001","timeSpent":"25m","timeSpentSeconds":1500}"#.utf8))
+        }
+        let flusher = JiraOutboxFlusher(client: client, storage: storage)
+
+        let result = await flusher.flush()
+
+        #expect(result.sent == 1)
+        let sent = recorder.last
+        #expect(sent?.method == "POST")
+        #expect(sent?.path == "/ex/jira/test-cloud/rest/api/3/issue/WT-702/worklog")
+        let body = try JSONSerialization.jsonObject(with: try #require(sent?.body)) as? [String: Any]
+        #expect(body?["timeSpentSeconds"] as? Int == 1500)
+        #expect(storage.pendingCount() == 0)
+    }
+
     @Test("a permanent failure marks the item failed and stops retrying")
     func permanentFailureMarksFailed() async throws {
         let (storage, _) = try tempStorage()

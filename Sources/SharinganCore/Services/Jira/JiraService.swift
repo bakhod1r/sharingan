@@ -140,7 +140,7 @@ actor JiraOAuthTokenProvider: JiraTokenProviding {
 /// which is how `JiraClient` gets its bearer token without ever touching a
 /// refresh token or the client secret.
 @MainActor
-public final class JiraService: ObservableObject {
+public final class JiraService: ObservableObject, JiraPomodoroHooks {
 
     public static let autoStartTransitionDefaultsKey = "jira.autoStartTransition"
     public static let doneBehaviorDefaultsKey = "jira.doneBehavior"
@@ -547,6 +547,41 @@ public final class JiraService: ObservableObject {
                                       createdAt: existing?.createdAt ?? Date()))
         objectWillChange.send()
     }
+
+    // MARK: - Worklog (pomodoro → Jira)
+
+    /// A completed pomodoro on a linked task. In two-way mode with worklog sync
+    /// on, queues a worklog against the sub-task's issue when the active subtask
+    /// is Jira-linked (the time belongs to the sub-task), otherwise the parent
+    /// task's issue. Sessions under a minute are dropped — Jira rejects them.
+    public func pomodoroCompleted(taskID: UUID, subtaskID: UUID?,
+                                  seconds: TimeInterval, completedAt: Date = Date()) {
+        guard syncMode == .twoWay,
+              defaults.bool(forKey: Self.worklogSyncDefaultsKey),
+              let issueCache,
+              let task = taskStore.tasks.first(where: { $0.id == taskID }) else { return }
+
+        let whole = Int(seconds.rounded(.down))
+        guard whole >= 60 else { return }
+
+        // Prefer the active sub-task's issue.
+        let subtask = subtaskID.flatMap { sid in task.subtasks.first { $0.id == sid } }
+        let issueKey = (subtask?.isJiraLinked == true ? subtask?.jiraKey : nil) ?? task.jiraKey
+        guard let issueKey else { return }
+
+        let started = JiraWorklogPayload.startedFormatter.string(
+            from: completedAt.addingTimeInterval(-Double(whole)))
+        let comment = defaults.string(forKey: Self.worklogCommentDefaultsKey)
+            ?? "Focus session from Sharingan 🍅"
+        let payload = JiraWorklogPayload(timeSpentSeconds: whole, started: started, comment: comment)
+        guard let data = try? JSONEncoder().encode(payload),
+              let json = String(data: data, encoding: .utf8) else { return }
+
+        issueCache.enqueue(OutboxItem(issueKey: issueKey, op: .worklog, payload: json))
+        objectWillChange.send()
+    }
+
+    public static let worklogCommentDefaultsKey = "jira.worklogComment"
 
     // MARK: - Push (drain the queue)
 
