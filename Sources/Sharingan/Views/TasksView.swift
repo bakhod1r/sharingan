@@ -43,9 +43,8 @@ struct TasksView: View {
     @State private var hoveredTask: UUID?
     /// Task currently open in the full editor sheet (nil = closed).
     @State private var editorTask: TaskItem?
-    /// Issue key whose Jira detail sheet is open, and whether the board sheet is.
+    /// Issue key whose Jira detail sheet is open.
     @State private var jiraDetailKey: JiraDetailKey?
-    @State private var showJiraBoard = false
     /// Task being snoozed via "Pick date…" (nil = closed).
     @State private var snoozeTask: TaskItem?
     @State private var snoozeDate = Date()
@@ -151,17 +150,6 @@ struct TasksView: View {
             if let model = AppServices.jiraService?.makeDetailModel(issueKey: wrapped.key) {
                 JiraIssueDetailView(model: model)
                     .frame(minWidth: 560, minHeight: 520)
-            }
-        }
-        .sheet(isPresented: $showJiraBoard) {
-            if let jira = AppServices.jiraService,
-               let model = jira.makeBoardModel(), let project = jira.boardProjectKey {
-                JiraBoardView(model: model, projectKey: project,
-                              accent: timer.settings.theme.accent)
-                    .frame(minWidth: 760, minHeight: 540)
-            } else {
-                Text("Connect Jira in Settings to see your board.")
-                    .padding(40)
             }
         }
         .onDrop(of: [.fileURL], isTargeted: nil, perform: handleFileDrop)
@@ -569,7 +557,7 @@ struct TasksView: View {
     @ViewBuilder
     private var jiraBoardToggle: some View {
         if AppServices.jiraService?.isConnected == true {
-            Button { showJiraBoard = true } label: {
+            Button { AppRouter.shared.openBoard(tab: .jira) } label: {
                 Image(systemName: "rectangle.split.3x1")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Color.dsSecondary)
@@ -579,7 +567,7 @@ struct TasksView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.pressableSubtle)
-            .help("Jira sprint board")
+            .help("Jira sprint board — opens the Board section")
             .accessibilityLabel("Show Jira board")
         }
     }
