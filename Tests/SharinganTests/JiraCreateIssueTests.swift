@@ -41,6 +41,28 @@ struct JiraCreateIssueTests {
         #expect((fields?["priority"] as? [String: Any])?["name"] as? String == "High")
     }
 
+    @Test("createIssue also posts labels, due date and estimate when present")
+    func createIssuePostsOptionalFields() async throws {
+        defer { CreateStubProtocol.handler = nil }
+        let recorder = RequestRecorder()
+        let client = stubClient { request in
+            recorder.record(request)
+            return (HTTPURLResponse(url: request.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!,
+                    Data(#"{"id":"10500","key":"SHRGN-8"}"#.utf8))
+        }
+
+        _ = try await client.createIssue(fields: JiraIssueCreateFields(
+            projectKey: "SHRGN", issueTypeName: "Task", summary: "Ship it",
+            labels: ["backend", "code-review"], dueDate: "2026-07-20",
+            estimateSeconds: 3000))
+
+        let body = try JSONSerialization.jsonObject(with: try #require(recorder.last?.body)) as? [String: Any]
+        let fields = body?["fields"] as? [String: Any]
+        #expect(fields?["labels"] as? [String] == ["backend", "code-review"])
+        #expect(fields?["duedate"] as? String == "2026-07-20")
+        #expect(fields?["timeoriginalestimate"] as? Int == 3000)
+    }
+
     @MainActor
     private func makeService(_ handler: @escaping @Sendable (URLRequest) throws -> (HTTPURLResponse, Data))
     throws -> (JiraService, TaskStore) {
@@ -88,6 +110,35 @@ struct JiraCreateIssueTests {
         #expect(linked.jiraKey == "SHRGN-8")
         #expect(linked.jiraIssueID == "10500")
         #expect(linked.jiraSiteHost == "wayll.atlassian.net")
+    }
+
+    @Test("creating from a task carries its tags, due date, estimate and issue type")
+    @MainActor
+    func createFromTaskCarriesLocalFields() async throws {
+        defer { CreateStubProtocol.handler = nil }
+        let recorder = RequestRecorder()
+        let (service, tasks) = try makeService { request in
+            recorder.record(request)
+            return (HTTPURLResponse(url: request.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!,
+                    Data(#"{"id":"10500","key":"SHRGN-8"}"#.utf8))
+        }
+        let due = JiraFieldMapper.date(fromJiraDueDate: "2026-07-20")
+        tasks.add(title: "Wire it up", category: "Inbox", tags: ["backend", "code review"],
+                  dueDate: due, estimatedPomodoros: 2, priority: .high)
+        var task = try #require(tasks.tasks.first { $0.title == "Wire it up" })
+        task.jiraIssueType = "Story"
+        tasks.update(task)
+
+        #expect(await service.createIssue(from: task, projectKey: "SHRGN"))
+
+        let body = try JSONSerialization.jsonObject(with: try #require(recorder.last?.body)) as? [String: Any]
+        let fields = body?["fields"] as? [String: Any]
+        // Local tags become Jira labels (space → dash), due date and estimate ride along.
+        #expect(Set((fields?["labels"] as? [String]) ?? []) == ["backend", "code-review"])
+        #expect(fields?["duedate"] as? String == "2026-07-20")
+        #expect(fields?["timeoriginalestimate"] as? Int == 3000)   // 2 pomodoros × 1500s
+        // The issue type follows the task, not a hardcoded "Task".
+        #expect((fields?["issuetype"] as? [String: Any])?["name"] as? String == "Story")
     }
 
     @Test("bulk push creates issues only for unlinked, undone tasks and links them")

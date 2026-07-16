@@ -592,18 +592,24 @@ public final class JiraService: ObservableObject, JiraPomodoroHooks {
     /// failure; the task is left unlinked so it can be retried.
     @discardableResult
     public func createIssue(from task: TaskItem, projectKey explicitProject: String? = nil,
-                            issueType: String = "Task") async -> Bool {
+                            issueType explicitType: String? = nil) async -> Bool {
         guard let host = resolvedSiteHost,
               let project = projectKey(forTask: task, explicit: explicitProject) else {
             lastErrorMessage = "Pick a Jira project for this task first."
             return false
         }
+        // Prefer an explicit type, else the one the task already carries (a
+        // re-linked Story shouldn't downgrade to Task), else the standard "Task".
+        let issueType = explicitType ?? task.jiraIssueType ?? "Task"
         do {
             let ref = try await client.createIssue(fields: JiraIssueCreateFields(
                 projectKey: project, issueTypeName: issueType,
                 summary: task.title,
                 priorityName: JiraFieldMapper.jiraPriorityName(from: task.priority),
-                descriptionText: task.notes.isEmpty ? nil : task.notes))
+                descriptionText: task.notes.isEmpty ? nil : task.notes,
+                labels: task.tags.map(JiraFieldMapper.jiraLabel(from:)),
+                dueDate: JiraFieldMapper.jiraDueDate(from: task.dueDate),
+                estimateSeconds: JiraFieldMapper.estimateSeconds(fromPomodoros: task.estimatedPomodoros)))
             var linked = task
             linked.jiraKey = ref.key
             linked.jiraIssueID = ref.id

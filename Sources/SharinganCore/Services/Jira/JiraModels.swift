@@ -751,20 +751,33 @@ public struct JiraIssueCreateFields: Encodable, Equatable, Sendable {
     public let summary: String
     public let priorityName: String?
     public let descriptionText: String?
+    /// Jira labels (already space-collapsed to dashes by the caller). Empty is
+    /// treated as absent so a create can't wipe nothing onto the field.
+    public let labels: [String]
+    /// `yyyy-MM-dd`, UTC — same format as the pull/push paths.
+    public let dueDate: String?
+    /// `timeoriginalestimate`, in seconds.
+    public let estimateSeconds: Int?
 
     public init(projectKey: String, issueTypeName: String, summary: String,
-                priorityName: String? = nil, descriptionText: String? = nil) {
+                priorityName: String? = nil, descriptionText: String? = nil,
+                labels: [String] = [], dueDate: String? = nil,
+                estimateSeconds: Int? = nil) {
         self.projectKey = projectKey
         self.issueTypeName = issueTypeName
         self.summary = summary
         self.priorityName = priorityName
         self.descriptionText = descriptionText
+        self.labels = labels
+        self.dueDate = dueDate
+        self.estimateSeconds = estimateSeconds
     }
 
     private struct KeyRef: Encodable { let key: String }
     private struct NameRef: Encodable { let name: String }
     private enum CodingKeys: String, CodingKey {
         case project, issuetype, summary, priority, description
+        case labels, duedate, timeoriginalestimate
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -778,6 +791,9 @@ public struct JiraIssueCreateFields: Encodable, Equatable, Sendable {
                                                from: ADF.document(fromPlainText: descriptionText))
             try c.encode(adf, forKey: .description)
         }
+        if !labels.isEmpty { try c.encode(labels, forKey: .labels) }
+        if let dueDate { try c.encode(dueDate, forKey: .duedate) }
+        if let estimateSeconds { try c.encode(estimateSeconds, forKey: .timeoriginalestimate) }
     }
 }
 
