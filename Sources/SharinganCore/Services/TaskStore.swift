@@ -1057,6 +1057,27 @@ public final class TaskStore: ObservableObject {
         activeTaskID = id
     }
 
+    /// Moves a task to a board column. `markDone` reflects the destination
+    /// column's role — a `.done` column completes the task, any other column
+    /// reopens a previously-done one — so dragging a card is fully reversible.
+    public func setBoardColumn(_ id: UUID, columnID: String?, markDone: Bool) {
+        guard let i = tasks.firstIndex(where: { $0.id == id }) else { return }
+        tasks[i].boardColumnID = columnID
+        if tasks[i].isDone != markDone { toggleDone(id) }  // keeps completedAt / reminders in sync
+        persist()
+    }
+
+    /// One-time backfill when the board columns first appear: completed tasks
+    /// land in the Done column, everything else stays unassigned (first column).
+    /// Idempotent — only touches tasks with no column yet.
+    public func backfillBoardColumns(doneColumnID: String) {
+        var changed = false
+        for i in tasks.indices where tasks[i].boardColumnID == nil {
+            if tasks[i].isDone { tasks[i].boardColumnID = doneColumnID; changed = true }
+        }
+        if changed { persist() }
+    }
+
     /// Pomodoro size the active target asks for: the focused subtask's kind
     /// wins, then the task's; nil = no preference (keep the timer's current).
     public var resolvedActiveKind: PomodoroKind? {
