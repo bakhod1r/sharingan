@@ -16,6 +16,7 @@ struct SettingsJiraSection: View {
     @AppStorage(JiraService.autoCompleteLocalDefaultsKey) private var autoCompleteLocal = false
     @AppStorage(JiraService.worklogSyncDefaultsKey) private var worklogSync = true
     @AppStorage(JiraService.pushEstimateDefaultsKey) private var pushEstimate = false
+    @AppStorage(JiraService.addToActiveSprintDefaultsKey) private var addToActiveSprint = false
     @AppStorage(JiraService.pollMinutesDefaultsKey) private var pollMinutes = 15
     @AppStorage(JiraService.showTypeBadgeDefaultsKey) private var showTypeBadge = true
     @AppStorage(JiraBoardModel.boardIDDefaultsKey) private var boardID = 0
@@ -405,6 +406,8 @@ struct SettingsJiraSection: View {
                   isOn: $worklogSync)
         ToggleRow(title: "Push local estimate back to Jira",
                   isOn: $pushEstimate)
+        ToggleRow(title: "Add new issues to the active sprint",
+                  isOn: $addToActiveSprint)
         ToggleRow(title: "Show issue key badge on tasks",
                   isOn: $showTypeBadge)
 

@@ -150,6 +150,9 @@ public final class JiraService: ObservableObject, JiraPomodoroHooks {
     public static let pollMinutesDefaultsKey = "jira.pollMinutes"
     public static let customJQLDefaultsKey = "jira.customJQL"
     public static let showTypeBadgeDefaultsKey = "jira.showTypeBadge"
+    /// When on, a newly-created Jira issue is also dropped into the project's
+    /// active sprint (best-effort).
+    public static let addToActiveSprintDefaultsKey = "jira.addToActiveSprint"
 
     /// Leftovers from the API-token era. Kept only so `purgeLegacyBasicAuth` can
     /// delete them — nothing reads these for auth any more.
@@ -640,6 +643,10 @@ public final class JiraService: ObservableObject, JiraPomodoroHooks {
             isApplyingRemote = true
             taskStore.update(linked)
             isApplyingRemote = false
+
+            // Optionally drop the new issue into the project's active sprint.
+            await addToActiveSprintIfEnabled(issueKey: ref.key, projectKey: project)
+
             lastErrorMessage = nil
             objectWillChange.send()
             return true
@@ -647,6 +654,18 @@ public final class JiraService: ObservableObject, JiraPomodoroHooks {
             lastErrorMessage = (error as? JiraError)?.userMessage ?? error.localizedDescription
             return false
         }
+    }
+
+    /// Adds a freshly-created issue to the project's active sprint when the
+    /// setting is on. Best-effort: any failure (no board, no active sprint, a
+    /// restricted sprint) is swallowed — the issue is already created and
+    /// linked, it just stays in the backlog.
+    private func addToActiveSprintIfEnabled(issueKey: String, projectKey: String) async {
+        guard UserDefaults.standard.bool(forKey: Self.addToActiveSprintDefaultsKey) else { return }
+        guard let boards = try? await client.getBoards(projectKeyOrId: projectKey),
+              let board = boards.values.first,
+              let sprint = try? await client.getActiveSprint(boardId: board.id) ?? nil else { return }
+        try? await client.addIssuesToSprint(sprintId: sprint.id, issueKeys: [issueKey])
     }
 
     /// A cache of each project's sub-task issue-type name, keyed by project key.

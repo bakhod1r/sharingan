@@ -229,6 +229,16 @@ public actor JiraClient {
         return try await request(path: "/rest/agile/1.0/sprint/\(sprintId)/issue", method: "GET", queryItems: queryItems)
     }
 
+    /// Moves issues into a sprint (POST /rest/agile/1.0/sprint/{id}/issue).
+    /// Returns 204 on success; a `hasScreen`-style restriction or a closed
+    /// sprint surfaces as a thrown `JiraError`.
+    public func addIssuesToSprint(sprintId: Int, issueKeys: [String]) async throws {
+        struct Body: Encodable { let issues: [String] }
+        let body = try encoder.encode(Body(issues: issueKeys))
+        _ = try await request(path: "/rest/agile/1.0/sprint/\(sprintId)/issue",
+                              method: "POST", body: body) as EmptyResponse
+    }
+
     // MARK: - Private request machinery
 
     private struct EmptyResponse: Decodable, Sendable {}
