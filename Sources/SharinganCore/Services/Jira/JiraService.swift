@@ -709,6 +709,34 @@ public final class JiraService: ObservableObject, JiraPomodoroHooks {
         }
     }
 
+    /// Turns the sprint board's cards into local tasks: one linked task per
+    /// card that isn't already linked (matched by Jira key). The board's cards
+    /// are already scoped to the current user, so this only imports issues
+    /// assigned to you. Returns how many tasks were created.
+    @discardableResult
+    public func importBoardCards(_ cards: [JiraBoardModel.Card]) -> Int {
+        guard let host = siteHost else { return 0 }
+        let existingKeys = Set(taskStore.tasks.compactMap(\.jiraKey))
+        let fresh = cards.filter { !existingKeys.contains($0.key) }
+        guard !fresh.isEmpty else { return 0 }
+
+        isApplyingRemote = true
+        for card in fresh {
+            var task = TaskItem(title: card.summary)
+            task.jiraKey = card.key
+            task.jiraSiteHost = host
+            task.jiraIssueType = card.issueType
+            if let secs = card.estimateSeconds, secs > 0 {
+                task.estimatedPomodoros = max(1, Int((Double(secs) / 1500.0).rounded()))  // 25-min pomodoros
+            }
+            if card.isDone { task.isDone = true; task.completedAt = Date() }
+            taskStore.insert(task)
+        }
+        isApplyingRemote = false
+        objectWillChange.send()
+        return fresh.count
+    }
+
     /// Bulk-creates Jira issues for every unlinked, undone task (optionally in
     /// one category) and links each returned key back. Existing local tasks are
     /// what seed Jira the first time — the queue only carries *changes* to tasks

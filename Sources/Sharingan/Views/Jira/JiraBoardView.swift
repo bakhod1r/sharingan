@@ -20,6 +20,9 @@ struct JiraBoardView: View {
     @State private var hoveredCard: String?
     /// Column currently being dragged over — highlighted.
     @State private var targetedColumn: String?
+    /// Result banner after converting board cards to tasks.
+    @State private var showImported = false
+    @State private var importedCount = 0
 
     private let columnWidth: CGFloat = 204
 
@@ -29,6 +32,13 @@ struct JiraBoardView: View {
             content
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .alert("Converted to tasks", isPresented: $showImported) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(importedCount == 0
+                 ? "Every board card is already a task."
+                 : "Added \(importedCount) task\(importedCount == 1 ? "" : "s") from the board.")
+        }
         .task(id: projectKey) {
             if model.phase == .idle { await model.load(projectKey: projectKey) }
         }
@@ -143,9 +153,31 @@ struct JiraBoardView: View {
                     .transition(.opacity)
             }
             if model.phase == .loaded {
+                convertToTasksButton
                 switchBoardButton
             }
         }
+    }
+
+    /// Imports every board card (all assigned to me) as a local task, so the
+    /// Jira work also lives on the Sharingan board.
+    private var convertToTasksButton: some View {
+        Button {
+            let cards = model.columns.flatMap(\.cards)
+            let n = AppServices.jiraService?.importBoardCards(cards) ?? 0
+            importedCount = n
+            showImported = true
+        } label: {
+            Image(systemName: "square.and.arrow.down.on.square")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.75))
+                .frame(width: 30, height: 30)
+                .background(Circle().fill(Color.white.opacity(0.08)))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.pressableSubtle)
+        .help("Convert board cards to tasks")
+        .accessibilityLabel("Convert board cards to tasks")
     }
 
     /// Forgets the remembered board and reloads, so a project with several
