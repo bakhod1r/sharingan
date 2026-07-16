@@ -5,6 +5,18 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.11.0] — 2026-07-16
+
+### Added
+- Converting a task to Jira now carries its **tags (as labels), due date and
+  estimate**, not just the title — and its **sub-tasks** become real Jira
+  sub-tasks under the new parent. The issue type follows the task instead of
+  always being "Task" (which also avoids a failure in projects with no Task
+  type).
+- **OAuth token broker** (optional, `broker/`): a tiny Cloudflare Worker that
+  holds the Atlassian client secret so a release can ship with **no secret in
+  the app**. When configured, token exchange and refresh go through the broker.
+
 ## [1.10.0] — 2026-07-16
 
 ### Added
@@ -35,8 +47,6 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ### Changed
 - The Jira issue-key badge on task rows can be hidden (Settings → Integrations).
-
-### Changed
 - The sidebar's **Week** section is now **Board**, with two tabs: **Weekly**
   (the 7-day planner, unchanged) and **Jira** (the sprint board, previously a
   sheet opened from Tasks). The last-used tab is remembered; while Jira is
