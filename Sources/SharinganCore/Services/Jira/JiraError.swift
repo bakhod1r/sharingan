@@ -37,7 +37,7 @@ public enum JiraError: Error, Equatable, Sendable {
     public var userMessage: String {
         switch self {
         case .notConfigured:      return "Jira isn't connected."
-        case .unauthorized:       return "Jira rejected your email or API token."
+        case .unauthorized:       return "Your Jira session expired — reconnect to continue."
         case .forbidden:          return "You don't have permission for that in Jira."
         case .notFound:           return "That Jira issue no longer exists."
         case .rateLimited:        return "Jira is rate limiting requests — will retry."

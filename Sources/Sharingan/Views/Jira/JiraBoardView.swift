@@ -69,10 +69,20 @@ struct JiraBoardView: View {
                 .font(.system(.subheadline, design: .rounded))
                 .foregroundStyle(Color.dsSecondary)
                 .multilineTextAlignment(.center)
-            Button("Try again") {
-                Task { await model.load(projectKey: projectKey) }
+            HStack(spacing: 10) {
+                Button("Reconnect") {
+                    Task {
+                        if await AppServices.jiraService?.connect() == true {
+                            await model.load(projectKey: projectKey)
+                        }
+                    }
+                }
+                .buttonStyle(.glass)
+                Button("Try again") {
+                    Task { await model.load(projectKey: projectKey) }
+                }
+                .buttonStyle(.pressableSubtle)
             }
-            .buttonStyle(.pressableSubtle)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, 40)
