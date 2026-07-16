@@ -66,6 +66,11 @@ struct JiraIssueBadge: View {
     let issueType: String?
     var size: CGFloat = 9
 
+    /// The badge hides itself rather than being filtered out at each call site:
+    /// it is drawn from several rows and the board, and a setting that only some
+    /// of them honoured would be worse than no setting.
+    @AppStorage(JiraService.showTypeBadgeDefaultsKey) private var showTypeBadge = true
+
     private var tint: Color {
         switch issueType?.lowercased() {
         case "epic":                return Color(hex: "#904EE2")
@@ -76,16 +81,19 @@ struct JiraIssueBadge: View {
         }
     }
 
+    @ViewBuilder
     var body: some View {
-        Text(key)
-            .font(.system(size: size, weight: .bold, design: .monospaced))
-            .foregroundStyle(tint)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 1.5)
-            .background(Capsule().fill(tint.opacity(0.14)))
-            .overlay(Capsule().strokeBorder(tint.opacity(0.35), lineWidth: 0.5))
-            .help("\(issueType ?? "Issue") from Jira — \(key)")
-            .accessibilityLabel("Jira \(issueType ?? "issue") \(key)")
+        if showTypeBadge {
+            Text(key)
+                .font(.system(size: size, weight: .bold, design: .monospaced))
+                .foregroundStyle(tint)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 1.5)
+                .background(Capsule().fill(tint.opacity(0.14)))
+                .overlay(Capsule().strokeBorder(tint.opacity(0.35), lineWidth: 0.5))
+                .help("\(issueType ?? "Issue") from Jira — \(key)")
+                .accessibilityLabel("Jira \(issueType ?? "issue") \(key)")
+        }
     }
 }
 

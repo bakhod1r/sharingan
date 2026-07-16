@@ -17,9 +17,14 @@ struct SettingsJiraSection: View {
     @AppStorage(JiraService.worklogSyncDefaultsKey) private var worklogSync = true
     @AppStorage(JiraService.pushEstimateDefaultsKey) private var pushEstimate = false
     @AppStorage(JiraService.pollMinutesDefaultsKey) private var pollMinutes = 15
+    @AppStorage(JiraService.showTypeBadgeDefaultsKey) private var showTypeBadge = true
+    @AppStorage(JiraBoardModel.boardIDDefaultsKey) private var boardID = 0
 
     @State private var showConvertConfirm = false
     @State private var convertStatus: String?
+    /// Edited locally and committed on submit/blur: writing through on every
+    /// keystroke would file half-typed JQL as the saved filter.
+    @State private var jqlDraft = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -39,7 +44,17 @@ struct SettingsJiraSection: View {
                     behaviorRows
                 }
             }
+
+            VStack(alignment: .leading, spacing: 7) {
+                Text("Advanced").dsSectionLabel()
+                    .padding(.leading, 6)
+                SettingsCard {
+                    customJQLRow
+                    defaultBoardRow
+                }
+            }
         }
+        .onAppear { jqlDraft = jira.customJQL }
     }
 
     // MARK: - Account
@@ -387,6 +402,8 @@ struct SettingsJiraSection: View {
                   isOn: $worklogSync)
         ToggleRow(title: "Push local estimate back to Jira",
                   isOn: $pushEstimate)
+        ToggleRow(title: "Show issue key badge on tasks",
+                  isOn: $showTypeBadge)
 
         HStack(spacing: 12) {
             Text("Done behavior")
@@ -415,6 +432,63 @@ struct SettingsJiraSection: View {
         .frame(minHeight: 24)
 
         note("This first pass wires authentication and the settings surface. Issue sync, transitions, and worklog delivery land on the next milestones.")
+    }
+
+    // MARK: - Advanced
+
+    /// The escape hatch for filters the pickers above can't express — a saved
+    /// team filter, a label, a sprint. It *replaces* the query rather than
+    /// narrowing it, so the caption says so and the placeholder shows exactly
+    /// what runs when the field is empty.
+    @ViewBuilder
+    private var customJQLRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Custom JQL")
+                .font(.system(.body, design: .rounded))
+                .foregroundStyle(.white)
+            TextField("", text: $jqlDraft, prompt: Text(effectiveJQLHint))
+                .textFieldStyle(.plain)
+                .font(.system(.callout, design: .monospaced))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(RoundedRectangle(cornerRadius: 7).fill(.white.opacity(0.06)))
+                .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(.white.opacity(0.12)))
+                .onSubmit { jira.customJQL = jqlDraft; jqlDraft = jira.customJQL }
+            note("Replaces the query above — the space and “assigned to me” filter no longer apply. Leave empty to use the default. Example: assignee = currentUser() AND statusCategory != Done")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// What a sync would ask for right now, as the placeholder — the empty field
+    /// is not "no filter", and showing the real default is the only way to say
+    /// what typing here replaces.
+    private var effectiveJQLHint: String {
+        guard let project = jira.selectedProjectKey else { return JiraService.assignedOpenJQL }
+        return JiraService.assignedOpenJQL(project: project)
+    }
+
+    /// The board is picked on the board itself (Settings has no project context
+    /// to list boards from without inventing a fetch), so this row only reports
+    /// the remembered choice and offers to drop it.
+    @ViewBuilder
+    private var defaultBoardRow: some View {
+        HStack(spacing: 12) {
+            Text("Default board")
+                .font(.system(.body, design: .rounded))
+                .foregroundStyle(.white)
+            Spacer(minLength: 8)
+            Text(boardID > 0 ? "Remembered" : "Always ask")
+                .font(.system(.callout, design: .rounded))
+                .foregroundStyle(Color.dsSecondary)
+            if boardID > 0 {
+                Button("Forget") { boardID = 0 }
+                    .buttonStyle(.pressableSubtle)
+                    .font(.system(.caption, design: .rounded).weight(.semibold))
+            }
+        }
+        .frame(minHeight: 24)
+        note("When a space has several boards, Sharingan asks once and reuses that board. Forgetting it makes it ask again.")
     }
 
     // MARK: - Bits

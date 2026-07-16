@@ -18,9 +18,26 @@ struct JiraBoardTests {
 
     private typealias Fx = BoardFixtures
 
-    private func makeModel(session: URLSession, siteHost: String = "wayll.atlassian.net") -> JiraBoardModel {
+    /// `defaults` is never `.standard`: the model now remembers the chosen board
+    /// there, and a test that read the developer's own preferences would pass or
+    /// fail depending on which machine ran it.
+    private func makeModel(session: URLSession,
+                          siteHost: String = "wayll.atlassian.net",
+                          defaults: UserDefaults? = nil) -> JiraBoardModel {
         JiraBoardModel(client: JiraClient(tokens: StubBoardTokens(), session: session),
-                       siteHost: siteHost)
+                       siteHost: siteHost,
+                       defaults: defaults ?? makeDefaults())
+    }
+
+    /// A throwaway defaults suite, so a remembered board can't leak between
+    /// tests or into the developer's own preferences.
+    private func makeDefaults() -> UserDefaults {
+        let suite = "jira-board-\(UUID().uuidString)"
+        // A named suite always opens; the fallback keeps the helper non-throwing
+        // for the many call sites that don't care about defaults at all.
+        guard let defaults = UserDefaults(suiteName: suite) else { return .standard }
+        defaults.removePersistentDomain(forName: suite)
+        return defaults
     }
 
     // MARK: - Load & column mapping
@@ -113,6 +130,72 @@ struct JiraBoardTests {
         await model.selectBoard(try #require(model.availableBoards.first))
         #expect(model.phase == .loaded)
         #expect(model.columns.first?.name == "To Do")
+    }
+
+    @Test("a remembered board is used instead of asking again")
+    func rememberedBoardAutoSelects() async throws {
+        defer { TestStub.reset() }
+        let defaults = makeDefaults()
+        defaults.set(2, forKey: JiraBoardModel.boardIDDefaultsKey)
+        let session = TestStub.session { request in
+            let path = request.url?.path ?? ""
+            let body: String
+            if path.hasSuffix("/rest/agile/1.0/board") { body = Fx.boardListJSON([(1, "Alpha"), (2, "Beta")]) }
+            else if path.hasSuffix("/configuration") { body = Fx.configJSON }
+            else if path.hasSuffix("/sprint") { body = Fx.activeSprintJSON }
+            else if path.hasSuffix("/search/jql") {
+                body = Fx.searchJSON([Fx.issueJSON(key: "SHR-1", id: "1", statusId: "10")])
+            } else { body = "{}" }
+            return (try TestStub.json(request), Data(body.utf8))
+        }
+        let model = makeModel(session: session, defaults: defaults)
+
+        await model.load(projectKey: "SHR")
+
+        #expect(model.phase == .loaded)
+        #expect(model.availableBoards.isEmpty)
+        // Board 2's configuration, not board 1's.
+        #expect(TestStub.requests.contains { $0.url?.path.contains("/board/2/") == true })
+    }
+
+    @Test("a remembered board that no longer matches the project still asks")
+    func staleRememberedBoardStillAsks() async throws {
+        defer { TestStub.reset() }
+        let defaults = makeDefaults()
+        // Board 99 belongs to a project the user has since moved off.
+        defaults.set(99, forKey: JiraBoardModel.boardIDDefaultsKey)
+        let session = TestStub.session { request in
+            let path = request.url?.path ?? ""
+            if path.hasSuffix("/rest/agile/1.0/board") {
+                return (try TestStub.json(request), Data(Fx.boardListJSON([(1, "Alpha"), (2, "Beta")]).utf8))
+            }
+            return (try TestStub.json(request), Data("{}".utf8))
+        }
+        let model = makeModel(session: session, defaults: defaults)
+
+        await model.load(projectKey: "SHR")
+
+        #expect(model.phase == .chooseBoard)
+        #expect(model.availableBoards.map(\.name) == ["Alpha", "Beta"])
+        #expect(!TestStub.requests.contains { $0.url?.path.hasSuffix("/configuration") == true })
+    }
+
+    @Test("picking a board remembers it, so the next load doesn't ask")
+    func selectBoardPersistsChoice() async throws {
+        defer { TestStub.reset() }
+        let defaults = makeDefaults()
+        let session = TestStub.session(handler: Fx.boardHandler())
+        let model = makeModel(session: session, defaults: defaults)
+
+        await model.selectBoard(JiraBoard(id: 7, name: "Beta", type: "scrum", location: nil))
+
+        #expect(defaults.integer(forKey: JiraBoardModel.boardIDDefaultsKey) == 7)
+        #expect(model.rememberedBoardID == 7)
+
+        // …and forgetting it puts the picker back.
+        model.forgetBoard()
+        #expect(model.rememberedBoardID == nil)
+        #expect(defaults.integer(forKey: JiraBoardModel.boardIDDefaultsKey) == 0)
     }
 
     // MARK: - No-active-sprint fallback

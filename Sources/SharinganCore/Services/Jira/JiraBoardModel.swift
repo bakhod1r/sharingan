@@ -67,13 +67,34 @@ public final class JiraBoardModel: ObservableObject {
 
     public let siteHost: String
 
+    /// The board the user picked last time, remembered so a project with several
+    /// boards stops interrupting every open.
+    public static let boardIDDefaultsKey = "jira.boardID"
+
     private let client: JiraClient
+    private let defaults: UserDefaults
     /// Held so the no-active-sprint fallback can query `project = "KEY"`.
     private var projectKey: String = ""
 
-    public init(client: JiraClient, siteHost: String) {
+    /// - Parameter defaults: injectable so tests (and a second connection) don't
+    ///   write the remembered board into the app's real preferences.
+    public init(client: JiraClient, siteHost: String, defaults: UserDefaults = .standard) {
         self.client = client
         self.siteHost = siteHost
+        self.defaults = defaults
+    }
+
+    /// The remembered board id, or nil when the user has never picked one. 0 is
+    /// the absent value `UserDefaults` hands back, and no board has id 0.
+    public var rememberedBoardID: Int? {
+        let id = defaults.integer(forKey: Self.boardIDDefaultsKey)
+        return id > 0 ? id : nil
+    }
+
+    /// Drops the remembered board, so the next multi-board load asks again.
+    public func forgetBoard() {
+        defaults.removeObject(forKey: Self.boardIDDefaultsKey)
+        objectWillChange.send()
     }
 
     // MARK: - Load
@@ -98,9 +119,18 @@ public final class JiraBoardModel: ObservableObject {
             case 1:
                 await loadBoard(boards.values[0])
             default:
-                // Picking one silently would lay out someone else's board, so ask.
-                availableBoards = boards.values
-                phase = .chooseBoard
+                // The user already answered this question — honour it, but only
+                // if that board is still one of this project's: a remembered id
+                // from another project would lay out something they didn't ask
+                // for, which is the very thing the picker exists to prevent.
+                if let remembered = rememberedBoardID,
+                   let board = boards.values.first(where: { $0.id == remembered }) {
+                    await loadBoard(board)
+                } else {
+                    // Picking one silently would lay out someone else's board, so ask.
+                    availableBoards = boards.values
+                    phase = .chooseBoard
+                }
             }
         } catch {
             phase = .error
@@ -108,8 +138,10 @@ public final class JiraBoardModel: ObservableObject {
         }
     }
 
-    /// Continues a load the user paused on to choose between several boards.
+    /// Continues a load the user paused on to choose between several boards, and
+    /// remembers the pick — being asked the same question every open is the bug.
     public func selectBoard(_ board: JiraBoard) async {
+        defaults.set(board.id, forKey: Self.boardIDDefaultsKey)
         phase = .loading
         errorMessage = nil
         availableBoards = []

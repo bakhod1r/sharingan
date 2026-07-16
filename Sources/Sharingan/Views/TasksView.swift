@@ -6,6 +6,9 @@ import SharinganCore
 /// Identifiable wrapper so a Jira issue key can drive `.sheet(item:)`.
 private struct JiraDetailKey: Identifiable { let key: String; var id: String { key } }
 
+/// Identifiable wrapper so a category name can drive the push-preview `.sheet(item:)`.
+private struct JiraPushCategory: Identifiable { let id: String }
+
 struct TasksView: View {
     @ObservedObject var timer: PomodoroTimer
     /// When true (main window), rows flow into the parent scroll view instead of
@@ -45,6 +48,11 @@ struct TasksView: View {
     @State private var editorTask: TaskItem?
     /// Issue key whose Jira detail sheet is open.
     @State private var jiraDetailKey: JiraDetailKey?
+
+    /// Category whose unlinked tasks are being previewed before a Jira push.
+    @State private var jiraPushCategory: JiraPushCategory?
+    /// Last push result per category, shown next to that section's label.
+    @State private var jiraPushStatus: [String: String] = [:]
     /// Task being snoozed via "Pick date…" (nil = closed).
     @State private var snoozeTask: TaskItem?
     @State private var snoozeDate = Date()
@@ -152,6 +160,7 @@ struct TasksView: View {
                     .frame(minWidth: 560, minHeight: 520)
             }
         }
+        .sheet(item: $jiraPushCategory) { wrapped in jiraPushSheet(wrapped.id) }
         .onDrop(of: [.fileURL], isTargeted: nil, perform: handleFileDrop)
         .alert("Save as Template", isPresented: Binding(
             get: { templateNamingTask != nil },
@@ -1555,7 +1564,15 @@ struct TasksView: View {
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(Color(hex: store.color(for: category)))
             Text(category).dsSectionLabel()
+            if let status = jiraPushStatus[category] {
+                Text(status)
+                    .font(.system(.caption2, design: .rounded).weight(.medium))
+                    .foregroundStyle(Color.dsSecondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
             Spacer()
+            jiraCategoryMenu(category)
             Text("\(count)")
                 .font(.system(.caption2, design: .rounded).weight(.bold).monospacedDigit())
                 .foregroundStyle(Color.dsSecondary)
@@ -1563,6 +1580,103 @@ struct TasksView: View {
                 .background(Capsule().fill(Color.white.opacity(0.06)))
         }
         .padding(.top, 10)
+    }
+
+    /// Category-level Jira actions, behind a "…" menu and only while connected.
+    /// The push itself is never one click away — it opens the preview sheet.
+    @ViewBuilder
+    private func jiraCategoryMenu(_ category: String) -> some View {
+        if let jira = AppServices.jiraService, jira.isConnected {
+            let unlinked = jira.unlinkedTasks(inCategory: category).count
+            Menu {
+                Button { jiraPushCategory = JiraPushCategory(id: category) } label: {
+                    Label(unlinked == 0
+                          ? "Push category to Jira"
+                          : "Convert \(unlinked) task\(unlinked == 1 ? "" : "s") to Jira",
+                          systemImage: "arrow.up.forward.app")
+                }
+                .disabled(unlinked == 0 || jira.isWorking)
+            } label: {
+                Image(systemName: "ellipsis").font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.6)).frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("Jira actions for \(category)")
+        }
+    }
+
+    /// Preview + confirm for a category push. These issues land in a shared
+    /// project, so the exact titles and the target project key are shown before
+    /// anything is created.
+    @ViewBuilder
+    private func jiraPushSheet(_ category: String) -> some View {
+        if let jira = AppServices.jiraService {
+            let tasks = jira.unlinkedTasks(inCategory: category)
+            let project = tasks.first.flatMap { jira.projectKey(forTask: $0) }
+                ?? jira.categoryProjectMap[category]
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Push \(category) to Jira").dsSectionLabel()
+
+                Text(project.map {
+                    "Creates \(tasks.count) issue\(tasks.count == 1 ? "" : "s") in \($0). Everyone on the project can see them."
+                } ?? "No Jira project is mapped for \(category) — map one in Settings first.")
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(Color.dsSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(tasks) { task in
+                            HStack(spacing: 8) {
+                                Image(systemName: "plus.circle")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(Color.dsSecondary)
+                                Text(task.title)
+                                    .font(.system(.caption, design: .rounded).weight(.medium))
+                                    .foregroundStyle(.white)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                                Spacer(minLength: 0)
+                            }
+                        }
+                    }
+                }
+                .frame(maxHeight: 220)
+
+                HStack {
+                    Button("Cancel") { jiraPushCategory = nil }
+                        .buttonStyle(.pressableSubtle)
+                        .foregroundStyle(.white.opacity(0.7))
+                    Spacer()
+                    Button("Create \(tasks.count) issue\(tasks.count == 1 ? "" : "s")") {
+                        jiraPushCategory = nil
+                        pushCategoryToJira(category)
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(tasks.isEmpty || project == nil)
+                }
+            }
+            .padding(16)
+            .frame(width: 340)
+            .background(Color.black.opacity(0.3).background(.ultraThinMaterial))
+        }
+    }
+
+    /// Runs the confirmed push and parks the outcome in the section header.
+    private func pushCategoryToJira(_ category: String) {
+        guard let jira = AppServices.jiraService else { return }
+        jiraPushStatus[category] = "Pushing…"
+        Task {
+            let created = await jira.pushUnlinkedTasks(inCategory: category)
+            if let error = jira.lastErrorMessage, created == 0 {
+                jiraPushStatus[category] = error
+            } else {
+                jiraPushStatus[category] = "Created \(created) issue\(created == 1 ? "" : "s")"
+            }
+        }
     }
 
     /// One task row as its own lazy child: drag/drop + the expanded subtask

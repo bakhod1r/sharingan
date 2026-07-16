@@ -9,6 +9,10 @@ public struct ParsedTaskInput: Equatable, Sendable {
     public var dueDate: Date?
     public var estimatedPomodoros: Int?
     public var recurrence: Recurrence
+    /// Set only when the whole line is the quick-add form `jira SHRGN-5`,
+    /// normalized to upper case. The caller keys off this to fetch and link the
+    /// real issue instead of creating a task named after the command.
+    public var jiraIssueKey: String?
 
     public init(title: String = "",
                 tags: [String] = [],
@@ -16,7 +20,8 @@ public struct ParsedTaskInput: Equatable, Sendable {
                 priority: TaskPriority = .none,
                 dueDate: Date? = nil,
                 estimatedPomodoros: Int? = nil,
-                recurrence: Recurrence = .none) {
+                recurrence: Recurrence = .none,
+                jiraIssueKey: String? = nil) {
         self.title = title
         self.tags = tags
         self.project = project
@@ -24,6 +29,7 @@ public struct ParsedTaskInput: Equatable, Sendable {
         self.dueDate = dueDate
         self.estimatedPomodoros = estimatedPomodoros
         self.recurrence = recurrence
+        self.jiraIssueKey = jiraIssueKey
     }
 }
 
@@ -51,7 +57,8 @@ public enum TaskInputParser {
         }
 
         var result = ParsedTaskInput()
-        var datePart: DateComponents?          // day-level phrase (bugun, friday, 12.08)
+        result.jiraIssueKey = jiraQuickAddKey(trimmed)
+        var datePart: DateComponents?        // day-level phrase (bugun, friday, 12.08)
         var timePart: (hour: Int, minute: Int)?
         var offsetDue: Date?                    // absolute due from "in N hours/days"
 
@@ -197,6 +204,30 @@ public enum TaskInputParser {
         case .recur(let r):    result.recurrence = r
         case .priority(let p): result.priority = p
         }
+    }
+
+    // MARK: - Jira quick-add
+
+    /// The issue key in a `jira SHRGN-5` line, upper-cased, or nil.
+    ///
+    /// Deliberately strict: the whole line must be the keyword plus one key
+    /// (`^[A-Z][A-Z0-9]+-\d+$`, case-insensitive). Anything else — "jira meeting
+    /// notes", "fix jira SHRGN-5" — is a task someone wrote the word "jira" in,
+    /// and silently fetching an issue for it would be worse than useless.
+    private static func jiraQuickAddKey(_ trimmed: String) -> String? {
+        let words = trimmed.split(separator: " ", omittingEmptySubsequences: true)
+        guard words.count == 2, words[0].lowercased() == "jira" else { return nil }
+
+        let key = words[1].uppercased()
+        let parts = key.split(separator: "-", omittingEmptySubsequences: false)
+        guard parts.count == 2,
+              let project = parts.first, let number = parts.last,
+              project.count >= 2,
+              project.allSatisfy({ $0.isASCII && ($0.isUppercase || $0.isNumber) }),
+              project.first?.isLetter == true,
+              !number.isEmpty,
+              number.allSatisfy({ $0.isASCII && $0.isNumber }) else { return nil }
+        return key
     }
 
     // MARK: - Token helpers

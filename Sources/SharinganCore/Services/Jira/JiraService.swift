@@ -148,6 +148,8 @@ public final class JiraService: ObservableObject, JiraPomodoroHooks {
     public static let worklogSyncDefaultsKey = "jira.worklogSync"
     public static let pushEstimateDefaultsKey = "jira.pushEstimate"
     public static let pollMinutesDefaultsKey = "jira.pollMinutes"
+    public static let customJQLDefaultsKey = "jira.customJQL"
+    public static let showTypeBadgeDefaultsKey = "jira.showTypeBadge"
 
     /// Leftovers from the API-token era. Kept only so `purgeLegacyBasicAuth` can
     /// delete them — nothing reads these for auth any more.
@@ -639,7 +641,7 @@ public final class JiraService: ObservableObject, JiraPomodoroHooks {
     /// Reuses the service's authenticated client so the views never touch auth.
     public func makeBoardModel() -> JiraBoardModel? {
         guard let host = siteHost else { return nil }
-        return JiraBoardModel(client: client, siteHost: host)
+        return JiraBoardModel(client: client, siteHost: host, defaults: defaults)
     }
 
     /// A detail model for one issue, or nil when disconnected.
@@ -780,8 +782,37 @@ public final class JiraService: ObservableObject, JiraPomodoroHooks {
         "assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC"
 
     /// The same, restricted to one project ("space").
-    static func assignedOpenJQL(project key: String) -> String {
+    public static func assignedOpenJQL(project key: String) -> String {
         "assignee = currentUser() AND statusCategory != Done AND project = \"\(key)\" ORDER BY updated DESC"
+    }
+
+    /// A JQL of the user's own that *replaces* the built-in filter, or "" when
+    /// unset. This is the escape hatch for the filters the Settings pickers
+    /// can't express (a saved team filter, a label, a sprint) — so it overrides
+    /// the space scoping rather than being ANDed onto it: a query the user typed
+    /// verbatim must be the query that runs, or the field is a lie.
+    ///
+    /// Whitespace stores as "unset": a field holding two spaces is not a filter,
+    /// and sending it would fail every sync with a Jira parse error.
+    public var customJQL: String {
+        get { defaults.string(forKey: Self.customJQLDefaultsKey) ?? "" }
+        set {
+            let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty {
+                defaults.removeObject(forKey: Self.customJQLDefaultsKey)
+            } else {
+                defaults.set(trimmed, forKey: Self.customJQLDefaultsKey)
+            }
+            objectWillChange.send()
+        }
+    }
+
+    /// The filter a sync runs when the caller names none: the custom JQL if the
+    /// user wrote one, else the selected space, else everything assigned to me.
+    var effectiveJQL: String {
+        let custom = customJQL
+        if !custom.isEmpty { return custom }
+        return selectedProjectKey.map(Self.assignedOpenJQL(project:)) ?? Self.assignedOpenJQL
     }
 
     /// Loads the browsable projects on the active site for the Settings picker.
@@ -814,10 +845,10 @@ public final class JiraService: ObservableObject, JiraPomodoroHooks {
     /// work). Paginates to a safety ceiling so a huge backlog can't run forever.
     @discardableResult
     public func syncAssignedIssues(jql explicitJQL: String? = nil) async -> JiraSyncSummary {
-        // Default to the selected project ("space"), or everything assigned when
-        // none is chosen. An explicit argument overrides both (used by tests).
-        let jql = explicitJQL ?? selectedProjectKey.map(Self.assignedOpenJQL(project:))
-            ?? Self.assignedOpenJQL
+        // Default to the user's custom JQL, else the selected project ("space"),
+        // else everything assigned. An explicit argument overrides all of them
+        // (used by tests and by callers that know exactly what they want).
+        let jql = explicitJQL ?? effectiveJQL
         guard hasProjectAccess, let host = siteHost else {
             let empty = JiraSyncSummary(imported: 0, updated: 0, conflicts: 0,
                                         failed: true, message: "Connect to a Jira site you can browse first.")
