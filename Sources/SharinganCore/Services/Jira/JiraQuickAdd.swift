@@ -32,6 +32,13 @@ extension JiraService {
         // quotes keep Jira from reading the key as a bare word.
         let summary = await syncAssignedIssues(jql: "key = \"\(key)\"")
         guard !summary.failed else { return false }
-        return summary.imported + summary.updated > 0
+        if summary.imported + summary.updated == 0 {
+            // 200 + nothing: the key is well-formed but no issue by that key is
+            // visible to this account. syncAssignedIssues leaves no message on a
+            // successful-but-empty run, so say why here.
+            setLastError("No Jira issue \(key) you can see.")
+            return false
+        }
+        return true
     }
 }

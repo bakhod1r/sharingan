@@ -19,6 +19,9 @@ struct SettingsJiraSection: View {
     @AppStorage(JiraService.pollMinutesDefaultsKey) private var pollMinutes = 15
     @AppStorage(JiraService.showTypeBadgeDefaultsKey) private var showTypeBadge = true
     @AppStorage(JiraBoardModel.boardIDDefaultsKey) private var boardID = 0
+    @AppStorage(JiraNotifier.notifyNewAssignedDefaultsKey) private var notifyNewAssigned = true
+    @AppStorage(JiraNotifier.notifyDueTodayDefaultsKey) private var notifyDueToday = true
+    @AppStorage(JiraNotifier.notifySprintEndingDefaultsKey) private var notifySprintEnding = true
 
     @State private var showConvertConfirm = false
     @State private var convertStatus: String?
@@ -431,7 +434,12 @@ struct SettingsJiraSection: View {
         }
         .frame(minHeight: 24)
 
-        note("This first pass wires authentication and the settings surface. Issue sync, transitions, and worklog delivery land on the next milestones.")
+        ToggleRow(title: "Notify when an issue is assigned to me",
+                  isOn: $notifyNewAssigned)
+        ToggleRow(title: "Notify about issues due today",
+                  isOn: $notifyDueToday)
+        ToggleRow(title: "Notify when the sprint is ending",
+                  isOn: $notifySprintEnding)
     }
 
     // MARK: - Advanced

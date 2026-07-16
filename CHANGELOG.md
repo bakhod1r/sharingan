@@ -5,7 +5,24 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
-## [1.8.0] — 2026-07-16
+## [1.9.0] — 2026-07-16
+
+### Added
+- **Quick-add by key.** Type `jira SHRGN-5` in the task composer to pull that
+  issue in as a linked task (hierarchy, cache and merge all reused) instead of
+  creating a task literally named after the command.
+- **Push a whole category to Jira.** A category section header's "…" menu now
+  offers "Convert N tasks to Jira" — with a preview list of exactly which
+  titles will be created and which project they land in, behind a confirm.
+- **Custom JQL** (Advanced): replace the default sync query with your own saved
+  filter, label or sprint. Empty falls back to the project default.
+- **Smart notifications** (each toggleable): an issue newly assigned to you,
+  an issue due today, and the sprint ending within a day. The first sync is
+  silent and nothing nags twice.
+- Remembered **default board** so a multi-board project stops asking each time.
+
+### Changed
+- The Jira issue-key badge on task rows can be hidden (Settings → Integrations).
 
 ### Changed
 - The sidebar's **Week** section is now **Board**, with two tabs: **Weekly**

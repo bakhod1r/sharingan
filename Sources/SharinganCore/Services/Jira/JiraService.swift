@@ -204,6 +204,10 @@ public final class JiraService: ObservableObject, JiraPomodoroHooks {
     @Published public private(set) var availableSites: [JiraAccessibleResource] = []
     @Published public private(set) var isWorking = false
     @Published public private(set) var lastErrorMessage: String?
+
+    /// Lets a `JiraService` extension in another file (quick-add) publish a
+    /// user-facing failure without widening the setter to the whole module.
+    func setLastError(_ message: String?) { lastErrorMessage = message }
     /// Outcome of the most recent `syncAssignedIssues()`, for the Settings row.
     @Published public private(set) var lastSync: JiraSyncSummary?
     /// Projects (Atlassian "spaces") on the active site the account can browse.
@@ -241,6 +245,12 @@ public final class JiraService: ObservableObject, JiraPomodoroHooks {
     /// The task list syncs write into — injectable so tests run against a
     /// throwaway store instead of the app's.
     private let taskStore: TaskStore
+    /// Decides which newly-assigned / due-today / sprint-ending notifications a
+    /// sync should fire. `lazy` so it binds to this service's `defaults`; a test
+    /// can replace it to capture what would be posted.
+    public lazy var notifier: JiraNotifier = JiraNotifier(
+        defaults: defaults,
+        notify: { NotificationService.shared.notify(title: $0, body: $1, identifier: $2) })
     /// Held between `connect()` surfacing a site list and `selectSite(_:)`.
     private var pendingTokens: JiraOAuth.Tokens?
     private var restoreTask: Task<Void, Never>?
@@ -947,6 +957,13 @@ public final class JiraService: ObservableObject, JiraPomodoroHooks {
                 }
                 issueCache?.upsertIssue(JiraFieldMapper.snapshot(from: orphan, siteHost: host))
             }
+
+            // The list is already scoped to me (the JQL carries
+            // `assignee = currentUser()` unless the user overrode it), so the
+            // notifier can treat "newly appeared" as "newly assigned". Sprint is
+            // nil here — sprint-ending fires from the board path where the active
+            // sprint is actually loaded.
+            notifier.process(issues: all, sprint: nil, now: Date())
 
             let summary = JiraSyncSummary(imported: imported, updated: updated,
                                           conflicts: conflicts, failed: false, message: nil)

@@ -2239,6 +2239,13 @@ struct TasksView: View {
         // Merge smart-parsed tokens with the manual pickers: whatever the user
         // set by hand wins; parsed values fill everything left untouched.
         let parsed = TaskInputParser.parse(newTitle, now: Date())
+        // `jira SHRGN-5` isn't a new task — it pulls that issue in as a linked
+        // one, through the same hierarchy-aware sync as the bulk import.
+        if let key = parsed.jiraIssueKey, let jira = AppServices.jiraService, jira.isConnected {
+            newTitle = ""
+            Task { await jira.importIssue(key: key) }
+            return
+        }
         var tags = newTagList
         for t in parsed.tags where !tags.contains(t) { tags.append(t) }
         store.add(title: parsed.title.isEmpty ? newTitle : parsed.title,

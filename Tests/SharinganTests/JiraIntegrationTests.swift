@@ -618,6 +618,51 @@ struct JiraIntegrationTests {
         #expect(keyInQueries.count == 1)
     }
 
+    @Test("a successful sync runs the notifier over the fetched issues")
+    @MainActor
+    func syncFiresNotifier() async throws {
+        defer { TestURLProtocol.reset() }
+        let suite = "jira-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("jira-notify-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let tasks = TaskStore(fileURL: dir.appendingPathComponent("t.sqlite"))
+
+        let port = Self.randomEphemeralPort()
+        let session = TestURLProtocol.session(handler: Self.hierarchySyncHandler())
+        let service = JiraService(defaults: defaults,
+                                  store: FakeKeychain().makeStore(defaults: defaults),
+                                  oauthConfig: Self.testConfig,
+                                  oauthSession: session,
+                                  apiSession: session,
+                                  callbackPort: port,
+                                  openURL: { simulateBrowserCallback(authorizeURL: $0, port: port) },
+                                  taskStore: tasks,
+                                  restoreOnInit: false)
+
+        // Capture what the notifier would post, and prime it past first-run
+        // (which is deliberately silent) so the sync's issues count as newly
+        // assigned. Same defaults as the service, so the seen-set persists.
+        let box = NotifyBox()
+        var primed = JiraNotifier(defaults: defaults, notify: { t, b, i in box.record(t, b, i) })
+        primed.process(issues: [], sprint: nil, now: Date())   // establish an empty baseline
+        service.notifier = primed
+
+        #expect(await service.connect())
+        let summary = await service.syncAssignedIssues()
+        #expect(!summary.failed)
+
+        // The fetched issues (WT-689, WT-702, WT-999, …) were all unseen at the
+        // primed baseline, so the wiring must have fired at least one.
+        #expect(!box.identifiers.isEmpty)
+        #expect(box.identifiers.contains { $0.hasPrefix("jira.notify.assigned.") })
+    }
+
     // MARK: - The refresh hazard
 
     @Test("concurrent accessToken() callers trigger exactly ONE refresh")
@@ -1703,6 +1748,22 @@ private final class URLBox: @unchecked Sendable {
     var value: URL? {
         get { lock.lock(); defer { lock.unlock() }; return stored }
         set { lock.lock(); defer { lock.unlock() }; stored = newValue }
+    }
+}
+
+/// Captures the notifications a wired `JiraNotifier` would post.
+private final class NotifyBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: [(String, String, String)] = []
+
+    func record(_ title: String, _ body: String, _ identifier: String) {
+        lock.lock(); defer { lock.unlock() }
+        stored.append((title, body, identifier))
+    }
+
+    var identifiers: [String] {
+        lock.lock(); defer { lock.unlock() }
+        return stored.map(\.2)
     }
 }
 
