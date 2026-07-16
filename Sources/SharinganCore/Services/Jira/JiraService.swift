@@ -1014,10 +1014,11 @@ public final class JiraService: ObservableObject, JiraPomodoroHooks {
 
             // The list is already scoped to me (the JQL carries
             // `assignee = currentUser()` unless the user overrode it), so the
-            // notifier can treat "newly appeared" as "newly assigned". Sprint is
-            // nil here — sprint-ending fires from the board path where the active
-            // sprint is actually loaded.
-            notifier.process(issues: all, sprint: nil, now: Date())
+            // notifier can treat "newly appeared" as "newly assigned". The active
+            // sprint is resolved only when the sprint-ending notification is on,
+            // so an ordinary sync doesn't pay for the extra board calls.
+            let sprint = notifier.isSprintEndingEnabled ? await activeSprintForNotifications() : nil
+            notifier.process(issues: all, sprint: sprint, now: Date())
 
             let summary = JiraSyncSummary(imported: imported, updated: updated,
                                           conflicts: conflicts, failed: false, message: nil)
@@ -1031,6 +1032,17 @@ public final class JiraService: ObservableObject, JiraPomodoroHooks {
             lastSync = summary
             return summary
         }
+    }
+
+    /// The active sprint of the selected project's first board, for the
+    /// sprint-ending notification. Best-effort: any failure (no board, no
+    /// sprint, a kanban project) returns nil and the notifier simply skips the
+    /// sprint check — a missed reminder is better than a failed sync.
+    private func activeSprintForNotifications() async -> JiraSprint? {
+        guard let project = boardProjectKey else { return nil }
+        guard let boards = try? await client.getBoards(projectKeyOrId: project),
+              let board = boards.values.first else { return nil }
+        return (try? await client.getActiveSprint(boardId: board.id)) ?? nil
     }
 
     private func dropCachedIssues(foreignTo host: String) {
