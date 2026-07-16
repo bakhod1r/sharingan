@@ -729,7 +729,7 @@ public final class JiraService: ObservableObject, JiraPomodoroHooks {
     /// Reuses the service's authenticated client so the views never touch auth.
     public func makeBoardModel() -> JiraBoardModel? {
         guard let host = siteHost else { return nil }
-        return JiraBoardModel(client: client, siteHost: host, defaults: defaults)
+        return JiraBoardModel(client: client, siteHost: host, storage: issueCache, defaults: defaults)
     }
 
     /// A detail model for one issue, or nil when disconnected.

@@ -201,9 +201,79 @@ public final class JiraStorage {
             last_error TEXT
         );
         """)
+        // Cached sprint board per project, so the board renders offline / when
+        // the Agile API is unreachable. One row per project key.
+        exec("""
+        CREATE TABLE IF NOT EXISTS jira_board_snapshot (
+            project_key TEXT PRIMARY KEY,
+            site_host TEXT NOT NULL,
+            sprint_name TEXT,
+            columns_json TEXT NOT NULL,
+            fetched_at REAL NOT NULL
+        );
+        """)
         // Lookup by key is the hot path (tasks store `jiraKey`, not the ID).
         exec("CREATE INDEX IF NOT EXISTS jira_issues_key ON jira_issues (issue_key);")
         exec("CREATE INDEX IF NOT EXISTS jira_outbox_due ON jira_outbox (failed, next_attempt_at);")
+    }
+
+    // MARK: - Board snapshot (offline board)
+
+    /// A cached sprint board for one project — the columns (with their cards)
+    /// serialized to JSON, plus the sprint name. `JiraBoardModel` owns the JSON
+    /// shape; this store only persists the blob.
+    public struct BoardSnapshot: Equatable, Sendable {
+        public let projectKey: String
+        public let siteHost: String
+        public let sprintName: String?
+        public let columnsJSON: String
+        public let fetchedAt: Date
+        public init(projectKey: String, siteHost: String, sprintName: String?,
+                    columnsJSON: String, fetchedAt: Date = Date()) {
+            self.projectKey = projectKey
+            self.siteHost = siteHost
+            self.sprintName = sprintName
+            self.columnsJSON = columnsJSON
+            self.fetchedAt = fetchedAt
+        }
+    }
+
+    public func saveBoardSnapshot(_ snapshot: BoardSnapshot) {
+        let sql = """
+        INSERT INTO jira_board_snapshot (project_key, site_host, sprint_name, columns_json, fetched_at)
+        VALUES (?,?,?,?,?)
+        ON CONFLICT(project_key) DO UPDATE SET
+            site_host = excluded.site_host,
+            sprint_name = excluded.sprint_name,
+            columns_json = excluded.columns_json,
+            fetched_at = excluded.fetched_at;
+        """
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+        defer { sqlite3_finalize(stmt) }
+        bindText(stmt, 1, snapshot.projectKey)
+        bindText(stmt, 2, snapshot.siteHost)
+        if let name = snapshot.sprintName { bindText(stmt, 3, name) } else { sqlite3_bind_null(stmt, 3) }
+        bindText(stmt, 4, snapshot.columnsJSON)
+        sqlite3_bind_double(stmt, 5, snapshot.fetchedAt.timeIntervalSince1970)
+        _ = sqlite3_step(stmt)
+    }
+
+    public func boardSnapshot(projectKey: String) -> BoardSnapshot? {
+        var stmt: OpaquePointer?
+        let sql = """
+        SELECT project_key, site_host, sprint_name, columns_json, fetched_at
+        FROM jira_board_snapshot WHERE project_key = ? LIMIT 1;
+        """
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
+        defer { sqlite3_finalize(stmt) }
+        bindText(stmt, 1, projectKey)
+        guard sqlite3_step(stmt) == SQLITE_ROW,
+              let key = text(stmt, 0), let host = text(stmt, 1), let json = text(stmt, 3)
+        else { return nil }
+        return BoardSnapshot(projectKey: key, siteHost: host, sprintName: text(stmt, 2),
+                             columnsJSON: json,
+                             fetchedAt: Date(timeIntervalSince1970: double(stmt, 4)))
     }
 
     // MARK: - Issue cache

@@ -27,7 +27,7 @@ public final class JiraBoardModel: ObservableObject {
 
     /// A single card on the board. Carries exactly what the view draws plus the
     /// status id that decides its column.
-    public struct Card: Identifiable, Equatable, Sendable {
+    public struct Card: Identifiable, Equatable, Sendable, Codable {
         public let id: String            // the Jira key, unique on a board and the drag payload
         public let key: String
         public let summary: String
@@ -46,7 +46,7 @@ public final class JiraBoardModel: ObservableObject {
 
     /// A board column: its name, the set of status ids that belong to it, and the
     /// cards currently mapped there.
-    public struct Column: Identifiable, Equatable, Sendable {
+    public struct Column: Identifiable, Equatable, Sendable, Codable {
         public let id: String            // column name, or the sentinel for "Other"
         public let name: String
         public let statusIds: Set<String>
@@ -73,15 +73,50 @@ public final class JiraBoardModel: ObservableObject {
 
     private let client: JiraClient
     private let defaults: UserDefaults
+    /// Offline cache: the last good board per project is saved here and shown
+    /// when the Agile API can't be reached. nil in tests that don't need it.
+    private let storage: JiraStorage?
     /// Held so the no-active-sprint fallback can query `project = "KEY"`.
     private var projectKey: String = ""
+    /// True while the shown board came from the cache, not a live fetch.
+    @Published public private(set) var isShowingCached = false
+
+    private let snapshotEncoder = JSONEncoder()
+    private let snapshotDecoder = JSONDecoder()
 
     /// - Parameter defaults: injectable so tests (and a second connection) don't
     ///   write the remembered board into the app's real preferences.
-    public init(client: JiraClient, siteHost: String, defaults: UserDefaults = .standard) {
+    public init(client: JiraClient, siteHost: String,
+                storage: JiraStorage? = nil, defaults: UserDefaults = .standard) {
         self.client = client
         self.siteHost = siteHost
+        self.storage = storage
         self.defaults = defaults
+    }
+
+    /// Persists the loaded board so it can render offline next time.
+    private func cacheLoadedBoard() {
+        guard let storage, !projectKey.isEmpty,
+              let data = try? snapshotEncoder.encode(columns),
+              let json = String(data: data, encoding: .utf8) else { return }
+        storage.saveBoardSnapshot(.init(projectKey: projectKey, siteHost: siteHost,
+                                        sprintName: sprintName, columnsJSON: json))
+    }
+
+    /// Falls back to the cached board after a load failure. Returns true when a
+    /// snapshot was shown (so the caller skips the error phase).
+    private func showCachedBoard() -> Bool {
+        guard let storage, !projectKey.isEmpty,
+              let snapshot = storage.boardSnapshot(projectKey: projectKey),
+              let data = snapshot.columnsJSON.data(using: .utf8),
+              let cached = try? snapshotDecoder.decode([Column].self, from: data),
+              !cached.isEmpty else { return false }
+        columns = cached
+        sprintName = snapshot.sprintName
+        isShowingCached = true
+        phase = .loaded
+        errorMessage = "Offline — showing the last saved board."
+        return true
     }
 
     /// The remembered board id, or nil when the user has never picked one. 0 is
@@ -109,13 +144,16 @@ public final class JiraBoardModel: ObservableObject {
         availableBoards = []
         columns = []
         sprintName = nil
+        isShowingCached = false
 
         do {
             let boards = try await client.getBoards(projectKeyOrId: projectKey)
             switch boards.values.count {
             case 0:
-                phase = .error
-                errorMessage = "No board found for \(projectKey)."
+                if !showCachedBoard() {
+                    phase = .error
+                    errorMessage = "No board found for \(projectKey)."
+                }
             case 1:
                 await loadBoard(boards.values[0])
             default:
@@ -133,8 +171,10 @@ public final class JiraBoardModel: ObservableObject {
                 }
             }
         } catch {
-            phase = .error
-            errorMessage = Self.describe(error)
+            if !showCachedBoard() {
+                phase = .error
+                errorMessage = Self.describe(error)
+            }
         }
     }
 
@@ -175,10 +215,14 @@ public final class JiraBoardModel: ObservableObject {
 
             let issues = try await fetchAllIssues(jql: jql)
             columns = Self.buildColumns(configuration: configuration, issues: issues)
+            isShowingCached = false
             phase = .loaded
+            cacheLoadedBoard()
         } catch {
-            phase = .error
-            errorMessage = Self.describe(error)
+            if !showCachedBoard() {
+                phase = .error
+                errorMessage = Self.describe(error)
+            }
         }
     }
 
