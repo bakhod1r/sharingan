@@ -34,7 +34,7 @@ struct MenuBarView: View {
             switch self {
             case .timer: return "Pomodoro"
             case .tasks: return "Tasks"
-            case .week: return "Week"
+            case .week: return "Board"
             case .report: return "Report"
             }
         }
@@ -42,7 +42,7 @@ struct MenuBarView: View {
             switch self {
             case .timer: return "timer"
             case .tasks: return "checklist"
-            case .week: return "calendar"
+            case .week: return "rectangle.split.3x1"
             case .report: return "list.bullet.rectangle"
             }
         }
@@ -64,11 +64,13 @@ struct MenuBarView: View {
     /// content sets the floor here.
     private static let standardWidth: CGFloat = 460
 
-    /// Week-tab popover width: the full 8-column board plus padding, capped to
-    /// the current screen so narrow displays keep every column reachable via
-    /// the board's own horizontal scroll.
-    private static var weekPopoverWidth: CGFloat {
-        let ideal = MenuBarWeekView.boardWidth + outerPadding * 2
+    /// Board-tab popover width: wide enough for the custom board's enabled
+    /// columns (plus the "add column" tile), capped to the screen so narrow
+    /// displays keep every column reachable via the board's own horizontal
+    /// scroll.
+    private var boardPopoverWidth: CGFloat {
+        let columns = BoardColumnStore.shared.enabled.count
+        let ideal = CGFloat(columns) * 254 + 170 + Self.outerPadding * 2  // 240 col + 14 gap; + add tile
         let screen = (NSScreen.main?.visibleFrame.width ?? 1440) - 40
         return min(ideal, screen)
     }
@@ -96,7 +98,7 @@ struct MenuBarView: View {
                         switch tab {
                         case .timer:  timerTab
                         case .tasks:  TasksView(timer: timer)
-                        case .week:   MenuBarWeekView(timer: timer)
+                        case .week:   SharinganBoardView(timer: timer)
                         case .report: ReportView(timer: timer)
                         }
                     }
@@ -134,7 +136,7 @@ struct MenuBarView: View {
         // 7 day columns); NSHostingController tracks preferredContentSize, so
         // the popover follows this frame automatically. Capped to the screen —
         // when it can't fit, the board's horizontal scroll takes over.
-        .frame(width: tab == .week ? Self.weekPopoverWidth : Self.standardWidth)
+        .frame(width: tab == .week ? boardPopoverWidth : Self.standardWidth)
         .animation(DS.Motion.standard, value: tab)
         // One app accent: controls follow the chosen theme, not system blue.
         .tint(timer.settings.theme.accent)
