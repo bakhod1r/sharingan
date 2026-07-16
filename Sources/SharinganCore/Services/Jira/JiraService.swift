@@ -548,6 +548,36 @@ public final class JiraService: ObservableObject, JiraPomodoroHooks {
         objectWillChange.send()
     }
 
+    // MARK: - Transitions (move status from Sharingan)
+
+    /// The workflow moves available from an issue's current status. Empty on
+    /// error; the caller shows a menu.
+    public func transitions(forIssueKey key: String) async -> [JiraTransition] {
+        (try? await client.getTransitions(issueKey: key)) ?? []
+    }
+
+    /// Applies a transition immediately (interactive, not queued). On success
+    /// the cached status is updated so the row's chip reflects the new column
+    /// at once. Returns false and records an error on failure.
+    @discardableResult
+    public func applyTransition(issueKey: String, transition: JiraTransition) async -> Bool {
+        do {
+            try await client.doTransition(issueKey: issueKey, transitionId: transition.id)
+            if let issueCache, var cached = issueCache.issue(key: issueKey) {
+                cached.statusName = transition.to.name
+                cached.statusCategory = transition.to.statusCategory.key
+                cached.statusID = transition.to.id
+                issueCache.upsertIssue(cached)
+            }
+            lastErrorMessage = nil
+            objectWillChange.send()
+            return true
+        } catch {
+            lastErrorMessage = (error as? JiraError)?.userMessage ?? error.localizedDescription
+            return false
+        }
+    }
+
     // MARK: - Worklog (pomodoro → Jira)
 
     /// A completed pomodoro on a linked task. In two-way mode with worklog sync
