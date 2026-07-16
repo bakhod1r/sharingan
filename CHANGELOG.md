@@ -5,6 +5,18 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.10.0] — 2026-07-16
+
+### Added
+- **Sharingan board.** The Board section gains a middle **Board** tab: a
+  To Do / In Progress / Done kanban over your local tasks. Columns are derived
+  from task state (In Progress = the current focus task), so dragging a card
+  between columns just starts, completes, or reopens it — always reversible.
+
+### Changed
+- The **Jira** board tab now appears only when Jira is integrated; a
+  disconnected user sees just Weekly and Board.
+
 ## [1.9.0] — 2026-07-16
 
 ### Added

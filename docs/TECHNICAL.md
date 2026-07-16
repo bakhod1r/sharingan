@@ -4,7 +4,7 @@
 > whenever a feature is added, changed, or removed, update this document in the
 > same change.**
 
-- Version: 1.8.0
+- Version: 1.10.0
 - Platform: macOS 14+, lives in the menu bar
 
 ---
@@ -55,7 +55,7 @@
 - CSV export.
 - **Focus queue**: line up several tasks — each finished pomodoro advances to the next one, the break screen shows "Next: …", and after a break a picker asks what to work on next.
 - **Eisenhower matrix** view: tasks sorted into do-first / schedule / delegate / eliminate by urgency and importance.
-- **Weekly board**: drag tasks between days to reschedule; sort & filter controls in the header order every column and narrow the whole board. The menu-bar popover’s Week tab carries the same two controls. Lives in the **Board** section (sidebar) as its **Weekly** tab, alongside the **Jira** sprint-board tab; the last-used tab is remembered (`board.tab` default, `BoardSectionView`).
+- **Weekly board**: drag tasks between days to reschedule; sort & filter controls in the header order every column and narrow the whole board. The menu-bar popover’s Week tab carries the same two controls. Lives in the **Board** section (sidebar) as its **Weekly** tab. The section (`BoardSectionView`, `BoardTab` in SharinganCore) has three tabs — **Weekly**, **Board**, **Jira** — and remembers the last used one (`board.tab` default). The **Board** tab (`SharinganBoardView`, since 1.10.0) is a To Do / In Progress / Done kanban over the local task list: columns are derived from task state (In Progress = the current focus task, `TaskStore.activeTaskID`; Done = `isDone`), so dragging a card just starts/completes/reopens it via the store, staying reversible. The **Jira** tab appears only when Jira is integrated (`isConnected`); a disconnected user sees only Weekly and Board.
 - **Today panel**: a floating desktop card showing today's tasks and the timer.
 - Optional guard that requires an active task before focus can start.
 
