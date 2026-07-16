@@ -341,6 +341,11 @@ public final class JiraService: ObservableObject, JiraPomodoroHooks {
     /// code exchange → cloudId lookup → permission preflight.
     @discardableResult
     public func connect() async -> Bool {
+        // Re-entrancy guard: a second sign-in started while the first is still
+        // waiting for its browser callback gets a fresh `state` and rebinds the
+        // same loopback port, so completing the *older* browser page then fails
+        // the CSRF check ("state mismatch"). One flow at a time.
+        if case .connecting = status { return false }
         guard let oauthConfig else {
             // Fail here, not at Atlassian's authorize endpoint with a 400 about
             // an unknown client_id.
