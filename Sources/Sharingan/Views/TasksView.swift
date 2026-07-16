@@ -1925,6 +1925,10 @@ struct TasksView: View {
                             Label("Open in Jira", systemImage: "arrow.up.forward.app")
                         }
                     }
+                } else if AppServices.jiraService?.isConnected == true {
+                    Button { Task { await AppServices.jiraService?.createIssue(from: task) } } label: {
+                        Label("Create Jira issue", systemImage: "arrow.up.forward.app")
+                    }
                 }
                 Divider()
                 Button(role: .destructive) { store.delete(task.id) } label: {

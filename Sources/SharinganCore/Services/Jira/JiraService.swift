@@ -548,6 +548,67 @@ public final class JiraService: ObservableObject, JiraPomodoroHooks {
         objectWillChange.send()
     }
 
+    /// The active site's host — the live `siteHost` when connected this session,
+    /// else derived from the persisted session's URL (so a create right after a
+    /// cold launch, before a refresh, still knows where it's filing).
+    private var resolvedSiteHost: String? {
+        if let siteHost { return siteHost }
+        guard let url = defaults.string(forKey: JiraTokenStore.siteURLDefaultsKey) else { return nil }
+        return URL(string: url)?.host ?? url
+    }
+
+    // MARK: - Create (Sharingan → Jira)
+
+    public static let categoryProjectMapDefaultsKey = "jira.categoryProjectMap"
+
+    /// Category → project-key map for issue creation, edited in Settings. A
+    /// task's category decides which project it's filed under.
+    public var categoryProjectMap: [String: String] {
+        get { (defaults.dictionary(forKey: Self.categoryProjectMapDefaultsKey) as? [String: String]) ?? [:] }
+        set { defaults.set(newValue, forKey: Self.categoryProjectMapDefaultsKey); objectWillChange.send() }
+    }
+
+    /// The project a task should be created in: an explicit key, else the
+    /// category mapping, else the selected space.
+    public func projectKey(forTask task: TaskItem, explicit: String? = nil) -> String? {
+        explicit ?? categoryProjectMap[task.category] ?? boardProjectKey
+    }
+
+    /// Creates a Jira issue from a local task and links the returned key back
+    /// onto it. Creating team-visible issues is deliberate and per-task — the
+    /// caller confirms before bulk runs. Returns false and records an error on
+    /// failure; the task is left unlinked so it can be retried.
+    @discardableResult
+    public func createIssue(from task: TaskItem, projectKey explicitProject: String? = nil,
+                            issueType: String = "Task") async -> Bool {
+        guard let host = resolvedSiteHost,
+              let project = projectKey(forTask: task, explicit: explicitProject) else {
+            lastErrorMessage = "Pick a Jira project for this task first."
+            return false
+        }
+        do {
+            let ref = try await client.createIssue(fields: JiraIssueCreateFields(
+                projectKey: project, issueTypeName: issueType,
+                summary: task.title,
+                priorityName: JiraFieldMapper.jiraPriorityName(from: task.priority),
+                descriptionText: task.notes.isEmpty ? nil : task.notes))
+            var linked = task
+            linked.jiraKey = ref.key
+            linked.jiraIssueID = ref.id
+            linked.jiraSiteHost = host
+            linked.jiraIssueType = issueType
+            isApplyingRemote = true
+            taskStore.update(linked)
+            isApplyingRemote = false
+            lastErrorMessage = nil
+            objectWillChange.send()
+            return true
+        } catch {
+            lastErrorMessage = (error as? JiraError)?.userMessage ?? error.localizedDescription
+            return false
+        }
+    }
+
     // MARK: - View-model factories
 
     /// A board model bound to this connection, or nil when disconnected.

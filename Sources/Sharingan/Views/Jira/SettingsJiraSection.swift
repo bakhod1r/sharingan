@@ -130,6 +130,7 @@ struct SettingsJiraSection: View {
             if jira.syncMode == .twoWay {
                 pushRow
             }
+            categoryMapRow
             note("Sharingan reads and updates the Jira issues you link to tasks. It never sees your Atlassian password.")
                 .task { await jira.refreshProjects() }
 
@@ -242,6 +243,44 @@ struct SettingsJiraSection: View {
             .glassMenu()
         }
         .frame(minHeight: 24)
+    }
+
+    /// Maps a task category to the Jira project new issues are filed under, so
+    /// "Create Jira issue" on a task in that category goes to the right project.
+    @ViewBuilder
+    private var categoryMapRow: some View {
+        if !jira.availableProjects.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Create issues in")
+                    .font(.system(.body, design: .rounded))
+                    .foregroundStyle(.white)
+                ForEach(TaskStore.shared.allCategories) { category in
+                    HStack(spacing: 12) {
+                        Text(category.name)
+                            .font(.system(.callout, design: .rounded))
+                            .foregroundStyle(Color.dsSecondary)
+                        Spacer(minLength: 8)
+                        Picker("", selection: projectBinding(for: category.name)) {
+                            Text("Default space").tag("")
+                            ForEach(jira.availableProjects, id: \.key) { p in
+                                Text(p.key).tag(p.key)
+                            }
+                        }
+                        .pickerStyle(.menu).labelsHidden().glassMenu()
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func projectBinding(for category: String) -> Binding<String> {
+        Binding(get: { jira.categoryProjectMap[category] ?? "" },
+                set: { key in
+                    var map = jira.categoryProjectMap
+                    if key.isEmpty { map.removeValue(forKey: category) } else { map[category] = key }
+                    jira.categoryProjectMap = map
+                })
     }
 
     /// Drains the queued local edits. The count keeps the queue honest — a

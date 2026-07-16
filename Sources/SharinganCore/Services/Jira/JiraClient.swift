@@ -77,7 +77,10 @@ public actor JiraClient {
         _ = try await request(path: "/rest/api/3/issue/\(key)", method: "PUT", body: body) as EmptyResponse
     }
 
-    public func createIssue(fields: JiraIssueUpdateFields) async throws -> JiraIssue {
+    /// Creates an issue. Unlike an update, Jira requires `project` and
+    /// `issuetype` here — the old updateFields path omitted both and would 400.
+    /// Returns the new issue's id and key.
+    public func createIssue(fields: JiraIssueCreateFields) async throws -> JiraIssueRef {
         let body = try encoder.encode(["fields": fields])
         return try await request(path: "/rest/api/3/issue", method: "POST", body: body)
     }

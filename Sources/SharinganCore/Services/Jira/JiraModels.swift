@@ -742,6 +742,56 @@ public struct JiraPriorityInput: Encodable, Equatable, Sendable {
     }
 }
 
+/// The fields for creating an issue — encodes to Jira's nested shape
+/// (`project.key`, `issuetype.name`, `priority.name`). Priority goes by name;
+/// Jira accepts either name or id.
+public struct JiraIssueCreateFields: Encodable, Equatable, Sendable {
+    public let projectKey: String
+    public let issueTypeName: String
+    public let summary: String
+    public let priorityName: String?
+    public let descriptionText: String?
+
+    public init(projectKey: String, issueTypeName: String, summary: String,
+                priorityName: String? = nil, descriptionText: String? = nil) {
+        self.projectKey = projectKey
+        self.issueTypeName = issueTypeName
+        self.summary = summary
+        self.priorityName = priorityName
+        self.descriptionText = descriptionText
+    }
+
+    private struct KeyRef: Encodable { let key: String }
+    private struct NameRef: Encodable { let name: String }
+    private enum CodingKeys: String, CodingKey {
+        case project, issuetype, summary, priority, description
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(KeyRef(key: projectKey), forKey: .project)
+        try c.encode(NameRef(name: issueTypeName), forKey: .issuetype)
+        try c.encode(summary, forKey: .summary)
+        if let priorityName { try c.encode(NameRef(name: priorityName), forKey: .priority) }
+        if let descriptionText {
+            let adf = try JSONDecoder().decode(JiraADFDocument.self,
+                                               from: ADF.document(fromPlainText: descriptionText))
+            try c.encode(adf, forKey: .description)
+        }
+    }
+}
+
+/// The id + key Jira returns from a create.
+public struct JiraIssueRef: Decodable, Equatable, Sendable {
+    public let id: String
+    public let key: String
+
+    public init(id: String, key: String) {
+        self.id = id
+        self.key = key
+    }
+}
+
 // MARK: - Projects / Issue Types / Boards / Sprints (Agile API)
 
 public struct JiraProjectListResponse: Decodable, Equatable, Sendable {
