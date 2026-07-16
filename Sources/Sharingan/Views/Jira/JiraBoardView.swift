@@ -28,6 +28,7 @@ struct JiraBoardView: View {
             header
             content
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .task(id: projectKey) {
             if model.phase == .idle { await model.load(projectKey: projectKey) }
         }
@@ -56,7 +57,7 @@ struct JiraBoardView: View {
                 .font(.system(.subheadline, design: .rounded))
                 .foregroundStyle(Color.dsSecondary)
         }
-        .frame(maxWidth: .infinity, minHeight: 200)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func errorState(_ message: String) -> some View {
@@ -73,7 +74,7 @@ struct JiraBoardView: View {
             }
             .buttonStyle(.pressableSubtle)
         }
-        .frame(maxWidth: .infinity, minHeight: 200)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, 40)
     }
 
@@ -104,6 +105,7 @@ struct JiraBoardView: View {
             }
         }
         .frame(maxWidth: 420, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     // MARK: - Header

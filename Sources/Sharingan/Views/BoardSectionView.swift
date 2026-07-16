@@ -40,15 +40,21 @@ struct BoardSectionView: View {
                 cases: availableTabs, label: \.title)
                 .frame(width: jiraConnected ? 300 : 220)
 
-            switch selection {
-            case .weekly:
-                WeeklyBoardView(timer: timer)
-            case .kanban:
-                SharinganBoardView(timer: timer)
-            case .jira:
-                jiraBoard
+            // Every tab fills the same area, so switching tabs — or a Jira
+            // error replacing the loaded board — never resizes the window.
+            Group {
+                switch selection {
+                case .weekly:
+                    WeeklyBoardView(timer: timer)
+                case .kanban:
+                    SharinganBoardView(timer: timer)
+                case .jira:
+                    jiraBoard
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear(perform: consumeDeepLink)
         .onChange(of: router.pendingBoardTab) { consumeDeepLink() }
     }
@@ -77,7 +83,7 @@ struct BoardSectionView: View {
             Button("Open Settings") { AppRouter.shared.openSettings() }
                 .buttonStyle(.glass)
         }
-        .frame(maxWidth: .infinity, minHeight: 240)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear(perform: resolveJiraModel)
     }
 
