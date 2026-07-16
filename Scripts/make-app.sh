@@ -75,12 +75,23 @@ raw = os.environ["MASK_INPUT"].encode()
 print(base64.b64encode(bytes(b ^ mask[i % len(mask)] for i, b in enumerate(raw))).decode())
 PY
 }
-if [[ -n "${JIRA_CLIENT_ID:-}" && -n "${JIRA_CLIENT_SECRET:-}" ]]; then
-  plutil -replace SHIntegrationAppID  -string "$(mask_secret "$JIRA_CLIENT_ID")"     "$APP/Contents/Info.plist"
-  plutil -replace SHIntegrationAppKey -string "$(mask_secret "$JIRA_CLIENT_SECRET")" "$APP/Contents/Info.plist"
-  echo "  ✓ Jira OAuth credentials baked in"
+# A token broker (broker/, a Cloudflare Worker) is the real fix: with
+# JIRA_BROKER_URL set, the app sends token requests there WITHOUT the secret, so
+# JIRA_CLIENT_SECRET can be empty and nothing sensitive ships. The broker URL is
+# not secret, so it's stored in the clear.
+if [[ -n "${JIRA_CLIENT_ID:-}" && ( -n "${JIRA_CLIENT_SECRET:-}" || -n "${JIRA_BROKER_URL:-}" ) ]]; then
+  plutil -replace SHIntegrationAppID  -string "$(mask_secret "$JIRA_CLIENT_ID")" "$APP/Contents/Info.plist"
+  if [[ -n "${JIRA_CLIENT_SECRET:-}" ]]; then
+    plutil -replace SHIntegrationAppKey -string "$(mask_secret "$JIRA_CLIENT_SECRET")" "$APP/Contents/Info.plist"
+  fi
+  if [[ -n "${JIRA_BROKER_URL:-}" ]]; then
+    plutil -replace SHIntegrationBrokerURL -string "$JIRA_BROKER_URL" "$APP/Contents/Info.plist"
+    echo "  ✓ Jira OAuth via token broker (no secret shipped)"
+  else
+    echo "  ✓ Jira OAuth credentials baked in"
+  fi
 else
-  echo "  ⚠︎ JIRA_CLIENT_ID/JIRA_CLIENT_SECRET unset — Jira OAuth disabled in this build"
+  echo "  ⚠︎ JIRA_CLIENT_ID + (SECRET or BROKER_URL) unset — Jira OAuth disabled in this build"
 fi
 
 # SwiftPM resource bundles (sounds, animations, icons) live in Contents/Resources,

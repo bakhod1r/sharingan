@@ -1,0 +1,13 @@
+# Cloudflare Worker config for the Sharingan Jira OAuth token broker.
+# Deploy with: cd broker && npx wrangler deploy
+name = "sharingan-jira-broker"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+
+# Secrets are NOT set here — they'd be in the repo. Set them out-of-band:
+#   npx wrangler secret put JIRA_CLIENT_SECRET
+#   npx wrangler secret put JIRA_CLIENT_ID     # optional, hardens to one app
+#
+# The client id is not secret, so you may instead expose it as a plain var:
+# [vars]
+# JIRA_CLIENT_ID = "your-atlassian-client-id"

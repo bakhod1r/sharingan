@@ -24,10 +24,10 @@ import Foundation
 /// any time, which invalidates the old one.
 ///
 /// The real fix is a backend that holds the secret and brokers the exchange, so
-/// it never ships at all. That is deliberately deferred: Sharingan has no
-/// server today, and adding one would put us in the path of users' Jira data.
-/// When a backend exists, this type goes away and `JiraOAuth` talks to it
-/// instead.
+/// it never ships at all. That backend now exists (`broker/`, a Cloudflare
+/// Worker): when `brokerURL` is baked into the build, `JiraOAuth` sends the
+/// token requests there without the secret, and `clientSecret` can be empty.
+/// The masking below still covers the legacy secret-in-app builds.
 public enum JiraAppCredentials {
 
     /// Info.plist keys written by `make-app.sh`. Deliberately bland — a key
@@ -35,6 +35,8 @@ public enum JiraAppCredentials {
     private enum PlistKey {
         static let clientID = "SHIntegrationAppID"
         static let clientSecret = "SHIntegrationAppKey"
+        /// The token broker URL. Not secret, so it's stored in the clear.
+        static let brokerURL = "SHIntegrationBrokerURL"
     }
 
     /// XOR mask. Fixed and public by necessity (it ships in the same binary);
@@ -50,11 +52,22 @@ public enum JiraAppCredentials {
     /// The OAuth client secret, or nil when the build wasn't given one.
     public static var clientSecret: String? { unmask(PlistKey.clientSecret) }
 
+    /// The token broker URL, or nil when this build talks to Atlassian directly.
+    public static var brokerURL: URL? {
+        guard let raw = Bundle.main.object(forInfoDictionaryKey: PlistKey.brokerURL) as? String,
+              !raw.isEmpty else { return nil }
+        return URL(string: raw)
+    }
+
     /// Whether this build can run the OAuth flow at all. Dev builds made with
     /// a plain `swift build` have no baked credentials — the UI uses this to
     /// say so plainly instead of failing at the authorize step with a 400.
+    ///
+    /// A client id is always required. The secret is required only for the
+    /// direct flow; with a broker the app legitimately ships no secret.
     public static var isConfigured: Bool {
-        clientID?.isEmpty == false && clientSecret?.isEmpty == false
+        guard clientID?.isEmpty == false else { return false }
+        return brokerURL != nil || clientSecret?.isEmpty == false
     }
 
     private static func unmask(_ key: String) -> String? {

@@ -259,9 +259,12 @@ public final class JiraService: ObservableObject, JiraPomodoroHooks {
     /// without them (a plain `swift build`, and every test).
     public nonisolated static func bundledOAuthConfig() -> JiraOAuthConfig? {
         guard JiraAppCredentials.isConfigured,
-              let clientID = JiraAppCredentials.clientID,
-              let clientSecret = JiraAppCredentials.clientSecret else { return nil }
-        return JiraOAuthConfig(clientID: clientID, clientSecret: clientSecret)
+              let clientID = JiraAppCredentials.clientID else { return nil }
+        // With a broker the secret is empty by design; JiraOAuth drops it from
+        // the request when tokenBrokerURL is set, so "" never goes on the wire.
+        return JiraOAuthConfig(clientID: clientID,
+                               clientSecret: JiraAppCredentials.clientSecret ?? "",
+                               tokenBrokerURL: JiraAppCredentials.brokerURL)
     }
 
     /// - Parameter openURL: opens the Atlassian consent page in the user's
