@@ -16,15 +16,23 @@ public struct JiraOAuthConfig: Sendable {
     /// console: `http://localhost:53682/callback`.
     public var redirectURI: String
     public var scopes: [String]
+    /// When set, token exchange and refresh POST to this URL **without**
+    /// `client_secret`; the broker holds the secret and forwards to Atlassian.
+    /// This is the real fix for the embedded-secret problem — with it, the app
+    /// can ship with an empty `clientSecret` and nothing sensitive is extractable
+    /// from the bundle. Nil keeps the direct (secret-in-app) flow.
+    public var tokenBrokerURL: URL?
 
     public init(clientID: String,
                 clientSecret: String,
                 redirectURI: String = JiraOAuth.defaultRedirectURI,
-                scopes: [String] = JiraOAuth.defaultScopes) {
+                scopes: [String] = JiraOAuth.defaultScopes,
+                tokenBrokerURL: URL? = nil) {
         self.clientID = clientID
         self.clientSecret = clientSecret
         self.redirectURI = redirectURI
         self.scopes = scopes
+        self.tokenBrokerURL = tokenBrokerURL
     }
 }
 
@@ -129,7 +137,6 @@ public actor JiraOAuth {
         try await postToken([
             "grant_type": "authorization_code",
             "client_id": config.clientID,
-            "client_secret": config.clientSecret,
             "code": code,
             "redirect_uri": config.redirectURI,
         ])
@@ -149,13 +156,22 @@ public actor JiraOAuth {
         try await postToken([
             "grant_type": "refresh_token",
             "client_id": config.clientID,
-            "client_secret": config.clientSecret,
             "refresh_token": refreshToken,
         ])
     }
 
     private func postToken(_ body: [String: String]) async throws -> Tokens {
-        var request = URLRequest(url: Self.tokenEndpoint)
+        // With a broker, POST to it and let it add the secret server-side; only
+        // the direct flow puts the secret on the wire from the app.
+        var body = body
+        let endpoint: URL
+        if let broker = config.tokenBrokerURL {
+            endpoint = broker
+        } else {
+            endpoint = Self.tokenEndpoint
+            body["client_secret"] = config.clientSecret
+        }
+        var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.timeoutInterval = 30
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")

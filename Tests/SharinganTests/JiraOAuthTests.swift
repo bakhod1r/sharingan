@@ -94,6 +94,55 @@ struct JiraOAuthTests {
         #expect(tokens.expiresAt.timeIntervalSince(before) <= 3601)
     }
 
+    @Test("with a token broker configured, tokens go through the broker and carry no client secret")
+    func brokerRoutesTokenExchangeWithoutSecret() async throws {
+        defer { OAuthStubProtocol.reset() }
+        let session = OAuthStubProtocol.session { request in
+            (try OAuthStubProtocol.jsonResponse(for: request, status: 200), Data("""
+            {"access_token":"at-1","expires_in":3600,"refresh_token":"rt-1",
+             "scope":"read:jira-work offline_access","token_type":"Bearer"}
+            """.utf8))
+        }
+        let config = JiraOAuthConfig(clientID: "client-abc", clientSecret: "secret-xyz",
+                                     redirectURI: "http://localhost:53682/callback",
+                                     scopes: ["read:jira-work", "offline_access"],
+                                     tokenBrokerURL: URL(string: "https://broker.example.com/token"))
+        let oauth = JiraOAuth(config: config, session: session)
+
+        _ = try await oauth.exchange(code: "code-42")
+
+        let sent = try #require(OAuthStubProtocol.requests.last)
+        #expect(sent.url?.absoluteString == "https://broker.example.com/token")
+        let body = try sent.jsonObject()
+        #expect(body["grant_type"] as? String == "authorization_code")
+        #expect(body["client_id"] as? String == "client-abc")
+        #expect(body["code"] as? String == "code-42")
+        // The whole point: the secret never leaves the broker.
+        #expect(body["client_secret"] == nil)
+    }
+
+    @Test("with a broker, refresh also omits the secret and hits the broker")
+    func brokerRoutesRefreshWithoutSecret() async throws {
+        defer { OAuthStubProtocol.reset() }
+        let session = OAuthStubProtocol.session { request in
+            (try OAuthStubProtocol.jsonResponse(for: request, status: 200), Data("""
+            {"access_token":"at-2","expires_in":3600,"refresh_token":"rt-2","token_type":"Bearer"}
+            """.utf8))
+        }
+        let config = JiraOAuthConfig(clientID: "client-abc", clientSecret: "secret-xyz",
+                                     tokenBrokerURL: URL(string: "https://broker.example.com/token"))
+        let oauth = JiraOAuth(config: config, session: session)
+
+        _ = try await oauth.refresh(refreshToken: "rt-1")
+
+        let sent = try #require(OAuthStubProtocol.requests.last)
+        #expect(sent.url?.absoluteString == "https://broker.example.com/token")
+        let body = try sent.jsonObject()
+        #expect(body["grant_type"] as? String == "refresh_token")
+        #expect(body["refresh_token"] as? String == "rt-1")
+        #expect(body["client_secret"] == nil)
+    }
+
     @Test("a token response without a refresh token fails rather than yielding a session that dies in an hour")
     func exchangeWithoutRefreshTokenThrows() async throws {
         defer { OAuthStubProtocol.reset() }
