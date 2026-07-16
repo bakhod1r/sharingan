@@ -86,7 +86,20 @@ public actor JiraOAuth {
     public static let defaultRedirectURI = "http://localhost:53682/callback"
     /// `offline_access` is mandatory: without it Atlassian returns no refresh
     /// token and the user re-consents every hour.
-    public static let defaultScopes = ["read:jira-user", "read:jira-work", "write:jira-work", "offline_access"]
+    ///
+    /// The `*:jira-software` scopes cover the Agile REST API the sprint board
+    /// uses (`/rest/agile/1.0/board`, `/sprint`) — the classic `read:jira-work`
+    /// scope does NOT, so without these the board 401s while task sync (the
+    /// platform API) works. **The OAuth app must also have the "Jira Software
+    /// API" added with these scopes selected in the Atlassian developer
+    /// console**, otherwise authorization fails with an invalid-scope error.
+    public static let defaultScopes = [
+        "read:jira-user", "read:jira-work", "write:jira-work",
+        "read:board-scope:jira-software",
+        "read:sprint:jira-software",
+        "write:sprint:jira-software",
+        "offline_access",
+    ]
 
     private let config: JiraOAuthConfig
     private let session: URLSession
