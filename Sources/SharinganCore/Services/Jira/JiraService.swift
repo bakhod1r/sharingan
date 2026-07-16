@@ -548,6 +548,15 @@ public final class JiraService: ObservableObject, JiraPomodoroHooks {
         objectWillChange.send()
     }
 
+    // MARK: - Cached status (for the row chip)
+
+    /// The last-synced status name + category key for a linked issue, if cached.
+    public func cachedStatus(issueID: String) -> (name: String, category: String)? {
+        guard let cached = issueCache?.issue(id: issueID),
+              let name = cached.statusName else { return nil }
+        return (name, cached.statusCategory ?? "undefined")
+    }
+
     // MARK: - Transitions (move status from Sharingan)
 
     /// The workflow moves available from an issue's current status. Empty on

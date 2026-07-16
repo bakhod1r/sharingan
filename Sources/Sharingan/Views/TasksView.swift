@@ -1713,6 +1713,7 @@ struct TasksView: View {
                 // before anything else on the line.
                 if let key = task.jiraKey, task.isJiraLinked {
                     JiraIssueBadge(key: key, issueType: task.jiraIssueType)
+                    JiraStatusChip(task: task)
                 }
                 if let due = task.dueDate {
                     Label(dueText(due), systemImage: "calendar")

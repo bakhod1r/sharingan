@@ -89,6 +89,88 @@ struct JiraIssueBadge: View {
     }
 }
 
+/// The Jira status of a linked task, tinted by category, as a menu button:
+/// tap to see the workflow transitions and move the issue (and the board card)
+/// without opening Jira. Reads the cached status; transitions are fetched on
+/// open. Nothing renders when the task isn't linked or the status isn't cached.
+struct JiraStatusChip: View {
+    let task: TaskItem
+    @State private var transitions: [JiraTransition] = []
+    @State private var loading = false
+    @State private var status: (name: String, category: String)?
+
+    private var tint: Color {
+        switch status?.category {
+        case "done":          return Color(hex: "#36B37E")
+        case "indeterminate": return Color(hex: "#4F8DFD")
+        case "new":           return Color(hex: "#9AA3AF")
+        default:              return Color(hex: "#9AA3AF")
+        }
+    }
+
+    var body: some View {
+        if let status {
+            Menu {
+                // Transitions load when the menu opens, not per visible row —
+                // a getTransitions call for every card on every scroll would
+                // hammer the API.
+                menuContent
+                    .onAppear { if transitions.isEmpty { Task { await loadTransitions() } } }
+            } label: {
+                Text(status.name)
+                    .font(.system(size: 9, weight: .semibold, design: .rounded))
+                    .foregroundStyle(tint)
+                    .padding(.horizontal, 6).padding(.vertical, 1.5)
+                    .background(Capsule().fill(tint.opacity(0.14)))
+                    .overlay(Capsule().strokeBorder(tint.opacity(0.3), lineWidth: 0.5))
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .onAppear { refreshStatus() }
+        } else {
+            Color.clear.frame(width: 0, height: 0).onAppear { refreshStatus() }
+        }
+    }
+
+    @ViewBuilder
+    private var menuContent: some View {
+        if loading {
+            Text("Loading…")
+        } else if transitions.isEmpty {
+            Text("No moves available")
+        } else {
+            ForEach(transitions, id: \.id) { t in
+                Button { apply(t) } label: {
+                    Label(t.name, systemImage: t.hasScreen ? "arrow.up.forward.square" : "arrow.right")
+                }
+            }
+        }
+    }
+
+    private func refreshStatus() {
+        guard let id = task.jiraIssueID else { return }
+        status = AppServices.jiraService?.cachedStatus(issueID: id)
+    }
+
+    private func loadTransitions() async {
+        guard let key = task.jiraKey, let jira = AppServices.jiraService else { return }
+        loading = true
+        transitions = await jira.transitions(forIssueKey: key)
+        loading = false
+    }
+
+    private func apply(_ t: JiraTransition) {
+        guard let key = task.jiraKey, let jira = AppServices.jiraService else { return }
+        Task {
+            if await jira.applyTransition(issueKey: key, transition: t) {
+                refreshStatus()
+                await loadTransitions()
+            }
+        }
+    }
+}
+
 struct SubtaskProgressBadge: View {
     let done: Int
     let total: Int
