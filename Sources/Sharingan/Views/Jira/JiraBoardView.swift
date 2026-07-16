@@ -130,7 +130,29 @@ struct JiraBoardView: View {
                     .frame(maxWidth: 280, alignment: .trailing)
                     .transition(.opacity)
             }
+            if model.phase == .loaded {
+                switchBoardButton
+            }
         }
+    }
+
+    /// Forgets the remembered board and reloads, so a project with several
+    /// boards re-shows the picker.
+    private var switchBoardButton: some View {
+        Button {
+            model.forgetBoard()
+            Task { await model.load(projectKey: projectKey) }
+        } label: {
+            Image(systemName: "rectangle.on.rectangle.angled")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.75))
+                .frame(width: 30, height: 30)
+                .background(Circle().fill(Color.white.opacity(0.08)))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.pressableSubtle)
+        .help("Switch board")
+        .accessibilityLabel("Switch Jira board")
     }
 
     // MARK: - Board
