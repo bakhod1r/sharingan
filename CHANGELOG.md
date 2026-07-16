@@ -5,6 +5,24 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.12.0] — 2026-07-16
+
+### Added
+- **Custom board columns.** The Board tab's kanban is now fully customizable:
+  add, rename, reorder, hide and delete columns. Seeded with Today, This Week,
+  In Progress, Paused, Done and Cancelled; the built-in Done column completes a
+  task when you drag a card into it. Columns and each task's column sync across
+  Macs.
+- **Add new issues to the active sprint** (Settings → Integrations, opt-in):
+  when you convert a task to Jira, it also drops into the project's active
+  sprint.
+- **Switch board** button on the Jira sprint board, to re-pick which board a
+  multi-board project shows.
+
+### Notes
+- CloudKit: the new `boardColumnID` Task field must be promoted
+  dev→production in the CloudKit dashboard before a release syncs it.
+
 ## [1.11.0] — 2026-07-16
 
 ### Added
