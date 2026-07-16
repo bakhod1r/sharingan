@@ -609,6 +609,30 @@ public final class JiraService: ObservableObject, JiraPomodoroHooks {
         }
     }
 
+    /// Local tasks eligible to be pushed to Jira: not yet linked and not done,
+    /// optionally scoped to one category. The Settings "Convert to Jira" action
+    /// previews this set before creating anything.
+    public func unlinkedTasks(inCategory category: String? = nil) -> [TaskItem] {
+        taskStore.tasks.filter { task in
+            !task.isJiraLinked && !task.isDone
+                && (category == nil || task.category == category)
+        }
+    }
+
+    /// Bulk-creates Jira issues for every unlinked, undone task (optionally in
+    /// one category) and links each returned key back. Existing local tasks are
+    /// what seed Jira the first time — the queue only carries *changes* to tasks
+    /// that are already linked, so nothing shows there until this runs. Returns
+    /// the number created; a per-task failure is recorded and skipped.
+    @discardableResult
+    public func pushUnlinkedTasks(inCategory category: String? = nil) async -> Int {
+        var created = 0
+        for task in unlinkedTasks(inCategory: category) {
+            if await createIssue(from: task) { created += 1 }
+        }
+        return created
+    }
+
     // MARK: - View-model factories
 
     /// A board model bound to this connection, or nil when disconnected.

@@ -89,6 +89,45 @@ struct JiraCreateIssueTests {
         #expect(linked.jiraIssueID == "10500")
         #expect(linked.jiraSiteHost == "wayll.atlassian.net")
     }
+
+    @Test("bulk push creates issues only for unlinked, undone tasks and links them")
+    @MainActor
+    func bulkPushConvertsUnlinkedTasks() async throws {
+        defer { CreateStubProtocol.handler = nil }
+        let counter = Counter()
+        let (service, tasks) = try makeService { request in
+            let n = counter.next()
+            return (HTTPURLResponse(url: request.url!, statusCode: 201, httpVersion: nil, headerFields: nil)!,
+                    Data("{\"id\":\"105\(n)\",\"key\":\"SHRGN-\(n)\"}".utf8))
+        }
+        service.categoryProjectMap = ["Inbox": "SHRGN"]
+        tasks.add(title: "First", category: "Inbox", priority: .high)
+        tasks.add(title: "Second", category: "Inbox", priority: .medium)
+        // An already-linked task must be skipped (no duplicate create).
+        tasks.add(title: "Already there", category: "Inbox", priority: .low)
+        var linkedAlready = try #require(tasks.tasks.first { $0.title == "Already there" })
+        linkedAlready.jiraKey = "SHRGN-99"
+        linkedAlready.jiraSiteHost = "wayll.atlassian.net"
+        tasks.update(linkedAlready)
+        // A finished task must be skipped too.
+        tasks.add(title: "Done task", category: "Inbox", priority: .low)
+        var d = try #require(tasks.tasks.first { $0.title == "Done task" })
+        d.isDone = true
+        tasks.update(d)
+
+        let created = await service.pushUnlinkedTasks(inCategory: "Inbox")
+
+        #expect(created == 2)
+        #expect(tasks.tasks.first { $0.title == "First" }?.isJiraLinked == true)
+        #expect(tasks.tasks.first { $0.title == "Second" }?.isJiraLinked == true)
+        #expect(tasks.tasks.first { $0.title == "Done task" }?.isJiraLinked == false)
+    }
+}
+
+private final class Counter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var n = 0
+    func next() -> Int { lock.lock(); defer { lock.unlock() }; n += 1; return n }
 }
 
 private final class RequestRecorder: @unchecked Sendable {
