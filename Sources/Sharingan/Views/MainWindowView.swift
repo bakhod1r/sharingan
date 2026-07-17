@@ -235,6 +235,7 @@ struct MainWindowView: View {
                     navRow(.tasks)
                     navRow(.week)
                     navRow(.stats)
+                    navRow(.analytics)
                     navRow(.report)
                     sidebarDivider
                     categoriesSection
@@ -1311,6 +1312,10 @@ struct MainWindowView: View {
                 .padding(.horizontal, 28)
                 .padding(.top, 32)
                 .padding(.bottom, 24)
+        case .analytics:
+            detailScaffold(title: "Analytics") {
+                AnalyticsView(timer: timer)
+            }
         case .stats:
             detailScaffold(title: "Progress") {
                 VStack(spacing: 20) {
