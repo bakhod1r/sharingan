@@ -41,8 +41,7 @@ struct AnalyticsView: View {
                     spanDays: filter.range.heatmapDays)
             case .load:
                 AnalyticsLoadView(timer: timer, completedOnly: filter.completedOnly,
-                                  allowedTaskIDs: allowedTaskIDs,
-                                  averageDays: filter.range.loadAverageDays)
+                                  allowedTaskIDs: allowedTaskIDs, range: filter.range)
             }
         }
     }

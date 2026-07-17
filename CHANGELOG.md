@@ -15,7 +15,8 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
   down the left, rounded cells, and a range-driven span.
 - The **time range** now applies to every Analytics tab: it averages the
   Overview scores, sets how far the heatmap spans (4 weeks … 1 year), and
-  sets the focus-load average window.
+  drives the focus-load chart — Today shows the day's curve with a rolling
+  average, a wider range shows the total hourly load across that window.
 
 ### Added
 - The **Big** pomodoro size is now called **Deep Work** (its saved data is
