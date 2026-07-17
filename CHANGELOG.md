@@ -5,6 +5,15 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.7.3] - 2026-07-17
+
+### Fixed
+- The app could freeze at launch — no windows, no menu bar icon — when
+  writing the widget snapshot into the group container blocked forever
+  (a wedged containermanagerd hangs the `open()` syscall). Snapshot
+  writes now run on a background queue, so the menu bar icon always
+  comes up no matter what the container daemon is doing.
+
 ## [1.7.2] - 2026-07-17
 
 ### Changed

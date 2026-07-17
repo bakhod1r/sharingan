@@ -19,6 +19,14 @@ final class WidgetSnapshotPublisher {
     private var bag = Set<AnyCancellable>()
     private var lastFingerprint: String?
 
+    /// Snapshot writes go through this serial queue, never the main thread.
+    /// A write into the group container can block in `open()` indefinitely
+    /// when containermanagerd is wedged — on the main thread during launch
+    /// that froze the app before the status item was ever created (the
+    /// "menu bar icon missing in prod" hang, observed live 2026-07-17).
+    private let ioQueue = DispatchQueue(label: "sharingan.widget-snapshot-io",
+                                        qos: .utility)
+
     func install(timer: PomodoroTimer) {
         self.timer = timer
         Publishers.Merge(timer.objectWillChange.map { _ in () },
@@ -43,8 +51,13 @@ final class WidgetSnapshotPublisher {
         let now = Date()
         var snap = snapshot(from: timer, now: now)
         if snap.isRunning { snap = snap.idled() }
-        WidgetSnapshotStore.write(snap)
-        WidgetCenter.shared.reloadAllTimelines()
+        // Synchronous on purpose (the process is about to exit), but routed
+        // through the queue so it can't land before an earlier queued write.
+        let final = snap
+        ioQueue.sync {
+            WidgetSnapshotStore.write(final)
+            WidgetCenter.shared.reloadAllTimelines()
+        }
     }
 
     private func publish() {
@@ -56,8 +69,10 @@ final class WidgetSnapshotPublisher {
         // the snapshot must be written even though nothing changed.
         guard key != lastFingerprint || WidgetSnapshotStore.needsSeed else { return }
         lastFingerprint = key
-        WidgetSnapshotStore.write(snap)
-        WidgetCenter.shared.reloadAllTimelines()
+        ioQueue.async {
+            WidgetSnapshotStore.write(snap)
+            WidgetCenter.shared.reloadAllTimelines()
+        }
     }
 
     private func snapshot(from timer: PomodoroTimer, now: Date) -> WidgetSnapshot {
