@@ -48,6 +48,8 @@ public enum RecordMapper {
         record["jiraSiteHost"] = task.jiraSiteHost as CKRecordValue?
         record["jiraIssueType"] = task.jiraIssueType as CKRecordValue?
         record["boardColumnID"] = task.boardColumnID as CKRecordValue?
+        record["originDevice"] = task.originDevice as CKRecordValue
+        record["number"] = task.number as CKRecordValue
         // Subtasks are a nested value type with their own evolving shape —
         // JSON keeps them one field instead of a parallel record type whose
         // deletes would have to be tracked separately.
@@ -94,6 +96,12 @@ public enum RecordMapper {
         if let raw = record["subtasksJSON"] as? String {
             task.subtasks = decode([Subtask].self, from: raw) ?? []
         }
+        // Keep the creator's device; a record from a peer that predates origin
+        // tracking has none, so fall back to this Mac rather than crashing.
+        task.originDevice = record["originDevice"] as? String ?? DeviceIdentity.name
+        // A record written before numbering carries no number; it lands as 0 and
+        // this Mac's store backfills one.
+        task.number = record["number"] as? Int ?? 0
         return task
     }
 

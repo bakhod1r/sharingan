@@ -256,6 +256,7 @@ struct FocusQueueCoordinatorTests {
     @Test func breakEndDoesNotFlagWhenActiveOpenTaskExists() {
         let (c, cleanup) = makeCoordinator()
         defer { cleanup() }
+        c.timer.settings.autoStartFocus = true
         let store = tempStore()
         store.add(title: "Still working")
         store.setActive(store.tasks[0].id)
@@ -267,6 +268,7 @@ struct FocusQueueCoordinatorTests {
     @Test func breakEndDoesNotFlagWhenQueueHasWork() {
         let (c, cleanup) = makeCoordinator()
         defer { cleanup() }
+        c.timer.settings.autoStartFocus = true
         let store = tempStore()
         store.add(title: "Queued up")
         c.focusQueue.enqueue(store.tasks[0].id)
@@ -278,6 +280,7 @@ struct FocusQueueCoordinatorTests {
     @Test func breakEndClearsAStaleFlag() {
         let (c, cleanup) = makeCoordinator()
         defer { cleanup() }
+        c.timer.settings.autoStartFocus = true
         let store = tempStore()
         c.evaluateTaskPickAfterBreak(store: store)
         #expect(c.needsTaskPick == true)

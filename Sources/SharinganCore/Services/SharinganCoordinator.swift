@@ -215,7 +215,7 @@ public final class SharinganCoordinator: ObservableObject {
             startedAt: now.addingTimeInterval(-max(0, timer.elapsedSeconds)),
             endsAt: idle ? nil : now.addingTimeInterval(remaining),
             isPaused: isPaused,
-            taskTitle: TaskStore.shared.activeTask?.title,
+            taskTitle: TaskStore.shared.activeFocusTitle,
             updatedAt: now)
     }
 
@@ -752,6 +752,10 @@ public final class SharinganCoordinator: ObservableObject {
     private func beginBreakSideEffects() {
         ReminderService.shared.pauseForBreak()
         if let p = breakPresenter, timer.settings.blockScreenDuringBreak {
+            // No auto-start here: when "Auto-start break" is off the overlay
+            // comes up with the countdown parked at full length and the break
+            // screen's own Start button runs it (see `BreakView`). Starting it
+            // for the user would defeat the setting.
             p.presentBreak(
                 timer: timer,
                 onTapSkip: { [weak self] in self?.timer.skip() }
@@ -803,13 +807,17 @@ public final class SharinganCoordinator: ObservableObject {
         }
     }
 
-    /// After a break ends: flag the UI to ask "which task next?" when the
-    /// queue has no valid entry AND there's no open active task. Also clears
-    /// a stale flag when there *is* something to work on.
+    /// After a break ends: flag the UI to ask "which task next?".
+    ///
+    /// Always asked when there is nothing to work on (no valid queue entry and
+    /// no open active task). Also asked whenever "Auto-start focus" is off —
+    /// the next session is waiting on the user either way, so the picker is the
+    /// prompt to choose what it runs rather than leaving a silent idle timer.
     func evaluateTaskPickAfterBreak(store: TaskStore) {
         let hasOpenActiveTask = store.activeTask.map { !$0.isDone } ?? false
-        needsTaskPick = focusQueue.current(validatedAgainst: store) == nil
+        let nothingToWorkOn = focusQueue.current(validatedAgainst: store) == nil
             && !hasOpenActiveTask
+        needsTaskPick = nothingToWorkOn || !timer.settings.autoStartFocus
     }
 
     /// The UI's answer to `needsTaskPick`: activates the chosen task (nil

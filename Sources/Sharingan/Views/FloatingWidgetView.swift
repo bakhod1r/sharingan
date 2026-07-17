@@ -157,10 +157,11 @@ struct FloatingWidgetView: View {
             HStack(spacing: 5) {
                 Circle().fill(Color(hex: tasks.color(for: task.category)))
                     .frame(width: 6 * k, height: 6 * k)
-                Text(task.title)
-                    .font(.system(size: 12 * k, design: .rounded).weight(.semibold))
+                Text(tasks.activeShortLabel ?? task.title)
+                    .font(.system(size: 12 * k, design: .rounded).weight(.semibold).monospacedDigit())
                     .foregroundStyle(.white.opacity(0.92))
                     .lineLimit(1)
+                    .help(tasks.activeFocusTitle ?? "")   // full title on hover
             }
         } else {
             Text("No task selected")
@@ -169,8 +170,38 @@ struct FloatingWidgetView: View {
         }
     }
 
+    /// Pomodoro-size chooser as a single quiet button showing the current size
+    /// icon; the menu carries all three (Small / Normal / Big) with durations.
+    /// One button instead of three keeps the pill uncluttered.
+    private var kindMenu: some View {
+        Menu {
+            ForEach(PomodoroKind.allCases) { kind in
+                let cfg = timer.settings.config(for: kind)
+                Button {
+                    timer.applyKind(kind)
+                } label: {
+                    Label("\(kind.label) · \(cfg.focusMinutes)′ + \(cfg.breakMinutes)′",
+                          systemImage: timer.settings.activeKind == kind ? "checkmark" : kind.systemImage)
+                }
+            }
+        } label: {
+            Image(systemName: timer.settings.activeKind.systemImage)
+                .font(.system(size: 12 * k, weight: .bold))
+                .foregroundStyle(.white.opacity(0.9))
+                .frame(width: 26 * k, height: 26 * k)
+                .background(Circle().fill(.white.opacity(0.12)))
+                .contentShape(Circle())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Pomodoro size: \(timer.settings.activeKind.label)")
+    }
+
     private var controls: some View {
         HStack(spacing: 8 * k) {
+            kindMenu
             control("play.fill", enabled: !timer.isRunning, help: "Start") {
                 handleStart()
             }

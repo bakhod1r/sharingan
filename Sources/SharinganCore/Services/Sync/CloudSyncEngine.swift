@@ -23,6 +23,11 @@ public final class CloudSyncEngine: ObservableObject {
     public static let zoneName = "SharinganData"
     /// UserDefaults key for the master toggle (default OFF — sync is opt-in).
     public static let syncEnabledKey = "sync.enabled"
+    /// UserDefaults key for the retry backoff ceiling, in minutes. Absent means
+    /// the default of 5. Bounds the longest wait between push retries for a
+    /// record the server keeps rejecting.
+    public static let syncRetryMaxMinutesKey = "sync.retryMaxMinutes"
+    public static let defaultRetryMaxMinutes = 5
 
     @Published public private(set) var status: SyncStatus = .disabled
 
@@ -32,9 +37,27 @@ public final class CloudSyncEngine: ObservableObject {
     /// safe — TemplateStore does the same). TaskDatabase is internal to
     /// SharinganCore, so the app target could not pass one in anyway.
     private let database: TaskDatabase?
+    /// The durable push queue. Its rows outlive a shadow reset, so a delete the
+    /// user made while offline still ships after an account/zone reset wipes the
+    /// shadow — see SyncOutbox. The shadow diff still decides WHAT changed; the
+    /// outbox only carries the intent forward and gates per-record retry.
+    private let outbox: SyncOutbox
     private var engine: CKSyncEngine?
     private var fallbackTimer: Timer?
+    /// Coalesces a burst of persists into one diff pass — see scheduleEnqueue().
+    private var enqueueDebounce: Timer?
+    /// When the current burst's first persist arrived, so the debounce can be
+    /// capped and never starve under continuous typing.
+    private var burstStartedAt: Date?
     private let log = Logger(subsystem: "com.bakhod1r.sharingan", category: "sync")
+
+    /// How long after a persist to wait for more before diffing. Long enough to
+    /// swallow a burst of keystrokes, short enough that "Sync now" is never what
+    /// the user reaches for.
+    static let enqueueDebounceInterval: TimeInterval = 0.75
+    /// Hard ceiling on that wait: continuous typing must not defer the push
+    /// indefinitely, so a burst always diffs at least this often.
+    static let enqueueDebounceCap: TimeInterval = 5
 
     private var zoneID: CKRecordZone.ID {
         CKRecordZone.ID(zoneName: Self.zoneName, ownerName: CKCurrentUserDefaultName)
@@ -64,7 +87,28 @@ public final class CloudSyncEngine: ObservableObject {
             dbURL = base.appendingPathComponent("Sharingan", isDirectory: true)
                 .appendingPathComponent("blink.sqlite")
         }
-        self.database = TaskDatabase(path: dbURL.path)
+        let database = TaskDatabase(path: dbURL.path)
+        self.database = database
+        // The SQLite store is what makes the queue durable; the in-memory store
+        // is only reached when the database itself failed to open, in which case
+        // sync as a whole is already degraded and a session-scoped queue is moot.
+        self.outbox = SyncOutbox(storage: database ?? InMemorySyncOutboxStorage())
+        applyRetryCap()
+    }
+
+    /// The user-facing "retry at most every N minutes" setting → the outbox's
+    /// backoff ceiling. Reading the stored default here (rather than binding it)
+    /// keeps SyncOutbox free of UserDefaults; the setter is called live when the
+    /// slider changes, and init picks up whatever was last stored.
+    public func applyRetryCap() {
+        let minutes = UserDefaults.standard.object(forKey: Self.syncRetryMaxMinutesKey) as? Int
+            ?? Self.defaultRetryMaxMinutes
+        outbox.maxBackoff = TimeInterval(max(1, minutes)) * 60
+    }
+
+    public func setRetryCapMinutes(_ minutes: Int) {
+        UserDefaults.standard.set(minutes, forKey: Self.syncRetryMaxMinutesKey)
+        outbox.maxBackoff = TimeInterval(max(1, minutes)) * 60
     }
 
     // MARK: - Lifecycle
@@ -99,8 +143,8 @@ public final class CloudSyncEngine: ObservableObject {
         // engine dedupes pending changes.
         engine.state.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: zoneID))])
 
-        store.didPersist = { [weak self] in self?.enqueueLocalChanges() }
-        templates?.didPersist = { [weak self] in self?.enqueueLocalChanges() }
+        store.didPersist = { [weak self] in self?.scheduleEnqueue() }
+        templates?.didPersist = { [weak self] in self?.scheduleEnqueue() }
 
         status = .idle(lastSynced: lastSyncedDate())
         Task { [weak self] in
@@ -130,7 +174,14 @@ public final class CloudSyncEngine: ObservableObject {
         // settings landing within a minute worst-case instead of 15.
         fallbackTimer = Timer.scheduledTimer(withTimeInterval: 60,
                                              repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.fetchChanges() }
+            Task { @MainActor in
+                guard let self else { return }
+                self.fetchChanges()
+                // Re-arm ops whose backoff has now elapsed. Nothing persisted to
+                // trigger a fresh diff, so without this a failed push would only
+                // retry on the next unrelated edit.
+                if let engine = self.engine { self.submitReadyOutbox(to: engine) }
+            }
         }
     }
 
@@ -141,6 +192,13 @@ public final class CloudSyncEngine: ObservableObject {
         templates?.didPersist = nil
         fallbackTimer?.invalidate()
         fallbackTimer = nil
+        // Dropping a debounced diff on the floor loses nothing: the pending set
+        // is DERIVED from the rows and the shadow, both already on disk, so the
+        // next start() re-derives exactly the same work. That property is what
+        // makes debouncing safe at all — see scheduleEnqueue().
+        enqueueDebounce?.invalidate()
+        enqueueDebounce = nil
+        burstStartedAt = nil
         engine = nil
         status = .disabled
     }
@@ -149,6 +207,7 @@ public final class CloudSyncEngine: ObservableObject {
     /// the server has.
     public func syncNow() {
         guard let engine else { return }
+        // Explicit user intent — never make them wait out the debounce.
         enqueueLocalChanges()
         Task { [weak self] in
             do {
@@ -171,6 +230,10 @@ public final class CloudSyncEngine: ObservableObject {
     /// be reused against another's database.
     public func accountChanged() {
         database?.resetSyncState()
+        // The account change is the ONLY reset that clears the outbox: one
+        // person's pending pushes (including tombstones, which survive every
+        // other reset) must never replay into another's database.
+        outbox.reset()
         let wasRunning = engine != nil
         stop()
         if wasRunning { start() }
@@ -209,22 +272,78 @@ public final class CloudSyncEngine: ObservableObject {
 
     // MARK: - Local diff → pending changes
 
-    /// The didPersist hook: diff every synced collection against its shadow
-    /// and hand the result to the engine as pending changes. Runs after every
-    /// confirmed local save; the content hashes keep a whole-collection
-    /// rewrite from becoming a whole-collection upload.
-    private func enqueueLocalChanges() {
-        guard let engine, let database else { return }
-        var pending: [CKSyncEngine.PendingRecordZoneChange] = []
+    /// The didPersist hook: coalesce a burst of saves into ONE diff pass.
+    ///
+    /// Why this is needed: the store persists the whole collection on every
+    /// mutation, so typing a note fires didPersist per keystroke, and each one
+    /// used to cost a full `enqueueLocalChanges()` — five shadow SELECTs plus a
+    /// JSON-encode-and-SHA256 of every task, category, tag and focus-log entry
+    /// in the database, on the main actor, to discover that ONE record moved.
+    /// The diff is not wrong, just far too eager; a whole-collection rewrite
+    /// already can't become a whole-collection upload (that's what the content
+    /// hashes buy), but it could absolutely become a whole-collection re-hash.
+    ///
+    /// Why debouncing is safe here and would not be in a hand-maintained queue:
+    /// nothing is buffered in memory that isn't already on disk. The pending set
+    /// is a pure function of (rows, shadow), so a quit, crash, or power loss
+    /// mid-debounce loses no change — start() re-derives the identical set. The
+    /// only thing deferred is when we look.
+    ///
+    /// The cap matters: without it, a user typing steadily for two minutes would
+    /// reset the timer on every keystroke and push nothing for two minutes.
+    private func scheduleEnqueue() {
+        let now = Date()
+        if burstStartedAt == nil { burstStartedAt = now }
+        // Burst has run long enough — diff now and start a fresh window,
+        // rather than let the next keystroke defer it again.
+        if let start = burstStartedAt, now.timeIntervalSince(start) >= Self.enqueueDebounceCap {
+            enqueueLocalChanges()
+            return
+        }
+        enqueueDebounce?.invalidate()
+        enqueueDebounce = Timer.scheduledTimer(
+            withTimeInterval: Self.enqueueDebounceInterval, repeats: false
+        ) { [weak self] _ in
+            Task { @MainActor in self?.enqueueLocalChanges() }
+        }
+    }
 
+    /// Diff every synced collection against its shadow and hand the result to
+    /// the engine as pending changes. The content hashes keep a whole-collection
+    /// rewrite from becoming a whole-collection upload. Call directly only for
+    /// explicit intent (syncNow, start, post-merge); routine persists go through
+    /// `scheduleEnqueue()`.
+    private func enqueueLocalChanges() {
+        // Whatever prompted this pass, the current burst is now accounted for.
+        enqueueDebounce?.invalidate()
+        enqueueDebounce = nil
+        burstStartedAt = nil
+
+        guard let engine, let database else { return }
+        let now = Date()
+
+        // The shadow diff stays the source of truth for WHAT changed; each pass
+        // reconciles the outbox to it. A record that is dirty gets a queued op;
+        // a record whose queued .save is no longer dirty (a remote merge already
+        // overwrote it to match the shadow) has its op marked sent — there is
+        // nothing left to push, and leaving it would re-send stale content.
         func collect<T: SyncableRecord & Equatable>(_ type: SyncRecordType, _ local: [T]) {
             let diff = SyncShadow.diff(local: local,
                                        shadow: database.loadShadow(recordType: type.rawValue))
+            var dirty = Set<String>()
             for record in diff.created + diff.changed {
-                pending.append(.saveRecord(recordID(record.recordName)))
+                dirty.insert(record.recordName)
+                outbox.enqueue(recordType: type.rawValue,
+                               recordName: record.recordName, kind: .save, now: now)
             }
             for name in diff.deletedRecordNames {
-                pending.append(.deleteRecord(recordID(name)))
+                outbox.enqueue(recordType: type.rawValue,
+                               recordName: name, kind: .delete, now: now)
+            }
+            // Clean-again saves: a pending .save the diff no longer reports.
+            for op in outbox.ready(at: now)
+            where op.recordType == type.rawValue && op.kind == .save && !dirty.contains(op.recordName) {
+                outbox.markSent(op.key)
             }
         }
 
@@ -234,6 +353,19 @@ public final class CloudSyncEngine: ObservableObject {
         collect(.focusLog, store.focusLog)
         if let templates { collect(.template, templates.templates) }
 
+        submitReadyOutbox(to: engine, at: now)
+    }
+
+    /// Hands the engine every outbox op whose backoff has elapsed. CKSyncEngine
+    /// dedupes pending changes, so calling this from both the diff pass and the
+    /// fallback timer (which retries backed-off ops with no new persist to
+    /// trigger a diff) is safe.
+    private func submitReadyOutbox(to engine: CKSyncEngine, at now: Date = Date()) {
+        let pending: [CKSyncEngine.PendingRecordZoneChange] = outbox.ready(at: now).map { op in
+            op.kind == .delete
+                ? .deleteRecord(recordID(op.recordName))
+                : .saveRecord(recordID(op.recordName))
+        }
         guard !pending.isEmpty else { return }
         engine.state.add(pendingRecordZoneChanges: pending)
     }
@@ -346,6 +478,9 @@ public final class CloudSyncEngine: ObservableObject {
                 remoteTimer = nil
             }
             database?.deleteShadow(recordType: type.rawValue, recordName: name)
+            // The server already removed this record; any local .delete op for
+            // it has nothing left to do.
+            outbox.markSent(SyncOutbox.Key(recordType: type.rawValue, recordName: name))
         }
 
         if !tasks.isEmpty || !categories.isEmpty || !tags.isEmpty || !focus.isEmpty
@@ -404,6 +539,10 @@ public final class CloudSyncEngine: ObservableObject {
     private func handleSent(_ event: CKSyncEngine.Event.SentRecordZoneChanges) {
         for record in event.savedRecords {
             guard let type = SyncRecordType(rawValue: record.recordType) else { continue }
+            // The server confirmed this push — the ONLY place a save op leaves
+            // the queue on success.
+            outbox.markSent(SyncOutbox.Key(recordType: type.rawValue,
+                                           recordName: record.recordID.recordName))
             // The hash stored is of the payload the server acknowledged —
             // decoded back through the mapper so it is byte-for-byte the same
             // hash a later fetch of this record would produce.
@@ -420,15 +559,25 @@ public final class CloudSyncEngine: ObservableObject {
         }
         for recordID in event.deletedRecordIDs {
             // The confirmation carries no record type; clearing the name from
-            // every type's shadow is safe (names are namespaced by content —
-            // UUIDs, category names, focus-log triples).
+            // every type's shadow and queue is safe (names are namespaced by
+            // content — UUIDs, category names, focus-log triples).
             for type in SyncRecordType.allCases {
                 database?.deleteShadow(recordType: type.rawValue,
                                        recordName: recordID.recordName)
+                outbox.markSent(SyncOutbox.Key(recordType: type.rawValue,
+                                               recordName: recordID.recordName))
             }
         }
         for failure in event.failedRecordSaves {
             handleFailedSave(failure)
+        }
+        for recordID in event.failedRecordDeletes.keys {
+            // A delete that failed transiently must stay queued and back off,
+            // or the tombstone is lost and the record returns on the next fetch.
+            for type in SyncRecordType.allCases {
+                outbox.markFailed(SyncOutbox.Key(recordType: type.rawValue,
+                                                 recordName: recordID.recordName))
+            }
         }
         if !event.failedRecordDeletes.isEmpty {
             log.error("sync: \(event.failedRecordDeletes.count) record deletes failed")
@@ -463,7 +612,12 @@ public final class CloudSyncEngine: ObservableObject {
             engine?.state.add(pendingRecordZoneChanges: [.saveRecord(recordID)])
         default:
             // Transient errors (network, throttling, quota) are CKSyncEngine's
-            // to retry; log the rest rather than wedging the status.
+            // to retry; back the queue op off in step so a poison record cannot
+            // re-enter every batch at full speed, and log the rest.
+            if let type = SyncRecordType(rawValue: failure.record.recordType) {
+                outbox.markFailed(SyncOutbox.Key(recordType: type.rawValue,
+                                                 recordName: recordID.recordName))
+            }
             log.error("sync: save failed for \(recordID.recordName, privacy: .public): \(failure.error.localizedDescription, privacy: .public)")
         }
     }
@@ -615,6 +769,9 @@ extension CloudSyncEngine: CKSyncEngineDelegate {
                 enqueueLocalChanges()
             case .signOut:
                 database?.resetSyncState()
+                // Leaving one account for none is an account change too — the
+                // queue must not carry this user's pushes into the next signer.
+                outbox.reset()
                 status = .unavailable("Signed out of iCloud")
             case .switchAccounts:
                 // One person's shadow must never be merged into another's

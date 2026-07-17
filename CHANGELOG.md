@@ -5,75 +5,6 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
-## [1.12.0] — 2026-07-16
-
-### Added
-- **Custom board columns.** The Board tab's kanban is now fully customizable:
-  add, rename, reorder, hide and delete columns. Seeded with Today, This Week,
-  In Progress, Paused, Done and Cancelled; the built-in Done column completes a
-  task when you drag a card into it. Columns and each task's column sync across
-  Macs.
-- **Add new issues to the active sprint** (Settings → Integrations, opt-in):
-  when you convert a task to Jira, it also drops into the project's active
-  sprint.
-- **Switch board** button on the Jira sprint board, to re-pick which board a
-  multi-board project shows.
-
-### Notes
-- CloudKit: the new `boardColumnID` Task field must be promoted
-  dev→production in the CloudKit dashboard before a release syncs it.
-
-## [1.11.0] — 2026-07-16
-
-### Added
-- Converting a task to Jira now carries its **tags (as labels), due date and
-  estimate**, not just the title — and its **sub-tasks** become real Jira
-  sub-tasks under the new parent. The issue type follows the task instead of
-  always being "Task" (which also avoids a failure in projects with no Task
-  type).
-- **OAuth token broker** (optional, `broker/`): a tiny Cloudflare Worker that
-  holds the Atlassian client secret so a release can ship with **no secret in
-  the app**. When configured, token exchange and refresh go through the broker.
-
-## [1.10.0] — 2026-07-16
-
-### Added
-- **Sharingan board.** The Board section gains a middle **Board** tab: a
-  To Do / In Progress / Done kanban over your local tasks. Columns are derived
-  from task state (In Progress = the current focus task), so dragging a card
-  between columns just starts, completes, or reopens it — always reversible.
-
-### Changed
-- The **Jira** board tab now appears only when Jira is integrated; a
-  disconnected user sees just Weekly and Board.
-
-## [1.9.0] — 2026-07-16
-
-### Added
-- **Quick-add by key.** Type `jira SHRGN-5` in the task composer to pull that
-  issue in as a linked task (hierarchy, cache and merge all reused) instead of
-  creating a task literally named after the command.
-- **Push a whole category to Jira.** A category section header's "…" menu now
-  offers "Convert N tasks to Jira" — with a preview list of exactly which
-  titles will be created and which project they land in, behind a confirm.
-- **Custom JQL** (Advanced): replace the default sync query with your own saved
-  filter, label or sprint. Empty falls back to the project default.
-- **Smart notifications** (each toggleable): an issue newly assigned to you,
-  an issue due today, and the sprint ending within a day. The first sync is
-  silent and nothing nags twice.
-- Remembered **default board** so a multi-board project stops asking each time.
-
-### Changed
-- The Jira issue-key badge on task rows can be hidden (Settings → Integrations).
-- The sidebar's **Week** section is now **Board**, with two tabs: **Weekly**
-  (the 7-day planner, unchanged) and **Jira** (the sprint board, previously a
-  sheet opened from Tasks). The last-used tab is remembered; while Jira is
-  disconnected the tab shows a "Connect Jira in Settings" hint.
-- The Jira board button in the Tasks view bar now jumps to Board → Jira
-  instead of opening a sheet.
-
-## [1.7.0] — 2026-07-16
-
 ### Added
 - **Jira Cloud integration.** Connect with "Log in with Atlassian" (OAuth
   2.0 3LO — no password, tokens in the Keychain); pick your site and space.
@@ -84,21 +15,77 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
   into nested sub-tasks on the next sync.
 - Two-way sync (opt-in): local edits to a linked task queue and push back
   to Jira; a poll pulls Jira's side and drains the queue on its own clock.
-  Pull-only stays the default.
-- Move an issue's status from the task row's status chip — the workflow
-  transitions, applied straight to Jira (and its board).
-- Sprint board (mini-kanban) of your cards, drag a card between columns to
-  transition it.
-- Issue detail sheet: description, comments, full change history, worklogs
-  — without opening Jira. Post comments from here.
-- Each completed pomodoro on a linked task (or sub-task) logs a Jira
-  worklog; Jira reduces the remaining estimate itself.
-- Create a Jira issue from a local task; map each category to a project.
+  Pull-only stays the default. Move an issue's status from the task row's
+  status chip; each completed pomodoro on a linked task logs a Jira worklog.
+- Jira sprint board (mini-kanban) of your cards with drag-to-transition, a
+  remembered **default board** and a **Switch board** button; issue detail
+  sheet (description, comments, change history, worklogs — post comments
+  from here).
+- Create a Jira issue from a local task (carries tags as labels, due date,
+  estimate and sub-tasks; issue type follows the task); map each category to
+  a project; **push a whole category to Jira** behind a confirm preview;
+  optionally drop new issues into the project's **active sprint**.
+- **Quick-add by key.** Type `jira SHRGN-5` in the task composer to pull that
+  issue in as a linked task.
+- **Custom JQL** (Advanced) to replace the default sync query; **smart
+  notifications** (newly assigned, due today, sprint ending), each
+  toggleable.
+- **Sharingan board.** The sidebar's Week section is now **Board** with
+  Weekly, Board and Jira tabs. The Sharingan kanban has fully customizable
+  columns: add, rename, reorder, hide and delete (seeded Today / This Week /
+  In Progress / Paused / Done / Cancelled); the built-in Done column
+  completes a task dragged into it; columns and each task's column sync
+  across Macs.
+- **OAuth token broker** (optional, `broker/`): a tiny Cloudflare Worker that
+  holds the Atlassian client secret so a release ships with no secret in the
+  app.
 
 ### Changed
 - The task list renders lazily and reveals a page at a time (infinite
   scroll), so a large Jira import no longer freezes the window.
-- Destructive row actions (delete) moved behind an "…" menu everywhere.
+- The Jira board tab appears only when Jira is integrated; the issue-key
+  badge on task rows can be hidden (Settings → Integrations).
+
+### Notes
+- CloudKit: the new `boardColumnID` (and jira*) Task fields must be promoted
+  dev→production in the CloudKit dashboard before a release syncs them.
+
+## [1.7.0] — 2026-07-17
+
+### Added
+- Tasks carry a permanent issue number, shown as "T-42" everywhere a task
+  is named — notch, widget, menu bar, board, task list, report. It replaces
+  the UUID-derived short code that could collide; existing tasks are
+  backfilled oldest-first, and numbers are never reused or renumbered.
+- Trash for tasks: deleting soft-deletes with restore, permanent delete,
+  Empty Trash, and automatic retention purge on launch.
+- Projects: a second colour/icon-tagged axis alongside categories, managed
+  from the sidebar (add/rename/recolor/delete).
+- Due dates can carry an optional time of day.
+- Deadlines can read as a countdown ("2d 4h left") via a new setting; a
+  date-only due expires at the end of its day, matching the overdue rule.
+- Settings → iCloud sync gained "Retry at most every" (1–15 min) to cap
+  sync push retry backoff.
+
+### Changed
+- Board cards restyled Jira-like: flat surface, tight radius, a footer lane
+  with type square, task code, priority arrow, subtask count and estimate
+  pill; the deadline gets its own row. Cards size themselves instead of
+  stretching, so long titles no longer spill across neighbouring columns.
+- iCloud pushes go through a durable per-record outbox with tombstones that
+  survive shadow resets, with exponential-backoff retry.
+
+### Fixed
+- Saving task templates wiped every template from the database on the next
+  launch: the post-save prune matched template *names* against UUID keys and
+  deleted all rows. Templates now prune by their UUID column.
+- Sync retry backoff never actually reached its documented 5-minute
+  ceiling; the cap is applied (and now configurable).
+- The break overlay respects "Auto-start break", and the task picker is
+  shown after a break whenever "Auto-start focus" is off.
+- A menu-bar icon that AppKit parked off-screen at the bottom-left corner
+  (no slot found) stayed invisible for good; that case is now detected and
+  repaired alongside the behind-the-notch one.
 
 ## [1.6.1] — 2026-07-15
 

@@ -1044,7 +1044,10 @@ public final class JiraService: ObservableObject, JiraPomodoroHooks {
                     imported += 1
                 }
                 for absorbedID in nested.absorbedTaskIDs {
-                    taskStore.delete(absorbedID)
+                    // The flat twin's progress just transferred into the nested
+                    // subtask — it's a duplicate, not user data, so it skips the
+                    // Trash (delete() would only soft-delete it).
+                    taskStore.deletePermanently(absorbedID)
                 }
 
                 issueCache?.upsertIssue(JiraFieldMapper.snapshot(from: parentIssue, siteHost: host))

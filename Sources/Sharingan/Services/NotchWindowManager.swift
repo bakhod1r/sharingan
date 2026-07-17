@@ -619,10 +619,12 @@ private final class NotchHostingView<Content: View>: NSHostingView<Content> {
     override func mouseMoved(with event: NSEvent) {
         guard let model else { return }
         let local = convert(event.locationInWindow, from: nil)
-        // Hovering the *island* opens it; hovering the expanded body keeps it open.
-        let inside = NotchGeometry.hitTest(geometryPoint(local), metrics: model.metrics,
-                                           size: model.state.size,
-                                           config: model.config)
+        // Hovering the *island* opens it; hovering the expanded body keeps it
+        // open. `hoverContains` is forgiving at the expanded edges so the panel
+        // doesn't jitter when the pointer rests near the silhouette shoulders.
+        let inside = NotchGeometry.hoverContains(geometryPoint(local), metrics: model.metrics,
+                                                 size: model.state.size,
+                                                 config: model.config)
         NotchWindowManager.shared.pointerMoved(inside: inside)
     }
 

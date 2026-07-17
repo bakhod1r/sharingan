@@ -99,19 +99,24 @@ public enum ReportSortMode: String, CaseIterable, Identifiable, Sendable {
 public enum FocusReport {
     /// Task-level rows for one day's entries, minutes-descending, each with
     /// its subtask entries attached. `tasks` is the live list used to resolve
-    /// done state and category; a missing task marks the row deleted.
+    /// done state and category.
+    ///
+    /// A task that has been deleted (no longer in `tasks`) or moved to the Trash
+    /// is dropped from the report entirely — a stray "deleted" orphan row is
+    /// noise, not history the user asked to keep here.
     public static func rows(entries: [FocusLogEntry], tasks: [TaskItem]) -> [FocusReportRow] {
         entries.filter { $0.subtaskID == nil }
             .sorted { $0.seconds > $1.seconds }
-            .map { e in
-                let live = tasks.first { $0.id == e.taskID }
+            .compactMap { e -> FocusReportRow? in
+                guard let live = tasks.first(where: { $0.id == e.taskID }),
+                      !live.isTrashed else { return nil }
                 let subs = entries
                     .filter { $0.taskID == e.taskID && $0.subtaskID != nil }
                     .sorted { $0.seconds > $1.seconds }
                 return FocusReportRow(entry: e, subrows: subs,
-                                      isDone: live?.isDone ?? false,
-                                      isDeleted: live == nil,
-                                      category: live?.category)
+                                      isDone: live.isDone,
+                                      isDeleted: false,
+                                      category: live.category)
             }
     }
 

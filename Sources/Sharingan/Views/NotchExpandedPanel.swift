@@ -354,7 +354,7 @@ struct NotchExpandedPanel: View {
         // `setActive` (not a raw write to `activeTaskID`) so a stale focused
         // subtask from another task is cleared, and `resolvedActiveKind` so a
         // task whose focused subtask asks for a short pomodoro gets one.
-        tasks.setActive(task.id)
+        tasks.selectFocusTarget(task.id)
         timer.startFocusSession(kind: tasks.resolvedActiveKind)
     }
 

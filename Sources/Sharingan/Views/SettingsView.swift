@@ -357,9 +357,6 @@ struct SettingsView: View {
                         GlassSegmentedPicker(selection: $settings.dockWidgetSize,
                                              cases: FloatingWidgetSize.allCases) { $0.label }
 
-                        GlassSegmentedPicker(selection: $settings.dockWidgetAlignment,
-                                             cases: FloatingWidgetAlignment.allCases) { $0.label }
-
                         ToggleRow(title: "Expand on hover",
                                   isOn: $settings.dockWidgetExpandOnHover)
                         Text("Rests compact — ring and time only — and springs open under the pointer, like the Dock's now-playing widgets.")
@@ -977,6 +974,25 @@ struct SettingsView: View {
                     ToggleRow(title: "Show pomodoro badges",
                               isOn: $settings.showPomodoroBadges)
                     Text("The 🍅 done/estimate chips on task and subtask rows.")
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.6))
+                    ToggleRow(title: "Deadlines as countdown",
+                              isOn: $settings.deadlineAsCountdown)
+                    Text(settings.deadlineAsCountdown
+                         ? "Board cards count down to the deadline — “2d 4h left”."
+                         : "Board cards show the deadline itself — “Fri 14:30”.")
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+
+                Section("Trash") {
+                    StepperRow(title: "Auto-delete after",
+                               value: $settings.trashRetentionDays,
+                               unit: settings.trashRetentionDays == 1 ? "day" : "days",
+                               range: 0...365)
+                    Text(settings.trashRetentionDays == 0
+                         ? "Deleted tasks stay in the Trash until you remove them by hand."
+                         : "Deleted tasks are permanently removed \(settings.trashRetentionDays) day\(settings.trashRetentionDays == 1 ? "" : "s") after they land in the Trash. Set to 0 to keep them forever.")
                         .font(.system(.caption2, design: .rounded))
                         .foregroundStyle(.white.opacity(0.6))
                 }

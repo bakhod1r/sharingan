@@ -31,6 +31,9 @@ struct TasksView: View {
     @State private var newEstimate = 0
     @State private var newRecurrence: Recurrence = .none
     @State private var newProject = ""
+    /// Inline "new project" name form under the composer's project picker.
+    @State private var showNewProject = false
+    @State private var newProjectName = ""
     @State private var newNotes = ""
     @State private var newPriority: TaskPriority = .none
     /// Pomodoro length override for the new task; nil means Auto (settings default).
@@ -53,6 +56,8 @@ struct TasksView: View {
     @State private var jiraPushCategory: JiraPushCategory?
     /// Last push result per category, shown next to that section's label.
     @State private var jiraPushStatus: [String: String] = [:]
+    /// Task shown in the docked side panel (main window only, `embeddedInScroll`).
+    @State private var detailTask: TaskItem?
     /// Task being snoozed via "Pick date…" (nil = closed).
     @State private var snoozeTask: TaskItem?
     @State private var snoozeDate = Date()
@@ -65,6 +70,14 @@ struct TasksView: View {
     @State private var templateRenameText = ""
     /// Done view "Clear" asks before deleting permanently.
     @State private var confirmClearCompleted = false
+    /// Task queued for the "move to Trash?" confirmation (nil = no prompt).
+    @State private var pendingDeleteTask: TaskItem?
+    /// Task queued for the Trash's "delete forever?" confirmation.
+    @State private var pendingPurgeTask: TaskItem?
+    /// Whether the collapsible Trash section is expanded.
+    @State private var showTrash = false
+    /// Empty-Trash confirmation.
+    @State private var confirmEmptyTrash = false
     /// Bulk import sheet — paste Markdown/JSON, or a dropped file's contents.
     @State private var showImportSheet = false
     @State private var importText = ""
@@ -106,8 +119,10 @@ struct TasksView: View {
     @FocusState private var searchFocused: Bool
     /// Sidebar deep-link narrowing — at most one is active at a time.
     @State private var categoryFilter: String?
+    @State private var projectFilter: String?
     @State private var tagFilter: String?
     @State private var priorityFilter: TaskPriority?
+    @State private var deviceFilter: String?
     /// Row being flash-highlighted after a reveal deep-link (see `AppRouter.
     /// revealTask`) — cleared a couple of seconds after the scroll lands.
     @State private var revealedTaskID: UUID?
@@ -116,36 +131,61 @@ struct TasksView: View {
     private var newCategoryAccent: Color { Color(hex: store.color(for: newCategory)) }
 
     var body: some View {
-        VStack(spacing: 12) {
-            composer
+        HStack(spacing: 16) {
+            VStack(spacing: 12) {
+                composer
 
-            if store.tasks.isEmpty {
-                emptyState
-            } else {
-                viewBar
-                if showEisenhower {
-                    let matrix = EisenhowerView(timer: timer) { editorTask = $0 }
-                    if embeddedInScroll {
-                        matrix
-                    } else {
-                        ScrollView { matrix.padding(.vertical, 2) }
-                            .frame(height: 320)
-                    }
+                if store.tasks.isEmpty {
+                    emptyState
                 } else {
-                    narrowFilterChip
-                    let groups = narrowed(store.grouped(filter: filter, search: search,
-                                                        sort: sortMode))
-                    if groups.isEmpty {
-                        noResults
-                    } else if embeddedInScroll {
-                        taskList(groups)
+                    viewBar
+                    if showEisenhower {
+                        let matrix = EisenhowerView(timer: timer) { editorTask = $0 }
+                        if embeddedInScroll {
+                            matrix
+                        } else {
+                            ScrollView { matrix.padding(.vertical, 2) }
+                                .frame(height: 320)
+                        }
                     } else {
-                        ScrollView { taskList(groups).padding(.vertical, 2) }
-                            .frame(height: 320)
+                        narrowFilterChip
+                        let groups = narrowed(store.grouped(filter: filter, search: search,
+                                                            sort: sortMode))
+                        if groups.isEmpty {
+                            noResults
+                        } else if embeddedInScroll {
+                            ScrollView { taskList(groups).padding(.vertical, 2) }
+                        } else {
+                            ScrollView { taskList(groups).padding(.vertical, 2) }
+                                .frame(height: 320)
+                        }
                     }
                 }
             }
+            .frame(maxWidth: .infinity)
+
+            // Docked detail panel (main window only) — the row's chevron.right
+            // or "Edit…" opens it; the list stays visible beside it, no scrim.
+            if embeddedInScroll, let task = store.tasks.first(where: { $0.id == detailTask?.id }) {
+                Divider().overlay(Color.white.opacity(0.1)).padding(.vertical, 8)
+                TaskEditorView(task: task,
+                               accent: timer.settings.theme.accent,
+                               settings: timer.settings,
+                               presentation: .docked,
+                               onClose: { withAnimation(DS.Motion.panel) { detailTask = nil } })
+                    // The editor seeds its `draft` @State in init, so switching
+                    // rows has to give it a new identity — otherwise the panel
+                    // keeps showing the first task it was opened with.
+                    .id(task.id)
+                    .frame(width: 380)
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .trailing)
+                            .combined(with: .opacity)
+                            .combined(with: .scale(scale: 0.97, anchor: .trailing)),
+                        removal: .move(edge: .trailing).combined(with: .opacity)))
+            }
         }
+        .animation(DS.Motion.panel, value: detailTask?.id)
         .sheet(item: $editorTask) { task in
             TaskEditorView(task: task,
                            accent: timer.settings.theme.accent,
@@ -185,9 +225,46 @@ struct TasksView: View {
             let n = store.count(.completed)
             Text("This permanently deletes \(n) completed task\(n == 1 ? "" : "s").")
         }
+        .alert("Delete this task?", isPresented: Binding(
+            get: { pendingDeleteTask != nil },
+            set: { if !$0 { pendingDeleteTask = nil } })) {
+            Button("Move to Trash", role: .destructive) {
+                if let t = pendingDeleteTask {
+                    withAnimation(DS.Motion.standard) {
+                        queue.remove(t.id)
+                        store.delete(t.id)
+                    }
+                }
+                pendingDeleteTask = nil
+            }
+            Button("Cancel", role: .cancel) { pendingDeleteTask = nil }
+        } message: {
+            Text(pendingDeleteTask.map { "“\($0.title)” moves to Trash — you can restore it from there." } ?? "")
+        }
+        .alert("Delete forever?", isPresented: Binding(
+            get: { pendingPurgeTask != nil },
+            set: { if !$0 { pendingPurgeTask = nil } })) {
+            Button("Delete forever", role: .destructive) {
+                if let t = pendingPurgeTask { withAnimation { store.deletePermanently(t.id) } }
+                pendingPurgeTask = nil
+            }
+            Button("Cancel", role: .cancel) { pendingPurgeTask = nil }
+        } message: {
+            Text(pendingPurgeTask.map { "“\($0.title)” will be gone for good. This can't be undone." } ?? "")
+        }
+        .alert("Empty Trash?", isPresented: $confirmEmptyTrash) {
+            Button("Delete \(store.trashedTasks.count) forever", role: .destructive) {
+                withAnimation { store.emptyTrash() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            let n = store.trashedTasks.count
+            Text("This permanently deletes \(n) task\(n == 1 ? "" : "s") in the Trash.")
+        }
         .onAppear(perform: consumeDeepLink)
         .onChange(of: router.pendingTaskFilter) { consumeDeepLink() }
         .onChange(of: router.pendingTaskCategory) { consumeDeepLink() }
+        .onChange(of: router.pendingTaskProject) { consumeDeepLink() }
         .onChange(of: router.pendingTaskTag) { consumeDeepLink() }
         .onChange(of: router.pendingTaskPriority) { consumeDeepLink() }
         .onChange(of: router.focusTaskSearch) { consumeDeepLink() }
@@ -202,13 +279,15 @@ struct TasksView: View {
             filter = f
             router.pendingTaskFilter = nil
         }
-        if router.pendingTaskCategory != nil || router.pendingTaskTag != nil
-            || router.pendingTaskPriority != nil {
+        if router.pendingTaskCategory != nil || router.pendingTaskProject != nil
+            || router.pendingTaskTag != nil || router.pendingTaskPriority != nil {
             categoryFilter = router.pendingTaskCategory
+            projectFilter = router.pendingTaskProject
             tagFilter = router.pendingTaskTag
             priorityFilter = router.pendingTaskPriority
             if filter == .completed { filter = .all }
             router.pendingTaskCategory = nil
+            router.pendingTaskProject = nil
             router.pendingTaskTag = nil
             router.pendingTaskPriority = nil
         }
@@ -225,7 +304,8 @@ struct TasksView: View {
             // the search, the sidebar narrowing and the matrix, and land on the
             // smart view that actually contains the task (Done for completed).
             search = ""
-            categoryFilter = nil; tagFilter = nil; priorityFilter = nil
+            categoryFilter = nil; projectFilter = nil; tagFilter = nil; priorityFilter = nil
+            deviceFilter = nil
             showEisenhower = false
             let isDone = store.tasks.first { $0.id == id }?.isDone ?? false
             filter = isDone ? .completed : .all
@@ -243,14 +323,17 @@ struct TasksView: View {
     /// groups that end up empty.
     private func narrowed(_ groups: [(category: String, items: [TaskItem])])
         -> [(category: String, items: [TaskItem])] {
-        guard categoryFilter != nil || tagFilter != nil || priorityFilter != nil else {
+        guard categoryFilter != nil || projectFilter != nil
+            || tagFilter != nil || priorityFilter != nil || deviceFilter != nil else {
             return groups
         }
         return groups.compactMap { g in
             if let c = categoryFilter, g.category != c { return nil }
             var items = g.items
+            if let pr = projectFilter { items = items.filter { $0.project == pr } }
             if let t = tagFilter { items = items.filter { $0.tags.contains(t) } }
             if let p = priorityFilter { items = items.filter { $0.priority == p } }
+            if let d = deviceFilter { items = items.filter { $0.originDevice == d } }
             return items.isEmpty ? nil : (g.category, items)
         }
     }
@@ -277,12 +360,14 @@ struct TasksView: View {
         return (out, total > revealLimit)
     }
 
-    /// "Filtered by …" pill (category / tag / priority) with a clear button.
+    /// "Filtered by …" pill (category / project / tag / priority) with a clear button.
     @ViewBuilder
     private var narrowFilterChip: some View {
-        if categoryFilter != nil || tagFilter != nil || priorityFilter != nil {
+        if categoryFilter != nil || projectFilter != nil
+            || tagFilter != nil || priorityFilter != nil {
             let (symbol, label, tint): (String, String, Color) = {
                 if let c = categoryFilter { return ("#", c, Color(hex: store.color(for: c))) }
+                if let pr = projectFilter { return ("▤", pr, Color(hex: store.projectColor(pr))) }
                 if let t = tagFilter { return ("@", t, .accentColor) }
                 if let p = priorityFilter {
                     return ("⚑", timer.settings.priorityName(p),
@@ -298,7 +383,8 @@ struct TasksView: View {
                     .font(.system(.caption, design: .rounded).weight(.semibold))
                 Button {
                     withAnimation(DS.Motion.gentle) {
-                        categoryFilter = nil; tagFilter = nil; priorityFilter = nil
+                        categoryFilter = nil; projectFilter = nil
+                        tagFilter = nil; priorityFilter = nil
                     }
                 } label: {
                     Image(systemName: "xmark.circle.fill")
@@ -331,7 +417,17 @@ struct TasksView: View {
                     ForEach(doneGroups(groups), id: \.label) { group in
                         doneSectionHeader(group.label, count: group.items.count)
                         ForEach(group.items) { task in
-                            row(task).id(task.id)   // scroll anchor for reveal deep-links
+                            VStack(spacing: 4) {
+                                row(task)
+                                // Completed rows expand their subtask/notes panel
+                                // too — the chevron on the row toggles `expanded`,
+                                // so Done must render the panel just like the open
+                                // sections do.
+                                if expanded.contains(task.id) {
+                                    subtaskPanel(task)
+                                }
+                            }
+                            .id(task.id)   // scroll anchor for reveal deep-links
                         }
                     }
                 } else {
@@ -346,6 +442,9 @@ struct TasksView: View {
                             .transition(.opacity)
                     }
                 }
+                // Trash lives in the full main window only — the menu-bar popover
+                // stays lean (it's the combined focus + task list now).
+                if embeddedInScroll { trashSection }
             }
             // Both hooks matter: onChange for a reveal that arrives while the
             // list is on screen, onAppear for one consumed before it was (the
@@ -527,7 +626,8 @@ struct TasksView: View {
             TaskFilterMenuItems(store: store, settings: timer.settings,
                                 categoryFilter: $categoryFilter,
                                 tagFilter: $tagFilter,
-                                priorityFilter: $priorityFilter)
+                                priorityFilter: $priorityFilter,
+                                deviceFilter: $deviceFilter)
         } label: {
             Image(systemName: isNarrowed
                   ? "line.3.horizontal.decrease.circle.fill"
@@ -582,19 +682,26 @@ struct TasksView: View {
     }
 
     private var searchField: some View {
-        HStack(spacing: 6) {
+        // The field lit up: it was near-invisible at rest, so clicking it (or the
+        // sidebar "Search", which focuses it) gave no feedback. Focus now paints
+        // an accent ring, a stronger fill, and an accent glyph so it clearly
+        // "wakes up", and the field is a touch taller/rounder to read as a real
+        // search bar rather than a faint strip.
+        let active = searchFocused || !search.isEmpty
+        let accent = timer.settings.theme.accent
+        return HStack(spacing: 7) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Color.dsTertiary)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(active ? accent : Color.dsTertiary)
             TextField("Search tasks", text: $search)
                 .textFieldStyle(.plain)
-                .font(.system(.caption, design: .rounded))
+                .font(.system(.callout, design: .rounded))
                 .foregroundStyle(.white)
                 .focused($searchFocused)
             if !search.isEmpty {
                 Button { search = "" } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 11))
+                        .font(.system(size: 12))
                         .foregroundStyle(Color.dsTertiary)
                         .contentShape(Rectangle())
                 }
@@ -602,9 +709,14 @@ struct TasksView: View {
                 .accessibilityLabel("Clear search")
             }
         }
-        .padding(.horizontal, 10).padding(.vertical, 6)
+        .padding(.horizontal, 11).padding(.vertical, 8)
         .frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous).fill(Color.dsFill))
+        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+            .fill(active ? Color.dsFillStrong : Color.dsFill))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+            .stroke(searchFocused ? accent.opacity(0.8) : Color.clear, lineWidth: 1.5))
+        .animation(DS.Motion.standard, value: active)
+        .animation(DS.Motion.standard, value: searchFocused)
     }
 
     // MARK: - Focus queue
@@ -936,7 +1048,11 @@ struct TasksView: View {
                         .buttonStyle(.pressableSubtle)
                         .foregroundStyle(Color.red.opacity(0.9))
                     Spacer()
-                    Button("Set") { hasDue = true; showCustomDue = false }
+                    Button("Set") {
+                        // Picking a day sets a date-only due (no time of day).
+                        newDue = DueDate.dateOnly(newDue)
+                        hasDue = true; showCustomDue = false
+                    }
                         .keyboardShortcut(.defaultAction)
                 }
             }
@@ -961,13 +1077,15 @@ struct TasksView: View {
     }
 
     /// `days` from now at 9:00 AM.
+    // Quick-pick due dates are date-only (start of day) — the time of day is
+    // optional and only quick-add ("5pm") sets one.
     private func dueAt(daysFromNow days: Int) -> Date {
         let cal = Calendar.current
         let base = cal.date(byAdding: .day, value: days, to: Date()) ?? Date()
-        return cal.date(bySettingHour: 9, minute: 0, second: 0, of: base) ?? base
+        return cal.startOfDay(for: base)
     }
 
-    /// The coming Saturday (today if it's already Saturday) at 9:00 AM.
+    /// The coming Saturday (today if it's already Saturday), date-only.
     private func upcomingWeekend() -> Date {
         let cal = Calendar.current
         var d = Date()
@@ -975,10 +1093,10 @@ struct TasksView: View {
             if cal.component(.weekday, from: d) == 7 { break }   // 7 = Saturday
             d = cal.date(byAdding: .day, value: 1, to: d) ?? d
         }
-        return cal.date(bySettingHour: 9, minute: 0, second: 0, of: d) ?? d
+        return cal.startOfDay(for: d)
     }
 
-    /// The next Monday (never today) at 9:00 AM.
+    /// The next Monday (never today), date-only.
     private func nextMonday() -> Date {
         let cal = Calendar.current
         var d = cal.date(byAdding: .day, value: 1, to: Date()) ?? Date()
@@ -986,7 +1104,7 @@ struct TasksView: View {
             if cal.component(.weekday, from: d) == 2 { break }   // 2 = Monday
             d = cal.date(byAdding: .day, value: 1, to: d) ?? d
         }
-        return cal.date(bySettingHour: 9, minute: 0, second: 0, of: d) ?? d
+        return cal.startOfDay(for: d)
     }
 
     /// The category picker chip, reused in the primary row.
@@ -1078,7 +1196,7 @@ struct TasksView: View {
             }
 
             tagEditor
-            fieldBox { TextField("project", text: $newProject) }
+            projectPicker
 
             fieldBox {
                 TextField("notes (optional)", text: $newNotes, axis: .vertical)
@@ -1285,6 +1403,75 @@ struct TasksView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
                 .fill(Color.white.opacity(0.05)))
+    }
+
+    // MARK: - Project picker
+
+    /// Selectable project menu — projects are a registry like categories, not
+    /// free text. Offers every known project (colour dot + name), "No project",
+    /// and an inline "New project…" name field.
+    private var projectPicker: some View {
+        HStack(spacing: 8) {
+            Menu {
+                Button {
+                    newProject = ""
+                } label: {
+                    Label("No project", systemImage: newProject.isEmpty ? "checkmark" : "slash.circle")
+                }
+                if !store.allProjects.isEmpty { Divider() }
+                ForEach(store.allProjects) { p in
+                    Button {
+                        newProject = p.name
+                    } label: {
+                        Label(p.name, systemImage: newProject == p.name ? "checkmark" : p.icon)
+                    }
+                }
+                Divider()
+                Button { showNewProject = true } label: {
+                    Label("New project…", systemImage: "plus")
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: newProject.isEmpty ? "square.stack.3d.up"
+                                                         : store.projectIcon(newProject))
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(newProject.isEmpty ? Color.dsSecondary
+                                         : Color(hex: store.projectColor(newProject)))
+                    Text(newProject.isEmpty ? "Project" : newProject)
+                        .font(.system(.caption, design: .rounded).weight(.semibold))
+                        .foregroundStyle(newProject.isEmpty ? Color.dsSecondary : .white)
+                    Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(Color.dsTertiary)
+                }
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .background(Capsule().fill(Color.white.opacity(0.06)))
+                .contentShape(Capsule())
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .help("Assign a project")
+
+            if showNewProject {
+                fieldBox {
+                    TextField("New project name", text: $newProjectName)
+                        .onSubmit(commitNewProject)
+                }
+                Button("Add", action: commitNewProject)
+                    .buttonStyle(.pressableSubtle)
+                    .font(.system(.caption, design: .rounded).weight(.semibold))
+                    .disabled(newProjectName.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func commitNewProject() {
+        guard let name = store.addProject(name: newProjectName,
+                                          colorHex: TaskCategory.palette[
+                                            store.allProjects.count % TaskCategory.palette.count])
+        else { return }
+        newProject = name
+        newProjectName = ""
+        showNewProject = false
     }
 
     // MARK: - Tag editor
@@ -1697,6 +1884,95 @@ struct TasksView: View {
         .id(task.id)   // scroll anchor for reveal deep-links
     }
 
+    /// Collapsible Trash bucket, pinned below the lists. Hidden when empty.
+    /// Expands to show soft-deleted tasks, each with Restore and Delete-forever;
+    /// a header "Empty" purges the lot (after a confirm).
+    @ViewBuilder
+    private var trashSection: some View {
+        let trashed = store.trashedTasks
+        if !trashed.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Button {
+                        withAnimation(DS.Motion.gentle) { showTrash.toggle() }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "trash")
+                                .font(.system(size: 10, weight: .semibold))
+                            Text("Trash").dsSectionLabel()
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 8, weight: .bold))
+                                .rotationEffect(.degrees(showTrash ? 0 : -90))
+                        }
+                        .foregroundStyle(Color.dsSecondary)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.pressableSubtle)
+                    Spacer()
+                    Text("\(trashed.count)")
+                        .font(.system(.caption2, design: .rounded).weight(.bold).monospacedDigit())
+                        .foregroundStyle(Color.dsSecondary)
+                        .padding(.horizontal, 7).padding(.vertical, 2)
+                        .background(Capsule().fill(Color.white.opacity(0.06)))
+                    if showTrash {
+                        Button { confirmEmptyTrash = true } label: {
+                            Text("Empty")
+                                .font(.system(.caption2, design: .rounded).weight(.semibold))
+                                .foregroundStyle(Color.red.opacity(0.8))
+                        }
+                        .buttonStyle(.pressableSubtle)
+                        .help("Delete every trashed task permanently")
+                    }
+                }
+                if showTrash {
+                    ForEach(trashed) { task in trashRow(task) }
+                }
+            }
+            .padding(.top, 4)
+        }
+    }
+
+    /// One row in the Trash — dimmed title, Restore, and Delete-forever.
+    private func trashRow(_ task: TaskItem) -> some View {
+        HStack(spacing: 11) {
+            Image(systemName: "trash")
+                .font(.system(size: 13))
+                .foregroundStyle(Color.dsTertiary)
+                .frame(width: 24, height: 24)
+            Text(task.title)
+                .font(.system(.callout, design: .rounded).weight(.medium))
+                .foregroundStyle(Color.dsSecondary)
+                .lineLimit(1)
+            Spacer(minLength: 6)
+            Button { withAnimation(DS.Motion.standard) { store.restore(task.id) } } label: {
+                Label("Restore", systemImage: "arrow.uturn.backward")
+                    .labelStyle(.iconOnly)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.dsSecondary)
+                    .frame(width: 26, height: 26)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.pressableSubtle)
+            .help("Restore this task")
+            .accessibilityLabel("Restore \(task.title)")
+            Button { pendingPurgeTask = task } label: {
+                Image(systemName: "trash.slash")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.red.opacity(0.75))
+                    .frame(width: 26, height: 26)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.pressableSubtle)
+            .help("Delete permanently")
+            .accessibilityLabel("Delete \(task.title) permanently")
+        }
+        .padding(.leading, 14).padding(.trailing, 12).padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .fill(Color.dsFill.opacity(0.5))
+        )
+    }
+
     /// Slim controls row atop an expanded panel (only for multi-step tasks):
     /// step progress, then quiet sort / filter menus. The sort preference is
     /// shared with the picker's step rows; the filter applies to every panel.
@@ -1848,69 +2124,82 @@ struct TasksView: View {
     /// priority own their color channels; tags stay neutral so nothing competes.
     @ViewBuilder
     private func metaRow(_ task: TaskItem) -> some View {
-        let hasMeta = !task.tags.isEmpty || task.dueDate != nil
-            || task.recurrence != .none || task.project != nil
-            || task.subtaskProgress.total > 0 || task.priority != .none
-            || task.pomodoroKind != nil || task.isJiraLinked
+        // Only the essentials belong on the row — due date, priority, subtask
+        // progress. Tags, project, recurrence and pomodoro-kind live in the task
+        // editor; crowding them onto the row is what forced the ugly truncation.
+        let hasMeta = task.dueDate != nil
+            || task.priority != .none
+            || task.subtaskProgress.total > 0
+            || task.isPlannedToday()
+            || task.isJiraLinked
         if hasMeta {
-            HStack(spacing: 7) {
-                // Leads the row: the key answers "where did this come from"
-                // before anything else on the line.
-                if let key = task.jiraKey, task.isJiraLinked {
-                    JiraIssueBadge(key: key, issueType: task.jiraIssueType)
-                    JiraStatusChip(task: task)
+            // A horizontal ScrollView keeps the chips' combined width from
+            // propagating up and widening the row past the popover (a plain
+            // `.fixedSize()` HStack did exactly that and clipped both edges); the
+            // chips stay `.fixedSize()` so nothing truncates mid-label.
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 7) {
+                    // Leads the row: the key answers "where did this come from"
+                    // before anything else on the line.
+                    if let key = task.jiraKey, task.isJiraLinked {
+                        JiraIssueBadge(key: key, issueType: task.jiraIssueType)
+                            .fixedSize()
+                        JiraStatusChip(task: task)
+                            .fixedSize()
+                    }
+                    if let due = task.dueDate {
+                        Label(dueText(due), systemImage: "calendar")
+                            .foregroundStyle(task.isOverdue() ? Color.red : Color.dsSecondary)
+                            .fixedSize()
+                    }
+                    if task.priority != .none, let hex = timer.settings.priorityColorHex(task.priority) {
+                        Label(timer.settings.priorityShortLabel(task.priority), systemImage: "flag.fill")
+                            .foregroundStyle(Color(hex: hex))
+                            .fixedSize()
+                    }
+                    if task.subtaskProgress.total > 0 {
+                        SubtaskProgressBadge(task.subtaskProgress).fixedSize()
+                    }
+                    if task.isPlannedToday() {
+                        Image(systemName: "sun.max.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.orange)
+                            .fixedSize()
+                            .help("On today's plan")
+                    }
                 }
-                if let due = task.dueDate {
-                    Label(dueText(due), systemImage: "calendar")
-                        .foregroundStyle(task.isOverdue() ? Color.red : Color.dsSecondary)
-                }
-                if task.priority != .none, let hex = timer.settings.priorityColorHex(task.priority) {
-                    Label(timer.settings.priorityShortLabel(task.priority), systemImage: "flag.fill")
-                        .foregroundStyle(Color(hex: hex))
-                }
-                ForEach(task.tags.prefix(2), id: \.self) { t in
-                    TaskTag(tag: t,
-                            tint: timer.settings.tagColorHex(t).map { Color(hex: $0) })
-                }
-                if task.tags.count > 2 { TaskTagOverflow(count: task.tags.count - 2) }
-                if task.subtaskProgress.total > 0 {
-                    SubtaskProgressBadge(task.subtaskProgress)
-                }
-                if task.recurrence != .none {
-                    Image(systemName: "repeat")
-                        .foregroundStyle(Color.dsTertiary)
-                        .help(task.recurrence.label)
-                }
-                if let project = task.project {
-                    Label(project, systemImage: "folder")
-                        .foregroundStyle(Color.dsTertiary)
-                }
-                if let kind = task.pomodoroKind {
-                    Label(kind.label, systemImage: kind.systemImage)
-                        .foregroundStyle(Color.dsTertiary)
-                }
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .lineLimit(1)
             }
-            .font(.system(size: 10, weight: .semibold, design: .rounded))
-            .lineLimit(1)
-            .truncationMode(.tail)
+            .scrollDisabled(true)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, 1)
         }
     }
 
-    /// One icon in the hover action pill (edit / delete).
-    private func rowActionButton(_ icon: String, _ help: String,
-                                 danger: Bool = false,
-                                 action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(danger ? Color.red.opacity(0.75) : Color.dsSecondary)
-                .frame(width: 24, height: 24)
+    /// The row's vertical "⋮" overflow menu — the full task action list, the
+    /// same items as the right-click context menu. Delete routes through the
+    /// "move to Trash?" confirmation rather than acting immediately.
+    private func rowMenu(_ task: TaskItem) -> some View {
+        Menu {
+            rowMenuItems(task)
+        } label: {
+            // A borderless Menu's label is rendered by AppKit, which only picks
+            // up Text and Image: Shape-drawn dots come out blank, a rotated
+            // `ellipsis` loses its rotation, and a clear label leaves nothing
+            // to click. The U+22EE character is real text, so it draws vertical
+            // and carries a hit area.
+            Text("⋮")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(Color.dsSecondary)
+                .frame(width: 16, height: 24)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.pressableSubtle)
-        .help(help)
-        .accessibilityLabel(help)
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("More actions")
+        .accessibilityLabel("More actions for \(task.title)")
     }
 
     private func row(_ task: TaskItem) -> some View {
@@ -1946,16 +2235,30 @@ struct TasksView: View {
                         .onExitCommand { editingTaskID = nil; editFocused = false }
                         .onAppear { editFocused = true }
                 } else {
-                    Text(task.title)
-                        .font(.system(.callout, design: .rounded).weight(.semibold))
-                        .strikethrough(task.isDone, color: .dsTertiary)
-                        .foregroundStyle(task.isDone ? Color.dsTertiary : Color.dsPrimary)
-                        .lineLimit(1)
-                        .onTapGesture(count: 2) { beginEdit(task) }
+                    HStack(spacing: 6) {
+                        if let code = task.code {
+                            Text(code)
+                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .foregroundStyle(Color.dsTertiary)
+                                .padding(.horizontal, 4).padding(.vertical, 1)
+                                .background(Capsule().fill(Color.dsFill))
+                                .fixedSize()
+                                .help("Task code — shown in the notch while focusing")
+                        }
+                        Text(task.title)
+                            .font(.system(.callout, design: .rounded).weight(.semibold))
+                            .strikethrough(task.isDone, color: .dsTertiary)
+                            .foregroundStyle(task.isDone ? Color.dsTertiary : Color.dsPrimary)
+                            .lineLimit(1)
+                            .onTapGesture(count: 2) { beginEdit(task) }
+                    }
                 }
                 metaRow(task)
             }
-            Spacer(minLength: 6)
+            // Sized before the row's trailing controls, so the title keeps its
+            // width instead of splitting it evenly with them.
+            .layoutPriority(1)
+            Spacer(minLength: 4)
 
             // Subtle queue-position chip for queued tasks ("1", "2", …).
             if !task.isDone, let pos = queuePosition(task.id) {
@@ -1969,105 +2272,36 @@ struct TasksView: View {
                     .accessibilityLabel("Focus queue position \(pos)")
             }
 
-            if task.isPlannedToday() {
-                Image(systemName: "sun.max.fill")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.orange)
-                    .help("On today's plan")
-            }
-
-            // Estimate progress ring (or a plain count when no estimate).
-            // Estimate is the subtask sum when subtasks carry estimates.
-            // `TaskPomodoroBadge` is that pair of cases, shared with the notch.
-            if timer.settings.showPomodoroBadges {
-                TaskPomodoroBadge(done: task.pomodorosDone,
-                                  estimate: task.effectiveEstimate, color: accent)
-            }
-
-            // Expand chevron — an info affordance, only when there's more to see.
-            if task.subtaskProgress.total > 0 || !task.notes.isEmpty {
+            // Main window: a chevron toggles the docked detail panel beside
+            // the list. It flips to point back at the list while open, so the
+            // same tap that opened the panel closes it.
+            if embeddedInScroll {
                 Button {
-                    withAnimation(DS.Motion.gentle) {
-                        if expanded.contains(task.id) { expanded.remove(task.id) }
-                        else { expanded.insert(task.id) }
+                    withAnimation(DS.Motion.panel) {
+                        detailTask = (detailTask?.id == task.id) ? nil : task
                     }
                 } label: {
-                    Image(systemName: "chevron.down")
+                    Image(systemName: "chevron.right")
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(Color.dsTertiary)
-                        .rotationEffect(.degrees(expanded.contains(task.id) ? 180 : 0))
+                        .foregroundStyle(detailTask?.id == task.id ? accent : Color.dsTertiary)
+                        .rotationEffect(.degrees(detailTask?.id == task.id ? 180 : 0))
                         .frame(width: 20, height: 20)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.pressableSubtle)
-                .help("Subtasks & notes")
-                .accessibilityLabel("Show subtasks and notes")
+                .help("Open task details")
+                .accessibilityLabel("Open details for \(task.title)")
             }
 
-            // Secondary actions live together in one quiet pill that only
-            // appears on hover — separated from the primary Focus button so the
-            // row reads calm at rest and Delete never sits under the cursor's
-            // path to Play.
-            // Always present (not conditionally inserted) so hovering never
-            // changes the row's layout width — a conditional insert here would
-            // shove the Play button left under the cursor, causing the row's
-            // hover state to flicker on/off in a feedback loop.
-            // Destructive actions hide behind "…" — a bare trash button on the
-            // row invites misclicks and reads noisy.
-            Menu {
-                Button { editorTask = task } label: {
-                    Label("Edit task…", systemImage: "pencil")
-                }
-                if task.isJiraLinked, let key = task.jiraKey {
-                    Button { jiraDetailKey = JiraDetailKey(key: key) } label: {
-                        Label("Jira details…", systemImage: "link")
-                    }
-                    if let url = task.jiraBrowseURL {
-                        Button { NSWorkspace.shared.open(url) } label: {
-                            Label("Open in Jira", systemImage: "arrow.up.forward.app")
-                        }
-                    }
-                } else if AppServices.jiraService?.isConnected == true {
-                    Button { Task { await AppServices.jiraService?.createIssue(from: task) } } label: {
-                        Label("Create Jira issue", systemImage: "arrow.up.forward.app")
-                    }
-                }
-                Divider()
-                Button(role: .destructive) { store.delete(task.id) } label: {
-                    Label("Delete task", systemImage: "trash")
-                }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.7))
-                    .frame(width: 24, height: 22)
-                    .contentShape(Capsule())
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .padding(2)
-            .background(Capsule().fill(Color.white.opacity(0.07)))
-            .opacity(hovered ? 1 : 0)
-            .scaleEffect(hovered ? 1 : 0.9, anchor: .trailing)
-            .allowsHitTesting(hovered)
+            // Every secondary action — including the subtasks/notes expander
+            // the chevron used to own — lives in this one ⋮ menu, so the row
+            // spends its width on the title instead of a control ladder.
+            rowMenu(task)
 
-            // Primary action: Focus. A filled circle so it's unmistakably THE
-            // button — accent when active/hovered, calm at rest.
-            Button { startFocus(on: task) } label: {
-                Image(systemName: isActive && timer.isRunning ? "pause.fill" : "play.fill")
-                    .font(.system(size: 11, weight: .black))
-                    .foregroundStyle(isActive || hovered ? .white : Color.dsSecondary)
-                    .frame(width: 30, height: 30)
-                    .background(
-                        Circle().fill(isActive ? accent
-                                      : (hovered ? accent.opacity(0.9) : Color.white.opacity(0.06))))
-                    .shadow(color: isActive ? accent.opacity(0.5) : .clear, radius: 5)
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.pressableSubtle)
-            .help("Run a focus pomodoro on this task")
-            .accessibilityLabel(isActive && timer.isRunning ? "Pause focus" : "Start focus on \(task.title)")
+            // Primary action + pomodoro progress in one control: at rest it's
+            // the estimate ring with the done-count in the middle; on hover or
+            // while active it fills and shows the play / pause glyph.
+            focusRing(task, isActive: isActive, hovered: hovered, accent: accent)
         }
         .animation(DS.Motion.hover, value: hovered)
         .padding(.leading, 14).padding(.trailing, 12).padding(.vertical, 10)
@@ -2097,18 +2331,59 @@ struct TasksView: View {
             if inside { hoveredTask = task.id }
             else if hoveredTask == task.id { hoveredTask = nil }
         }
-        .contextMenu {
+        .contextMenu { rowMenuItems(task) }
+    }
+
+    /// The full task action menu — shared by the row's right-click context menu
+    /// and its ⋮ overflow button so both offer identical actions.
+    @ViewBuilder
+    private func rowMenuItems(_ task: TaskItem) -> some View {
             if task.isDone {
                 Button { store.toggleDone(task.id) } label: {
                     Label("Restore", systemImage: "arrow.uturn.backward")
                 }
                 Divider()
             }
-            Button { editorTask = task } label: {
+            // The chevron's old job — only offered when there's something to
+            // expand, same condition the chevron itself used.
+            if task.subtaskProgress.total > 0 || !task.notes.isEmpty {
+                Button {
+                    withAnimation(DS.Motion.gentle) {
+                        if expanded.contains(task.id) { expanded.remove(task.id) }
+                        else { expanded.insert(task.id) }
+                    }
+                } label: {
+                    Label(expanded.contains(task.id) ? "Hide subtasks & notes"
+                                                     : "Subtasks & notes",
+                          systemImage: "list.bullet.indent")
+                }
+                Divider()
+            }
+            Button {
+                if embeddedInScroll {
+                    withAnimation(DS.Motion.panel) { detailTask = task }
+                } else {
+                    editorTask = task
+                }
+            } label: {
                 Label("Edit…", systemImage: "pencil")
             }
             Button { beginEdit(task) } label: {
                 Label("Rename", systemImage: "character.cursor.ibeam")
+            }
+            if task.isJiraLinked, let key = task.jiraKey {
+                Button { jiraDetailKey = JiraDetailKey(key: key) } label: {
+                    Label("Jira details…", systemImage: "link")
+                }
+                if let url = task.jiraBrowseURL {
+                    Button { NSWorkspace.shared.open(url) } label: {
+                        Label("Open in Jira", systemImage: "arrow.up.forward.app")
+                    }
+                }
+            } else if AppServices.jiraService?.isConnected == true {
+                Button { Task { await AppServices.jiraService?.createIssue(from: task) } } label: {
+                    Label("Create Jira issue", systemImage: "arrow.up.forward.app")
+                }
             }
             Menu {
                 ForEach(TaskPriority.levels(custom: timer.settings.customPriorityLevels)) { p in
@@ -2203,10 +2478,9 @@ struct TasksView: View {
                 Label("Move down", systemImage: "arrow.down")
             }
             Divider()
-            Button(role: .destructive) { store.delete(task.id) } label: {
+            Button(role: .destructive) { pendingDeleteTask = task } label: {
                 Label("Delete", systemImage: "trash")
             }
-        }
     }
 
     // MARK: - Actions
@@ -2281,7 +2555,15 @@ struct TasksView: View {
     private func dueText(_ d: Date) -> String {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US")
-        f.dateFormat = Calendar.current.isDateInToday(d) ? "'today' HH:mm" : "MMM d, HH:mm"
+        // The time is optional: a due parked at midnight is a date-only deadline,
+        // so its "HH:mm" is dropped everywhere it reads. Only a due carrying a
+        // real time of day (from quick-add like "5pm") shows the clock.
+        let dateOnly = DueDate.isDateOnly(d)
+        if Calendar.current.isDateInToday(d) {
+            f.dateFormat = dateOnly ? "'today'" : "'today' HH:mm"
+        } else {
+            f.dateFormat = dateOnly ? "MMM d" : "MMM d, HH:mm"
+        }
         return f.string(from: d)
     }
 
@@ -2290,7 +2572,52 @@ struct TasksView: View {
             timer.toggle() // pause
             return
         }
-        store.setActive(task.id)
+        store.selectFocusTarget(task.id)
         timer.startFocusSession(kind: store.resolvedActiveKind)
+    }
+
+    /// The focus button and the pomodoro-progress badge fused into one circle:
+    /// at rest it's the estimate ring with the done-count in the middle; on
+    /// hover or while active it fills accent and shows the play / pause glyph.
+    @ViewBuilder
+    private func focusRing(_ task: TaskItem, isActive: Bool, hovered: Bool, accent: Color) -> some View {
+        let showRing = timer.settings.showPomodoroBadges && task.effectiveEstimate != nil
+        let est = task.effectiveEstimate ?? 0
+        let frac = est > 0 ? min(1, Double(task.pomodorosDone) / Double(est)) : 0
+        let complete = est > 0 && task.pomodorosDone >= est
+        let running = isActive && timer.isRunning
+        // Show the glyph while engaged (or when there's no count to show);
+        // otherwise the ring's centre holds the done-count, badge-style.
+        let showGlyph = isActive || hovered || task.pomodorosDone == 0
+        Button { startFocus(on: task) } label: {
+            ZStack {
+                if showRing {
+                    Circle().stroke(Color.dsFillStrong, lineWidth: 3)
+                    Circle().trim(from: 0, to: frac)
+                        .stroke(complete ? Color.green : accent,
+                                style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                }
+                Circle()
+                    .fill(isActive ? accent : (hovered ? accent.opacity(0.9) : Color.clear))
+                    .padding(showRing ? 4.5 : 0)
+                if showGlyph {
+                    Image(systemName: running ? "pause.fill" : "play.fill")
+                        .font(.system(size: 11, weight: .black))
+                        .foregroundStyle(isActive || hovered ? .white : Color.dsSecondary)
+                } else {
+                    Text("\(task.pomodorosDone)")
+                        .font(.system(size: 10, design: .rounded).weight(.bold))
+                        .foregroundStyle(complete ? Color.green : Color.dsPrimary)
+                }
+            }
+            .frame(width: 30, height: 30)
+            .shadow(color: isActive ? accent.opacity(0.5) : .clear, radius: 5)
+            .contentShape(Circle())
+        }
+        .buttonStyle(.pressableSubtle)
+        .help(showRing ? "\(task.pomodorosDone) of \(est) pomodoros — click to focus"
+                       : "Run a focus pomodoro on this task")
+        .accessibilityLabel(running ? "Pause focus" : "Start focus on \(task.title)")
     }
 }

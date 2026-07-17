@@ -6,6 +6,12 @@ import SharinganCore
 /// due date, tags, estimate, recurrence, project, notes and subtasks — then
 /// saves the whole thing atomically through `store.update`.
 struct TaskEditorView: View {
+    /// `.sheet` is the original centered modal. `.docked` renders as an
+    /// inline card meant to sit beside the task list (main window only) —
+    /// same fields, different chrome: an "X" close instead of Cancel/Save in
+    /// the header, and a pinned Delete/Save footer below the scroll content.
+    enum Presentation { case sheet, docked }
+
     @ObservedObject private var store = TaskStore.shared
     @Environment(\.dismiss) private var dismiss
 
@@ -26,12 +32,20 @@ struct TaskEditorView: View {
     /// fine for a modal sheet). No default value on purpose: a call site that
     /// forgets it would silently run the editor on factory settings.
     let settings: PomodoroSettings
+    var presentation: Presentation = .sheet
+    /// Called instead of `dismiss()` when `presentation == .docked`, since a
+    /// docked panel isn't a real SwiftUI presentation — the parent owns the
+    /// state that shows/hides it.
+    var onClose: (() -> Void)? = nil
 
     init(task: TaskItem, accent: Color = .paletteFocusStart,
-         settings: PomodoroSettings) {
+         settings: PomodoroSettings, presentation: Presentation = .sheet,
+         onClose: (() -> Void)? = nil) {
         _draft = State(initialValue: task)
         self.accent = accent
         self.settings = settings
+        self.presentation = presentation
+        self.onClose = onClose
     }
 
     var body: some View {
@@ -48,24 +62,55 @@ struct TaskEditorView: View {
                     notesSection
                     subtasksSection
                     if !history.isEmpty { historySection }
-                    deleteButton
+                    if presentation == .sheet { deleteButton }
                 }
                 .padding(20)
             }
+            if presentation == .docked {
+                Divider().overlay(Color.white.opacity(0.12))
+                dockedFooter
+            }
         }
-        // A comfortable default that can grow — long notes/subtask lists no
-        // longer scroll inside a locked 420×560 box.
-        .frame(minWidth: 440, idealWidth: 460, maxWidth: 620,
-               minHeight: 560, idealHeight: 640, maxHeight: 820)
-        .background(editorBackground)
+        .modifier(SizingModifier(presentation: presentation))
+        .background(presentation == .docked ? AnyView(dockedBackground) : AnyView(editorBackground))
         .tint(accent)
+    }
+
+    /// `.sheet` keeps its original comfortable modal sizing; `.docked` just
+    /// fills the panel container its parent sized (`TasksView`'s side-panel
+    /// `HStack` gives it a fixed width).
+    private struct SizingModifier: ViewModifier {
+        let presentation: Presentation
+        func body(content: Content) -> some View {
+            if presentation == .docked {
+                content.frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                content.frame(minWidth: 440, idealWidth: 460, maxWidth: 620,
+                               minHeight: 560, idealHeight: 640, maxHeight: 820)
+            }
+        }
     }
 
     // MARK: - Header
 
     private var header: some View {
         HStack {
-            Button("Cancel") { dismiss() }
+            if presentation == .docked {
+                Text("Task:")
+                    .font(.system(.headline, design: .rounded).weight(.bold))
+                    .foregroundStyle(.white)
+                Spacer()
+                Button { close() } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.6))
+                        .frame(width: 26, height: 26)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.pressableSubtle)
+                .help("Close")
+            } else {
+            Button("Cancel") { close() }
                 .buttonStyle(.pressableSubtle)
                 .foregroundStyle(.white.opacity(0.7))
             Spacer()
@@ -79,6 +124,7 @@ struct TaskEditorView: View {
                 .foregroundStyle(accent)
                 .keyboardShortcut(.defaultAction)
                 .disabled(draft.title.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
         }
         .padding(.horizontal, 18).padding(.vertical, 14)
     }
@@ -86,10 +132,11 @@ struct TaskEditorView: View {
     // MARK: - Title
 
     private var titleField: some View {
-        TextField("Task name", text: $draft.title)
+        TextField("Task name", text: $draft.title, axis: .vertical)
             .textFieldStyle(.plain)
             .font(.system(.title2, design: .rounded).weight(.semibold))
             .foregroundStyle(.white)
+            .lineLimit(1...3)
             .focused($titleFocused)
             .padding(.vertical, 10).padding(.horizontal, 14)
             .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
@@ -162,7 +209,8 @@ struct TaskEditorView: View {
                 Text("Due date").dsSectionLabel()
                 SharinganCalendar(date: Binding(
                     get: { draft.dueDate ?? Date() },
-                    set: { draft.dueDate = $0 }),
+                    // Picking a day sets a date-only due — the time is optional.
+                    set: { draft.dueDate = DueDate.dateOnly($0) }),
                     accent: accent,
                     weekStartsOnMonday: settings.weekStartsOnMonday)
                 HStack {
@@ -282,14 +330,48 @@ struct TaskEditorView: View {
     private var projectField: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Project").dsSectionLabel()
-            TextField("optional project", text: Binding(
-                get: { draft.project ?? "" },
-                set: { draft.project = $0.isEmpty ? nil : $0 }))
-                .textFieldStyle(.plain)
+            // Selectable, like category — projects are a registry now, not free
+            // text. New projects are born in the composer or the sidebar "+".
+            Menu {
+                Button {
+                    draft.project = nil
+                } label: {
+                    Label("No project", systemImage: draft.project == nil ? "checkmark" : "slash.circle")
+                }
+                if !store.allProjects.isEmpty { Divider() }
+                ForEach(store.allProjects) { p in
+                    Button {
+                        draft.project = p.name
+                    } label: {
+                        Label(p.name, systemImage: draft.project == p.name ? "checkmark" : p.icon)
+                    }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    if let project = draft.project {
+                        Image(systemName: store.projectIcon(project))
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Color(hex: store.projectColor(project)))
+                        Text(project).foregroundStyle(.white)
+                    } else {
+                        Image(systemName: "square.stack.3d.up")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Color.dsSecondary)
+                        Text("No project").foregroundStyle(Color.dsSecondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(Color.dsTertiary)
+                }
                 .font(.system(.callout, design: .rounded))
                 .padding(.vertical, 7).padding(.horizontal, 10)
                 .background(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
                     .fill(Color.white.opacity(0.05)))
+                .contentShape(Rectangle())
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
         }
     }
 
@@ -340,108 +422,7 @@ struct TaskEditorView: View {
             }
             ForEach($draft.subtasks) { $sub in
                 if subtaskShown(sub) {
-                HStack(spacing: 8) {
-                    Button { sub.isDone.toggle() } label: {
-                        Image(systemName: sub.isDone ? "checkmark.circle.fill" : "circle")
-                            .foregroundStyle(sub.isDone ? .green : Color.dsSecondary)
-                    }
-                    .buttonStyle(.plain)
-                    Text(sub.title)
-                        .font(.system(.callout, design: .rounded))
-                        .strikethrough(sub.isDone, color: .dsTertiary)
-                        .foregroundStyle(sub.isDone ? Color.dsTertiary : Color.dsPrimary)
-                    Spacer()
-                    if settings.showPomodoroBadges, sub.pomodorosDone > 0 {
-                        Text("🍅\(sub.pomodorosDone)")
-                            .font(.system(size: 10, design: .rounded))
-                            .foregroundStyle(Color.dsSecondary)
-                    }
-                    // Per-step priority flag — imported from templates (`p1`
-                    // tokens) and editable here; promote carries it over.
-                    Menu {
-                        ForEach(SharinganCore.TaskPriority.levels(custom: settings.customPriorityLevels)) { p in
-                            Button { sub.priority = p } label: {
-                                Label(settings.priorityName(p),
-                                      systemImage: sub.priority == p ? "checkmark"
-                                                   : (p == .none ? "flag.slash" : "flag.fill"))
-                            }
-                        }
-                    } label: {
-                        HStack(spacing: 3) {
-                            Image(systemName: sub.priority == .none ? "flag" : "flag.fill")
-                                .font(.system(size: 9, weight: .semibold))
-                            if sub.priority != .none {
-                                Text(settings.priorityShortLabel(sub.priority))
-                                    .font(.system(size: 10, design: .rounded).weight(.semibold))
-                            }
-                        }
-                        .foregroundStyle(settings.priorityColorHex(sub.priority)
-                            .map { Color(hex: $0) } ?? Color.dsTertiary)
-                        .padding(.horizontal, 7).padding(.vertical, 3)
-                        .background(Capsule().fill(Color.white.opacity(0.06)))
-                    }
-                    .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-                    .help("Priority for this step")
-                    // Estimate stepper stays visible even with badges hidden —
-                    // the editor is the only place estimates can be set.
-                    // Per-step pomodoro size: overrides the task's kind when
-                    // this step is the focus target.
-                    Menu {
-                        Button("Task default") { sub.pomodoroKind = nil }
-                        Divider()
-                        ForEach(PomodoroKind.allCases) { kind in
-                            Button {
-                                sub.pomodoroKind = kind
-                            } label: {
-                                let cfg = settings.config(for: kind)
-                                Label("\(kind.label) · \(cfg.focusMinutes)/\(cfg.breakMinutes) min",
-                                      systemImage: sub.pomodoroKind == kind
-                                          ? "checkmark" : kind.systemImage)
-                            }
-                        }
-                    } label: {
-                        HStack(spacing: 3) {
-                            Image(systemName: sub.pomodoroKind?.systemImage ?? "timer")
-                                .font(.system(size: 9, weight: .semibold))
-                            Text(sub.pomodoroKind?.label ?? "Auto")
-                                .font(.system(size: 10, design: .rounded).weight(.medium))
-                        }
-                        .foregroundStyle(sub.pomodoroKind == nil ? Color.dsTertiary : accent)
-                        .padding(.horizontal, 7).padding(.vertical, 3)
-                        .background(Capsule().fill(Color.white.opacity(0.06)))
-                    }
-                    .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-                    .help("Pomodoro size for this step")
-                    Text(sub.estimatedPomodoros.map { "est \($0)" } ?? "no est")
-                        .font(.system(size: 10, design: .rounded))
-                        .foregroundStyle(Color.dsTertiary)
-                    DSStepper(value: Binding(
-                        get: { sub.estimatedPomodoros ?? 0 },
-                        set: { sub.estimatedPomodoros = $0 == 0 ? nil : $0 }),
-                              range: 0...8)
-                        .scaleEffect(0.8)
-                    Button { draft.subtasks.removeAll { $0.id == sub.id } } label: {
-                        Image(systemName: "xmark").font(.system(size: 10)).foregroundStyle(Color.dsTertiary)
-                    }
-                    .buttonStyle(.plain)
-                }
-                .contentShape(Rectangle())
-                // Same drag idiom as the task rows (this stack isn't a List,
-                // so `.onMove` has nothing to hook into).
-                .draggable(sub.id.uuidString)
-                .dropDestination(for: String.self) { dropped, _ in
-                    guard let s = dropped.first, let id = UUID(uuidString: s) else { return false }
-                    return moveSubtask(id, before: sub.id)
-                }
-                .contextMenu {
-                    Button {
-                        if store.promoteSubtask(draft.id, sub.id) != nil {
-                            draft.subtasks.removeAll { $0.id == sub.id }
-                        }
-                    } label: {
-                        Label("Make a task", systemImage: "arrow.up.right.square")
-                    }
-                }
+                    subtaskRow($sub)
                 }
             }
             HStack(spacing: 6) {
@@ -455,6 +436,141 @@ struct TaskEditorView: View {
             .background(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
                 .fill(Color.white.opacity(0.05)))
         }
+    }
+
+    /// One step, stacked like a task row: title across the full width, its
+    /// badges on a second line underneath. Putting the badges beside the title
+    /// (as this once did) starved it of width in the docked panel and wrapped
+    /// long step names into a one-word-per-line column.
+    private func subtaskRow(_ sub: Binding<Subtask>) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Button { sub.wrappedValue.isDone.toggle() } label: {
+                Image(systemName: sub.wrappedValue.isDone ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(sub.wrappedValue.isDone ? .green : Color.dsSecondary)
+            }
+            .buttonStyle(.plain)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(sub.wrappedValue.title)
+                    .font(.system(.callout, design: .rounded))
+                    .strikethrough(sub.wrappedValue.isDone, color: .dsTertiary)
+                    .foregroundStyle(sub.wrappedValue.isDone ? Color.dsTertiary : Color.dsPrimary)
+                    .lineLimit(3)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                subtaskBadges(sub)
+            }
+
+            Button { draft.subtasks.removeAll { $0.id == sub.wrappedValue.id } } label: {
+                Image(systemName: "xmark").font(.system(size: 10)).foregroundStyle(Color.dsTertiary)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.vertical, 8).padding(.horizontal, 10)
+        .background(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
+            .fill(Color.white.opacity(0.05)))
+        .contentShape(Rectangle())
+        // Same drag idiom as the task rows (this stack isn't a List, so
+        // `.onMove` has nothing to hook into).
+        .draggable(sub.wrappedValue.id.uuidString)
+        .dropDestination(for: String.self) { dropped, _ in
+            guard let s = dropped.first, let id = UUID(uuidString: s) else { return false }
+            return moveSubtask(id, before: sub.wrappedValue.id)
+        }
+        .contextMenu {
+            Button {
+                if store.promoteSubtask(draft.id, sub.wrappedValue.id) != nil {
+                    draft.subtasks.removeAll { $0.id == sub.wrappedValue.id }
+                }
+            } label: {
+                Label("Make a task", systemImage: "arrow.up.right.square")
+            }
+        }
+    }
+
+    /// A step's second line: done-count, priority, pomodoro size and estimate.
+    private func subtaskBadges(_ sub: Binding<Subtask>) -> some View {
+        HStack(spacing: 6) {
+            if settings.showPomodoroBadges, sub.wrappedValue.pomodorosDone > 0 {
+                Text("🍅\(sub.wrappedValue.pomodorosDone)")
+                    .font(.system(size: 10, design: .rounded))
+                    .foregroundStyle(Color.dsSecondary)
+            }
+            subtaskPriorityMenu(sub)
+            subtaskKindMenu(sub)
+            Text(sub.wrappedValue.estimatedPomodoros.map { "est \($0)" } ?? "no est")
+                .font(.system(size: 10, design: .rounded))
+                .foregroundStyle(Color.dsTertiary)
+            // Estimate stepper stays visible even with badges hidden — the
+            // editor is the only place estimates can be set.
+            DSStepper(value: Binding(
+                get: { sub.wrappedValue.estimatedPomodoros ?? 0 },
+                set: { sub.wrappedValue.estimatedPomodoros = $0 == 0 ? nil : $0 }),
+                      range: 0...8)
+                .scaleEffect(0.8)
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// Per-step priority flag — imported from templates (`p1` tokens) and
+    /// editable here; promote carries it over.
+    private func subtaskPriorityMenu(_ sub: Binding<Subtask>) -> some View {
+        Menu {
+            ForEach(SharinganCore.TaskPriority.levels(custom: settings.customPriorityLevels)) { p in
+                Button { sub.wrappedValue.priority = p } label: {
+                    Label(settings.priorityName(p),
+                          systemImage: sub.wrappedValue.priority == p ? "checkmark"
+                                       : (p == .none ? "flag.slash" : "flag.fill"))
+                }
+            }
+        } label: {
+            HStack(spacing: 3) {
+                Image(systemName: sub.wrappedValue.priority == .none ? "flag" : "flag.fill")
+                    .font(.system(size: 9, weight: .semibold))
+                if sub.wrappedValue.priority != .none {
+                    Text(settings.priorityShortLabel(sub.wrappedValue.priority))
+                        .font(.system(size: 10, design: .rounded).weight(.semibold))
+                }
+            }
+            .foregroundStyle(settings.priorityColorHex(sub.wrappedValue.priority)
+                .map { Color(hex: $0) } ?? Color.dsTertiary)
+            .padding(.horizontal, 7).padding(.vertical, 3)
+            .background(Capsule().fill(Color.white.opacity(0.06)))
+        }
+        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+        .help("Priority for this step")
+    }
+
+    /// Per-step pomodoro size: overrides the task's kind when this step is the
+    /// focus target.
+    private func subtaskKindMenu(_ sub: Binding<Subtask>) -> some View {
+        Menu {
+            Button("Task default") { sub.wrappedValue.pomodoroKind = nil }
+            Divider()
+            ForEach(PomodoroKind.allCases) { kind in
+                Button {
+                    sub.wrappedValue.pomodoroKind = kind
+                } label: {
+                    let cfg = settings.config(for: kind)
+                    Label("\(kind.label) · \(cfg.focusMinutes)/\(cfg.breakMinutes) min",
+                          systemImage: sub.wrappedValue.pomodoroKind == kind
+                              ? "checkmark" : kind.systemImage)
+                }
+            }
+        } label: {
+            HStack(spacing: 3) {
+                Image(systemName: sub.wrappedValue.pomodoroKind?.systemImage ?? "timer")
+                    .font(.system(size: 9, weight: .semibold))
+                Text(sub.wrappedValue.pomodoroKind?.label ?? "Auto")
+                    .font(.system(size: 10, design: .rounded).weight(.medium))
+            }
+            .foregroundStyle(sub.wrappedValue.pomodoroKind == nil ? Color.dsTertiary : accent)
+            .padding(.horizontal, 7).padding(.vertical, 3)
+            .background(Capsule().fill(Color.white.opacity(0.06)))
+        }
+        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+        .help("Pomodoro size for this step")
     }
 
     // MARK: - Focus history
@@ -522,7 +638,7 @@ struct TaskEditorView: View {
     private var deleteButton: some View {
         Button(role: .destructive) {
             store.delete(draft.id)
-            dismiss()
+            close()
         } label: {
             Label("Delete task", systemImage: "trash")
                 .font(.system(.callout, design: .rounded).weight(.medium))
@@ -534,6 +650,40 @@ struct TaskEditorView: View {
         }
         .buttonStyle(.pressableSubtle)
         .padding(.top, 4)
+    }
+
+    /// `.docked`'s pinned Delete Task / Save changes pair, mirroring the
+    /// reference mock's footer instead of the sheet's in-scroll delete row +
+    /// header Save.
+    private var dockedFooter: some View {
+        HStack(spacing: 10) {
+            Button(role: .destructive) {
+                store.delete(draft.id)
+                close()
+            } label: {
+                Text("Delete Task")
+                    .font(.system(.callout, design: .rounded).weight(.semibold))
+                    .foregroundStyle(.red.opacity(0.9))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                        .fill(Color.red.opacity(0.12)))
+            }
+            .buttonStyle(.pressableSubtle)
+
+            Button { save() } label: {
+                Text("Save changes")
+                    .font(.system(.callout, design: .rounded).weight(.bold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                        .fill(accent))
+            }
+            .buttonStyle(.pressableSubtle)
+            .disabled(draft.title.trimmingCharacters(in: .whitespaces).isEmpty)
+        }
+        .padding(16)
     }
 
     // MARK: - Helpers
@@ -566,6 +716,26 @@ struct TaskEditorView: View {
         .ignoresSafeArea()
     }
 
+    /// Docked-panel chrome — the same glass-card recipe as the sidebar
+    /// (`MainWindowView.sidebar`) instead of the sheet's full-bleed scrim, so
+    /// the panel reads as part of the window rather than a modal overlay.
+    private var dockedBackground: some View {
+        RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+            .fill(.ultraThinMaterial)
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                    .fill(accent.opacity(0.14))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                    .stroke(
+                        LinearGradient(colors: [Color.white.opacity(0.35),
+                                                Color.white.opacity(0.08)],
+                                       startPoint: .top, endPoint: .bottom),
+                        lineWidth: 1)
+            )
+    }
+
     private var dueLabel: String {
         guard let d = draft.dueDate else { return "Due" }
         let cal = Calendar.current
@@ -579,7 +749,7 @@ struct TaskEditorView: View {
     private func dueAt(_ days: Int) -> Date {
         let cal = Calendar.current
         let base = cal.date(byAdding: .day, value: days, to: Date()) ?? Date()
-        return cal.date(bySettingHour: 9, minute: 0, second: 0, of: base) ?? base
+        return cal.startOfDay(for: base)
     }
     private func upcomingWeekend() -> Date {
         let cal = Calendar.current
@@ -588,14 +758,14 @@ struct TaskEditorView: View {
             if cal.component(.weekday, from: d) == 7 { break }   // Saturday
             d = cal.date(byAdding: .day, value: 1, to: d) ?? d
         }
-        return cal.date(bySettingHour: 9, minute: 0, second: 0, of: d) ?? d
+        return cal.startOfDay(for: d)
     }
     private func nextMonday() -> Date {
         let cal = Calendar.current
         var d = cal.date(byAdding: .day, value: 1, to: Date()) ?? Date()
         for _ in 0..<7 { if cal.component(.weekday, from: d) == 2 { break }
             d = cal.date(byAdding: .day, value: 1, to: d) ?? d }
-        return cal.date(bySettingHour: 9, minute: 0, second: 0, of: d) ?? d
+        return cal.startOfDay(for: d)
     }
 
     private func commitTag() {
@@ -643,7 +813,13 @@ struct TaskEditorView: View {
         clean.title = clean.title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.title.isEmpty else { return }
         store.update(clean)
-        dismiss()
+        close()
+    }
+
+    /// `.sheet` dismisses itself; `.docked` isn't a real presentation, so its
+    /// parent's `onClose` owns hiding the panel.
+    private func close() {
+        if presentation == .docked { onClose?() } else { dismiss() }
     }
 }
 

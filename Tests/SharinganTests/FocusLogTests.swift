@@ -17,17 +17,13 @@ struct FocusLogModelTests {
             var t = t; t.id = t2; t.isDone = true; return t
         }
         let rows = FocusReport.rows(entries: entries, tasks: tasks)
-        #expect(rows.count == 2)
-        // Sorted by seconds desc: B first.
+        // A's task is deleted (not in the live list) — dropped entirely.
+        #expect(rows.count == 1)
         #expect(rows[0].entry.taskID == t2)
         #expect(rows[0].subrows.map(\.title) == ["B.1"])
         #expect(rows[0].isDone)
         #expect(!rows[0].isDeleted)
         #expect(rows[0].category == "Work")
-        // A has no live task: deleted, keeps snapshot title.
-        #expect(rows[1].isDeleted)
-        #expect(rows[1].entry.title == "A")
-        #expect(rows[1].category == nil)
     }
 
     @Test func durationLabelFormatsMinutesAndHours() {

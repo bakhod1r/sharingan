@@ -102,11 +102,13 @@ struct NotchEars: View {
                 .animation(NotchMotion.phaseFade(reduceMotion: reduceMotion),
                            value: model.phase)
                 .frame(width: 6, height: 6)
-            Text(tasks.activeTask?.title ?? model.phase.label)
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
+            Text(tasks.activeShortLabel ?? model.phase.label)
+                .font(.system(size: 11, weight: .semibold, design: .rounded).monospacedDigit())
                 .foregroundStyle(Color.dsSecondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
+                // Hover reveals the full task / subtask title behind the code.
+                .help(tasks.activeFocusTitle ?? "")
         }
         .padding(.leading, 6)
         .frame(maxWidth: .infinity, alignment: .leading)

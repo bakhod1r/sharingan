@@ -25,23 +25,29 @@ struct MenuBarView: View {
     @State private var hoveredTask: UUID?
     /// Task open in the full editor sheet (nil = closed).
     @State private var editorTask: TaskItem?
+    /// Task queued for the "move to Trash?" confirmation (nil = no prompt).
+    @State private var pendingDeleteTask: TaskItem?
+    @State private var showTrash = false
+    /// Task queued for the irreversible "delete forever?" confirmation.
+    @State private var pendingPurgeTask: TaskItem?
+    @State private var confirmEmptyTrash = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private enum Tab: Hashable, CaseIterable {
-        case timer, tasks, week, report
+        // Pomodoro and Tasks are one tab now: the full task view with the timer
+        // controls pinned below it.
+        case timer, week, report
 
         var title: String {
             switch self {
-            case .timer: return "Pomodoro"
-            case .tasks: return "Tasks"
+            case .timer: return "Tasks"
             case .week: return "Board"
             case .report: return "Report"
             }
         }
         var icon: String {
             switch self {
-            case .timer: return "timer"
-            case .tasks: return "checklist"
+            case .timer: return "checklist"
             case .week: return "rectangle.split.3x1"
             case .report: return "list.bullet.rectangle"
             }
@@ -62,7 +68,7 @@ struct MenuBarView: View {
     /// trailing cluster (estimate badge, chevron, hover actions, Focus button)
     /// plus the composer's filter row; 360 pt clipped both edges, so the
     /// content sets the floor here.
-    private static let standardWidth: CGFloat = 460
+    private static let standardWidth: CGFloat = 420
 
     /// Board-tab popover width: wide enough for the custom board's enabled
     /// columns (plus the "add column" tile), capped to the screen so narrow
@@ -96,8 +102,7 @@ struct MenuBarView: View {
                 ScrollView(.vertical, showsIndicators: false) {
                     Group {
                         switch tab {
-                        case .timer:  timerTab
-                        case .tasks:  TasksView(timer: timer)
+                        case .timer:  TasksView(timer: timer)
                         case .week:   SharinganBoardView(timer: timer)
                         case .report: ReportView(timer: timer)
                         }
@@ -116,19 +121,22 @@ struct MenuBarView: View {
                     }
                 )
                 if tab == .timer {
+                    // Same width envelope as the tab bar and stats strip so the
+                    // controls line up with the rest of the popover chrome.
                     controls
+                        .frame(maxWidth: 640)
+                        .frame(maxWidth: .infinity)
                 }
             }
             .frame(height: tabContentHeight)
 
-            // Today / Cycle / Streak — pinned below the scroll so it's always
-            // fully visible on both tabs, never clipped by the fixed height.
-            Divider().overlay(Color.dsHairline).frame(maxWidth: 640).frame(maxWidth: .infinity)
-            statsStrip
-                .frame(maxWidth: 640)
-                .frame(maxWidth: .infinity)
+            // Today / Cycle / Streak + Sync / Settings / Quit — one row, pinned
+            // below the scroll so it's always fully visible on both tabs,
+            // never clipped by the fixed height.
             Divider().overlay(Color.dsHairline).frame(maxWidth: 640).frame(maxWidth: .infinity)
             footer
+                .frame(maxWidth: 640)
+                .frame(maxWidth: .infinity)
         }
         .onAppear { heartbeat = true }
         .padding(Self.outerPadding)
@@ -145,6 +153,37 @@ struct MenuBarView: View {
                            accent: timer.settings.theme.accent,
                            settings: timer.settings)
         }
+        .alert("Delete this task?", isPresented: Binding(
+            get: { pendingDeleteTask != nil },
+            set: { if !$0 { pendingDeleteTask = nil } })) {
+            Button("Move to Trash", role: .destructive) {
+                if let t = pendingDeleteTask { tasks.delete(t.id) }
+                pendingDeleteTask = nil
+            }
+            Button("Cancel", role: .cancel) { pendingDeleteTask = nil }
+        } message: {
+            Text(pendingDeleteTask.map { "“\($0.title)” moves to Trash — restore it from the Tasks tab." } ?? "")
+        }
+        .alert("Delete forever?", isPresented: Binding(
+            get: { pendingPurgeTask != nil },
+            set: { if !$0 { pendingPurgeTask = nil } })) {
+            Button("Delete forever", role: .destructive) {
+                if let t = pendingPurgeTask { withAnimation { tasks.deletePermanently(t.id) } }
+                pendingPurgeTask = nil
+            }
+            Button("Cancel", role: .cancel) { pendingPurgeTask = nil }
+        } message: {
+            Text(pendingPurgeTask.map { "“\($0.title)” will be gone for good. This can't be undone." } ?? "")
+        }
+        .alert("Empty Trash?", isPresented: $confirmEmptyTrash) {
+            Button("Delete \(tasks.trashedTasks.count) forever", role: .destructive) {
+                withAnimation { tasks.emptyTrash() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            let n = tasks.trashedTasks.count
+            Text("This permanently deletes \(n) task\(n == 1 ? "" : "s") in the Trash.")
+        }
     }
 
     /// Liquid-glass tab bar — a translucent capsule track with a floating
@@ -153,9 +192,21 @@ struct MenuBarView: View {
     /// the popover's glass surfaces.
     private var liquidGlassTabBar: some View {
         let segment = RoundedRectangle(cornerRadius: 9, style: .continuous)
+        let tabs = Tab.allCases
         return HStack(spacing: 2) {
-            ForEach(Tab.allCases, id: \.self) { t in
+            ForEach(Array(tabs.enumerated()), id: \.element) { idx, t in
                 let selected = tab == t
+                // Hairline separator between two *unselected* neighbours — the
+                // macOS segmented look in the reference. It vanishes next to the
+                // accent pill so the pill never butts against a line.
+                if idx > 0 {
+                    let prevSelected = tab == tabs[idx - 1]
+                    Rectangle()
+                        .fill(Color.white.opacity(0.14))
+                        .frame(width: 1, height: 16)
+                        .opacity(selected || prevSelected ? 0 : 1)
+                        .animation(DS.Motion.standard, value: tab)
+                }
                 Button {
                     withAnimation(DS.Motion.standard) { tab = t }
                 } label: {
@@ -168,20 +219,16 @@ struct MenuBarView: View {
                         .background {
                             if selected {
                                 let accent = timer.settings.theme.accent
+                                // Flat, clean accent pill — matches the reference:
+                                // no glossy white sheen, no coloured glow. A barely
+                                // there top-to-bottom gradient keeps it from reading
+                                // dull, a hairline border defines the edge, and a
+                                // soft neutral drop shadow gives just enough lift.
                                 segment
-                                    .fill(LinearGradient(colors: [accent, accent.opacity(0.82)],
+                                    .fill(LinearGradient(colors: [accent, accent.opacity(0.92)],
                                                           startPoint: .top, endPoint: .bottom))
-                                    // A glass sheen over the saturated accent —
-                                    // vibrant like the app's other selected
-                                    // pills, with a glossy highlight on top.
-                                    .overlay(alignment: .top) {
-                                        LinearGradient(colors: [.white.opacity(0.5), .clear],
-                                                       startPoint: .top, endPoint: .center)
-                                            .blendMode(.screen)
-                                            .clipShape(segment)
-                                    }
-                                    .overlay(segment.stroke(Color.white.opacity(0.25), lineWidth: 1))
-                                    .liquidShadow(color: accent.opacity(0.5), radius: 10, y: 4)
+                                    .overlay(segment.stroke(Color.white.opacity(0.12), lineWidth: 1))
+                                    .shadow(color: .black.opacity(0.22), radius: 3, y: 1)
                                     .matchedGeometryEffect(id: "tabPill", in: tabPillNS)
                             }
                         }
@@ -287,13 +334,13 @@ struct MenuBarView: View {
 
     /// All open tasks (ignoring search/today filters) — used to decide whether to
     /// show the filter controls.
-    private var allOpenCount: Int { tasks.tasks.filter { !$0.isDone }.count }
+    private var allOpenCount: Int { tasks.tasks.filter { !$0.isDone && $0.trashedAt == nil }.count }
 
     /// All open tasks, active-on-top then manual order, IGNORING the search /
     /// Today filters — used by Start so a filter that hides every row doesn't
     /// disable a perfectly startable timer or change which task Start launches.
     private var allOpenTasks: [TaskItem] {
-        tasks.tasks.filter { !$0.isDone }.sorted { a, b in
+        tasks.tasks.filter { !$0.isDone && $0.trashedAt == nil }.sorted { a, b in
             if (tasks.activeTaskID == a.id) != (tasks.activeTaskID == b.id) {
                 return tasks.activeTaskID == a.id
             }
@@ -304,7 +351,7 @@ struct MenuBarView: View {
     /// Open (unfinished) tasks after search + today filters, the active one on top,
     /// then manual order.
     private var openTasks: [TaskItem] {
-        var list = tasks.tasks.filter { !$0.isDone }
+        var list = tasks.tasks.filter { !$0.isDone && $0.trashedAt == nil }
         let q = taskSearch.trimmingCharacters(in: .whitespaces).lowercased()
         if !q.isEmpty {
             list = list.filter {
@@ -369,38 +416,127 @@ struct MenuBarView: View {
                 // taller lists scroll.
                 .frame(height: taskListHeight)
             }
+            // Completed and Trash live in the Tasks tab — the Pomodoro tab shows
+            // only the active/open list so the timer stays front and centre.
+        }
+    }
 
-            completedSection
+    /// Shared header for the collapsible Completed / Trash buckets, so both read
+    /// as one consistent, quietly styled disclosure row: tinted icon, label,
+    /// count pill, a chevron that turns on expand, and an optional trailing
+    /// action — all sitting on a soft rounded fill that deepens when open.
+    @ViewBuilder
+    private func bucketHeader<Trailing: View>(
+        icon: String, label: String, count: Int, tint: Color, isOpen: Bool,
+        toggle: @escaping () -> Void,
+        @ViewBuilder trailing: () -> Trailing = { EmptyView() }
+    ) -> some View {
+        HStack(spacing: 8) {
+            Button {
+                withAnimation(DS.Motion.gentle) { toggle() }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(Color.dsTertiary)
+                        .rotationEffect(.degrees(isOpen ? 90 : 0))
+                    Image(systemName: icon)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(tint)
+                        .frame(width: 15)
+                    Text(label).dsSectionLabel()
+                    Text("\(count)")
+                        .font(.system(.caption2, design: .rounded).weight(.bold).monospacedDigit())
+                        .foregroundStyle(Color.dsSecondary)
+                        .padding(.horizontal, 6).padding(.vertical, 1)
+                        .background(Capsule().fill(Color.dsFill))
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.pressableSubtle)
+            trailing()
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(Color.dsFill.opacity(isOpen ? 0.6 : 0.3))
+        )
+    }
+
+    /// Collapsible Trash bucket for the Pomodoro tab's inline list — the same
+    /// bucket the Tasks tab shows, so a task deleted from either place can be
+    /// recovered without switching tabs. Hidden when the Trash is empty.
+    @ViewBuilder
+    private var trashSection: some View {
+        let trashed = tasks.trashedTasks
+        if !trashed.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                bucketHeader(icon: "trash", label: "Trash", count: trashed.count,
+                             tint: Color.red.opacity(0.8), isOpen: showTrash,
+                             toggle: { showTrash.toggle() }) {
+                    if showTrash {
+                        Button { confirmEmptyTrash = true } label: {
+                            Text("Empty")
+                                .font(.system(.caption2, design: .rounded).weight(.semibold))
+                                .foregroundStyle(Color.red.opacity(0.85))
+                                .padding(.horizontal, 8).padding(.vertical, 5)
+                        }
+                        .buttonStyle(.pressableSubtle)
+                        .help("Delete every trashed task permanently")
+                    }
+                }
+
+                if showTrash {
+                    ForEach(trashed) { task in
+                        HStack(spacing: 10) {
+                            Text(task.title)
+                                .font(.system(.caption, design: .rounded))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                            Spacer(minLength: 6)
+                            Button {
+                                withAnimation(DS.Motion.standard) { tasks.restore(task.id) }
+                            } label: {
+                                Image(systemName: "arrow.uturn.backward")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 22, height: 22)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.pressableSubtle)
+                            .help("Restore this task")
+                            .accessibilityLabel("Restore \(task.title)")
+                            Button { pendingPurgeTask = task } label: {
+                                Image(systemName: "trash.slash")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(Color.red.opacity(0.75))
+                                    .frame(width: 22, height: 22)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.pressableSubtle)
+                            .help("Delete permanently")
+                            .accessibilityLabel("Delete \(task.title) permanently")
+                        }
+                        .padding(.horizontal, 10).padding(.vertical, 4)
+                    }
+                }
+            }
+            .padding(.top, 2)
         }
     }
 
     /// Collapsible list of completed tasks with one-tap un-complete (undo).
     @ViewBuilder
     private var completedSection: some View {
-        let done = tasks.tasks.filter { $0.isDone }.sorted { $0.createdAt > $1.createdAt }
+        let done = tasks.tasks.filter { $0.isDone && $0.trashedAt == nil }
+            .sorted { $0.createdAt > $1.createdAt }
         if !done.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
-                Button {
-                    withAnimation(DS.Motion.gentle) { showCompleted.toggle() }
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(.secondary)
-                            .rotationEffect(.degrees(showCompleted ? 90 : 0))
-                        Text("Completed")
-                            .font(.system(.caption, design: .rounded).weight(.semibold))
-                            .foregroundStyle(.secondary)
-                        Text("\(done.count)")
-                            .font(.system(.caption2, design: .rounded).weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 6).padding(.vertical, 1)
-                            .background(Capsule().fill(Color.primary.opacity(0.08)))
-                        Spacer()
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.pressableSubtle)
+                bucketHeader(icon: "checkmark.circle.fill", label: "Completed",
+                             count: done.count, tint: .green, isOpen: showCompleted,
+                             toggle: { showCompleted.toggle() })
 
                 if showCompleted {
                     ForEach(done.prefix(8)) { task in
@@ -565,6 +701,18 @@ struct MenuBarView: View {
                     .onAppear { editFieldFocused = true }
                 Spacer(minLength: 6)
             } else {
+                // Code leads the row (fixed, tiny); the title takes all the room
+                // it can before the decoration ladder.
+                if let code = task.code {
+                    Text(code)
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundStyle(Color.dsTertiary)
+                        .padding(.horizontal, 4).padding(.vertical, 1)
+                        .background(Capsule().fill(Color.white.opacity(0.08)))
+                        .fixedSize()
+                        .help("Task code — shown in the notch while focusing")
+                }
+
                 Text(task.title)
                     .font(.system(.callout, design: .rounded).weight(.medium))
                     .lineLimit(1)
@@ -603,41 +751,22 @@ struct MenuBarView: View {
                     .fixedSize()
             }
 
-            // Expand to manage subtasks / notes.
-            Button {
-                withAnimation(DS.Motion.gentle) {
-                    if expandedTasks.contains(task.id) { expandedTasks.remove(task.id) }
-                    else { expandedTasks.insert(task.id) }
-                }
-            } label: {
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(.secondary)
-                    .rotationEffect(.degrees(expandedTasks.contains(task.id) ? 180 : 0))
-                    .frame(width: 18, height: 18)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.pressableSubtle)
-
-            // Delete hides behind "…" — revealed on hover so the dense row
-            // stays uncluttered, and never a bare trash button.
+            // Every secondary action, subtasks/notes included, lives in this ⋮
+            // menu — the chevron used to sit here and cost the title width.
             Menu {
-                Button(role: .destructive) { tasks.delete(task.id) } label: {
-                    Label("Delete", systemImage: "trash")
-                }
+                taskMenuItems(task)
             } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 20, height: 20)
+                // U+22EE text, not drawn dots — see the note in TasksView.rowMenu.
+                Text("⋮")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(Color.dsSecondary)
+                    .frame(width: 16, height: 20)
                     .contentShape(Rectangle())
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .fixedSize()
-            .opacity(hoveredTask == task.id ? 1 : 0)
-            .animation(DS.Motion.hover, value: hoveredTask)
-            .help("Delete task")
+            .help("More actions")
 
             Button {
                 startFocus(on: task)
@@ -665,7 +794,27 @@ struct MenuBarView: View {
             if inside { hoveredTask = task.id }
             else if hoveredTask == task.id { hoveredTask = nil }
         }
-        .contextMenu {
+        .contextMenu { taskMenuItems(task) }
+    }
+
+    /// The full task action menu — shared by the row's right-click context menu
+    /// and its ⋮ overflow button so both offer identical actions.
+    @ViewBuilder
+    private func taskMenuItems(_ task: TaskItem) -> some View {
+            // The chevron's old job, now that the row no longer carries one.
+            if task.subtaskProgress.total > 0 || !task.notes.isEmpty {
+                Button {
+                    withAnimation(DS.Motion.gentle) {
+                        if expandedTasks.contains(task.id) { expandedTasks.remove(task.id) }
+                        else { expandedTasks.insert(task.id) }
+                    }
+                } label: {
+                    Label(expandedTasks.contains(task.id) ? "Hide subtasks & notes"
+                                                          : "Subtasks & notes",
+                          systemImage: "list.bullet.indent")
+                }
+                Divider()
+            }
             Button { editorTask = task } label: {
                 Label("Edit…", systemImage: "pencil")
             }
@@ -765,10 +914,9 @@ struct MenuBarView: View {
                 Label("Move down", systemImage: "arrow.down")
             }
             Divider()
-            Button(role: .destructive) { tasks.delete(task.id) } label: {
+            Button(role: .destructive) { pendingDeleteTask = task } label: {
                 Label("Delete", systemImage: "trash")
             }
-        }
     }
 
     /// Colored bucket pill for a task's category.
@@ -1009,130 +1157,102 @@ struct MenuBarView: View {
             timer.toggle()
             return
         }
-        tasks.setActive(task.id)
+        tasks.selectFocusTarget(task.id)
         timer.startFocusSession(kind: tasks.resolvedActiveKind)
     }
 
     // MARK: - Pieces
 
+    /// One row, every control the same 36×36 circle so the whole strip reads as
+    /// one family: Small · Normal · Big (pomodoro size) — a divider — Skip ·
+    /// Start · Reset · −5m · +5m · Auto. Labels live in tooltips; the row would
+    /// never fit the popover's fixed width if every button also carried text.
     private var controls: some View {
-        VStack(spacing: 8) {
-            kindSelector
-            GlassButton(label: timer.isRunning ? "Pause" : "Start",
-                        systemImage: timer.isRunning ? "pause.fill" : "play.fill",
-                        prominent: true,
-                        accent: timer.settings.theme.accent,
-                        action: startTapped)
-                // Gentle breathing pulse while the timer runs. Keyed on
-                // `isRunning` (not the one-shot `heartbeat`) so the repeating
-                // animation actually starts when the user presses Start.
-                .scaleEffect(timer.isRunning && !reduceMotion ? 1.012 : 1.0)
-                .animation(timer.isRunning && !reduceMotion
-                           ? .easeInOut(duration: 1.1).repeatForever(autoreverses: true)
-                           : .default,
-                           value: timer.isRunning)
-                // When a task is required but none exists, Start would silently
-                // do nothing — dim + disable it so the dead tap is visible.
-                .opacity(startBlocked ? 0.45 : 1)
-                .disabled(startBlocked)
-                .help(startBlocked ? "Add or pick a task to start a focus session" : "")
-            HStack(spacing: 8) {
-                GlassButton(label: "Skip",
-                            systemImage: "forward.end.fill",
-                            accent: timer.settings.theme.accent,
-                            action: { timer.skip() })
-                GlassButton(label: "Reset",
-                            systemImage: "arrow.counterclockwise",
-                            tint: .red.opacity(0.95),
-                            accent: timer.settings.theme.accent,
-                            action: { timer.stop() })
-            }
-            HStack(spacing: 8) {
-                GlassButton(label: "+5m",
-                            systemImage: "plus",
-                            tint: .green.opacity(0.95),
-                            accent: timer.settings.theme.accent,
-                            action: { timer.addTime(300) })
-                GlassButton(label: "-5m",
-                            systemImage: "minus",
-                            tint: .orange.opacity(0.95),
-                            accent: timer.settings.theme.accent,
-                            action: { timer.removeTime(300) })
-            }
-            autoModeToggle
-        }
-    }
-
-    /// Small / Normal / Big pomodoro switch. Applies to the next focus block —
-    /// a session that is already running keeps its length.
-    private var kindSelector: some View {
         let accent = timer.settings.theme.accent
-        return HStack(spacing: 4) {
+        return HStack(spacing: 6) {
             ForEach(PomodoroKind.allCases) { kind in
                 let selected = timer.settings.activeKind == kind
                 let cfg = timer.settings.config(for: kind)
-                Button {
+                circleButton(kind.systemImage, selected: selected, accent: accent,
+                            help: "\(kind.label): \(cfg.focusMinutes) min focus, \(cfg.breakMinutes) min break") {
                     timer.applyKind(kind)
-                } label: {
-                    VStack(spacing: 1) {
-                        HStack(spacing: 4) {
-                            Image(systemName: kind.systemImage)
-                                .font(.system(size: 9, weight: .semibold))
-                            Text(kind.label)
-                                .font(.system(.caption, design: .rounded).weight(.bold))
-                        }
-                        Text("\(cfg.focusMinutes)′ + \(cfg.breakMinutes)′")
-                            .font(.system(size: 9, design: .rounded).weight(.medium))
-                            .opacity(0.7)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 6)
-                    .background(
-                        Capsule().fill(selected ? accent.opacity(0.24) : Color.clear))
-                    .overlay(
-                        Capsule().stroke(selected ? accent.opacity(0.65) : Color.clear,
-                                         lineWidth: 1))
-                    .foregroundStyle(selected ? accent : Color.primary.opacity(0.7))
-                    .contentShape(Capsule())
                 }
-                .buttonStyle(.pressableSubtle)
-                .help("\(kind.label): \(cfg.focusMinutes) min focus, \(cfg.breakMinutes) min break")
+            }
+            Divider().frame(height: 22)
+            circleButton("forward.end.fill", accent: accent, help: "Skip") { timer.skip() }
+            startPauseCircle
+            circleButton("arrow.counterclockwise", tint: .red.opacity(0.9), accent: accent,
+                        help: "Reset") { timer.stop() }
+            circleButton("minus", tint: .orange.opacity(0.9), accent: accent,
+                        help: "-5 minutes") { timer.removeTime(300) }
+            circleButton("plus", tint: .green.opacity(0.9), accent: accent,
+                        help: "+5 minutes") { timer.addTime(300) }
+            circleButton("infinity", selected: timer.settings.autoCycle,
+                        tint: timer.settings.autoCycle ? .green : .primary.opacity(0.85),
+                        accent: .green,
+                        help: "Auto mode: focus → break → focus runs continuously, no manual Start") {
+                timer.settings.autoCycle.toggle()
             }
         }
-        .padding(3)
-        .background(Capsule().fill(Color.white.opacity(0.06)))
-        .animation(DS.Motion.snappy, value: timer.settings.activeKind)
+        .frame(maxWidth: .infinity)
     }
 
-    /// Auto mode — run focus → break → focus → break continuously, hands-free.
-    private var autoModeToggle: some View {
-        let on = timer.settings.autoCycle
-        return Button {
-            timer.settings.autoCycle.toggle()
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "infinity")
-                    .font(.system(size: 13, weight: .bold))
-                Text(on ? "Auto mode: ON" : "Auto mode")
-                    .font(.system(.callout, design: .rounded).weight(.semibold))
-                Spacer()
-                Image(systemName: on ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 14))
-            }
-            .padding(.horizontal, 14).padding(.vertical, 9)
-            .frame(maxWidth: .infinity)
-            .background(
-                Capsule().fill(on ? Color.green.opacity(0.22) : Color.white.opacity(0.06))
-            )
-            .overlay(
-                Capsule().stroke(on ? Color.green.opacity(0.6) : Color.white.opacity(0.12),
-                                 lineWidth: 1)
-            )
-            .foregroundStyle(on ? Color.green : Color.primary.opacity(0.85))
-            .contentShape(Capsule())
+    private var startPauseCircle: some View {
+        circleButton(timer.isRunning ? "pause.fill" : "play.fill",
+                    prominent: true, accent: timer.settings.theme.accent,
+                    help: startBlocked ? "Add or pick a task to start a focus session"
+                                       : (timer.isRunning ? "Pause" : "Start"),
+                    action: startTapped)
+            // Gentle breathing pulse while the timer runs.
+            .scaleEffect(timer.isRunning && !reduceMotion ? 1.03 : 1.0)
+            .animation(timer.isRunning && !reduceMotion
+                       ? .easeInOut(duration: 1.1).repeatForever(autoreverses: true)
+                       : .default,
+                       value: timer.isRunning)
+            // When a task is required but none exists, Start would silently do
+            // nothing — dim + disable it so the dead tap is visible.
+            .opacity(startBlocked ? 0.45 : 1)
+            .disabled(startBlocked)
+    }
+
+    /// One uniform 36×36 circle used for every control in `controls` — same
+    /// shape and size whether it's a pomodoro-size pick, Start, or a nudge, so
+    /// the strip reads as one consistent family instead of mismatched pills.
+    private func circleButton(_ systemImage: String, selected: Bool = false,
+                              prominent: Bool = false, tint: Color = .primary,
+                              accent: Color, help: String,
+                              action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 13, weight: .bold))
+                .contentTransition(.opacity)
+                .foregroundStyle(prominent ? Color.white
+                                  : (selected ? accent : tint.opacity(0.85)))
+                .frame(width: 36, height: 36)
+                .background(circleBackground(selected: selected, prominent: prominent, accent: accent))
+                .overlay(
+                    Circle().stroke(
+                        prominent ? Color.white.opacity(0.25)
+                        : (selected ? accent.opacity(0.6) : Color.clear),
+                        lineWidth: 1)
+                )
+                .contentShape(Circle())
         }
         .buttonStyle(.pressableSubtle)
-        .help("Auto mode: focus → break → focus runs continuously, no manual Start")
+        .help(help)
+    }
+
+    @ViewBuilder
+    private func circleBackground(selected: Bool, prominent: Bool, accent: Color) -> some View {
+        if prominent {
+            Circle().fill(LinearGradient(colors: [accent, accent.opacity(0.82)],
+                                         startPoint: .top, endPoint: .bottom))
+                .shadow(color: accent.opacity(0.5), radius: 6, y: 2)
+        } else if selected {
+            Circle().fill(accent.opacity(0.24))
+        } else {
+            Circle().fill(Color.white.opacity(0.06))
+        }
     }
 
     /// True when Start can do nothing: the "require a task" rule is on, no task
@@ -1155,7 +1275,17 @@ struct MenuBarView: View {
         // Otherwise: no task + rule on → nothing runs.
     }
 
-    private var statsStrip: some View {
+    private func stat(value: String, label: String) -> some View {
+        VStack(spacing: 4) {
+            Text(value).font(.system(.title3, design: .rounded).weight(.bold).monospacedDigit())
+            Text(label).font(.system(.caption, design: .rounded).weight(.medium))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// Today / Cycle / Streak stats and the Sync / Settings / Quit actions,
+    /// combined into a single row so the footer no longer takes two.
+    private var footer: some View {
         HStack(spacing: 14) {
             stat(value: "\(timer.stats.completedTodayCount())", label: "Today")
             stat(value: "\(timer.cyclesCompletedInRound)/\(timer.settings.longBreakEvery)",
@@ -1165,21 +1295,9 @@ struct MenuBarView: View {
                      label: "Repeat")
             }
             stat(value: "\(timer.stats.streak.currentStreak)", label: "Streak")
-        }
-        .frame(maxWidth: .infinity)
-    }
 
-    private func stat(value: String, label: String) -> some View {
-        VStack(spacing: 4) {
-            Text(value).font(.system(.title3, design: .rounded).weight(.bold).monospacedDigit())
-            Text(label).font(.system(.caption, design: .rounded).weight(.medium))
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-    }
+            Spacer(minLength: 12)
 
-    private var footer: some View {
-        HStack(spacing: 14) {
             if let engine = AppServices.syncEngine {
                 SyncFooterButton(engine: engine)
             }
@@ -1193,8 +1311,6 @@ struct MenuBarView: View {
             .buttonStyle(.pressableSubtle)
             .foregroundStyle(.secondary)
             .help("Settings")
-
-            Spacer()
 
             Button { NSApp.terminate(nil) } label: {
                 Label("Quit", systemImage: "power")

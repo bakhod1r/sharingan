@@ -17,9 +17,17 @@ extension TaskItem: SyncableRecord {
             recurrence: recurrence.stringValue, project: project,
             priority: priority.rawValue, completedAt: completedAt,
             pomodoroKind: pomodoroKind?.rawValue, jiraKey: jiraKey,
-            jiraIssueID: jiraIssueID, jiraSiteHost: jiraSiteHost))
+            jiraIssueID: jiraIssueID, jiraSiteHost: jiraSiteHost,
+            boardColumnID: boardColumnID, trashedAt: trashedAt))
     }
 
+    // originDevice and number are deliberately NOT hashed: both are immutable
+    // and set locally at creation, so two Macs that assign their own value for
+    // a task created before the field existed must not read as "changed" and
+    // sync-fight. (For number that fight would be endless: each Mac backfills
+    // its own sequence, stamps modifiedAt, pushes, and the other backfills
+    // back.) Both still travel in the CKRecord (see RecordMapper) — the hash
+    // just doesn't gate on them.
     private struct SyncPayload: Encodable {
         let title: String, category: String, tags: [String], isDone: Bool
         let pomodorosDone: Int, createdAt: Date, dueDate: Date?
@@ -27,6 +35,7 @@ extension TaskItem: SyncableRecord {
         let notes: String, subtasks: [Subtask], recurrence: String
         let project: String?, priority: Int, completedAt: Date?, pomodoroKind: String?
         let jiraKey: String?, jiraIssueID: String?, jiraSiteHost: String?
+        let boardColumnID: String?, trashedAt: Date?
     }
 }
 

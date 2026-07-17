@@ -27,17 +27,23 @@ struct WeeklyBoardView: View {
     @State private var categoryFilter: String?
     @State private var tagFilter: String?
     @State private var priorityFilter: TaskPriority?
+    @State private var deviceFilter: String?
     private var isNarrowed: Bool {
-        categoryFilter != nil || tagFilter != nil || priorityFilter != nil
+        categoryFilter != nil || tagFilter != nil || priorityFilter != nil || deviceFilter != nil
     }
 
     private let columnWidth: CGFloat = 204
+    /// Cards must be sized, not merely capped: the board scrolls horizontally,
+    /// so the column is handed an unspecified width proposal, and under one a
+    /// `maxWidth: .infinity` card resolves to its own ideal width — which for a
+    /// long title is far wider than the column, spilling over both neighbours.
+    private var cardWidth: CGFloat { columnWidth - 24 }   // minus the column's padding
 
     /// A column's cards as shown: narrowed by the filter, in the shared sort
     /// order (the store already hands columns over in manual order).
     private func boardItems(_ items: [TaskItem]) -> [TaskItem] {
         narrowTasks(items, category: categoryFilter, tag: tagFilter,
-                    priority: priorityFilter)
+                    priority: priorityFilter, device: deviceFilter)
             .sorted(by: sortMode.inOrder)
     }
 
@@ -165,7 +171,8 @@ struct WeeklyBoardView: View {
             TaskFilterMenuItems(store: store, settings: timer.settings,
                                 categoryFilter: $categoryFilter,
                                 tagFilter: $tagFilter,
-                                priorityFilter: $priorityFilter)
+                                priorityFilter: $priorityFilter,
+                                deviceFilter: $deviceFilter)
         } label: {
             menuCircle(isNarrowed ? "line.3.horizontal.decrease.circle.fill"
                                   : "line.3.horizontal.decrease.circle",
@@ -391,94 +398,67 @@ struct WeeklyBoardView: View {
 
     // MARK: - Card
 
+    /// A Jira issue card: title on top, then a meta lane carrying the issue-type
+    /// square, the issue key, and — pushed right — priority, subtask count and
+    /// the estimate pill. Flat surface, tight radius, hairline border: the card
+    /// reads as a document, not as glass.
     private func card(_ task: TaskItem) -> some View {
         let color = Color(hex: store.color(for: task.category))
         let hovered = hoveredCard == task.id
-        return VStack(alignment: .leading, spacing: 6) {
+        return VStack(alignment: .leading, spacing: 8) {
             Text(task.title)
-                .font(.system(.callout, design: .rounded).weight(.medium))
-                .foregroundStyle(.white)
-                .lineLimit(2)
+                .font(.system(size: 12.5, design: .rounded).weight(.regular))
+                .foregroundStyle(.white.opacity(0.92))
+                .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
 
-            let showBadge = timer.settings.showPomodoroBadges
-                && (task.pomodorosDone > 0 || task.effectiveEstimate != nil)
-            let hasMeta = task.dueDate != nil || task.subtaskProgress.total > 0
-                || showBadge || !task.tags.isEmpty || task.priority != .none
-            if hasMeta {
-                HStack(spacing: 7) {
-                    if task.priority != .none, let hex = timer.settings.priorityColorHex(task.priority) {
-                        Image(systemName: "flag.fill")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(Color(hex: hex))
-                            .help(timer.settings.priorityName(task.priority))
-                    }
-                    if let due = task.dueDate {
-                        Label(shortDue(due), systemImage: "calendar")
-                            .labelStyle(.titleAndIcon)
-                            .font(.system(size: 10, weight: .semibold, design: .rounded))
-                            .foregroundStyle(task.isOverdue() ? Color.red : .white.opacity(0.55))
-                    }
-                    if let tag = task.tags.first {
-                        Text("#\(tag)")
-                            .font(.system(size: 10, weight: .semibold, design: .rounded))
-                            .foregroundStyle(color)
-                    }
-                    if task.subtaskProgress.total > 0 {
-                        Label("\(task.subtaskProgress.done)/\(task.subtaskProgress.total)", systemImage: "checklist")
-                            .font(.system(size: 10, design: .rounded))
-                            .foregroundStyle(task.subtaskProgress.done == task.subtaskProgress.total
-                                             ? Color.green : .white.opacity(0.55))
-                    }
-                    Spacer(minLength: 0)
-                    if showBadge {
-                        Text(task.effectiveEstimate.map { "🍅\(task.pomodorosDone)/\($0)" }
-                             ?? "🍅\(task.pomodorosDone)")
-                            .font(.system(size: 10, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.6))
-                    }
-                }
+            // The deadline gets a row of its own: squeezed onto the meta lane it
+            // had no width left for its text and collapsed to a bare icon.
+            if let due = task.dueDate {
+                dueLozenge(task, due)
             }
+
+            metaLane(task, color)
         }
-        .padding(.leading, 12).padding(.trailing, 9).padding(.vertical, 9)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        // Only as tall as its content — without this the greedy accent shape
+        .padding(.horizontal, 10).padding(.vertical, 10)
+        .frame(width: cardWidth, alignment: .leading)
+        .frame(minHeight: 78, alignment: .top)
+        // Only as tall as its content — without this the greedy background
         // stretched each card to fill the whole 440pt column.
         .fixedSize(horizontal: false, vertical: true)
         .background(
-            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .fill(LinearGradient(
-                    colors: [Color.white.opacity(hovered ? 0.15 : 0.09),
-                             Color.white.opacity(hovered ? 0.08 : 0.04)],
-                    startPoint: .top, endPoint: .bottom))
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .fill(Color.white.opacity(hovered ? 0.13 : 0.075))
         )
-        // Category accent as a leading bar sized to the card, not a greedy sibling.
-        .overlay(alignment: .leading) {
-            RoundedRectangle(cornerRadius: 2)
-                .fill(color)
-                .frame(width: 3)
-                .padding(.vertical, 6)
-        }
         .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .stroke(color.opacity(hovered ? 0.55 : 0.2), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .stroke(Color.white.opacity(hovered ? 0.18 : 0.09), lineWidth: 1)
         )
-        .scaleEffect(hovered ? 1.035 : 1)
-        .shadow(color: .black.opacity(hovered ? 0.3 : 0.12), radius: hovered ? 9 : 4, y: hovered ? 5 : 2)
+        .shadow(color: .black.opacity(hovered ? 0.28 : 0.14), radius: hovered ? 6 : 2, y: hovered ? 3 : 1)
         .animation(DS.Motion.standard, value: hovered)
-        .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
         .onTapGesture { editorTask = task }
         .onHover { inside in
             hoveredCard = inside ? task.id : (hoveredCard == task.id ? nil : hoveredCard)
         }
         .draggable(task.id.uuidString) {
-            Text(task.title)
-                .font(.system(.callout, design: .rounded).weight(.semibold))
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .padding(.horizontal, 12).padding(.vertical, 8)
-                .background(RoundedRectangle(cornerRadius: 10).fill(color.opacity(0.95)))
-                .shadow(color: .black.opacity(0.4), radius: 10, y: 4)
+            // Jira's drag ghost is the card itself, tilted a couple of degrees.
+            HStack(spacing: 6) {
+                typeSquare(color)
+                Text(task.title)
+                    .font(.system(size: 12.5, design: .rounded).weight(.medium))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            .padding(.horizontal, 10).padding(.vertical, 9)
+            .frame(maxWidth: cardWidth, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .fill(Color.black.opacity(0.75)))
+            .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .stroke(Color.white.opacity(0.18), lineWidth: 1))
+            .shadow(color: .black.opacity(0.45), radius: 10, y: 4)
+            .rotationEffect(.degrees(-2))
         }
         .contextMenu {
             Button { startFocus(task) } label: {
@@ -507,6 +487,130 @@ struct WeeklyBoardView: View {
         }
     }
 
+    /// The card's footer: what the task *is* (type, code) on the left, how it's
+    /// tracking (priority, steps, pomodoros) on the right. Every chip is
+    /// `.fixedSize()` — without it they wrap character by character ("0 / 3") —
+    /// and together they stay well inside the column at their natural width.
+    private func metaLane(_ task: TaskItem, _ color: Color) -> some View {
+        HStack(spacing: 6) {
+            typeSquare(color)
+            if let code = task.code {
+                Text(code)
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .tracking(0.4)
+                    .foregroundStyle(.white.opacity(0.5))
+                    .strikethrough(task.isDone, color: .white.opacity(0.4))
+                    .fixedSize()
+                    .textSelection(.enabled)
+            }
+            Spacer(minLength: 0)
+            if task.priority != .none, let hex = timer.settings.priorityColorHex(task.priority) {
+                Image(systemName: priorityArrow(task.priority))
+                    .font(.system(size: 10, weight: .black))
+                    .foregroundStyle(Color(hex: hex))
+                    .help(timer.settings.priorityName(task.priority))
+                    .fixedSize()
+            }
+            if !task.subtasks.isEmpty {
+                Label("\(task.subtasks.filter(\.isDone).count)/\(task.subtasks.count)",
+                      systemImage: "checklist")
+                    .font(.system(size: 9.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.5))
+                    .fixedSize()
+            }
+            if timer.settings.showPomodoroBadges,
+               task.pomodorosDone > 0 || task.effectiveEstimate != nil {
+                storyPoints(task)
+            }
+        }
+        .lineLimit(1)
+    }
+
+    /// Jira's issue-type glyph: a small filled square, tinted by category.
+    private func typeSquare(_ color: Color) -> some View {
+        RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+            .fill(color)
+            .frame(width: 12, height: 12)
+            .overlay(
+                Image(systemName: "checkmark")
+                    .font(.system(size: 7, weight: .black))
+                    .foregroundStyle(.white.opacity(0.95))
+            )
+    }
+
+    /// Jira's due-date lozenge — the deadline reads by colour before it reads by
+    /// text: red once missed, amber while it's today or tomorrow, quiet grey
+    /// otherwise. In countdown mode the label is time-relative, so it has to be
+    /// redrawn as the clock moves: a per-minute `TimelineView` is enough, since
+    /// the finest unit shown is a minute.
+    @ViewBuilder
+    private func dueLozenge(_ task: TaskItem, _ due: Date) -> some View {
+        if timer.settings.deadlineAsCountdown && !task.isDone {
+            TimelineView(.periodic(from: .now, by: 60)) { ctx in
+                lozengeBody(due, overdue: task.isOverdue(now: ctx.date),
+                            text: DueDate.countdown(to: due, now: ctx.date))
+            }
+        } else {
+            lozengeBody(due, overdue: task.isOverdue(), text: dueLabel(due))
+        }
+    }
+
+    private func lozengeBody(_ due: Date, overdue: Bool, text: String) -> some View {
+        let soon = !overdue && (cal.isDateInToday(due) || cal.isDateInTomorrow(due))
+        let tint: Color = overdue ? .red : soon ? .orange : .white.opacity(0.55)
+        return HStack(spacing: 3) {
+            Image(systemName: overdue ? "clock.badge.exclamationmark.fill"
+                              : timer.settings.deadlineAsCountdown ? "timer" : "calendar")
+            Text(text)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+            .font(.system(size: 9.5, weight: .semibold, design: .rounded))
+            .foregroundStyle(overdue || soon ? tint : .white.opacity(0.55))
+            .padding(.horizontal, 5).padding(.vertical, 2)
+            .background(Capsule().fill(tint.opacity(overdue || soon ? 0.16 : 0.08)))
+            .contentTransition(.numericText())
+            .help(overdue ? "Overdue — due \(fullDue(due))" : "Due \(fullDue(due))")
+    }
+
+    /// Short enough for a 204pt column: a weekday inside this week, a date
+    /// outside it, plus the time when the deadline carries one.
+    private func dueLabel(_ due: Date) -> String {
+        let day: String
+        if cal.isDateInToday(due) { day = "Today" }
+        else if cal.isDateInTomorrow(due) { day = "Tomorrow" }
+        else if cal.isDateInYesterday(due) { day = "Yesterday" }
+        else if let days = cal.dateComponents([.day], from: Date(), to: due).day,
+                (0..<7).contains(days) { day = fmt("EEE", due) }
+        else { day = fmt("MMM d", due) }
+        return DueDate.isDateOnly(due) ? day : "\(day) \(fmt("HH:mm", due))"
+    }
+
+    private func fullDue(_ due: Date) -> String {
+        DueDate.isDateOnly(due) ? fmt("EEEE, MMM d", due) : fmt("EEEE, MMM d 'at' HH:mm", due)
+    }
+
+    /// Jira's story-point pill: a grey capsule at the card's trailing edge.
+    private func storyPoints(_ task: TaskItem) -> some View {
+        Text(task.effectiveEstimate.map { "\(task.pomodorosDone)/\($0)" }
+             ?? "\(task.pomodorosDone)")
+            .font(.system(size: 9.5, weight: .semibold, design: .rounded))
+            .foregroundStyle(.white.opacity(0.75))
+            .padding(.horizontal, 6).padding(.vertical, 2)
+            .background(Capsule().fill(Color.white.opacity(0.12)))
+            .fixedSize()
+            .help("\(task.pomodorosDone) of \(task.effectiveEstimate.map(String.init) ?? "—") pomodoros")
+    }
+
+    /// Jira ranks priority with arrows, not flags: up = high, down = low.
+    private func priorityArrow(_ p: TaskPriority) -> String {
+        switch p.rawValue {
+        case 1:  return "arrow.down"
+        case 2:  return "equal"
+        default: return "arrow.up"   // 3 and any custom level above it
+        }
+    }
+
     // MARK: - Helpers
 
     private func startFocus(_ task: TaskItem) {
@@ -519,9 +623,6 @@ struct WeeklyBoardView: View {
     private func dayNumber(_ d: Date) -> String { fmt("d", d) }
     private func dayKey(_ d: Date) -> String {
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; return f.string(from: d)
-    }
-    private func shortDue(_ d: Date) -> String {
-        Calendar.current.isDateInToday(d) ? "today" : fmt("MMM d", d)
     }
     private func fmt(_ pattern: String, _ d: Date) -> String {
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US")

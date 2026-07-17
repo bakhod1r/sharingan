@@ -16,6 +16,8 @@ struct MenuBarWeekView: View {
     @State private var targetedColumn: String?
     /// Draft for the quick-add field in the Unscheduled column.
     @State private var backlogDraft = ""
+    /// Task open in the full editor sheet (nil = closed).
+    @State private var editorTask: TaskItem?
     /// Same ordering the Tasks list and main-window board use — one shared
     /// preference; applies within every column.
     @AppStorage("tasks.sortMode") private var sortModeRaw = TaskSortMode.manual.rawValue
@@ -66,6 +68,11 @@ struct MenuBarWeekView: View {
                 }
                 .padding(.vertical, 2)
             }
+        }
+        .sheet(item: $editorTask) { task in
+            TaskEditorView(task: task,
+                           accent: timer.settings.theme.accent,
+                           settings: timer.settings)
         }
     }
 
@@ -353,6 +360,11 @@ struct MenuBarWeekView: View {
             RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
                 .stroke(color.opacity(0.2), lineWidth: 1)
         )
+        // Tap opens the editor. Ordered ahead of `.draggable` so the tap sees
+        // the card's own shape: a tap never travels, so it can't shadow the
+        // drag, which only engages once the pointer moves.
+        .contentShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+        .onTapGesture { editorTask = task }
         .draggable(task.id.uuidString) {
             Text(task.title)
                 .font(.system(.caption, design: .rounded).weight(.semibold))
@@ -360,6 +372,7 @@ struct MenuBarWeekView: View {
                 .background(RoundedRectangle(cornerRadius: DS.Radius.sm).fill(Color.black.opacity(0.7)))
         }
         .contextMenu {
+            Button("Edit…") { editorTask = task }
             Button("Start focus") { startFocus(on: task) }
             Button(task.isDone ? "Mark not done" : "Mark done") { store.toggleDone(task.id) }
             Divider()
@@ -413,7 +426,7 @@ struct MenuBarWeekView: View {
             timer.toggle()
             return
         }
-        store.setActive(task.id)
+        store.selectFocusTarget(task.id)
         timer.startFocusSession(kind: store.resolvedActiveKind)
     }
 }
