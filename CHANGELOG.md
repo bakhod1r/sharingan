@@ -5,6 +5,43 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.7.0] — 2026-07-17
+
+### Added
+- Tasks carry a permanent issue number, shown as "T-42" everywhere a task
+  is named — notch, widget, menu bar, board, task list, report. It replaces
+  the UUID-derived short code that could collide; existing tasks are
+  backfilled oldest-first, and numbers are never reused or renumbered.
+- Trash for tasks: deleting soft-deletes with restore, permanent delete,
+  Empty Trash, and automatic retention purge on launch.
+- Projects: a second colour/icon-tagged axis alongside categories, managed
+  from the sidebar (add/rename/recolor/delete).
+- Due dates can carry an optional time of day.
+- Deadlines can read as a countdown ("2d 4h left") via a new setting; a
+  date-only due expires at the end of its day, matching the overdue rule.
+- Settings → iCloud sync gained "Retry at most every" (1–15 min) to cap
+  sync push retry backoff.
+
+### Changed
+- Board cards restyled Jira-like: flat surface, tight radius, a footer lane
+  with type square, task code, priority arrow, subtask count and estimate
+  pill; the deadline gets its own row. Cards size themselves instead of
+  stretching, so long titles no longer spill across neighbouring columns.
+- iCloud pushes go through a durable per-record outbox with tombstones that
+  survive shadow resets, with exponential-backoff retry.
+
+### Fixed
+- Saving task templates wiped every template from the database on the next
+  launch: the post-save prune matched template *names* against UUID keys and
+  deleted all rows. Templates now prune by their UUID column.
+- Sync retry backoff never actually reached its documented 5-minute
+  ceiling; the cap is applied (and now configurable).
+- The break overlay respects "Auto-start break", and the task picker is
+  shown after a break whenever "Auto-start focus" is off.
+- A menu-bar icon that AppKit parked off-screen at the bottom-left corner
+  (no slot found) stayed invisible for good; that case is now detected and
+  repaired alongside the behind-the-notch one.
+
 ## [1.6.1] — 2026-07-15
 
 ### Fixed

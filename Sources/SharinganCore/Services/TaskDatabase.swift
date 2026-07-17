@@ -821,9 +821,10 @@ final class TaskDatabase: SyncOutboxStorage {
         }
     }
 
-    private func deleteMissingNamed(_ table: String, keep: [String], guardSQL: String?) {
+    private func deleteMissingNamed(_ table: String, keyColumn: String = "name",
+                                    keep: [String], guardSQL: String?) {
         let placeholders = keep.isEmpty ? "''" : keep.map { _ in "?" }.joined(separator: ",")
-        var sql = "DELETE FROM \(table) WHERE name NOT IN (\(placeholders))"
+        var sql = "DELETE FROM \(table) WHERE \(keyColumn) NOT IN (\(placeholders))"
         if let guardSQL { sql += " AND \(guardSQL)" }
         sql += ";"
         run(sql) { stmt in
@@ -881,7 +882,8 @@ final class TaskDatabase: SyncOutboxStorage {
                 ON CONFLICT(uuid) DO UPDATE SET name=excluded.name, json=excluded.json;
                 """) { bindText($0, 1, t.id.uuidString); bindText($0, 2, t.name); bindText($0, 3, json) }
             }
-            deleteMissingNamed("templates", keep: templates.map(\.id.uuidString), guardSQL: nil)
+            deleteMissingNamed("templates", keyColumn: "uuid",
+                               keep: templates.map(\.id.uuidString), guardSQL: nil)
             return true
         }
     }

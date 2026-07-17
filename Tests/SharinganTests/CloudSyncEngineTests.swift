@@ -41,12 +41,24 @@ struct CloudSyncEngineTests {
         #expect(pending.first?.recordName == edited.recordName)
     }
 
-    @Test func deletedTaskProducesADeletionNotACreation() {
+    @Test func trashedTaskSyncsAsAChangeNotADeletion() {
+        let store = tempStore()
+        store.add(title: "doomed")
+        let shadow = CloudSyncEngine.shadowSnapshot(of: store)
+        store.delete(store.tasks[0].id) // soft delete → Trash
+
+        let diff = SyncShadow.diff(local: store.tasks, shadow: shadow)
+        #expect(diff.deletedRecordNames.isEmpty)
+        #expect(diff.created.isEmpty)
+        #expect(diff.changed.map(\.recordName) == [store.tasks[0].recordName])
+    }
+
+    @Test func permanentlyDeletedTaskProducesADeletionNotACreation() {
         let store = tempStore()
         store.add(title: "doomed")
         let shadow = CloudSyncEngine.shadowSnapshot(of: store)
         let name = store.tasks[0].recordName
-        store.delete(store.tasks[0].id)
+        store.deletePermanently(store.tasks[0].id)
 
         let diff = SyncShadow.diff(local: store.tasks, shadow: shadow)
         #expect(diff.deletedRecordNames == [name])
