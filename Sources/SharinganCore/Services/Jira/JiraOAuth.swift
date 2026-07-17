@@ -93,11 +93,37 @@ public actor JiraOAuth {
     /// platform API) works. **The OAuth app must also have the "Jira Software
     /// API" added with these scopes selected in the Atlassian developer
     /// console**, otherwise authorization fails with an invalid-scope error.
+    ///
+    /// **Fully granular — not mixed with classic scopes.** The Agile API
+    /// (`/rest/agile/1.0/…`) rejects a token that carries *both* classic
+    /// (`read:jira-work`) and granular (`*:jira-software`) scopes with
+    /// "scope does not match", so the whole app moved to granular scopes; every
+    /// one below must also be enabled on the OAuth app in the developer console.
     public static let defaultScopes = [
-        "read:jira-user", "read:jira-work", "write:jira-work",
+        // Jira platform (granular)
+        "read:jql:jira",
+        "read:issue:jira",
+        "read:issue-details:jira",
+        "read:issue-meta:jira",
+        "read:issue.changelog:jira",
+        "read:issue.transition:jira",
+        "write:issue:jira",
+        "read:comment:jira",
+        "write:comment:jira",
+        "read:worklog:jira",
+        "write:worklog:jira",
+        "read:project:jira",
+        "read:issue-type:jira",
+        "read:field:jira",
+        "read:status:jira",
+        "read:priority:jira",
+        "read:user:jira",
+        "read:permission:jira",
+        // Jira Software (Agile) — the board / sprint API
         "read:board-scope:jira-software",
         "read:sprint:jira-software",
         "write:sprint:jira-software",
+        // Refresh tokens
         "offline_access",
     ]
 
