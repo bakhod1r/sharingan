@@ -55,7 +55,7 @@
 - CSV export.
 - **Focus queue**: line up several tasks — each finished pomodoro advances to the next one, the break screen shows "Next: …", and after a break a picker asks what to work on next.
 - **Eisenhower matrix** view: tasks sorted into do-first / schedule / delegate / eliminate by urgency and importance.
-- **Weekly board**: drag tasks between days to reschedule; sort & filter controls in the header order every column and narrow the whole board. The menu-bar popover’s Week tab carries the same two controls. Lives in the **Board** section (sidebar) as its **Weekly** tab. The section (`BoardSectionView`, `BoardTab` in SharinganCore) has three tabs — **Weekly**, **Board**, **Jira** — and remembers the last used one (`board.tab` default). The **Board** tab (`SharinganBoardView`) is a **customizable kanban** over the local task list (since 1.12.0; shipped 1.10.0 with fixed columns). Columns are user-defined (`BoardColumn`/`BoardColumnStore`) — add, rename, reorder, hide, delete — seeded with Today / This Week / In Progress / Paused / Done / Cancelled. A task names its column via `TaskItem.boardColumnID` (nil / disabled / deleted falls back to the first column); the one built-in coupling is a `role == .done` column, which drives `isDone` so dragging a card in/out completes/reopens the task. The column list persists to `board.columns` and rides `SettingsSync` across Macs; `boardColumnID` is a synced Task field (**CloudKit promote gate** — five Task fields now). The **Jira** tab appears only when Jira is integrated (`isConnected`); a disconnected user sees only Weekly and Board.
+- **Weekly board**: drag tasks between days to reschedule; sort & filter controls in the header order every column and narrow the whole board. The menu-bar popover’s Week tab carries the same two controls. Lives in the **Board** section (sidebar) as its **Weekly** tab. The section (`BoardSectionView`, `BoardTab` in SharinganCore) has three tabs — **Weekly**, **Board**, **Jira** — and remembers the last used one (`board.tab` default). The **Board** tab (`SharinganBoardView`) is a **customizable kanban** over the local task list (since 1.7.1). Columns are user-defined (`BoardColumn`/`BoardColumnStore`) — add, rename, reorder, hide, delete — seeded with Today / This Week / In Progress / Paused / Done / Cancelled. A task names its column via `TaskItem.boardColumnID` (nil / disabled / deleted falls back to the first column); the one built-in coupling is a `role == .done` column, which drives `isDone` so dragging a card in/out completes/reopens the task. The column list persists to `board.columns` and rides `SettingsSync` across Macs; `boardColumnID` is a synced Task field (**CloudKit promote gate** — five Task fields now). The **Jira** tab appears only when Jira is integrated (`isConnected`); a disconnected user sees only Weekly and Board.
 - **Today panel**: a floating desktop card showing today's tasks and the timer.
 - Optional guard that requires an active task before focus can start.
 
@@ -676,7 +676,7 @@ dynamic mode.
   `com.sharingan.cli.*`, Floating widget/today-panel position keys, the focus
   queue, and the task pre-reminder-minutes setting). Task/template data lives
   in `~/Library/Application Support/Sharingan/` (SQLite db + the `tired` CLI's
-  shared `cli/` snapshot files). Since 1.13.0 the bundle identifier itself is
+  shared `cli/` snapshot files). Since 1.7.1 the bundle identifier itself is
   `com.sharingan.app` (widget appex `com.sharingan.app.widget`, app group
   `group.com.sharingan.app`) — renaming it moved the `UserDefaults` domain,
   handled by the migration below.
@@ -695,7 +695,7 @@ dynamic mode.
   kept, never deleted); the old `Blink/` Application Support directory is
   moved (renamed) to `Sharingan/`, never merged into an existing `Sharingan/`
   dir. Safe to call on every launch — a copy/move only happens once, the
-  first time the new location is still empty. The 1.13.0 bundle-id rename
+  first time the new location is still empty. The 1.7.1 bundle-id rename
   (`com.blink.app` → `com.sharingan.app`) added `migrateDomain`: everything
   persisted under the old `com.blink.app` defaults domain is copied into the
   new domain (existing new-domain values win; app process only — the CLI and

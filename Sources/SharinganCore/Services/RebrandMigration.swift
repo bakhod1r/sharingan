@@ -9,7 +9,7 @@ import Foundation
 /// anything reads storage.
 public enum RebrandMigration {
 
-    /// Bundle identifiers before/after the 1.13.0 rename. Until then the app
+    /// Bundle identifiers before/after the 1.7.1 rename. Until then the app
     /// shipped as `com.blink.app`, so every persisted default lives in that
     /// domain; renaming the bundle moved `UserDefaults.standard` to a fresh,
     /// empty `com.sharingan.app` domain.
