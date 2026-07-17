@@ -106,29 +106,32 @@ struct AnalyticsHeatmapView: View {
         }
     }
 
-    /// Month abbreviation above the first week column that begins each month.
+    private let gutter: CGFloat = 26
+
+    /// Month abbreviation above the week column where each month starts.
+    /// Labels are placed by absolute x-offset and allowed to overflow, so
+    /// "Jul" isn't clipped to one 13pt cell.
     private func monthHeader(weeks: [[DailyCount?]]) -> some View {
         let cal = Calendar.current
         let fmt = DateFormatter(); fmt.dateFormat = "MMM"
-        var labels: [String] = []
+        var starts: [(Int, String)] = []
         var lastMonth = -1
-        for week in weeks {
-            let firstDay = week.compactMap { $0?.day }.first
-            if let d = firstDay {
-                let m = cal.component(.month, from: d)
-                if m != lastMonth { labels.append(fmt.string(from: d)); lastMonth = m }
-                else { labels.append("") }
-            } else { labels.append("") }
+        for (i, week) in weeks.enumerated() {
+            guard let d = week.compactMap({ $0?.day }).first else { continue }
+            let m = cal.component(.month, from: d)
+            if m != lastMonth { starts.append((i, fmt.string(from: d))); lastMonth = m }
         }
-        return HStack(spacing: gap) {
-            Color.clear.frame(width: 26, height: 12)          // weekday-column gutter
-            ForEach(Array(labels.enumerated()), id: \.offset) { _, label in
-                Text(label)
+        return ZStack(alignment: .topLeading) {
+            ForEach(starts, id: \.0) { idx, name in
+                Text(name)
                     .font(.system(size: 9, design: .rounded))
                     .foregroundStyle(.white.opacity(0.5))
-                    .frame(width: cell, height: 12, alignment: .leading)
+                    .fixedSize()
+                    .offset(x: gutter + gap + CGFloat(idx) * (cell + gap))
             }
         }
+        .frame(height: 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var footer: some View {
