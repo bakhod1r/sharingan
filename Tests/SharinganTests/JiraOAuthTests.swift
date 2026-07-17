@@ -293,7 +293,7 @@ struct JiraOAuthTests {
 
     // MARK: - Expiry maths
 
-    @Test("expiresAt comes from expires_in, and tokens go stale a minute early")
+    @Test("expiresAt comes from expires_in, and tokens go stale five minutes early")
     func expiryMathsLeavesSafetyMargin() async throws {
         defer { OAuthStubProtocol.reset() }
         let session = OAuthStubProtocol.session { request in
@@ -309,7 +309,7 @@ struct JiraOAuthTests {
         // Wire expiry is exact — the margin is applied at check time, not baked in.
         #expect(abs(tokens.expiresAt.timeIntervalSince(now.addingTimeInterval(3600))) < 1)
 
-        #expect(JiraOAuthSession.refreshMargin == 60)
+        #expect(JiraOAuthSession.refreshMargin == 300)
         let sessionModel = JiraOAuthSession(accessToken: "at-1",
                                             refreshToken: "rt-1",
                                             expiresAt: tokens.expiresAt,
@@ -318,10 +318,10 @@ struct JiraOAuthTests {
                                             scopes: tokens.scopes)
 
         #expect(!sessionModel.isExpired(asOf: now))
-        // 61s before the wire expiry: still fresh.
-        #expect(!sessionModel.isExpired(asOf: tokens.expiresAt.addingTimeInterval(-61)))
-        // 59s before the wire expiry: already treated as stale.
-        #expect(sessionModel.isExpired(asOf: tokens.expiresAt.addingTimeInterval(-59)))
+        // 301s before the wire expiry: still fresh.
+        #expect(!sessionModel.isExpired(asOf: tokens.expiresAt.addingTimeInterval(-301)))
+        // 299s before the wire expiry: already treated as stale.
+        #expect(sessionModel.isExpired(asOf: tokens.expiresAt.addingTimeInterval(-299)))
         #expect(sessionModel.isExpired(asOf: tokens.expiresAt))
         #expect(sessionModel.isExpired(asOf: tokens.expiresAt.addingTimeInterval(60)))
     }

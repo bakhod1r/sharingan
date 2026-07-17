@@ -38,7 +38,11 @@ public struct JiraOAuthSession: Sendable, Equatable {
     /// How early a token is considered stale. A request that leaves with a token
     /// valid for another 5 seconds can still land after it expires, so callers
     /// refresh ahead of the wire expiry rather than on it.
-    public static let refreshMargin: TimeInterval = 60
+    /// Refresh this long *before* the access token actually expires, so a slow
+    /// network or a little clock skew never lets an about-to-die token reach
+    /// Jira and 401. The refresh token (rotated + persisted on every refresh)
+    /// keeps the session alive for ~90 days, so this never forces a re-login.
+    public static let refreshMargin: TimeInterval = 300
 
     /// Whether the access token should be refreshed before the next request.
     public func isExpired(asOf now: Date = Date(),
