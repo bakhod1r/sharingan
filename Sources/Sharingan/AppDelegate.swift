@@ -120,10 +120,22 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
     /// uses puts the icon next to the system items, visible on every Mac, from
     /// the first launch rather than seconds later and only on notched screens.
     ///
-    /// Only ever runs when the key is absent, so a user's own ⌘-drag sticks.
+    /// Seeds only when the key is absent, so a user's own ⌘-drag sticks —
+    /// except a stored negative value, which is repaired (never a real drag;
+    /// only a bad seed from 1.7.0 could have written one).
     private func seedPositionOnFirstLaunch() {
-        guard UserDefaults.standard.object(forKey: Self.positionKey) == nil else { return }
-        UserDefaults.standard.set(-1.0, forKey: Self.positionKey) // DON'T EDIT HERE
+        let defaults = UserDefaults.standard
+        // Heal installs that were seeded -1.0 (a negative "distance from the
+        // right edge" is past the screen edge — AppKit never places the item,
+        // so on notched Macs the icon simply never appeared). The guard below
+        // skips them because the key exists, hence this one-shot repair.
+        if defaults.object(forKey: Self.positionKey) != nil {
+            if defaults.double(forKey: Self.positionKey) < 0 {
+                defaults.set(6.0, forKey: Self.positionKey)
+            }
+            return
+        }
+        defaults.set(6.0, forKey: Self.positionKey)
     }
 
     /// Creates (or re-creates) the status item and wires its button. Split out

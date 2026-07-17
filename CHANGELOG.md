@@ -5,6 +5,15 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-07-17
+
+### Fixed
+- Menu bar icon never appeared on notched MacBooks with a fresh install:
+  the first-launch position seed wrote `-1.0` (past the screen's right
+  edge) instead of the intended far-right slot (`6.0`), so AppKit could
+  never place the status item. Now seeds `6.0`, and installs already
+  stuck with a negative stored position are repaired on next launch.
+
 ### Added
 - **Jira Cloud integration.** Connect with "Log in with Atlassian" (OAuth
   2.0 3LO — no password, tokens in the Keychain); pick your site and space.
