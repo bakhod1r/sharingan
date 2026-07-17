@@ -68,6 +68,15 @@ struct AnalyticsLoadView: View {
 
     private var hasData: Bool { data.contains { $0.minutes > 0 || $0.avgMinutes > 0 } }
 
+    /// Adaptive y-axis label: hours once a bar clears an hour, a decimal minute
+    /// for small values (so ticks don't collapse to "0m 0m 1m 1m").
+    private func yLabel(_ m: Double) -> String {
+        if m <= 0 { return "0" }
+        if m >= 60 { return String(format: "%.1fh", m / 60) }
+        if m >= 10 { return "\(Int(m.rounded()))m" }
+        return String(format: "%.1fm", m)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             header
@@ -165,7 +174,7 @@ struct AnalyticsLoadView: View {
                 AxisGridLine().foregroundStyle(.white.opacity(0.08))
                 AxisValueLabel {
                     if let m = v.as(Double.self) {
-                        Text("\(Int(m))m")
+                        Text(yLabel(m))
                             .font(.system(.caption2, design: .rounded))
                             .foregroundStyle(.white.opacity(0.5))
                     }
