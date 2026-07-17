@@ -62,6 +62,30 @@ public final class SharinganCoordinator: ObservableObject {
         // the app doesn't re-announce milestones the user passed days ago.
         StreakRewardCenter.shared.prime(streak: timer.stats.streak.currentStreak)
         observe()
+        checkBurnout()
+    }
+
+    /// Surface a burnout warning once per day at most (a per-day cooldown so it
+    /// never nags). The Analytics → Overview banner is the always-on surface;
+    /// this is the gentle nudge for people who don't open it.
+    private func checkBurnout() {
+        let key = "sharingan.burnout.lastNotified"
+        let today = Calendar.current.startOfDay(for: Date())
+        if let last = UserDefaults.standard.object(forKey: key) as? Date,
+           Calendar.current.isDate(last, inSameDayAs: today) { return }
+
+        let cal = Calendar.current
+        guard let start = cal.date(byAdding: .day, value: -21, to: today) else { return }
+        let recent = FocusSessionLog.shared.sessions(
+            in: DateInterval(start: start, end: Date()))
+        let result = BurnoutDetector.evaluate(sessions: recent)
+        guard result.isWarning, let first = result.reasons.first else { return }
+
+        UserDefaults.standard.set(today, forKey: key)
+        NotificationService.shared.notify(
+            title: "Take it easy 🌿",
+            body: "\(first) Consider a lighter day — see Analytics for details.",
+            identifier: "sharingan.burnout")
     }
 
     public func installShortcuts() {

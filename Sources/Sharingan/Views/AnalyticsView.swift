@@ -20,6 +20,7 @@ struct AnalyticsView: View {
         case load     = "Focus load"
         case timeline = "Timeline"
         case apps     = "Apps"
+        case export   = "Export"
         var id: String { rawValue }
     }
 
@@ -51,6 +52,9 @@ struct AnalyticsView: View {
                 AnalyticsAppsView(totals: AnalyticsEngine.appTotals(sessions: rangeSessions),
                                   accent: accent, range: filter.range,
                                   trackingMode: timer.settings.appTrackingMode)
+            case .export:
+                AnalyticsExportView(sessions: rangeSessions, accent: accent,
+                                    range: filter.range)
             }
         }
     }
@@ -358,15 +362,28 @@ struct AnalyticsView: View {
         filter.range == .today ? "" : " · \(filter.range.rawValue) avg"
     }
 
+    /// Recent sessions (last 21 days) for burnout + suggestions.
+    private var recentSessions: [SessionRecord] {
+        let cal = Calendar.current
+        guard let start = cal.date(byAdding: .day, value: -21,
+                                   to: cal.startOfDay(for: Date())) else { return [] }
+        return log.sessions(in: DateInterval(start: start, end: Date()))
+    }
+
     private var overview: some View {
         let scores = overviewScores
+        let burnout = BurnoutDetector.evaluate(sessions: recentSessions)
+        let suggestions = SmartSuggestions.insights(stats: timer.stats,
+                                                    sessions: recentSessions)
         return VStack(alignment: .leading, spacing: 16) {
+            if burnout.isWarning { burnoutBanner(burnout) }
             HStack(spacing: 16) {
                 scoreCard(title: "Focus Score", score: scores.focus,
                           caption: "Diqqat sifati — hajm, yakunlash, tanaffuslar\(rangeSuffix)")
                 scoreCard(title: "Consistency", score: scores.consistency,
                           caption: "Rejaga rioya — reja, ritm, streak\(rangeSuffix)")
             }
+            if !suggestions.isEmpty { suggestionsCard(suggestions) }
             if scores.focus == nil {
                 Text(filter.narrowsSessions
                      ? "No sessions match this filter."
@@ -375,6 +392,55 @@ struct AnalyticsView: View {
                     .foregroundStyle(.white.opacity(0.6))
             }
         }
+    }
+
+    private func burnoutBanner(_ result: BurnoutDetector.Result) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 18))
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Signs of burnout")
+                    .font(.system(.headline, design: .rounded).weight(.bold))
+                    .foregroundStyle(.white)
+                ForEach(result.reasons, id: \.self) { reason in
+                    Text("• \(reason)")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.75))
+                }
+                Text("Consider a lighter day or a real break.")
+                    .font(.system(.caption, design: .rounded).italic())
+                    .foregroundStyle(.white.opacity(0.55))
+            }
+            Spacer()
+        }
+        .padding(16)
+        .background(RoundedRectangle(cornerRadius: DS.Radius.xl)
+            .fill(Color.orange.opacity(0.14)))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.xl)
+            .strokeBorder(Color.orange.opacity(0.35), lineWidth: 1))
+    }
+
+    private func suggestionsCard(_ suggestions: [String]) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "lightbulb.fill")
+                .font(.system(size: 16))
+                .foregroundStyle(accent)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Insights")
+                    .font(.system(.subheadline, design: .rounded).weight(.bold))
+                    .foregroundStyle(.white)
+                ForEach(suggestions, id: \.self) { s in
+                    Text(s)
+                        .font(.system(.callout, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.8))
+                }
+            }
+            Spacer()
+        }
+        .padding(16)
+        .glassRounded(DS.Radius.xl, material: .regular)
+        .liquidShadow(radius: 10, y: 5)
     }
 
     private func scoreCard(title: String, score: Int?, caption: String) -> some View {

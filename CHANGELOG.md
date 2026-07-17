@@ -5,6 +5,25 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-07-17
+
+### Added
+- **Active app tracking** — Analytics → **Apps** tab shows which apps you
+  were focused in, ranked by time with icons and share bars. App-level
+  only (no window titles, no Accessibility permission), stored on your
+  Mac. Configurable in Settings → Tasks & Planning → Analytics
+  (Off / During focus only / Always; default focus-only).
+- **Timeline** tab — a day's sessions laid out across the clock (focus,
+  breaks, abandoned) with a session list; the day pager is a **time
+  machine** to replay any past day.
+- **Burnout detection** — an Overview banner (and a once-a-day
+  notification) when recent sessions show warning signs: huge days,
+  heavy streaks, skipped breaks, or repeated late-night focus.
+- **Smart insights** — templated suggestions on the Overview (best hour,
+  best weekday, break/abandon nudges).
+- **Export** tab — save the filtered session history as **CSV**, real
+  **.xlsx** (dependency-free writer), or a one-page **PDF** summary.
+
 ## [1.8.2] - 2026-07-17
 
 ### Changed

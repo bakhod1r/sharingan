@@ -4,7 +4,7 @@
 > whenever a feature is added, changed, or removed, update this document in the
 > same change.**
 
-- Version: 1.8.2
+- Version: 1.9.0
 - Platform: macOS 14+, lives in the menu bar
 
 ---
@@ -96,7 +96,12 @@
   - **Heatmap** — GitHub-style 52-week grid from `PomodoroStats.recentDays(364)` (so it's full for long-time users regardless of the new log), Monday-first columns via the pure `AnalyticsEngine.heatmapWeeks` mapper, 5-step accent intensity scaled to the year's peak day, hover shows "N 🍅 · date", Less→More legend.
   - **Focus load** — Swift Charts area chart of focus minutes per hour of day (`AnalyticsEngine.hourlyLoad`, sessions split proportionally across hour boundaries; breaks excluded), with a dashed 30-day-average line (averaged over days that have data) and a ◀ ▶ day pager clamped at today.
 - **Filter bar** (`AnalyticsFilter`, SharinganCore), applied to every tab: a time **range** (Today/1W/1M/3M/1Y) averages the Overview scores over the window via per-day computation (`AnalyticsEngine.average` over daily scores; past-day plan adherence is unknown ⇒ neutral default, streak reconstructed from the log's completed-focus days), sets the heatmap span (`range.heatmapDays`, 4 weeks…1 year) and the focus-load average window (`range.loadAverageDays`); **multi-select attribution facets** (categories/projects/tags — OR within a facet, AND across facets, resolved to a `Set<UUID>` of matching task IDs by the view and applied via `AnalyticsEngine.filter`) shown as removable chips in a wrapping `FlowChips` layout; and a **completed-only** toggle. While a filter narrows sessions the heatmap recomputes from `AnalyticsEngine.dailyCounts(from:)` instead of the aggregate history. Deleted tasks aren't in the live list, so their sessions drop from an attribution filter (same as the Report tab).
-- All score/grid/load/filter math is pure and unit-tested (`AnalyticsEngineTests`, `SessionLogTests`).
+- **Apps tab** — per-app focus time (`AnalyticsEngine.appTotals` over each session's `appUsage`), ranked with icon + share bar. Fed by **`ActiveAppTracker`** (SharinganCore): observes `NSWorkspace.didActivateApplicationNotification` for the frontmost app (app-level, no window titles, no Accessibility), accumulates into the pure `AppUsageAccumulator`, parks on idle (`CGEventSource.secondsSinceLastEventType` > 120 s). The coordinator starts it on focus begin per `settings.appTrackingMode` (`AppTrackingMode` off / focusOnly / always, default focusOnly), and stamps the session's `appUsage` on `.sessionDidEnd`. Setting lives in Settings → Tasks & Planning → Analytics.
+- **Timeline tab** — a day's sessions across a 0–24h track (focus = accent, break = green, abandoned = dashed) plus a session list; the day pager is the **time machine** for replaying any past day.
+- **Burnout detection** (`BurnoutDetector`, pure): over the last 21 days — a huge day (≥12 completed), a heavy streak (≥5 consecutive ≥8-pomodoro days), skipping >50% of breaks, or late-night (≥23:00) focus on ≥3 days. Two+ reasons ⇒ warning: an Overview banner and a once-per-day notification (`checkBurnout` in the coordinator, `UserDefaults` cooldown).
+- **Smart insights** (`SmartSuggestions`, pure): best hour, best weekday, break/abandon nudges — up to 2, shown on the Overview.
+- **Export tab** (`AnalyticsExport`): the filtered sessions as CSV, real `.xlsx` (dependency-free `XLSXWriter` + store-only `Zip`/`CRC32`), or a one-page PDF (`ImageRenderer` → `CGContext` PDF).
+- All score/grid/load/filter/burnout/export math is pure and unit-tested (`AnalyticsEngineTests`, `SessionLogTests`, `BurnoutSuggestionsTests`, `AnalyticsExportTests`, `AppUsageAccumulatorTests`).
 
 ---
 
