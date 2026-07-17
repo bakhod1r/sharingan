@@ -312,40 +312,40 @@ struct AnalyticsView: View {
     }
 
     private func scoreCard(title: String, score: Int?, caption: String) -> some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 14) {
             Text(title)
-                .font(.system(.title2, design: .rounded).weight(.bold))
+                .font(.system(.headline, design: .rounded).weight(.bold))
                 .foregroundStyle(.white)
             ZStack {
                 Circle()
-                    .stroke(Color.white.opacity(0.08), lineWidth: 18)
+                    .stroke(Color.white.opacity(0.08), lineWidth: 12)
                 Circle()
                     .trim(from: 0, to: CGFloat(score ?? 0) / 100)
                     .stroke(AngularGradient(colors: [accent.opacity(0.6), accent],
                                             center: .center),
-                            style: StrokeStyle(lineWidth: 18, lineCap: .round))
+                            style: StrokeStyle(lineWidth: 12, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                     .animation(DS.Motion.standard, value: score)
-                VStack(spacing: 2) {
+                VStack(spacing: 0) {
                     Text(score.map(String.init) ?? "—")
-                        .font(.system(size: 68, weight: .bold,
+                        .font(.system(size: 44, weight: .bold,
                                       design: .rounded).monospacedDigit())
                         .foregroundStyle(.white)
                     Text("/ 100")
-                        .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                        .font(.system(.caption, design: .rounded).weight(.semibold))
                         .foregroundStyle(.white.opacity(0.4))
                 }
             }
-            .frame(width: 200, height: 200)
+            .frame(width: 140, height: 140)
             Text(caption)
-                .font(.system(.subheadline, design: .rounded))
+                .font(.system(.caption, design: .rounded))
                 .foregroundStyle(.white.opacity(0.6))
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 36)
-        .padding(.horizontal, 24)
+        .padding(.vertical, 24)
+        .padding(.horizontal, 20)
         .glassRounded(DS.Radius.xl, material: .regular)
-        .liquidShadow(radius: 16, y: 8)
+        .liquidShadow(radius: 14, y: 7)
     }
 }

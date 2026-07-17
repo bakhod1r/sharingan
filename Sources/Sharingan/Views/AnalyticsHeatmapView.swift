@@ -45,9 +45,9 @@ struct AnalyticsHeatmapView: View {
         let peak = days.map(\.count).max() ?? 0
         VStack(alignment: .leading, spacing: 12) {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 3) {
+                HStack(alignment: .top, spacing: 4) {
                     ForEach(Array(weeks.enumerated()), id: \.offset) { _, week in
-                        VStack(spacing: 3) {
+                        VStack(spacing: 4) {
                             ForEach(0..<7, id: \.self) { slot in
                                 cell(week[slot], peak: peak)
                             }
