@@ -113,9 +113,11 @@ public final class JiraBoardModel: ObservableObject {
         }
     }
 
-    /// Falls back to the cached board after a load failure. Returns true when a
-    /// snapshot was shown (so the caller skips the error phase).
-    private func showCachedBoard() -> Bool {
+    /// Paints the cached board from SQLite. Returns true when a snapshot was
+    /// shown. `quiet` is used for the instant offline-first paint (no error
+    /// banner); the loud form is the post-failure fallback.
+    @discardableResult
+    private func showCachedBoard(quiet: Bool = false) -> Bool {
         guard let storage, !projectKey.isEmpty,
               let snapshot = storage.boardSnapshot(projectKey: projectKey),
               let data = snapshot.columnsJSON.data(using: .utf8),
@@ -125,7 +127,7 @@ public final class JiraBoardModel: ObservableObject {
         sprintName = snapshot.sprintName
         isShowingCached = true
         phase = .loaded
-        errorMessage = "Offline — showing the last saved board."
+        errorMessage = quiet ? nil : "Offline — showing the last saved board."
         return true
     }
 
@@ -149,12 +151,19 @@ public final class JiraBoardModel: ObservableObject {
     /// active sprint, and fill the columns with my cards.
     public func load(projectKey: String) async {
         self.projectKey = projectKey
-        phase = .loading
         errorMessage = nil
         availableBoards = []
-        columns = []
-        sprintName = nil
         isShowingCached = false
+
+        // Offline-first: paint the last saved board from SQLite instantly, then
+        // revalidate against Jira below. Only show the loading spinner when
+        // there's nothing cached to show.
+        let hadCache = showCachedBoard(quiet: true)
+        if !hadCache {
+            phase = .loading
+            columns = []
+            sprintName = nil
+        }
 
         do {
             let boards = try await client.getBoards(projectKeyOrId: projectKey)
