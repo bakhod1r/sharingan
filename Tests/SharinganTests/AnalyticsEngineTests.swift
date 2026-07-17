@@ -168,4 +168,20 @@ struct AnalyticsEngineTests {
         #expect(AnalyticsEngine.average([nil, nil]) == nil)
         #expect(AnalyticsEngine.average([]) == nil)
     }
+
+    // MARK: App totals
+
+    @Test func appTotalsSumsAndSortsDescending() {
+        var s1 = focus(hour: 9)
+        s1.appUsage = ["com.a": 600, "com.b": 120]
+        var s2 = focus(hour: 10)
+        s2.appUsage = ["com.a": 300, "com.c": 0]   // zero-time app drops out
+        let totals = AnalyticsEngine.appTotals(sessions: [s1, s2])
+        #expect(totals.map(\.bundleID) == ["com.a", "com.b"])
+        #expect(totals.first?.seconds == 900)
+    }
+
+    @Test func appTotalsEmptyWhenNoUsage() {
+        #expect(AnalyticsEngine.appTotals(sessions: [focus(hour: 9)]).isEmpty)
+    }
 }

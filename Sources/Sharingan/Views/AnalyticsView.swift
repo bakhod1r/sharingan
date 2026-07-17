@@ -18,6 +18,8 @@ struct AnalyticsView: View {
         case overview = "Overview"
         case heatmap  = "Heatmap"
         case load     = "Focus load"
+        case timeline = "Timeline"
+        case apps     = "Apps"
         var id: String { rawValue }
     }
 
@@ -42,6 +44,13 @@ struct AnalyticsView: View {
             case .load:
                 AnalyticsLoadView(timer: timer, completedOnly: filter.completedOnly,
                                   allowedTaskIDs: allowedTaskIDs, range: filter.range)
+            case .timeline:
+                AnalyticsTimelineView(timer: timer, completedOnly: filter.completedOnly,
+                                      allowedTaskIDs: allowedTaskIDs)
+            case .apps:
+                AnalyticsAppsView(totals: AnalyticsEngine.appTotals(sessions: rangeSessions),
+                                  accent: accent, range: filter.range,
+                                  trackingMode: timer.settings.appTrackingMode)
             }
         }
     }
@@ -261,6 +270,15 @@ struct AnalyticsView: View {
 
     /// Every logged session, filtered — used to derive the narrowed heatmap.
     private var filteredAllSessions: [SessionRecord] { filtered(log.records) }
+
+    /// Filtered sessions within the selected range window (for the Apps tab).
+    private var rangeSessions: [SessionRecord] {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        guard let start = cal.date(byAdding: .day, value: -(filter.range.days - 1),
+                                   to: today) else { return filteredAllSessions }
+        return filtered(log.sessions(in: DateInterval(start: start, end: Date())))
+    }
 
     // MARK: - Overview
 

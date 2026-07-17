@@ -443,6 +443,19 @@ struct SettingsView: View {
                         .foregroundStyle(.white.opacity(0.6))
                 }
 
+                Section("Analytics") {
+                    Picker("App tracking", selection: $settings.appTrackingMode) {
+                        ForEach(AppTrackingMode.allCases) { m in
+                            Text(m.label).tag(m)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .glassMenu()
+                    Text("Records which app is frontmost during focus for the Analytics → Apps breakdown. App-level only — no window titles, no Accessibility permission, stored on your Mac. Turn off to record nothing.")
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+
                 Section("Due reminders") {
                     Picker("Due pre-reminder", selection: $preReminderMinutes) {
                         Text("Off").tag(0)

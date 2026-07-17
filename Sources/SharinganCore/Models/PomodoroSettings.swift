@@ -116,6 +116,30 @@ public struct PomodoroKindConfig: Codable, Equatable, Sendable {
 /// Which live "ears" the notch HUD grows while a session runs. The ears sit in
 /// the menu bar row and therefore overlap the app's menu titles (left) and the
 /// status items (right) — an inherent cost of the notch, so it is a choice.
+/// How aggressively the frontmost-app tracker runs (feeds Analytics → Apps).
+public enum AppTrackingMode: String, Codable, CaseIterable, Identifiable, Sendable {
+    case off
+    case focusOnly
+    case always
+
+    public var id: String { rawValue }
+    public var label: String {
+        switch self {
+        case .off:       return "Off"
+        case .focusOnly: return "During focus only"
+        case .always:    return "Always"
+        }
+    }
+    /// Whether the tracker should be running given the current phase.
+    public func isActive(focusRunning: Bool) -> Bool {
+        switch self {
+        case .off:       return false
+        case .focusOnly: return focusRunning
+        case .always:    return true
+        }
+    }
+}
+
 public enum NotchEarsMode: String, Codable, CaseIterable, Identifiable, Sendable {
     case both, trailingOnly, none
     public var id: String { rawValue }
@@ -244,6 +268,10 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var blockAppsDuringFocus: Bool = false
     /// Target number of focus pomodoros per day (0 = no goal).
     public var dailyPomodoroGoal: Int = 8
+    /// Which app is frontmost is recorded onto each focus session for the
+    /// Analytics → Apps breakdown. Local-only, app-level (no window titles, no
+    /// Accessibility permission). Default focus-only.
+    public var appTrackingMode: AppTrackingMode = .focusOnly
     /// Week columns/rows start on Monday (false = Sunday) in both week views.
     public var weekStartsOnMonday: Bool = true
     /// Estimate pre-filled on newly added subtasks (0 = none).
@@ -440,6 +468,7 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
         requireTaskForFocus = try c.decodeIfPresent(Bool.self, forKey: .requireTaskForFocus) ?? d.requireTaskForFocus
         blockAppsDuringFocus = try c.decodeIfPresent(Bool.self, forKey: .blockAppsDuringFocus) ?? d.blockAppsDuringFocus
         dailyPomodoroGoal = try c.decodeIfPresent(Int.self, forKey: .dailyPomodoroGoal) ?? d.dailyPomodoroGoal
+        appTrackingMode = try c.decodeIfPresent(AppTrackingMode.self, forKey: .appTrackingMode) ?? d.appTrackingMode
         weekStartsOnMonday = try c.decodeIfPresent(Bool.self, forKey: .weekStartsOnMonday) ?? d.weekStartsOnMonday
         defaultSubtaskEstimate = try c.decodeIfPresent(Int.self, forKey: .defaultSubtaskEstimate) ?? d.defaultSubtaskEstimate
         showPomodoroBadges = try c.decodeIfPresent(Bool.self, forKey: .showPomodoroBadges) ?? d.showPomodoroBadges

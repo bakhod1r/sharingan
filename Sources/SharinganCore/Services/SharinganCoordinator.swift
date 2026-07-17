@@ -439,17 +439,33 @@ public final class SharinganCoordinator: ObservableObject {
         // attached here — the timer doesn't know about tasks.
         NotificationCenter.default.publisher(for: .sessionDidEnd, object: timer)
             .receive(on: DispatchQueue.main)
-            .sink { note in
+            .sink { [weak self] note in
                 guard var record = note.userInfo?["record"] as? SessionRecord
                 else { return }
-                if record.phase == .focus,
-                   let taskID = TaskStore.shared.activeTaskID {
-                    record.taskID = taskID
-                    record.subtaskID = TaskStore.shared.activeSubtaskID
-                    record.taskTitle = TaskStore.shared.tasks
-                        .first(where: { $0.id == taskID })?.title
+                if record.phase == .focus {
+                    if let taskID = TaskStore.shared.activeTaskID {
+                        record.taskID = taskID
+                        record.subtaskID = TaskStore.shared.activeSubtaskID
+                        record.taskTitle = TaskStore.shared.tasks
+                            .first(where: { $0.id == taskID })?.title
+                    }
+                    // Stamp which apps were frontmost during this focus session.
+                    if ActiveAppTracker.shared.isRunning {
+                        record.appUsage = ActiveAppTracker.shared.flushUsage()
+                    }
+                    if self?.timer.settings.appTrackingMode == .focusOnly {
+                        ActiveAppTracker.shared.stop()
+                    }
                 }
                 FocusSessionLog.shared.append(record)
+            }
+            .store(in: &cancellables)
+
+        // Drive the app tracker from focus state + the tracking-mode setting.
+        timer.$isRunning.combineLatest(timer.$phase)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] running, phase in
+                self?.syncAppTracker(focusRunning: running && phase == .focus)
             }
             .store(in: &cancellables)
 
@@ -681,6 +697,23 @@ public final class SharinganCoordinator: ObservableObject {
         } else {
             AppBlockerService.shared.deactivate()
         }
+    }
+
+    private var wasFocusRunning = false
+    /// Start/stop the frontmost-app tracker per the mode; a fresh focus session
+    /// resets the per-session accumulation.
+    private func syncAppTracker(focusRunning: Bool) {
+        let mode = timer.settings.appTrackingMode
+        let shouldRun = mode.isActive(focusRunning: focusRunning)
+        // A focus session just started → begin a clean tracking window.
+        if focusRunning && !wasFocusRunning && shouldRun {
+            ActiveAppTracker.shared.beginFocusSession()
+        } else if shouldRun && !ActiveAppTracker.shared.isRunning {
+            ActiveAppTracker.shared.beginFocusSession()
+        } else if !shouldRun && ActiveAppTracker.shared.isRunning {
+            ActiveAppTracker.shared.stop()
+        }
+        wasFocusRunning = focusRunning
     }
 
     /// DND follows "a focus session is actually running" — pausing or

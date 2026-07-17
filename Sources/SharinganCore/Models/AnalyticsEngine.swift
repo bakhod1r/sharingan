@@ -167,4 +167,31 @@ public enum AnalyticsEngine {
         }
         return buckets
     }
+
+    // MARK: - App usage
+
+    /// One app's accumulated focused time across a session set.
+    public struct AppTotal: Equatable, Sendable, Identifiable {
+        public let bundleID: String
+        public let seconds: TimeInterval
+        public var id: String { bundleID }
+        public init(bundleID: String, seconds: TimeInterval) {
+            self.bundleID = bundleID
+            self.seconds = seconds
+        }
+    }
+
+    /// Per-app focused seconds, summed over every session's `appUsage` and
+    /// sorted most-used first. Apps that never accrued time drop out; the
+    /// result is empty when tracking never populated any session.
+    public static func appTotals(sessions: [SessionRecord]) -> [AppTotal] {
+        var totals: [String: TimeInterval] = [:]
+        for s in sessions {
+            for (bundleID, seconds) in s.appUsage where seconds > 0 {
+                totals[bundleID, default: 0] += seconds
+            }
+        }
+        return totals.map { AppTotal(bundleID: $0.key, seconds: $0.value) }
+            .sorted { $0.seconds > $1.seconds }
+    }
 }
