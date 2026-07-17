@@ -93,4 +93,25 @@ struct AnalyticsEngineTests {
         let load = AnalyticsEngine.hourlyLoad(sessions: [brk(hour: 9)])
         #expect(load.allSatisfy { $0 == 0 })
     }
+
+    // MARK: Heatmap grid
+
+    @Test func heatmapWeeksPadsToMondayAndKeepsOrder() {
+        let cal = Calendar.current
+        // A Wednesday, so the first column needs 2 leading pads (Mon, Tue).
+        var comps = DateComponents(); comps.year = 2026; comps.month = 7; comps.day = 15
+        let wednesday = cal.date(from: comps)!
+        let days = (0..<10).map { i in
+            DailyCount(day: cal.date(byAdding: .day, value: i, to: wednesday)!,
+                       count: i)
+        }
+        let weeks = AnalyticsEngine.heatmapWeeks(days: days)
+        #expect(weeks.count == 2)
+        #expect(weeks.allSatisfy { $0.count == 7 })
+        #expect(weeks[0][0] == nil && weeks[0][1] == nil)     // Mon, Tue pads
+        #expect(weeks[0][2]?.count == 0)                       // Wed 15th
+        #expect(weeks[1][0]?.count == 5)                       // next Monday
+        #expect(weeks[1][4]?.count == 9)                       // last day (Fri 24th)
+        #expect(weeks[1][5] == nil && weeks[1][6] == nil)      // trailing pads
+    }
 }

@@ -84,6 +84,30 @@ public enum AnalyticsEngine {
         return Double(c.hour ?? 0) + Double(c.minute ?? 0) / 60
     }
 
+    // MARK: - Heatmap grid
+
+    /// Chronological days → GitHub-style columns: one array per calendar week,
+    /// 7 slots each, Monday first; `nil` pads days outside the input range so
+    /// the view can render a fixed grid without date math.
+    public static func heatmapWeeks(days: [DailyCount]) -> [[DailyCount?]] {
+        guard !days.isEmpty else { return [] }
+        let cal = Calendar.current
+        var weeks: [[DailyCount?]] = []
+        var current = [DailyCount?](repeating: nil, count: 7)
+        var touched = false
+        for d in days {
+            let slot = (cal.component(.weekday, from: d.day) + 5) % 7   // 0 = Mon
+            if touched, slot == 0 {
+                weeks.append(current)
+                current = [DailyCount?](repeating: nil, count: 7)
+            }
+            current[slot] = d
+            touched = true
+        }
+        weeks.append(current)
+        return weeks
+    }
+
     // MARK: - Focus load
 
     /// 24 buckets of focus seconds for one day's sessions ("diqqat
