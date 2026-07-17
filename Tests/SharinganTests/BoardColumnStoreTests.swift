@@ -54,6 +54,27 @@ struct BoardColumnStoreTests {
         #expect(store.doneColumnID == nil)
     }
 
+    @Test("moveColumn drops a column into another's slot")
+    func moveColumnToSlot() {
+        let (store, _) = freshStore("moveTo")
+        // Move Cancelled (last) into Today's slot (first).
+        store.moveColumn(BoardColumn.Seed.cancelled, toSlotOf: BoardColumn.Seed.today)
+        #expect(store.enabled.first?.id == BoardColumn.Seed.cancelled)
+        #expect(store.enabled.map(\.id) == [
+            BoardColumn.Seed.cancelled, BoardColumn.Seed.today, BoardColumn.Seed.thisWeek,
+            BoardColumn.Seed.inProgress, BoardColumn.Seed.paused, BoardColumn.Seed.done,
+        ])
+    }
+
+    @Test("moveColumn onto itself or an unknown id is a no-op")
+    func moveColumnNoop() {
+        let (store, _) = freshStore("moveNoop")
+        let before = store.enabled.map(\.id)
+        store.moveColumn(BoardColumn.Seed.today, toSlotOf: BoardColumn.Seed.today)
+        store.moveColumn(BoardColumn.Seed.today, toSlotOf: "ghost")
+        #expect(store.enabled.map(\.id) == before)
+    }
+
     @Test("move reorders columns and reload re-reads persisted state")
     func moveAndReload() {
         let (store, d) = freshStore("move")

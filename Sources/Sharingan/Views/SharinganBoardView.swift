@@ -1,6 +1,14 @@
 import SwiftUI
 import SharinganCore
 
+private extension String {
+    /// The column id inside a `"column:<id>"` drag payload, or nil for a
+    /// plain task-card (UUID) drag.
+    var columnDragID: String? {
+        hasPrefix("column:") ? String(dropFirst("column:".count)) : nil
+    }
+}
+
 /// Sharingan's own kanban board: user-defined columns (`BoardColumnStore`)
 /// over the local task list. Shaped after `WeeklyBoardView`/`JiraBoardView`
 /// — same column width, `.draggable`/`.dropDestination` idiom, drop glow and
@@ -146,6 +154,14 @@ struct SharinganBoardView: View {
         let isFirst = columns.enabled.first?.id == column.id
         return VStack(alignment: .leading, spacing: 12) {
             columnHeader(column, count: cards.count)
+                .draggable("column:\(column.id)") {
+                    Text(column.name)
+                        .font(.system(.callout, design: .rounded).weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12).padding(.vertical, 8)
+                        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                            .fill(accent.opacity(0.9)))
+                }
             if isFirst { quickAdd }
             if cards.isEmpty {
                 emptyDrop(targeted: targeted)
@@ -172,7 +188,13 @@ struct SharinganBoardView: View {
         .scaleEffect(targeted ? 1.015 : 1)
         .animation(DS.Motion.standard, value: targeted)
         .dropDestination(for: String.self) { dropped, _ in
-            guard let s = dropped.first, let id = UUID(uuidString: s) else { return false }
+            guard let s = dropped.first else { return false }
+            // A column drag (reorder) is prefixed; anything else is a task card.
+            if let colID = s.columnDragID {
+                withAnimation(DS.Motion.standard) { columns.moveColumn(colID, toSlotOf: column.id) }
+                return true
+            }
+            guard let id = UUID(uuidString: s) else { return false }
             withAnimation(DS.Motion.standard) { drop(id, into: column) }
             return true
         } isTargeted: { inside in
@@ -182,6 +204,10 @@ struct SharinganBoardView: View {
 
     private func columnHeader(_ column: BoardColumn, count: Int) -> some View {
         HStack(spacing: 8) {
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.3))
+                .help("Drag to reorder")
             if column.role == .done {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 12, weight: .semibold))

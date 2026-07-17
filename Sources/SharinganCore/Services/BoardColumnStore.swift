@@ -72,6 +72,21 @@ public final class BoardColumnStore: ObservableObject {
         persist()
     }
 
+    /// Drag-reorder: drops the column `id` into `targetID`'s slot, shifting the
+    /// rest. No-op if either is unknown or they're the same.
+    public func moveColumn(_ id: String, toSlotOf targetID: String) {
+        guard id != targetID else { return }
+        var ordered = columns.sorted { $0.order < $1.order }
+        guard let from = ordered.firstIndex(where: { $0.id == id }),
+              let to = ordered.firstIndex(where: { $0.id == targetID }) else { return }
+        let moved = ordered.remove(at: from)
+        ordered.insert(moved, at: to)
+        for (index, col) in ordered.enumerated() {
+            if let i = columns.firstIndex(where: { $0.id == col.id }) { columns[i].order = index }
+        }
+        persist()
+    }
+
     /// Moves a column one step left/right in display order.
     public func move(_ id: String, by delta: Int) {
         let ordered = columns.sorted { $0.order < $1.order }
