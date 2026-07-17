@@ -76,7 +76,7 @@ public enum PomodoroKind: String, Codable, CaseIterable, Sendable, Identifiable 
         switch self {
         case .small:  return "Small"
         case .normal: return "Normal"
-        case .big:    return "Big"
+        case .big:    return "Deep Work"
         }
     }
 

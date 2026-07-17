@@ -11,7 +11,7 @@
 
 ## Timer / Pomodoro
 
-- Configurable focus, short break, and long break durations (25 / 5 / 15 by default). Settings' "Pomodoro sizes" section renders as a compact grid (Small/Normal/Big rows × Focus/Break/Long break columns); each size can override its own long-break length, falling back to the global long-break minutes when not overridden.
+- Configurable focus, short break, and long break durations (25 / 5 / 15 by default). Settings' "Pomodoro sizes" section renders as a compact grid (Small/Normal/Deep Work rows × Focus/Break/Long break columns); each size can override its own long-break length, falling back to the global long-break minutes when not overridden.
 - Countdown and count-up modes.
 - Long break automatically after every N pomodoros.
 - Auto-start focus and auto-start break toggles.
@@ -21,7 +21,7 @@
 - Sleep-aware: closing the lid during focus doesn't wrongly credit hours; a break still completes when you wake the Mac.
 - Custom one-off session length that survives mode changes.
 - Skip kills the tick loop before transitioning (like pause/stop/complete) — a live in-flight tick used to overwrite the fresh phase's countdown with the skipped phase's leftover time.
-- Main-window timer page: while idle, the ring hosts the Small/Normal/Big size switch (accent-tinted active chip + the selected size's lengths caption) instead of the phase label; a live/paused/pending-break session shows the label. Chips call the same `applyKind` as the sidebar selector, so both stay in sync and an idle tap refreshes the countdown instantly.
+- Main-window timer page: while idle, the ring hosts the Small/Normal/Deep Work size switch (accent-tinted active chip + the selected size's lengths caption) instead of the phase label; a live/paused/pending-break session shows the label. Chips call the same `applyKind` as the sidebar selector, so both stay in sync and an idle tap refreshes the countdown instantly.
 
 ---
 
@@ -30,7 +30,7 @@
 - Full task system: title, priority, tags, projects, categories, due dates, notes, and estimates.
 - **Extensible priority levels.** The four built-ins (P1 Urgent … P4 No priority) ship by default, but the sidebar's Priority section has a "+" to add your own levels *above* P1 (each requires a name + flag color); a custom row's context menu deletes it, moving its tasks back to No priority. `TaskPriority` is an `Int`-backed struct (was an enum) that Codes as a bare `Int`, so old tasks.json / SQLite rows decode byte-for-byte unchanged. **Renumbering semantic:** chip labels are rank-based, not fixed — adding one custom level makes it "P1" and pushes the built-in Urgent to "P2", etc. Everything above P2 (medium) counts as *important* in the Eisenhower matrix, so custom levels are always important.
 - Sidebar Tags section has a "+" to precreate a tag (name only, no color UI) before it's ever typed on a task; it shows dimmed with 0 uses until applied, and its own "Remove tag" (distinct from the destructive "Delete label" that strips a tag off every task) drops it again.
-- Per-task pomodoro type (Small/Normal/Big, or Auto to inherit the app default) — shown as a small icon+label badge in the task row's metadata line when set (nil/Auto shows nothing); subtasks can override it too, shown as an icon-only badge next to the subtask row.
+- Per-task pomodoro type (Small/Normal/Deep Work, or Auto to inherit the app default) — shown as a small icon+label badge in the task row's metadata line when set (nil/Auto shows nothing); subtasks can override it too, shown as an icon-only badge next to the subtask row.
 - Subtasks with their own estimates **and their own priority flag** (set in the editor's per-step flag menu or imported via `p1`…`p4` tokens; shown as a colored rank chip on subtask rows) — reorder them, or promote a subtask into a full task (the step's own flag and pomodoro size carry onto the promoted task, falling back to the parent's priority). A task's displayed estimate (row badges, editor summary, menu-bar rows) is its own estimate when it has no subtasks, or the **sum of its subtasks' estimates** when it does (falling back to its own estimate if no subtask carries one); the stored per-task estimate is unchanged and still what the editor/composer/parser write.
 - Recurrence: none, daily, weekdays, weekly, every N days, or monthly (on a chosen day). Completing a recurring task spawns the next occurrence.
 - Natural-language quick add in the **world's 25 most-spoken languages** at once, e.g. `ertaga 15:00 p1 #ish @blink ~2 hisobot yozish` — with live parse chips while you type, in both the main composer and the menu-bar quick-add. Recognizes:
@@ -237,7 +237,7 @@ Simple/Advanced switch and nothing to seed at launch.
   content, in its own `Section`s, shown when `advancedExpanded` is `true`.
   `advancedExpanded` resets to `false` whenever the open category changes.
 - Timer's always-visible part shows the full "Pomodoro sizes" section (the
-  Small/Normal/Big grid) — there's no simplified two-stepper substitute. The
+  Small/Normal/Deep Work grid) — there's no simplified two-stepper substitute. The
   "Floating widget" section (master toggle, then size / position / expand-on-
   hover / opacity once it's on, gated on `settings.dockWidgetEnabled`) is
   also essentials-tier — it isn't behind the Advanced accordion. Eye Care's
