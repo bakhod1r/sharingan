@@ -67,7 +67,7 @@ struct RebrandMigrationTests {
         body(oldName, d)
     }
 
-    @Test("old-domain values are copied, NSStatusItem keys dropped, slot re-seeded")
+    @Test("old-domain values are copied, NSStatusItem keys dropped, no slot seeded")
     func domainCopied() {
         withOldDomain([
             "com.sharingan.settings": Data([0x7b]),
@@ -78,9 +78,10 @@ struct RebrandMigrationTests {
             RebrandMigration.migrateDomain(from: oldName, into: d)
             #expect(d.data(forKey: "com.sharingan.settings") == Data([0x7b]))
             #expect(d.double(forKey: "sharingan.floating.x") == 120.0)
-            // The stale mid-bar slot is NOT carried; the far-right one is seeded.
-            #expect(d.double(forKey: RebrandMigration.menuBarSlotKey)
-                    == RebrandMigration.rightmostSlot)
+            // The stale mid-bar slot is dropped and NOT re-seeded — a seeded
+            // slot re-parked the icon under the Clock on macOS 26. AppDelegate
+            // clears any stored slot on launch so AppKit places it itself.
+            #expect(d.object(forKey: RebrandMigration.menuBarSlotKey) == nil)
             #expect(d.object(forKey: "NSStatusItem VisibleCC sharingan.menubar") == nil)
         }
     }
@@ -161,9 +162,8 @@ struct RebrandMigrationTests {
         RebrandMigration.migrateDomain(from: oldDomain, into: defaults)
 
         #expect(defaults.object(forKey: "com.sharingan.settings") != nil)
-        // Stale menu-bar slots are dropped and re-seeded to the rightmost slot.
-        #expect(defaults.double(forKey: RebrandMigration.menuBarSlotKey)
-                == RebrandMigration.rightmostSlot)
+        // Stale menu-bar slots are dropped and NOT re-seeded (see domainCopied).
+        #expect(defaults.object(forKey: RebrandMigration.menuBarSlotKey) == nil)
     }
 
     @Test("bundle-id and app-group constants match the rebrand")
