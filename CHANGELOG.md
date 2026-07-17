@@ -5,6 +5,29 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-07-17
+
+### Added
+- **Analytics page** (sidebar, between Progress and Report) with three tabs:
+  - **Overview** — daily **Focus Score** (0–100: focus volume vs goal,
+    completion ratio, break compliance, deep blocks) and **Consistency
+    Score** (plan adherence, start-time regularity, streak), drawn as
+    accent ring gauges. No sessions yet ⇒ "—", never a fake zero.
+  - **Heatmap** — GitHub-style yearly grid of completed pomodoros with a
+    5-step intensity legend and hover details, fed from the long-lived
+    daily history so it's full even before the new session log grows.
+  - **Focus load** — minutes of focus per hour of day ("diqqat
+    cho'qqilari") for any day (◀ ▶ pager) with a dashed 30-day-average
+    overlay.
+- **Per-session focus log**: every really-finished session (completed, or
+  skipped/stopped after ≥1 minute) is recorded with start/end, phase,
+  completion, planned length, and the focused task — the foundation for
+  the timeline/replay, time machine, burnout detection, and export
+  features coming next. Stored locally in `focus-sessions.json` (400-day
+  retention); writes never block the timer; a corrupt file is set aside,
+  never crashes the app. Mirrored (synced-from-another-Mac) sessions are
+  logged only by the owning Mac.
+
 ## [1.7.3] - 2026-07-17
 
 ### Fixed
