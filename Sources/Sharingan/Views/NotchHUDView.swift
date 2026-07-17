@@ -213,15 +213,16 @@ struct NotchHUDView: View {
     /// tuned for a window-sized canvas; compressed into a 340pt island the same
     /// ramp reads as a loud "gradient effect", which the user explicitly does
     /// not want. So the island takes the window's color and drops its lighting:
-    /// the theme gradient under one uniform darkening — the tone a mid-window
+    /// the theme `surface` under one uniform darkening — the tone a mid-window
     /// crop of `ThemeWindowWash` averages to. Same color as the app, flat as a
-    /// panel. (`flatDarkening` mirrors the wash's 0.30→0.62 ramp's midpoint.)
+    /// panel. (`surface` is already a dark base, so this darkening is light —
+    /// just enough to seat the island a touch below the window's own tone.)
     ///
     /// Only the wide states have a body worth glazing. The flat states (`idle`,
     /// `live`) live entirely in the menu-bar row — their `layout.body` is a few
     /// points tall — so they stay pure black: idle hides entirely behind the
     /// housing, and live adds only the lip the progress line runs on.
-    private static let flatDarkening: Double = 0.46
+    private static let flatDarkening: Double = 0.14
 
     @ViewBuilder
     private func bodyGlass(_ l: NotchLayout) -> some View {
@@ -235,7 +236,7 @@ struct NotchHUDView: View {
                 topTrailingRadius: s.bodyTopRadius,
                 style: .continuous)
             let theme = timer.settings.theme
-            LinearGradient(colors: theme.gradient,
+            LinearGradient(colors: theme.surface,
                            startPoint: .topLeading, endPoint: .bottomTrailing)
                 .overlay(Color.black.opacity(Self.flatDarkening))
                 .clipShape(shape)
@@ -302,7 +303,7 @@ struct NotchHUDView: View {
         // The body's flat tone cut down to the ears — the theme's color under
         // the same uniform darkening, no lighting effects, so the live island
         // and the expanded panel are one plain surface with the app's color.
-        return LinearGradient(colors: theme.gradient,
+        return LinearGradient(colors: theme.surface,
                               startPoint: .topLeading, endPoint: .bottomTrailing)
             .overlay(Color.black.opacity(Self.flatDarkening))
             .clipShape(shape)

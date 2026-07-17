@@ -420,7 +420,7 @@ testBrightnessSettings()
         check(zero.duration(for: .paused) == 0, "paused stays 0 even when floored")
         check(PomodoroPhase.allCases.count == 4, "phase count == 4")
         check(TimerMode.allCases.count == 2, "mode count == 2")
-        check(SharinganTheme.allCases.count == 6, "theme count == 6")
+        check(SharinganTheme.allCases.count == 20, "theme count == 20")
         check(PomodoroPhase.focus.gradient.count == 2, "focus gradient stack")
     }
 

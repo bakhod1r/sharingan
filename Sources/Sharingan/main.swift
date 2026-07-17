@@ -784,7 +784,7 @@ if let outDir = HeadlessRender.outputDirectory(for: "--render-dev-preview") {
         // Every theme, in both dressed states — the expanded panel (full list,
         // active row lit) and the live ears. The wash, the accents and Neon's rim
         // all read off `timer.settings.theme`, so setting it and re-shooting is
-        // the whole check: twelve frames, one pair per theme. Restores the theme
+        // the whole check: one pair per theme. Restores the theme
         // and the open state afterwards so the empty-list shot below is unchanged.
         do {
             var live = NotchHUDState()
