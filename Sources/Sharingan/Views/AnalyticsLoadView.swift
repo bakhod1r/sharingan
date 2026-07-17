@@ -7,10 +7,18 @@ import SharinganCore
 /// the usual rhythm. Day pager doubles as the load view's time machine.
 struct AnalyticsLoadView: View {
     @ObservedObject var timer: PomodoroTimer
+    var completedOnly: Bool = false
+    var allowedTaskIDs: Set<UUID>? = nil
     @ObservedObject private var log = FocusSessionLog.shared
     @State private var day = Calendar.current.startOfDay(for: Date())
 
     private var accent: Color { timer.settings.theme.accent }
+
+    private func sessions(on d: Date) -> [SessionRecord] {
+        AnalyticsEngine.filter(sessions: log.sessions(on: d),
+                               completedOnly: completedOnly,
+                               allowedTaskIDs: allowedTaskIDs)
+    }
 
     private struct HourLoad: Identifiable {
         let hour: Int
@@ -20,7 +28,7 @@ struct AnalyticsLoadView: View {
     }
 
     private var data: [HourLoad] {
-        let today = AnalyticsEngine.hourlyLoad(sessions: log.sessions(on: day))
+        let today = AnalyticsEngine.hourlyLoad(sessions: sessions(on: day))
         // 30-day average per hour (only days that have data count).
         let cal = Calendar.current
         var sums = [TimeInterval](repeating: 0, count: 24)
@@ -28,7 +36,7 @@ struct AnalyticsLoadView: View {
         for back in 1...30 {
             guard let d = cal.date(byAdding: .day, value: -back, to: day)
             else { continue }
-            let s = log.sessions(on: d)
+            let s = sessions(on: d)
             guard !s.isEmpty else { continue }
             daysWithData += 1
             let load = AnalyticsEngine.hourlyLoad(sessions: s)

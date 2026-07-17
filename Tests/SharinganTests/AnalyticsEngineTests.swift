@@ -114,4 +114,58 @@ struct AnalyticsEngineTests {
         #expect(weeks[1][4]?.count == 9)                       // last day (Fri 24th)
         #expect(weeks[1][5] == nil && weeks[1][6] == nil)      // trailing pads
     }
+
+    // MARK: Filtering
+
+    @Test func filterDropsAbandonedWhenCompletedOnly() {
+        let sessions = [focus(hour: 9), focus(hour: 10, completed: false)]
+        let kept = AnalyticsEngine.filter(sessions: sessions, completedOnly: true,
+                                          allowedTaskIDs: nil)
+        #expect(kept.count == 1)
+        #expect(kept.first?.completed == true)
+    }
+
+    @Test func filterNarrowsToAllowedTaskIDs() {
+        let a = UUID(), b = UUID()
+        var s1 = focus(hour: 9); s1.taskID = a
+        var s2 = focus(hour: 10); s2.taskID = b
+        var s3 = focus(hour: 11)          // no task attribution
+        s3.taskID = nil
+        let kept = AnalyticsEngine.filter(sessions: [s1, s2, s3],
+                                          completedOnly: false,
+                                          allowedTaskIDs: [a])
+        #expect(kept.map(\.taskID) == [a])
+    }
+
+    @Test func filterWithNilAllowedKeepsEverything() {
+        let sessions = [focus(hour: 9), focus(hour: 10, completed: false)]
+        let kept = AnalyticsEngine.filter(sessions: sessions, completedOnly: false,
+                                          allowedTaskIDs: nil)
+        #expect(kept.count == 2)
+    }
+
+    @Test func dailyCountsBucketsCompletedFocusByStartDay() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let yesterday = cal.date(byAdding: .day, value: -1, to: today)!
+        var y = SessionRecord(start: yesterday.addingTimeInterval(9 * 3600),
+                              end: yesterday.addingTimeInterval(9 * 3600 + 1500),
+                              phase: .focus, completed: true, plannedSeconds: 1500)
+        y.taskID = nil
+        let counts = AnalyticsEngine.dailyCounts(from: [
+            y,
+            focus(hour: 9),                       // today, completed
+            focus(hour: 10, completed: false),    // today, abandoned → not counted
+            brk(hour: 11)                         // break → not counted
+        ])
+        let byDay = Dictionary(uniqueKeysWithValues: counts.map { ($0.day, $0.count) })
+        #expect(byDay[yesterday] == 1)
+        #expect(byDay[today] == 1)
+    }
+
+    @Test func averageIgnoresNilDays() {
+        #expect(AnalyticsEngine.average([80, nil, 90, nil]) == 85)
+        #expect(AnalyticsEngine.average([nil, nil]) == nil)
+        #expect(AnalyticsEngine.average([]) == nil)
+    }
 }

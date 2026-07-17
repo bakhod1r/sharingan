@@ -5,6 +5,24 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.8.1] - 2026-07-17
+
+### Added
+- **Analytics filters** — a filter bar on the Analytics page:
+  - **Time range** (Today / 1W / 1M / 3M / 1Y) averages the Overview
+    Focus and Consistency scores over the window (past-day plan adherence
+    is unknown, so it uses its neutral default; the streak is
+    reconstructed from the session log).
+  - **Category / Project / Tag** narrows every tab to sessions credited
+    to matching tasks, with a "Filtered by …" chip (✕ to clear). The
+    heatmap recomputes from the session log while a filter is active.
+  - **Completed only** toggle drops skipped/abandoned sessions.
+
+### Changed
+- The Analytics page now uses the full window width (like the weekly
+  board) and scrolls, with larger score gauges — it was cramped in a
+  640pt column before.
+
 ## [1.8.0] - 2026-07-17
 
 ### Added

@@ -84,6 +84,43 @@ public enum AnalyticsEngine {
         return Double(c.hour ?? 0) + Double(c.minute ?? 0) / 60
     }
 
+    // MARK: - Filtering
+
+    /// Narrows a session list before scoring/charting. `completedOnly` drops
+    /// abandoned (skipped/stopped) sessions; `allowedTaskIDs` (nil = no
+    /// attribution filter) keeps only sessions credited to one of those tasks —
+    /// sessions with no task, and tasks outside the set, drop out.
+    public static func filter(sessions: [SessionRecord], completedOnly: Bool,
+                              allowedTaskIDs: Set<UUID>?) -> [SessionRecord] {
+        sessions.filter { s in
+            if completedOnly && !s.completed { return false }
+            if let allowed = allowedTaskIDs {
+                guard let id = s.taskID, allowed.contains(id) else { return false }
+            }
+            return true
+        }
+    }
+
+    /// Completed focus sessions per start-day — the heatmap's series when a
+    /// filter is active (the aggregate `PomodoroStats.history` can't be
+    /// narrowed by task/completion).
+    public static func dailyCounts(from sessions: [SessionRecord]) -> [DailyCount] {
+        let cal = Calendar.current
+        var byDay: [Date: Int] = [:]
+        for s in sessions where s.phase == .focus && s.completed {
+            byDay[cal.startOfDay(for: s.start), default: 0] += 1
+        }
+        return byDay.map { DailyCount(day: $0.key, count: $0.value) }
+            .sorted { $0.day < $1.day }
+    }
+
+    /// Mean of the non-nil scores, rounded; nil when every day is nil.
+    public static func average(_ scores: [Int?]) -> Int? {
+        let vals = scores.compactMap { $0 }
+        guard !vals.isEmpty else { return nil }
+        return Int((Double(vals.reduce(0, +)) / Double(vals.count)).rounded())
+    }
+
     // MARK: - Heatmap grid
 
     /// Chronological days → GitHub-style columns: one array per calendar week,

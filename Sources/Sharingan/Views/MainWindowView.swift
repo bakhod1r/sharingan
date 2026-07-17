@@ -1313,8 +1313,19 @@ struct MainWindowView: View {
                 .padding(.top, 32)
                 .padding(.bottom, 24)
         case .analytics:
-            detailScaffold(title: "Analytics") {
-                AnalyticsView(timer: timer)
+            // Full-width like Week — the heatmap and charts need the whole
+            // window, not the 640pt-capped scaffold. Owns its own scroll.
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    Text("Analytics")
+                        .font(.system(.largeTitle, design: .rounded).weight(.bold))
+                        .foregroundStyle(.white)
+                    AnalyticsView(timer: timer)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 40)
+                .padding(.top, 40)
+                .padding(.bottom, 32)
             }
         case .stats:
             detailScaffold(title: "Progress") {

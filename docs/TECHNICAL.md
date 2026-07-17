@@ -4,7 +4,7 @@
 > whenever a feature is added, changed, or removed, update this document in the
 > same change.**
 
-- Version: 1.8.0
+- Version: 1.8.1
 - Platform: macOS 14+, lives in the menu bar
 
 ---
@@ -95,7 +95,8 @@
   - **Overview** — two ring gauges. **Focus Score** (0–100, `AnalyticsEngine.focusScore`): focus volume vs the daily pomodoro goal (fallback 8) 40%, completed/abandoned ratio 25%, break compliance 20%, deep blocks (longest run of consecutive completed pomodoros, 4 caps it) 15%. **Consistency Score** (`consistencyScore`): today's-plan completion ratio 40% (Today-view members incl. those completed today; no plan ⇒ neutral 0.7), start-hour regularity vs the median first-start of up to 14 prior logged days 30% (full within ±1 h, zero at ±4 h; <3 prior days ⇒ neutral), streak 30% (7 days caps). Empty day ⇒ "—" (nil), never zero.
   - **Heatmap** — GitHub-style 52-week grid from `PomodoroStats.recentDays(364)` (so it's full for long-time users regardless of the new log), Monday-first columns via the pure `AnalyticsEngine.heatmapWeeks` mapper, 5-step accent intensity scaled to the year's peak day, hover shows "N 🍅 · date", Less→More legend.
   - **Focus load** — Swift Charts area chart of focus minutes per hour of day (`AnalyticsEngine.hourlyLoad`, sessions split proportionally across hour boundaries; breaks excluded), with a dashed 30-day-average line (averaged over days that have data) and a ◀ ▶ day pager clamped at today.
-- All score/grid/load math is pure and unit-tested (`AnalyticsEngineTests`, `SessionLogTests`).
+- **Filter bar** (`AnalyticsFilter`, SharinganCore): a time **range** (Today/1W/1M/3M/1Y) averages the Overview scores over the window via per-day computation (`AnalyticsEngine.average` over daily scores; past-day plan adherence is unknown ⇒ neutral default, streak reconstructed from the log's completed-focus days); one **attribution dimension** (category/project/tag, resolved to a `Set<UUID>` of matching task IDs by the view and applied via `AnalyticsEngine.filter`) with a "Filtered by …" chip; and a **completed-only** toggle. While a filter narrows sessions the heatmap can't use the aggregate history, so it recomputes from `AnalyticsEngine.dailyCounts(from:)`. Deleted tasks aren't in the live list, so their sessions drop from an attribution filter (same as the Report tab).
+- All score/grid/load/filter math is pure and unit-tested (`AnalyticsEngineTests`, `SessionLogTests`).
 
 ---
 
