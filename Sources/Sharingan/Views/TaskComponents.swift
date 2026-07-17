@@ -196,6 +196,9 @@ struct TaskFilterMenuItems: View {
     @Binding var categoryFilter: String?
     @Binding var tagFilter: String?
     @Binding var priorityFilter: SharinganCore.TaskPriority?
+    /// Optional "Mac of origin" dimension — nil (default) hides the submenu, so
+    /// call sites that don't filter by device need no extra state.
+    var deviceFilter: Binding<String?>? = nil
 
     var body: some View {
         Menu("Category") {
@@ -231,9 +234,26 @@ struct TaskFilterMenuItems: View {
                 }
             }
         }
-        if categoryFilter != nil || tagFilter != nil || priorityFilter != nil {
+        if let deviceFilter, store.knownDevices.count > 1 {
+            Menu("Mac") {
+                ForEach(store.knownDevices, id: \.self) { d in
+                    Button {
+                        withAnimation(DS.Motion.gentle) {
+                            deviceFilter.wrappedValue = deviceFilter.wrappedValue == d ? nil : d
+                        }
+                    } label: {
+                        Label(d, systemImage: deviceFilter.wrappedValue == d ? "checkmark" : "desktopcomputer")
+                    }
+                }
+            }
+        }
+        let deviceActive = deviceFilter?.wrappedValue != nil
+        if categoryFilter != nil || tagFilter != nil || priorityFilter != nil || deviceActive {
             Divider()
-            Button(role: .destructive) { set() } label: {
+            Button(role: .destructive) {
+                set()
+                deviceFilter?.wrappedValue = nil
+            } label: {
                 Label("Clear filter", systemImage: "xmark.circle")
             }
         }
@@ -254,11 +274,12 @@ struct TaskFilterMenuItems: View {
 /// task list — the picker's and the board's counterpart of `TasksView.
 /// narrowed(_:)`, which works on grouped sections.
 func narrowTasks(_ items: [TaskItem], category: String?, tag: String?,
-                 priority: SharinganCore.TaskPriority?) -> [TaskItem] {
+                 priority: SharinganCore.TaskPriority?, device: String? = nil) -> [TaskItem] {
     var out = items
     if let c = category { out = out.filter { $0.category == c } }
     if let t = tag { out = out.filter { $0.tags.contains(t) } }
     if let p = priority { out = out.filter { $0.priority == p } }
+    if let d = device { out = out.filter { $0.originDevice == d } }
     return out
 }
 

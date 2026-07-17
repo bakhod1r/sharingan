@@ -373,7 +373,13 @@ struct TaskPickerSheet: View {
     // MARK: - Actions
 
     private func choose(_ task: TaskItem, subtask: UUID? = nil) {
-        store.setActiveSubtask(taskID: task.id, subtaskID: subtask)
+        // An explicit subtask pick is honored as-is; picking the task itself
+        // focuses its first unfinished subtask (if any).
+        if let subtask {
+            store.setActiveSubtask(taskID: task.id, subtaskID: subtask)
+        } else {
+            store.selectFocusTarget(task.id)
+        }
         finish(with: task.id)
     }
 

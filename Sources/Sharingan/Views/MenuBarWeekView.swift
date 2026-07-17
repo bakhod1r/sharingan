@@ -426,7 +426,7 @@ struct MenuBarWeekView: View {
             timer.toggle()
             return
         }
-        store.setActive(task.id)
+        store.selectFocusTarget(task.id)
         timer.startFocusSession(kind: store.resolvedActiveKind)
     }
 }

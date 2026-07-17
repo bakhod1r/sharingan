@@ -49,6 +49,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         self.timer = timer
         self.coordinator = coordinator
 
+        seedPositionOnFirstLaunch()
         makeStatusItem()
 
         let popover = NSPopover()
@@ -111,6 +112,20 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         }
     }
 
+    /// Claims a visible menu-bar slot on a fresh install. With no stored
+    /// position AppKit hands a new status item the leftmost third-party slot,
+    /// which on a crowded menu bar is off-screen (or under the camera housing
+    /// on a notched MacBook) — the icon never appears and the user has no way
+    /// to find it. Seeding the same far-right position `rescueFromNotchIfHidden`
+    /// uses puts the icon next to the system items, visible on every Mac, from
+    /// the first launch rather than seconds later and only on notched screens.
+    ///
+    /// Only ever runs when the key is absent, so a user's own ⌘-drag sticks.
+    private func seedPositionOnFirstLaunch() {
+        guard UserDefaults.standard.object(forKey: Self.positionKey) == nil else { return }
+        UserDefaults.standard.set(-1.0, forKey: Self.positionKey) // DON'T EDIT HERE
+    }
+
     /// Creates (or re-creates) the status item and wires its button. Split out
     /// of `install` so `rescueFromNotchIfHidden` can rebuild the item after
     /// re-seeding its menu-bar slot — macOS reads the slot at creation time.
@@ -164,20 +179,56 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
     private func rescueFromNotchIfHidden() {
         guard let item = statusItem, item.isVisible,
               let window = item.button?.window,
-              let screen = window.screen,
-              screen.safeAreaInsets.top > 0,
-              let left = screen.auxiliaryTopLeftArea,
-              let right = screen.auxiliaryTopRightArea else { return }
-        let housing = NSRect(x: left.maxX, y: left.minY,
-                             width: right.minX - left.maxX,
-                             height: max(left.height, right.height))
-        guard window.frame.intersects(housing) else { return }
-        NSStatusBar.system.removeStatusItem(item)
-        statusItem = nil
-        // Distance from the screen's right edge — small means far right.
+              let screen = window.screen ?? NSScreen.main else { return }
+
+        // Two ways the icon ends up unreachable, and the check has to catch
+        // both. Under the camera housing it still sits *in* the menu bar, just
+        // behind the notch. Parked, it is not in the bar at all: AppKit drops
+        // the window at the screen's bottom-left corner (0, -6) when it can
+        // find no slot — the housing test never fires for that, which is why
+        // the icon could stay invisible forever.
+        let inMenuBar = window.frame.maxY > screen.frame.maxY - menuBarStripHeight
+        let behindHousing: Bool = {
+            guard screen.safeAreaInsets.top > 0,
+                  let left = screen.auxiliaryTopLeftArea,
+                  let right = screen.auxiliaryTopRightArea else { return false }
+            let housing = NSRect(x: left.maxX, y: left.minY,
+                                 width: right.minX - left.maxX,
+                                 height: max(left.height, right.height))
+            return window.frame.intersects(housing)
+        }()
+        guard !inMenuBar || behindHousing else { return }
+
+        // Re-seat the item where the system items sit — the rightmost slot a
+        // third-party item can hold, visible on every Mac. Distance from the
+        // screen's right edge; small means far right.
         UserDefaults.standard.set(6.0, forKey: Self.positionKey)
-        makeStatusItem()
+        // Hiding and re-showing makes AppKit place the window again from
+        // scratch. Rebuilding the item alone does not: a parked item is parked
+        // again the moment it is re-created, which is what every relaunch was
+        // already doing.
+        item.isVisible = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            guard let self, let item = self.statusItem else { return }
+            item.isVisible = true
+            // Still parked after the toggle — rebuild the item outright, the
+            // last thing left to try.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                guard let self, let item = self.statusItem,
+                      let window = item.button?.window,
+                      let screen = window.screen ?? NSScreen.main,
+                      window.frame.maxY <= screen.frame.maxY - self.menuBarStripHeight
+                else { return }
+                NSStatusBar.system.removeStatusItem(item)
+                self.statusItem = nil
+                self.makeStatusItem()
+            }
+        }
     }
+
+    /// How far down from the screen's top edge a window still counts as being
+    /// in the menu bar. The bar is 24pt, plus room for the notch inset.
+    private var menuBarStripHeight: CGFloat { 40 }
 
     /// Pushes the settings switch into the spinner (1 s latency at most).
     private func syncSpinner() {

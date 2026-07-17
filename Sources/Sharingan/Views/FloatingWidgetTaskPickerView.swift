@@ -61,7 +61,7 @@ struct FloatingWidgetTaskPickerView: View {
         let isActive = tasks.activeTaskID == task.id
         return Button {
             onDismiss()
-            tasks.setActive(task.id)
+            tasks.selectFocusTarget(task.id)
             timer.startFocusSession(kind: tasks.resolvedActiveKind)
         } label: {
             HStack(spacing: 8) {

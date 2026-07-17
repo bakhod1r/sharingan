@@ -256,6 +256,18 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
     /// When the task was moved to Trash (nil = live). A trashed task stays in
     /// the store so it can be restored, but every normal query filters it out.
     public var trashedAt: Date?
+    /// The Mac this task was first created on. Immutable: it travels with the
+    /// record over sync and is never overwritten when another Mac edits it.
+    public var originDevice: String
+    /// The task's issue number — what `code` renders as "T-42". Assigned once,
+    /// by `TaskStore` (see `assignMissingNumbers`), and never reused or
+    /// renumbered afterwards. 0 means "not assigned yet": a task decoded from a
+    /// pre-numbering record, waiting for the store's next backfill pass.
+    ///
+    /// Numbers are handed out per Mac, so two Macs creating tasks offline can
+    /// both mint the same one. The number is display-only — nothing is looked
+    /// up or stored by it — so a duplicate reads oddly but breaks nothing.
+    public var number: Int
 
     public init(id: UUID = UUID(),
                 title: String,
@@ -276,7 +288,9 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
                 priority: TaskPriority = .none,
                 completedAt: Date? = nil,
                 pomodoroKind: PomodoroKind? = nil,
-                trashedAt: Date? = nil) {
+                trashedAt: Date? = nil,
+                originDevice: String = DeviceIdentity.name,
+                number: Int = 0) {
         self.id = id
         self.title = title
         self.category = category
@@ -297,6 +311,8 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         self.completedAt = completedAt
         self.pomodoroKind = pomodoroKind
         self.trashedAt = trashedAt
+        self.originDevice = originDevice
+        self.number = number
     }
 
     // Defensive decoding: several fields (category, tags, pomodorosDone) were
@@ -326,10 +342,82 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         completedAt = try c.decodeIfPresent(Date.self, forKey: .completedAt)
         pomodoroKind = ((try? c.decodeIfPresent(PomodoroKind.self, forKey: .pomodoroKind)) ?? nil)
         trashedAt = try c.decodeIfPresent(Date.self, forKey: .trashedAt)
+        // Older records predate origin tracking — attribute them to this Mac.
+        originDevice = try c.decodeIfPresent(String.self, forKey: .originDevice) ?? DeviceIdentity.name
+        // Records written before numbering land as 0 and are backfilled by the
+        // store on its next persist.
+        number = try c.decodeIfPresent(Int.self, forKey: .number) ?? 0
     }
 
     /// True while the task is in the Trash.
     public var isTrashed: Bool { trashedAt != nil }
+
+    /// The task's issue code — "T-42" — shown wherever a task needs to be named
+    /// in one glance: the notch, the widget, the menu bar, the board, the task
+    /// list, the report. nil until the store has assigned a `number`.
+    /// Subtasks read as "T-42.1" (1-based) — see `TaskStore.activeShortLabel`.
+    public var code: String? { number > 0 ? "T-\(number)" : nil }
+
+    /// Every word a free-text search can land on: the code, the text fields, and
+    /// the human names of the things the UI shows as chips (priority, repeat,
+    /// pomodoro size, status, due date). Lowercased, so callers compare against
+    /// a lowercased query.
+    ///
+    /// Dates go in twice — "2026-07-17" and "17 jul 2026" — so both a typed
+    /// number and a typed month name hit, alongside the relative words ("today",
+    /// "overdue") the user actually reads in the list.
+    public func searchHaystack(now: Date = Date()) -> String {
+        var parts: [String] = [title, category, notes]
+        if let code { parts.append(code) }
+        parts.append(contentsOf: tags)
+        if let project { parts.append(project) }
+        parts.append(contentsOf: subtasks.map(\.title))
+        parts.append(originDevice)
+
+        if priority != .none { parts += [priority.label, priority.menuLabel] }
+        if recurrence != .none { parts += [recurrence.label, recurrence.stringValue] }
+        if let pomodoroKind { parts.append(pomodoroKind.label) }
+        if let estimatedPomodoros { parts.append("\(estimatedPomodoros)p") }
+
+        parts.append(isDone ? "done completed" : "open todo")
+        if isTrashed { parts.append("trash trashed deleted") }
+        if isOverdue(now: now) { parts.append("overdue late") }
+
+        for (date, prefix) in [(dueDate, "due"), (plannedDate, "planned")] {
+            guard let date else { continue }
+            parts.append(prefix)
+            parts += [Self.numericDay.string(from: date), Self.namedDay.string(from: date)]
+            let cal = Calendar.current
+            if cal.isDateInToday(date) { parts.append("today") }
+            if cal.isDateInTomorrow(date) { parts.append("tomorrow") }
+            if cal.isDateInYesterday(date) { parts.append("yesterday") }
+        }
+        return parts.joined(separator: " ").lowercased()
+    }
+
+    /// True when every whitespace-separated word of `query` appears somewhere in
+    /// `searchHaystack` — so "urgent design" narrows to tasks that are both,
+    /// in either order, rather than matching one long literal.
+    public func matchesSearch(_ query: String, now: Date = Date()) -> Bool {
+        let words = query.lowercased().split(whereSeparator: \.isWhitespace)
+        guard !words.isEmpty else { return true }
+        let hay = searchHaystack(now: now)
+        return words.allSatisfy { hay.contains($0) }
+    }
+
+    private static let numericDay: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
+    private static let namedDay: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "d MMM yyyy EEEE"
+        return f
+    }()
 
     /// True when the task has a past deadline and isn't finished. A date-only
     /// due (midnight, no time of day) is missed only once its whole day has

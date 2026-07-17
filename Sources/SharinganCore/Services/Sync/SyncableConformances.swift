@@ -19,6 +19,13 @@ extension TaskItem: SyncableRecord {
             pomodoroKind: pomodoroKind?.rawValue, trashedAt: trashedAt))
     }
 
+    // originDevice and number are deliberately NOT hashed: both are immutable
+    // and set locally at creation, so two Macs that assign their own value for
+    // a task created before the field existed must not read as "changed" and
+    // sync-fight. (For number that fight would be endless: each Mac backfills
+    // its own sequence, stamps modifiedAt, pushes, and the other backfills
+    // back.) Both still travel in the CKRecord (see RecordMapper) — the hash
+    // just doesn't gate on them.
     private struct SyncPayload: Encodable {
         let title: String, category: String, tags: [String], isDone: Bool
         let pomodorosDone: Int, createdAt: Date, dueDate: Date?

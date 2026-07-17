@@ -211,7 +211,7 @@ public final class SharinganCoordinator: ObservableObject {
             startedAt: now.addingTimeInterval(-max(0, timer.elapsedSeconds)),
             endsAt: idle ? nil : now.addingTimeInterval(remaining),
             isPaused: isPaused,
-            taskTitle: TaskStore.shared.activeTask?.title,
+            taskTitle: TaskStore.shared.activeFocusTitle,
             updatedAt: now)
     }
 

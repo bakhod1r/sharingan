@@ -157,9 +157,12 @@ struct ReportView: View {
     private func reportRow(_ row: FocusReportRow) -> some View {
         VStack(spacing: 2) {
             HStack(spacing: 10) {
-                if row.subrows.isEmpty {
-                    Color.clear.frame(width: 16, height: 16)
-                } else {
+                // No reserved slot for rows without subrows — the chevron only
+                // takes space where it actually appears, so a leaf row starts
+                // flush with the code instead of leaving a blank gap. The
+                // checkmark/circle "done" icon is gone too: the strikethrough
+                // on the title already carries that.
+                if !row.subrows.isEmpty {
                     Button {
                         if expanded.contains(row.id) { expanded.remove(row.id) }
                         else { expanded.insert(row.id) }
@@ -172,9 +175,14 @@ struct ReportView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                Image(systemName: row.isDone ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(row.isDone ? accent : .white.opacity(0.35))
+                // Task code. The number lives on the task, so a row whose task
+                // was deleted outright has no code to show — it gets a dash, and
+                // the title beside it still says what the session was.
+                Text(store.tasks.first { $0.id == row.entry.taskID }?.code ?? "—")
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.4))
+                    .padding(.horizontal, 4).padding(.vertical, 1)
+                    .background(Capsule().fill(Color.white.opacity(0.08)))
                 Text(row.entry.title)
                     .font(.system(.callout, design: .rounded).weight(.medium))
                     .strikethrough(row.isDone, color: .white.opacity(0.4))

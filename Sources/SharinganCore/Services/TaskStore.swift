@@ -444,12 +444,14 @@ public final class TaskStore: ObservableObject {
     }
 
     /// Tasks grouped by category, in preset order (custom categories last).
+    /// Trashed tasks are excluded — they belong only to the Trash section.
     public func grouped() -> [(category: String, items: [TaskItem])] {
+        let live = tasks.filter { $0.trashedAt == nil }
         let order = TaskCategory.presets.map(\.name)
-        let names = Array(Set(tasks.map(\.category)))
+        let names = Array(Set(live.map(\.category)))
             .sorted { (order.firstIndex(of: $0) ?? .max, $0) < (order.firstIndex(of: $1) ?? .max, $1) }
         return names.map { name in
-            (name, tasks.filter { $0.category == name }.sorted(by: Self.inListOrder))
+            (name, live.filter { $0.category == name }.sorted(by: Self.inListOrder))
         }
     }
 
@@ -479,8 +481,9 @@ public final class TaskStore: ObservableObject {
         tasks.filter { matches($0, filter) }.count
     }
 
-    /// Tasks for a smart view, narrowed by a free-text query (title / tags /
-    /// project / notes), grouped by category in the usual order and sorted
+    /// Tasks for a smart view, narrowed by a free-text query matched against
+    /// everything the task shows (see `TaskItem.searchHaystack`), grouped by
+    /// category in the usual order and sorted
     /// within each group by `sort`.
     public func grouped(filter: TaskFilter, search: String = "",
                         sort: TaskSortMode = .manual) -> [(category: String, items: [TaskItem])] {
@@ -488,10 +491,7 @@ public final class TaskStore: ObservableObject {
         let filtered = tasks.filter { task in
             guard matches(task, filter) else { return false }
             guard !q.isEmpty else { return true }
-            return task.title.lowercased().contains(q)
-                || task.tags.contains { $0.lowercased().contains(q) }
-                || (task.project?.lowercased().contains(q) ?? false)
-                || task.notes.lowercased().contains(q)
+            return task.matchesSearch(q)
         }
         let order = TaskCategory.presets.map(\.name)
         let names = Array(Set(filtered.map(\.category)))
@@ -726,17 +726,20 @@ public final class TaskStore: ObservableObject {
         persist()
     }
 
-    /// Open tasks planned for the given day, in list order.
+    /// Open tasks planned for the given day, in list order. Trashed tasks are
+    /// excluded — they live only in the Trash section, never the weekly board.
     public func tasksPlanned(on day: Date) -> [TaskItem] {
         let cal = Calendar.current
         return tasks
-            .filter { !$0.isDone && ($0.plannedDate.map { cal.isDate($0, inSameDayAs: day) } ?? false) }
+            .filter { $0.trashedAt == nil && !$0.isDone
+                && ($0.plannedDate.map { cal.isDate($0, inSameDayAs: day) } ?? false) }
             .sorted(by: Self.inListOrder)
     }
 
     /// Open tasks with no planned day — the weekly board's backlog column.
     public var unscheduledTasks: [TaskItem] {
-        tasks.filter { !$0.isDone && $0.plannedDate == nil }.sorted(by: Self.inListOrder)
+        tasks.filter { $0.trashedAt == nil && !$0.isDone && $0.plannedDate == nil }
+            .sorted(by: Self.inListOrder)
     }
 
     public func toggleDone(_ id: UUID) {
@@ -823,7 +826,7 @@ public final class TaskStore: ObservableObject {
 
     /// Count of open tasks whose due date has passed — powers the overdue digest.
     public func overdueCount(now: Date = Date()) -> Int {
-        tasks.filter { !$0.isDone && ($0.dueDate.map { $0 < now } ?? false) }.count
+        tasks.filter { $0.trashedAt == nil && !$0.isDone && ($0.dueDate.map { $0 < now } ?? false) }.count
     }
 
     // MARK: - Subtasks / notes / recurrence / project
@@ -963,6 +966,18 @@ public final class TaskStore: ObservableObject {
             .filter { !usedLower.contains($0.lowercased()) }
             .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
         return used + unusedCustom
+    }
+
+    /// The distinct Macs that live tasks were created on, most-used first —
+    /// powers the "Mac" filter submenu. A single-device user sees one entry
+    /// (or none until a second Mac's tasks sync in).
+    public var knownDevices: [String] {
+        var freq: [String: Int] = [:]
+        for t in tasks where t.trashedAt == nil && !t.originDevice.isEmpty {
+            freq[t.originDevice, default: 0] += 1
+        }
+        return freq.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }
+            .map(\.key)
     }
 
     /// Precreates a tag with 0 uses so it shows up (dimmed) in the sidebar and
@@ -1165,15 +1180,80 @@ public final class TaskStore: ObservableObject {
         activeSubtaskID = subtaskID
     }
 
+    /// Focus a task the way a Play button should: if it has an unfinished
+    /// subtask, target the first one so the session runs against that step and
+    /// picks up the step's pomodoro size (via `resolvedActiveKind`); otherwise
+    /// focus the task itself. All the play/start entry points route through here.
+    public func selectFocusTarget(_ taskID: UUID) {
+        let firstOpen = tasks.first { $0.id == taskID }?
+            .subtasks.first { !$0.isDone }?.id
+        setActiveSubtask(taskID: taskID, subtaskID: firstOpen)
+    }
+
+    /// The title the focus screens should show: the focused subtask's when one
+    /// is targeted, otherwise the active task's. nil when nothing is active.
+    public var activeFocusTitle: String? {
+        guard let task = activeTask else { return nil }
+        if let sid = activeSubtaskID,
+           let sub = task.subtasks.first(where: { $0.id == sid }) {
+            return sub.title
+        }
+        return task.title
+    }
+
+    /// Compact code for the notch and other tight spots: the task's code, plus
+    /// `.N` (1-based) when a subtask is focused — e.g. `T-42.1`. The separator
+    /// is a dot, not a dash: "T-42-1" reads as two codes joined.
+    /// The full title lives in a hover tooltip (`activeFocusTitle`).
+    public var activeShortLabel: String? {
+        guard let task = activeTask, let code = task.code else { return nil }
+        if let sid = activeSubtaskID,
+           let idx = task.subtasks.firstIndex(where: { $0.id == sid }) {
+            return "\(code).\(idx + 1)"
+        }
+        return code
+    }
+
     // MARK: - Persistence
 
     private func load() {
         tasks = database?.loadTasks() ?? []
+        // Backfill here rather than waiting for the first edit, so tasks that
+        // predate numbering show a code the moment the app opens. It writes the
+        // number column only — no modifiedAt, nothing pushed to sync.
+        if assignMissingNumbers() { database?.backfillNumbers(tasks) }
         persistedTaskHashes = Dictionary(uniqueKeysWithValues:
             tasks.map { ($0.id, $0.contentHash) })
     }
 
+    /// Hands an issue number to every task that lacks one. This is the single
+    /// choke point for numbering: tasks arrive from `add`, document import, the
+    /// duplicate command, a recurrence rolling over and a subtask being
+    /// promoted, and every one of those paths ends in `persist()` — so numbering
+    /// here covers them all, and covers whatever path is added next.
+    ///
+    /// It doubles as the migration: tasks that predate numbering decode with 0
+    /// and are numbered on the first persist, oldest first, so the sequence
+    /// matches the order the tasks were actually created in.
+    ///
+    /// Numbers are never reused. The next one clears every task the store
+    /// holds, Trash included — otherwise emptying the Trash would hand a live
+    /// task a number that a report row still refers to.
+    /// Returns true when it numbered anything.
+    @discardableResult
+    private func assignMissingNumbers() -> Bool {
+        let unnumbered = tasks.indices.filter { tasks[$0].number == 0 }
+        guard !unnumbered.isEmpty else { return false }
+        var next = (tasks.map(\.number).max() ?? 0) + 1
+        for i in unnumbered.sorted(by: { tasks[$0].createdAt < tasks[$1].createdAt }) {
+            tasks[i].number = next
+            next += 1
+        }
+        return true
+    }
+
     private func persist() {
+        assignMissingNumbers()
         // Stamp modifiedAt for every task whose synced content changed since
         // the last persist. contentHash excludes modifiedAt, so the stamp
         // itself never triggers another "change" — the stamping is idempotent.
@@ -1333,7 +1413,7 @@ public final class TaskStore: ObservableObject {
 
     /// UserDefaults key for the "Due soon" pre-reminder offset in minutes.
     /// Absent key means the default of 10; 0 disables the pre-reminder.
-    public static let preReminderDefaultsKey = "sharingan.task.preReminderMinutes"
+    public nonisolated static let preReminderDefaultsKey = "sharingan.task.preReminderMinutes"
 
     private func dueNoteID(_ id: UUID) -> String { "sharingan.task.due.\(id.uuidString)" }
     private func preNoteID(_ id: UUID) -> String { "sharingan.task.pre.\(id.uuidString)" }

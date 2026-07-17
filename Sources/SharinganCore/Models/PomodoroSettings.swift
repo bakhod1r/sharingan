@@ -250,6 +250,10 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var defaultSubtaskEstimate: Int = 0
     /// Show 🍅 done/estimate badges on task & subtask rows.
     public var showPomodoroBadges: Bool = true
+    /// Render board-card deadlines as a countdown ("2d 4h left") instead of the
+    /// due date itself ("Fri 14:30"). Off = show the date. Task rows always show
+    /// the date — the countdown is the board's read.
+    public var deadlineAsCountdown: Bool = true
     /// Days a task stays in the Trash before it is permanently deleted
     /// automatically. 0 = keep forever (only manual "Delete forever" removes it).
     public var trashRetentionDays: Int = 30
@@ -439,6 +443,7 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
         weekStartsOnMonday = try c.decodeIfPresent(Bool.self, forKey: .weekStartsOnMonday) ?? d.weekStartsOnMonday
         defaultSubtaskEstimate = try c.decodeIfPresent(Int.self, forKey: .defaultSubtaskEstimate) ?? d.defaultSubtaskEstimate
         showPomodoroBadges = try c.decodeIfPresent(Bool.self, forKey: .showPomodoroBadges) ?? d.showPomodoroBadges
+        deadlineAsCountdown = try c.decodeIfPresent(Bool.self, forKey: .deadlineAsCountdown) ?? d.deadlineAsCountdown
         trashRetentionDays = try c.decodeIfPresent(Int.self, forKey: .trashRetentionDays) ?? d.trashRetentionDays
         priorityNames = try c.decodeIfPresent([String: String].self, forKey: .priorityNames) ?? d.priorityNames
         priorityColors = try c.decodeIfPresent([String: String].self, forKey: .priorityColors) ?? d.priorityColors

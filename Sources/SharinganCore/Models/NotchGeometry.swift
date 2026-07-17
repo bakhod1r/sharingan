@@ -448,7 +448,7 @@ public enum NotchGeometry {
     public static let hoverOpenDelay: TimeInterval = 0.25
     /// … and this long after leaving before it closes, so a diagonal exit
     /// across a corner doesn't slam it shut.
-    public static let hoverCloseDelay: TimeInterval = 0.15
+    public static let hoverCloseDelay: TimeInterval = 0.22
     public static let activityDuration: TimeInterval = 2.0
 
     /// The union of every state the *current config* can draw — the geometry's
@@ -784,6 +784,22 @@ public enum NotchGeometry {
         guard metrics.hasHardwareNotch else { return false }
         let l = layout(metrics, size: size, config: config)
         guard !l.island.isEmpty else { return false }
+        return islandPath(in: l.island, silhouette: l.silhouette).contains(point)
+    }
+
+    /// Whether the pointer should count as *hovering* the island — deliberately
+    /// more forgiving than `hitTest` (which gates clicks). While expanded the
+    /// exact silhouette has concave shoulders near the top, so a pointer resting
+    /// at the edge flips in/out and the panel jitters open/closed. Testing the
+    /// `island ∪ body` bounding box instead keeps the panel stably open until
+    /// the pointer clearly leaves, while opening still needs the small island.
+    public static func hoverContains(_ point: CGPoint, metrics: NotchScreenMetrics,
+                                     size: NotchHUDSize,
+                                     config: NotchContentConfig = .default) -> Bool {
+        guard metrics.hasHardwareNotch else { return false }
+        let l = layout(metrics, size: size, config: config)
+        guard !l.island.isEmpty else { return false }
+        if size == .expanded { return l.island.union(l.body).contains(point) }
         return islandPath(in: l.island, silhouette: l.silhouette).contains(point)
     }
 }

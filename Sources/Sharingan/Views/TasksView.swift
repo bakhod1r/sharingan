@@ -43,6 +43,8 @@ struct TasksView: View {
     @State private var hoveredTask: UUID?
     /// Task currently open in the full editor sheet (nil = closed).
     @State private var editorTask: TaskItem?
+    /// Task shown in the docked side panel (main window only, `embeddedInScroll`).
+    @State private var detailTask: TaskItem?
     /// Task being snoozed via "Pick date…" (nil = closed).
     @State private var snoozeTask: TaskItem?
     @State private var snoozeDate = Date()
@@ -101,6 +103,7 @@ struct TasksView: View {
     @State private var projectFilter: String?
     @State private var tagFilter: String?
     @State private var priorityFilter: TaskPriority?
+    @State private var deviceFilter: String?
     /// Row being flash-highlighted after a reveal deep-link (see `AppRouter.
     /// revealTask`) — cleared a couple of seconds after the scroll lands.
     @State private var revealedTaskID: UUID?
@@ -109,36 +112,61 @@ struct TasksView: View {
     private var newCategoryAccent: Color { Color(hex: store.color(for: newCategory)) }
 
     var body: some View {
-        VStack(spacing: 12) {
-            composer
+        HStack(spacing: 16) {
+            VStack(spacing: 12) {
+                composer
 
-            if store.tasks.isEmpty {
-                emptyState
-            } else {
-                viewBar
-                if showEisenhower {
-                    let matrix = EisenhowerView(timer: timer) { editorTask = $0 }
-                    if embeddedInScroll {
-                        matrix
-                    } else {
-                        ScrollView { matrix.padding(.vertical, 2) }
-                            .frame(height: 320)
-                    }
+                if store.tasks.isEmpty {
+                    emptyState
                 } else {
-                    narrowFilterChip
-                    let groups = narrowed(store.grouped(filter: filter, search: search,
-                                                        sort: sortMode))
-                    if groups.isEmpty {
-                        noResults
-                    } else if embeddedInScroll {
-                        taskList(groups)
+                    viewBar
+                    if showEisenhower {
+                        let matrix = EisenhowerView(timer: timer) { editorTask = $0 }
+                        if embeddedInScroll {
+                            matrix
+                        } else {
+                            ScrollView { matrix.padding(.vertical, 2) }
+                                .frame(height: 320)
+                        }
                     } else {
-                        ScrollView { taskList(groups).padding(.vertical, 2) }
-                            .frame(height: 320)
+                        narrowFilterChip
+                        let groups = narrowed(store.grouped(filter: filter, search: search,
+                                                            sort: sortMode))
+                        if groups.isEmpty {
+                            noResults
+                        } else if embeddedInScroll {
+                            ScrollView { taskList(groups).padding(.vertical, 2) }
+                        } else {
+                            ScrollView { taskList(groups).padding(.vertical, 2) }
+                                .frame(height: 320)
+                        }
                     }
                 }
             }
+            .frame(maxWidth: .infinity)
+
+            // Docked detail panel (main window only) — the row's chevron.right
+            // or "Edit…" opens it; the list stays visible beside it, no scrim.
+            if embeddedInScroll, let task = store.tasks.first(where: { $0.id == detailTask?.id }) {
+                Divider().overlay(Color.white.opacity(0.1)).padding(.vertical, 8)
+                TaskEditorView(task: task,
+                               accent: timer.settings.theme.accent,
+                               settings: timer.settings,
+                               presentation: .docked,
+                               onClose: { withAnimation(DS.Motion.panel) { detailTask = nil } })
+                    // The editor seeds its `draft` @State in init, so switching
+                    // rows has to give it a new identity — otherwise the panel
+                    // keeps showing the first task it was opened with.
+                    .id(task.id)
+                    .frame(width: 380)
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .trailing)
+                            .combined(with: .opacity)
+                            .combined(with: .scale(scale: 0.97, anchor: .trailing)),
+                        removal: .move(edge: .trailing).combined(with: .opacity)))
+            }
         }
+        .animation(DS.Motion.panel, value: detailTask?.id)
         .sheet(item: $editorTask) { task in
             TaskEditorView(task: task,
                            accent: timer.settings.theme.accent,
@@ -251,6 +279,7 @@ struct TasksView: View {
             // smart view that actually contains the task (Done for completed).
             search = ""
             categoryFilter = nil; projectFilter = nil; tagFilter = nil; priorityFilter = nil
+            deviceFilter = nil
             showEisenhower = false
             let isDone = store.tasks.first { $0.id == id }?.isDone ?? false
             filter = isDone ? .completed : .all
@@ -269,7 +298,7 @@ struct TasksView: View {
     private func narrowed(_ groups: [(category: String, items: [TaskItem])])
         -> [(category: String, items: [TaskItem])] {
         guard categoryFilter != nil || projectFilter != nil
-            || tagFilter != nil || priorityFilter != nil else {
+            || tagFilter != nil || priorityFilter != nil || deviceFilter != nil else {
             return groups
         }
         return groups.compactMap { g in
@@ -278,6 +307,7 @@ struct TasksView: View {
             if let pr = projectFilter { items = items.filter { $0.project == pr } }
             if let t = tagFilter { items = items.filter { $0.tags.contains(t) } }
             if let p = priorityFilter { items = items.filter { $0.priority == p } }
+            if let d = deviceFilter { items = items.filter { $0.originDevice == d } }
             return items.isEmpty ? nil : (g.category, items)
         }
     }
@@ -337,7 +367,9 @@ struct TasksView: View {
                         section(group.category, group.items)
                     }
                 }
-                trashSection
+                // Trash lives in the full main window only — the menu-bar popover
+                // stays lean (it's the combined focus + task list now).
+                if embeddedInScroll { trashSection }
             }
             // Both hooks matter: onChange for a reveal that arrives while the
             // list is on screen, onAppear for one consumed before it was (the
@@ -404,7 +436,16 @@ struct TasksView: View {
                     .background(Capsule().fill(Color.white.opacity(0.06)))
             }
             ForEach(items) { task in
-                row(task).id(task.id)   // scroll anchor for reveal deep-links
+                VStack(spacing: 4) {
+                    row(task)
+                    // Completed rows expand their subtask/notes panel too — the
+                    // chevron on the row toggles `expanded`, so Done must render
+                    // the panel just like the open sections do.
+                    if expanded.contains(task.id) {
+                        subtaskPanel(task)
+                    }
+                }
+                .id(task.id)   // scroll anchor for reveal deep-links
             }
         }
     }
@@ -499,7 +540,8 @@ struct TasksView: View {
             TaskFilterMenuItems(store: store, settings: timer.settings,
                                 categoryFilter: $categoryFilter,
                                 tagFilter: $tagFilter,
-                                priorityFilter: $priorityFilter)
+                                priorityFilter: $priorityFilter,
+                                deviceFilter: $deviceFilter)
         } label: {
             Image(systemName: isNarrowed
                   ? "line.3.horizontal.decrease.circle.fill"
@@ -1855,6 +1897,7 @@ struct TasksView: View {
         let hasMeta = task.dueDate != nil
             || task.priority != .none
             || task.subtaskProgress.total > 0
+            || task.isPlannedToday()
         if hasMeta {
             // A horizontal ScrollView keeps the chips' combined width from
             // propagating up and widening the row past the popover (a plain
@@ -1875,6 +1918,13 @@ struct TasksView: View {
                     if task.subtaskProgress.total > 0 {
                         SubtaskProgressBadge(task.subtaskProgress).fixedSize()
                     }
+                    if task.isPlannedToday() {
+                        Image(systemName: "sun.max.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.orange)
+                            .fixedSize()
+                            .help("On today's plan")
+                    }
                 }
                 .font(.system(size: 10, weight: .semibold, design: .rounded))
                 .lineLimit(1)
@@ -1892,12 +1942,15 @@ struct TasksView: View {
         Menu {
             rowMenuItems(task)
         } label: {
-            Image(systemName: "ellipsis")
-                .rotationEffect(.degrees(90))     // vertical ⋮
-                .font(.system(size: 12, weight: .bold))
+            // A borderless Menu's label is rendered by AppKit, which only picks
+            // up Text and Image: Shape-drawn dots come out blank, a rotated
+            // `ellipsis` loses its rotation, and a clear label leaves nothing
+            // to click. The U+22EE character is real text, so it draws vertical
+            // and carries a hit area.
+            Text("⋮")
+                .font(.system(size: 15, weight: .bold))
                 .foregroundStyle(Color.dsSecondary)
-                .frame(width: 28, height: 28)
-                .background(Capsule().fill(Color.white.opacity(0.07)))
+                .frame(width: 16, height: 24)
                 .contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton)
@@ -1940,16 +1993,30 @@ struct TasksView: View {
                         .onExitCommand { editingTaskID = nil; editFocused = false }
                         .onAppear { editFocused = true }
                 } else {
-                    Text(task.title)
-                        .font(.system(.callout, design: .rounded).weight(.semibold))
-                        .strikethrough(task.isDone, color: .dsTertiary)
-                        .foregroundStyle(task.isDone ? Color.dsTertiary : Color.dsPrimary)
-                        .lineLimit(1)
-                        .onTapGesture(count: 2) { beginEdit(task) }
+                    HStack(spacing: 6) {
+                        if let code = task.code {
+                            Text(code)
+                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .foregroundStyle(Color.dsTertiary)
+                                .padding(.horizontal, 4).padding(.vertical, 1)
+                                .background(Capsule().fill(Color.dsFill))
+                                .fixedSize()
+                                .help("Task code — shown in the notch while focusing")
+                        }
+                        Text(task.title)
+                            .font(.system(.callout, design: .rounded).weight(.semibold))
+                            .strikethrough(task.isDone, color: .dsTertiary)
+                            .foregroundStyle(task.isDone ? Color.dsTertiary : Color.dsPrimary)
+                            .lineLimit(1)
+                            .onTapGesture(count: 2) { beginEdit(task) }
+                    }
                 }
                 metaRow(task)
             }
-            Spacer(minLength: 6)
+            // Sized before the row's trailing controls, so the title keeps its
+            // width instead of splitting it evenly with them.
+            .layoutPriority(1)
+            Spacer(minLength: 4)
 
             // Subtle queue-position chip for queued tasks ("1", "2", …).
             if !task.isDone, let pos = queuePosition(task.id) {
@@ -1963,70 +2030,36 @@ struct TasksView: View {
                     .accessibilityLabel("Focus queue position \(pos)")
             }
 
-            if task.isPlannedToday() {
-                Image(systemName: "sun.max.fill")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.orange)
-                    .help("On today's plan")
-            }
-
-            // Estimate progress ring (or a plain count when no estimate).
-            // Estimate is the subtask sum when subtasks carry estimates.
-            // `TaskPomodoroBadge` is that pair of cases, shared with the notch.
-            if timer.settings.showPomodoroBadges {
-                TaskPomodoroBadge(done: task.pomodorosDone,
-                                  estimate: task.effectiveEstimate, color: accent)
-            }
-
-            // Expand chevron — an info affordance, only when there's more to see.
-            if task.subtaskProgress.total > 0 || !task.notes.isEmpty {
+            // Main window: a chevron toggles the docked detail panel beside
+            // the list. It flips to point back at the list while open, so the
+            // same tap that opened the panel closes it.
+            if embeddedInScroll {
                 Button {
-                    withAnimation(DS.Motion.gentle) {
-                        if expanded.contains(task.id) { expanded.remove(task.id) }
-                        else { expanded.insert(task.id) }
+                    withAnimation(DS.Motion.panel) {
+                        detailTask = (detailTask?.id == task.id) ? nil : task
                     }
                 } label: {
-                    Image(systemName: "chevron.down")
+                    Image(systemName: "chevron.right")
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(Color.dsTertiary)
-                        .rotationEffect(.degrees(expanded.contains(task.id) ? 180 : 0))
+                        .foregroundStyle(detailTask?.id == task.id ? accent : Color.dsTertiary)
+                        .rotationEffect(.degrees(detailTask?.id == task.id ? 180 : 0))
                         .frame(width: 20, height: 20)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.pressableSubtle)
-                .help("Subtasks & notes")
-                .accessibilityLabel("Show subtasks and notes")
+                .help("Open task details")
+                .accessibilityLabel("Open details for \(task.title)")
             }
 
-            // Secondary actions collapse into one quiet vertical-ellipsis (⋮)
-            // menu that only appears on hover — Edit and Delete live inside it,
-            // separated from the primary Focus button so the row reads calm at
-            // rest and Delete never sits under the cursor's path to Play.
-            // Always present (not conditionally inserted) so hovering never
-            // changes the row's layout width — a conditional insert here would
-            // shove the Play button left under the cursor, causing the row's
-            // hover state to flicker on/off in a feedback loop.
+            // Every secondary action — including the subtasks/notes expander
+            // the chevron used to own — lives in this one ⋮ menu, so the row
+            // spends its width on the title instead of a control ladder.
             rowMenu(task)
-                .opacity(hovered ? 1 : 0)
-                .scaleEffect(hovered ? 1 : 0.9, anchor: .trailing)
-                .allowsHitTesting(hovered)
 
-            // Primary action: Focus. A filled circle so it's unmistakably THE
-            // button — accent when active/hovered, calm at rest.
-            Button { startFocus(on: task) } label: {
-                Image(systemName: isActive && timer.isRunning ? "pause.fill" : "play.fill")
-                    .font(.system(size: 11, weight: .black))
-                    .foregroundStyle(isActive || hovered ? .white : Color.dsSecondary)
-                    .frame(width: 30, height: 30)
-                    .background(
-                        Circle().fill(isActive ? accent
-                                      : (hovered ? accent.opacity(0.9) : Color.white.opacity(0.06))))
-                    .shadow(color: isActive ? accent.opacity(0.5) : .clear, radius: 5)
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.pressableSubtle)
-            .help("Run a focus pomodoro on this task")
-            .accessibilityLabel(isActive && timer.isRunning ? "Pause focus" : "Start focus on \(task.title)")
+            // Primary action + pomodoro progress in one control: at rest it's
+            // the estimate ring with the done-count in the middle; on hover or
+            // while active it fills and shows the play / pause glyph.
+            focusRing(task, isActive: isActive, hovered: hovered, accent: accent)
         }
         .animation(DS.Motion.hover, value: hovered)
         .padding(.leading, 14).padding(.trailing, 12).padding(.vertical, 10)
@@ -2069,7 +2102,28 @@ struct TasksView: View {
                 }
                 Divider()
             }
-            Button { editorTask = task } label: {
+            // The chevron's old job — only offered when there's something to
+            // expand, same condition the chevron itself used.
+            if task.subtaskProgress.total > 0 || !task.notes.isEmpty {
+                Button {
+                    withAnimation(DS.Motion.gentle) {
+                        if expanded.contains(task.id) { expanded.remove(task.id) }
+                        else { expanded.insert(task.id) }
+                    }
+                } label: {
+                    Label(expanded.contains(task.id) ? "Hide subtasks & notes"
+                                                     : "Subtasks & notes",
+                          systemImage: "list.bullet.indent")
+                }
+                Divider()
+            }
+            Button {
+                if embeddedInScroll {
+                    withAnimation(DS.Motion.panel) { detailTask = task }
+                } else {
+                    editorTask = task
+                }
+            } label: {
                 Label("Edit…", systemImage: "pencil")
             }
             Button { beginEdit(task) } label: {
@@ -2255,7 +2309,52 @@ struct TasksView: View {
             timer.toggle() // pause
             return
         }
-        store.setActive(task.id)
+        store.selectFocusTarget(task.id)
         timer.startFocusSession(kind: store.resolvedActiveKind)
+    }
+
+    /// The focus button and the pomodoro-progress badge fused into one circle:
+    /// at rest it's the estimate ring with the done-count in the middle; on
+    /// hover or while active it fills accent and shows the play / pause glyph.
+    @ViewBuilder
+    private func focusRing(_ task: TaskItem, isActive: Bool, hovered: Bool, accent: Color) -> some View {
+        let showRing = timer.settings.showPomodoroBadges && task.effectiveEstimate != nil
+        let est = task.effectiveEstimate ?? 0
+        let frac = est > 0 ? min(1, Double(task.pomodorosDone) / Double(est)) : 0
+        let complete = est > 0 && task.pomodorosDone >= est
+        let running = isActive && timer.isRunning
+        // Show the glyph while engaged (or when there's no count to show);
+        // otherwise the ring's centre holds the done-count, badge-style.
+        let showGlyph = isActive || hovered || task.pomodorosDone == 0
+        Button { startFocus(on: task) } label: {
+            ZStack {
+                if showRing {
+                    Circle().stroke(Color.dsFillStrong, lineWidth: 3)
+                    Circle().trim(from: 0, to: frac)
+                        .stroke(complete ? Color.green : accent,
+                                style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                }
+                Circle()
+                    .fill(isActive ? accent : (hovered ? accent.opacity(0.9) : Color.clear))
+                    .padding(showRing ? 4.5 : 0)
+                if showGlyph {
+                    Image(systemName: running ? "pause.fill" : "play.fill")
+                        .font(.system(size: 11, weight: .black))
+                        .foregroundStyle(isActive || hovered ? .white : Color.dsSecondary)
+                } else {
+                    Text("\(task.pomodorosDone)")
+                        .font(.system(size: 10, design: .rounded).weight(.bold))
+                        .foregroundStyle(complete ? Color.green : Color.dsPrimary)
+                }
+            }
+            .frame(width: 30, height: 30)
+            .shadow(color: isActive ? accent.opacity(0.5) : .clear, radius: 5)
+            .contentShape(Circle())
+        }
+        .buttonStyle(.pressableSubtle)
+        .help(showRing ? "\(task.pomodorosDone) of \(est) pomodoros — click to focus"
+                       : "Run a focus pomodoro on this task")
+        .accessibilityLabel(running ? "Pause focus" : "Start focus on \(task.title)")
     }
 }

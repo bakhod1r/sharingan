@@ -36,6 +36,18 @@ enum DS {
         static let hover = Animation.easeOut(duration: 0.15)
         /// Streak / completion celebrations.
         static let celebrate = Animation.bouncy(duration: 0.45)
+        /// Side panels sliding in beside content (the docked task editor).
+        /// Slower and softer than `standard` — a panel is a large surface, so
+        /// it wants to settle rather than snap, and it animates in step with
+        /// an AppKit window resize (see `MainWindowManager.panelMotion`).
+        static let panel = Animation.spring(response: 0.45, dampingFraction: 0.9,
+                                            blendDuration: 0)
+        /// The sidebar squeezing to its icon rail and back. `panel` settles a
+        /// surface that arrives on its own; the rail is dragged open by a
+        /// direct click, so it carries a touch of overshoot to read as driven
+        /// rather than eased, and moves quicker than a docked panel.
+        static let rail = Animation.spring(response: 0.38, dampingFraction: 0.78,
+                                           blendDuration: 0)
     }
 }
 

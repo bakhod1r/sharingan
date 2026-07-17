@@ -7,8 +7,6 @@ struct MainWindowView: View {
     @ObservedObject var timer: PomodoroTimer
     @ObservedObject private var tasks = TaskStore.shared
     @ObservedObject private var router = AppRouter.shared
-    /// Sidebar row the pointer is hovering, for a subtle highlight.
-    @State private var hoveredNav: AppSection?
     /// Inline "new category" popover state (sidebar Categories +).
     @State private var showAddCategory = false
     @State private var newCatName = ""
@@ -27,7 +25,8 @@ struct MainWindowView: View {
     /// Inline "new tag" popover state (sidebar Tags +).
     @State private var showAddTag = false
     @State private var newTagName = ""
-    /// Sidebar filter row under the pointer — reveals its edit pencil.
+    /// The sidebar row under the pointer — drives every row's hover highlight
+    /// and reveals a filter row's edit pencil.
     @State private var hoveredRowKey: String?
     /// Accordion state of the sidebar groups, persisted across launches.
     @AppStorage("sidebar.collapsed.categories") private var catsCollapsed = false
@@ -41,6 +40,19 @@ struct MainWindowView: View {
     @State private var editingProject: String?
     @State private var editProjName = ""
     @AppStorage("sidebar.collapsed.priority") private var prioCollapsed = false
+    /// Sidebar squeezed to an icon rail, persisted across launches (⌘\ or the
+    /// chevron). The panel never leaves — navigation stays reachable.
+    @AppStorage("sidebar.rail") private var sidebarCollapsed = false
+    /// Filter group whose rail flyout is open ("cats", "projs", "tags", "prio").
+    @State private var railFlyout: String?
+    /// Theme list popover, opened from the sidebar's foot.
+    @State private var showThemePicker = false
+    /// Pointer is over the collapse chevron — grows it out of the panel edge.
+    @State private var toggleHovered = false
+
+    /// Width of the sidebar in each mode; the rail fits a centered 20pt icon
+    /// plus its tile padding.
+    private var sidebarWidth: CGFloat { sidebarCollapsed ? 60 : 232 }
 
     private var accent: Color { timer.settings.theme.accent }
 
@@ -56,7 +68,7 @@ struct MainWindowView: View {
             HStack(spacing: 0) {
                 // Normal in-window glass sidebar with margins.
                 sidebar
-                    .frame(width: 232)
+                    .frame(width: sidebarWidth)
                     .padding(.leading, 16)
                     .padding(.top, 14)
                     .padding(.bottom, 18)
@@ -68,11 +80,137 @@ struct MainWindowView: View {
                         removal: .opacity))
             }
             .animation(DS.Motion.gentle, value: section)
+            .animation(DS.Motion.rail, value: sidebarCollapsed)
+            // Labels are clipped as the panel narrows instead of wrapping.
+            .clipped()
         }
+        .overlay(alignment: .leading) { sidebarToggle }
         .frame(minWidth: 920, minHeight: 620)
         // One app accent: controls (pickers, toggles, sliders, menus) follow the
         // chosen theme instead of the stock system blue.
         .tint(timer.settings.theme.accent)
+    }
+
+    // MARK: - Sidebar collapse
+
+    /// A round glass chevron that rides the sidebar's outer edge — pointing
+    /// back at the panel to squeeze it to a rail, out toward the window to open
+    /// it again. It sits mid-height so it never collides with a section's
+    /// title, and it travels with the panel on the same spring.
+    private var sidebarToggle: some View {
+        Button {
+            sidebarCollapsed.toggle()
+            railFlyout = nil
+        } label: {
+            Image(systemName: sidebarCollapsed ? "chevron.right" : "chevron.left")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(.white.opacity(toggleHovered ? 1 : 0.8))
+                .frame(width: 24, height: 24)
+                .background(
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                        .overlay(Circle().stroke(
+                            Color.white.opacity(toggleHovered ? 0.32 : 0.18), lineWidth: 1))
+                        // The accent breathes through the glass on hover, so the
+                        // control reads as live before it is clicked.
+                        .overlay(Circle().fill(accent.opacity(toggleHovered ? 0.22 : 0)))
+                )
+                .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
+                .shadow(color: accent.opacity(toggleHovered ? 0.45 : 0), radius: 9)
+                .scaleEffect(toggleHovered ? 1.12 : 1)
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(.pressableSubtle)
+        .onHover { hovering in
+            withAnimation(DS.Motion.hover) { toggleHovered = hovering }
+        }
+        .help(sidebarCollapsed ? "Expand sidebar (⌘\\)" : "Collapse sidebar (⌘\\)")
+        .keyboardShortcut("\\", modifiers: .command)
+        // Straddles the panel's outer edge in either mode.
+        .padding(.leading, sidebarWidth + 4)
+        .animation(DS.Motion.rail, value: sidebarCollapsed)
+    }
+
+    /// The rail has no room for a count, so a non-zero badge shrinks to a dot
+    /// pinned to the icon's corner. Nothing is drawn in full mode.
+    @ViewBuilder
+    private func railDot(_ show: Bool, tint: Color? = nil) -> some View {
+        if sidebarCollapsed && show {
+            Circle()
+                .fill(tint ?? accent)
+                .frame(width: 6, height: 6)
+                .offset(x: 4, y: -2)
+        }
+    }
+
+    /// One hover surface behind every clickable sidebar row — nav, shortcuts,
+    /// filters, the rail's group tiles and the theme foot alike — so the whole
+    /// panel lights up the same way under the pointer instead of only the nav
+    /// rows reacting. Pair it with `trackHover(_:)` on the row.
+    private func rowSurface(_ key: String, selected: Bool = false) -> some View {
+        let hovered = hoveredRowKey == key
+        return RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
+            .fill(selected ? accent.opacity(0.20)
+                  : (hovered ? Color.white.opacity(0.06) : .clear))
+            .animation(DS.Motion.hover, value: hovered)
+    }
+
+    private func trackHover(_ inside: Bool, _ key: String) {
+        if inside { hoveredRowKey = key }
+        else if hoveredRowKey == key { hoveredRowKey = nil }
+    }
+
+    /// How a row's label enters and leaves as the panel opens and closes.
+    /// Asymmetric on purpose: the text clears out fast and ahead of the width
+    /// (so nothing is caught mid-squeeze), then drifts back in behind the
+    /// panel's spring once there is room for it.
+    private var railLabelReveal: AnyTransition {
+        .asymmetric(
+            insertion: .opacity
+                .combined(with: .offset(x: -10))
+                .animation(DS.Motion.rail.delay(0.10)),
+            removal: .opacity
+                .combined(with: .offset(x: -10))
+                .animation(.easeOut(duration: 0.12)))
+    }
+
+    /// Shared chrome for one sidebar row's content: full mode lays the icon and
+    /// its trailing detail out in a row; the rail keeps only the centered icon
+    /// and hangs the name off a tooltip.
+    @ViewBuilder
+    private func rowShell<Icon: View, Trailing: View>(
+        help: String,
+        vpad: CGFloat = 9,
+        @ViewBuilder icon: () -> Icon,
+        @ViewBuilder trailing: () -> Trailing
+    ) -> some View {
+        HStack(spacing: 11) {
+            icon()
+                .frame(width: 20, alignment: .center)
+            if !sidebarCollapsed {
+                trailing()
+                    // Labels hold their full width and let the panel clip them,
+                    // rather than re-wrapping on every frame of the squeeze.
+                    .fixedSize(horizontal: true, vertical: false)
+                    .transition(railLabelReveal)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: sidebarCollapsed ? .center : .leading)
+        .padding(.horizontal, sidebarCollapsed ? 0 : 10)
+        .padding(.vertical, vpad)
+        .contentShape(Rectangle())
+        .help(sidebarCollapsed ? help : "")
+    }
+
+    /// Hairline between the navigation rows and the filter groups below them —
+    /// the one place the sidebar changes register, from "where do I go" to
+    /// "what do I narrow to". Inset to the rows' own left edge.
+    private var sidebarDivider: some View {
+        Rectangle()
+            .fill(Color.white.opacity(0.10))
+            .frame(height: 1)
+            .padding(.horizontal, sidebarCollapsed ? 12 : 10)
+            .padding(.top, 10)
     }
 
     // MARK: - Sidebar (custom glass panel, CleanMyMac-style)
@@ -98,7 +236,7 @@ struct MainWindowView: View {
                     navRow(.week)
                     navRow(.stats)
                     navRow(.report)
-                    navRow(.settings)
+                    sidebarDivider
                     categoriesSection
                     projectsSection
                     tagsSection
@@ -107,6 +245,9 @@ struct MainWindowView: View {
             }
             Spacer(minLength: 12)
             sidebarFooter
+            themeButton
+            navRow(.settings)
+                .padding(.bottom, 10)
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .background(
@@ -135,7 +276,7 @@ struct MainWindowView: View {
     /// plus-circle and bold accent label, opening the quick-capture panel.
     private var addTaskButton: some View {
         Button { QuickAddWindowManager.shared.showQuickAdd() } label: {
-            HStack(spacing: 10) {
+            rowShell(help: "Add task") {
                 ZStack {
                     Circle().fill(accent)
                     Image(systemName: "plus")
@@ -144,16 +285,17 @@ struct MainWindowView: View {
                 }
                 .frame(width: 24, height: 24)
                 .shadow(color: accent.opacity(0.5), radius: 5, y: 2)
+            } trailing: {
                 Text("Add task")
                     .font(.system(.body, design: .rounded).weight(.bold))
                     .foregroundStyle(accent)
                 Spacer()
             }
-            .padding(.horizontal, 10).padding(.vertical, 9)
-            .contentShape(Rectangle())
+            .background(rowSurface("add"))
         }
         .buttonStyle(.pressableSubtle)
         .padding(.horizontal, 8)
+        .onHover { trackHover($0, "add") }
         // Leave room for the traffic-light buttons over the hidden title bar.
         .padding(.top, 34)
         .padding(.bottom, 6)
@@ -165,16 +307,24 @@ struct MainWindowView: View {
     private var categoriesSection: some View {
         let counts = Dictionary(grouping: tasks.tasks.filter { !$0.isDone },
                                 by: \.category).mapValues(\.count)
-        sectionHeader("Categories", collapsed: $catsCollapsed,
-                      addHelp: "New category") {
-            showAddCategory = true
-        }
-        .popover(isPresented: $showAddCategory, arrowEdge: .trailing) {
-            addCategoryPopover
-        }
-        if !catsCollapsed {
-            ForEach(tasks.allCategories) { cat in
-                categoryRow(cat, count: counts[cat.name] ?? 0)
+        if sidebarCollapsed {
+            railGroupTile("cats", icon: "number", help: "Categories") {
+                ForEach(tasks.allCategories) { cat in
+                    categoryRow(cat, count: counts[cat.name] ?? 0)
+                }
+            }
+        } else {
+            sectionHeader("Categories", icon: "number", collapsed: $catsCollapsed,
+                          addHelp: "New category") {
+                showAddCategory = true
+            }
+            .popover(isPresented: $showAddCategory, arrowEdge: .trailing) {
+                addCategoryPopover
+            }
+            if !catsCollapsed {
+                ForEach(tasks.allCategories) { cat in
+                    categoryRow(cat, count: counts[cat.name] ?? 0)
+                }
             }
         }
     }
@@ -217,16 +367,24 @@ struct MainWindowView: View {
     private var projectsSection: some View {
         let counts = Dictionary(grouping: tasks.tasks.filter { !$0.isDone && $0.project != nil },
                                 by: { $0.project ?? "" }).mapValues(\.count)
-        sectionHeader("Projects", collapsed: $projsCollapsed,
-                      addHelp: "New project") {
-            showAddProject = true
-        }
-        .popover(isPresented: $showAddProject, arrowEdge: .trailing) {
-            addProjectPopover
-        }
-        if !projsCollapsed {
-            ForEach(tasks.allProjects) { proj in
-                projectRow(proj, count: counts[proj.name] ?? 0)
+        if sidebarCollapsed {
+            railGroupTile("projs", icon: "folder", help: "Projects") {
+                ForEach(tasks.allProjects) { proj in
+                    projectRow(proj, count: counts[proj.name] ?? 0)
+                }
+            }
+        } else {
+            sectionHeader("Projects", icon: "folder", collapsed: $projsCollapsed,
+                          addHelp: "New project") {
+                showAddProject = true
+            }
+            .popover(isPresented: $showAddProject, arrowEdge: .trailing) {
+                addProjectPopover
+            }
+            if !projsCollapsed {
+                ForEach(tasks.allProjects) { proj in
+                    projectRow(proj, count: counts[proj.name] ?? 0)
+                }
             }
         }
     }
@@ -290,6 +448,7 @@ struct MainWindowView: View {
             }
             .padding(.horizontal, 10).padding(.vertical, 7)
             .contentShape(Rectangle())
+            .background(rowSurface(key))
         }
         .buttonStyle(.pressableSubtle)
         .padding(.horizontal, 8)
@@ -374,12 +533,14 @@ struct MainWindowView: View {
     private func shortcutRow(icon: String, title: String, count: Int = 0,
                              countTint: Color? = nil,
                              action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 11) {
+        let key = "sc:\(title)"
+        return Button(action: action) {
+            rowShell(help: title) {
                 Image(systemName: icon)
                     .font(.system(size: 15))
-                    .foregroundStyle(.white.opacity(0.55))
-                    .frame(width: 20, alignment: .center)
+                    .foregroundStyle(.white.opacity(hoveredRowKey == key ? 0.85 : 0.55))
+                    .overlay(alignment: .topTrailing) { railDot(count > 0, tint: countTint) }
+            } trailing: {
                 Text(title)
                     .font(.system(.body, design: .rounded))
                     .foregroundStyle(.white.opacity(0.7))
@@ -390,11 +551,11 @@ struct MainWindowView: View {
                         .foregroundStyle(countTint ?? .white.opacity(0.45))
                 }
             }
-            .padding(.horizontal, 10).padding(.vertical, 9)
-            .contentShape(Rectangle())
+            .background(rowSurface(key))
         }
         .buttonStyle(.pressableSubtle)
         .padding(.horizontal, 8)
+        .onHover { trackHover($0, key) }
     }
 
     /// Category row: Todoist-style "#" mark, a hover pencil opening the editor
@@ -425,6 +586,7 @@ struct MainWindowView: View {
             }
             .padding(.horizontal, 10).padding(.vertical, 7)
             .contentShape(Rectangle())
+            .background(rowSurface(key))
         }
         .buttonStyle(.pressableSubtle)
         .padding(.horizontal, 8)
@@ -504,22 +666,30 @@ struct MainWindowView: View {
         // custom tags (they sit at the tail of allTags and a plain cap
         // would swallow a tag the user just added via "+").
         let names = tasks.allTags.prefix(8 + tasks.customTags.count)
-        sectionHeader("Tags", collapsed: $tagsCollapsed,
-                      addHelp: "New tag") {
-            showAddTag = true
-        }
-        .popover(isPresented: $showAddTag, arrowEdge: .trailing) {
-            addTagPopover
-        }
-        if !tagsCollapsed {
-            if names.isEmpty {
-                Text("Type #tag when adding a task")
-                    .font(.system(.caption2, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.4))
-                    .padding(.horizontal, 18).padding(.bottom, 4)
-            } else {
+        if sidebarCollapsed {
+            railGroupTile("tags", icon: "tag", help: "Tags") {
                 ForEach(Array(names), id: \.self) { tag in
                     tagRow(tag, count: counts[tag] ?? 0)
+                }
+            }
+        } else {
+            sectionHeader("Tags", icon: "tag", collapsed: $tagsCollapsed,
+                          addHelp: "New tag") {
+                showAddTag = true
+            }
+            .popover(isPresented: $showAddTag, arrowEdge: .trailing) {
+                addTagPopover
+            }
+            if !tagsCollapsed {
+                if names.isEmpty {
+                    Text("Type #tag when adding a task")
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.4))
+                        .padding(.horizontal, 18).padding(.bottom, 4)
+                } else {
+                    ForEach(Array(names), id: \.self) { tag in
+                        tagRow(tag, count: counts[tag] ?? 0)
+                    }
                 }
             }
         }
@@ -550,6 +720,7 @@ struct MainWindowView: View {
             }
             .padding(.horizontal, 10).padding(.vertical, 7)
             .contentShape(Rectangle())
+            .background(rowSurface(key))
         }
         .buttonStyle(.pressableSubtle)
         .padding(.horizontal, 8)
@@ -664,16 +835,24 @@ struct MainWindowView: View {
     @ViewBuilder
     private var prioritySection: some View {
         let open = tasks.tasks.filter { !$0.isDone }
-        sectionHeader("Priority", collapsed: $prioCollapsed,
-                      addHelp: "New priority level") {
-            showAddPriority = true
-        }
-        .popover(isPresented: $showAddPriority, arrowEdge: .trailing) {
-            addPriorityPopover
-        }
-        if !prioCollapsed {
-            ForEach(TaskPriority.levels(custom: timer.settings.customPriorityLevels)) { p in
-                priorityRow(p, count: open.filter { $0.priority == p }.count)
+        if sidebarCollapsed {
+            railGroupTile("prio", icon: "flag", help: "Priority") {
+                ForEach(TaskPriority.levels(custom: timer.settings.customPriorityLevels)) { p in
+                    priorityRow(p, count: open.filter { $0.priority == p }.count)
+                }
+            }
+        } else {
+            sectionHeader("Priority", icon: "flag", collapsed: $prioCollapsed,
+                          addHelp: "New priority level") {
+                showAddPriority = true
+            }
+            .popover(isPresented: $showAddPriority, arrowEdge: .trailing) {
+                addPriorityPopover
+            }
+            if !prioCollapsed {
+                ForEach(TaskPriority.levels(custom: timer.settings.customPriorityLevels)) { p in
+                    priorityRow(p, count: open.filter { $0.priority == p }.count)
+                }
             }
         }
     }
@@ -752,6 +931,7 @@ struct MainWindowView: View {
             }
             .padding(.horizontal, 10).padding(.vertical, 7)
             .contentShape(Rectangle())
+            .background(rowSurface(key))
         }
         .buttonStyle(.pressableSubtle)
         .padding(.horizontal, 8)
@@ -821,43 +1001,23 @@ struct MainWindowView: View {
         .padding(14)
     }
 
-    /// Shared row shape for category/tag entries: colored text mark + name +
-    /// trailing count, Todoist-style.
-    private func filterRow(mark: String, markTint: Color, title: String,
-                           count: Int, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 11) {
-                Text(mark)
-                    .font(.system(.body, design: .rounded).weight(.bold))
-                    .foregroundStyle(markTint)
-                    .frame(width: 20, alignment: .center)
-                Text(title)
-                    .font(.system(size: 13, design: .rounded))
-                    .foregroundStyle(.white.opacity(count > 0 ? 0.75 : 0.45))
-                    .lineLimit(1)
-                Spacer()
-                if count > 0 {
-                    Text("\(count)")
-                        .font(.system(size: 11, design: .rounded).monospacedDigit())
-                        .foregroundStyle(.white.opacity(0.45))
-                }
-            }
-            .padding(.horizontal, 10).padding(.vertical, 7)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.pressableSubtle)
-        .padding(.horizontal, 8)
-    }
-
     /// A small glass status card pinned to the bottom of the sidebar — today's
     /// focus count and the current streak, so the panel closes on a live signal
     /// instead of empty space (the way Todoist parks account/karma at the foot).
+    @ViewBuilder
     private var sidebarFooter: some View {
         let today = timer.stats.completedTodayCount()
         let streak = timer.stats.streak.currentStreak
-        return HStack(spacing: 0) {
+        // The rail stacks the two stats and drops their captions — the icon
+        // already says which is which at that width.
+        let layout = sidebarCollapsed
+            ? AnyLayout(VStackLayout(spacing: 8))
+            : AnyLayout(HStackLayout(spacing: 0))
+        layout {
             footerStat(icon: "target", tint: accent, value: today, label: "Today")
-            Divider().frame(height: 28).overlay(Color.white.opacity(0.12))
+            if !sidebarCollapsed {
+                Divider().frame(height: 28).overlay(Color.white.opacity(0.12))
+            }
             footerStat(icon: "flame.fill", tint: .orange, value: streak, label: "Streak")
         }
         .padding(.vertical, 11)
@@ -871,6 +1031,76 @@ struct MainWindowView: View {
         .padding(.bottom, 12)
     }
 
+    /// Theme switcher parked under the stats card — the palette every surface
+    /// reads off is one click away instead of buried in Settings → General.
+    /// The swatch shows the live accent, so the row states the current theme
+    /// even in the rail, where its name doesn't fit.
+    private var themeButton: some View {
+        Button { showThemePicker = true } label: {
+            rowShell(help: "Theme — \(timer.settings.theme.label)", vpad: 7) {
+                Circle()
+                    .fill(LinearGradient(colors: timer.settings.theme.gradient,
+                                         startPoint: .topLeading,
+                                         endPoint: .bottomTrailing))
+                    .frame(width: 14, height: 14)
+                    .overlay(Circle().stroke(.white.opacity(0.35), lineWidth: 1))
+            } trailing: {
+                Text(timer.settings.theme.label)
+                    .font(.system(size: 13, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .lineLimit(1)
+                Spacer()
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.4))
+            }
+            .background(rowSurface("theme", selected: showThemePicker))
+        }
+        .buttonStyle(.pressableSubtle)
+        .padding(.horizontal, 8)
+        .onHover { trackHover($0, "theme") }
+        .popover(isPresented: $showThemePicker, arrowEdge: .trailing) {
+            themePicker
+        }
+    }
+
+    private var themePicker: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Theme").dsSectionLabel().padding(.horizontal, 12).padding(.bottom, 4)
+            ForEach(SharinganTheme.allCases, id: \.self) { theme in
+                let current = timer.settings.theme == theme
+                Button {
+                    withAnimation(DS.Motion.gentle) { timer.settings.theme = theme }
+                    showThemePicker = false
+                } label: {
+                    HStack(spacing: 10) {
+                        Circle()
+                            .fill(LinearGradient(colors: theme.gradient,
+                                                 startPoint: .topLeading,
+                                                 endPoint: .bottomTrailing))
+                            .frame(width: 16, height: 16)
+                            .overlay(Circle().stroke(.white.opacity(0.35), lineWidth: 1))
+                        Text(theme.label)
+                            .font(.system(size: 13, design: .rounded)
+                                .weight(current ? .semibold : .regular))
+                            .foregroundStyle(.white.opacity(current ? 1 : 0.75))
+                        Spacer()
+                        if current {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(theme.accent)
+                        }
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 7)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.pressableSubtle)
+            }
+        }
+        .padding(.vertical, 10)
+        .frame(width: 190)
+    }
+
     private func footerStat(icon: String, tint: Color, value: Int, label: String) -> some View {
         VStack(spacing: 3) {
             HStack(spacing: 5) {
@@ -879,28 +1109,33 @@ struct MainWindowView: View {
                     .foregroundStyle(tint)
                     .symbolEffect(.bounce, value: value)
                 Text("\(value)")
-                    .font(.system(.title3, design: .rounded).weight(.bold).monospacedDigit())
+                    .font(.system(sidebarCollapsed ? .callout : .title3,
+                                  design: .rounded).weight(.bold).monospacedDigit())
                     .foregroundStyle(.white)
                     .contentTransition(.numericText())
                     .animation(DS.Motion.snappy, value: value)
             }
-            Text(label)
-                .font(.system(.caption2, design: .rounded).weight(.medium))
-                .foregroundStyle(.white.opacity(0.5))
+            if !sidebarCollapsed {
+                Text(label)
+                    .font(.system(.caption2, design: .rounded).weight(.medium))
+                    .foregroundStyle(.white.opacity(0.5))
+            }
         }
         .frame(maxWidth: .infinity)
+        .help(sidebarCollapsed ? label : "")
     }
 
-    private func sectionHeader(_ title: String,
+    private func sectionHeader(_ title: String, icon: String,
                                collapsed: Binding<Bool>) -> some View {
         HStack(spacing: 6) {
-            sidebarHeaderLabel(title)
+            sidebarHeaderLabel(title, icon: icon)
             Spacer()
             collapseChevron(collapsed.wrappedValue)
         }
         .contentShape(Rectangle())
         .onTapGesture { toggle(collapsed) }
-        .padding(.horizontal, 18).padding(.top, 16).padding(.bottom, 5)
+        .padding(.horizontal, 10).padding(.top, 16).padding(.bottom, 5)
+        .transition(.opacity)
     }
 
     /// Rotating accordion indicator shared by all sidebar group headers.
@@ -919,19 +1154,27 @@ struct MainWindowView: View {
 
     /// Todoist-style sidebar group label: sentence case at row size, instead
     /// of the app-wide 10 pt uppercase `dsSectionLabel` (too small next to
-    /// 13 pt rows).
-    private func sidebarHeaderLabel(_ title: String) -> some View {
-        Text(title)
-            .font(.system(size: 13, weight: .semibold, design: .rounded))
-            .foregroundStyle(.white.opacity(0.55))
+    /// 13 pt rows). The icon shares the rows' 20pt gutter so headers and rows
+    /// hang off one left edge — and it doubles as the group's rail tile.
+    private func sidebarHeaderLabel(_ title: String, icon: String) -> some View {
+        HStack(spacing: 11) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.4))
+                .frame(width: 20, alignment: .center)
+            Text(title)
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.55))
+        }
     }
 
     /// Section header with a trailing "+" action (e.g. Categories → new).
-    private func sectionHeader(_ title: String, collapsed: Binding<Bool>,
+    private func sectionHeader(_ title: String, icon: String,
+                               collapsed: Binding<Bool>,
                                addHelp: String,
                                onAdd: @escaping () -> Void) -> some View {
         HStack(spacing: 6) {
-            sidebarHeaderLabel(title)
+            sidebarHeaderLabel(title, icon: icon)
             Spacer()
             Button(action: onAdd) {
                 Image(systemName: "plus")
@@ -946,7 +1189,38 @@ struct MainWindowView: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { toggle(collapsed) }
-        .padding(.horizontal, 18).padding(.top, 16).padding(.bottom, 5)
+        .padding(.horizontal, 10).padding(.top, 16).padding(.bottom, 5)
+        .transition(.opacity)
+    }
+
+    /// A filter group as one rail tile: the group's icon, opening its rows in a
+    /// flyout beside the rail. Nothing else fits at 60pt, and hiding the groups
+    /// outright would put the filters out of reach while collapsed.
+    private func railGroupTile(_ key: String, icon: String, help: String,
+                               @ViewBuilder rows: @escaping () -> some View) -> some View {
+        Button { railFlyout = railFlyout == key ? nil : key } label: {
+            rowShell(help: help) {
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white.opacity(railFlyout == key ? 0.9 : 0.5))
+            } trailing: { EmptyView() }
+            .transition(.opacity)
+            .background(rowSurface("rail:\(key)", selected: railFlyout == key))
+        }
+        .buttonStyle(.pressableSubtle)
+        .padding(.horizontal, 8)
+        .onHover { trackHover($0, "rail:\(key)") }
+        .popover(isPresented: Binding(
+            get: { railFlyout == key },
+            set: { if !$0 { railFlyout = nil } }
+        ), arrowEdge: .trailing) {
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 4) { rows() }
+                    .padding(.vertical, 10)
+            }
+            .frame(width: 210)
+            .frame(maxHeight: 320)
+        }
     }
 
     /// Sidebar badge count per section: open tasks for Tasks, still-unscheduled
@@ -961,7 +1235,8 @@ struct MainWindowView: View {
 
     private func navRow(_ s: Section) -> some View {
         let selected = section == s
-        let hovered = hoveredNav == s
+        let key = "nav:\(s.rawValue)"
+        let hovered = hoveredRowKey == key
         let badge = badgeCount(for: s)
         return Button {
             // Settings routes through the router helper so re-selecting the
@@ -969,14 +1244,15 @@ struct MainWindowView: View {
             if s == .settings { router.openSettings() }
             else { section = s }
         } label: {
-            HStack(spacing: 11) {
+            rowShell(help: s.title) {
                 // Icon glows in the theme accent when the row is selected, so the
                 // active section reads instantly (Todoist-style accent selection).
                 Image(systemName: s.icon)
                     .font(.system(size: 15, weight: selected ? .semibold : .regular))
                     .foregroundStyle(selected ? accent
                                      : (hovered ? Color.white.opacity(0.85) : .white.opacity(0.55)))
-                    .frame(width: 20, alignment: .center)
+                    .overlay(alignment: .topTrailing) { railDot(badge > 0) }
+            } trailing: {
                 Text(s.title)
                     .font(.system(.body, design: .rounded).weight(selected ? .semibold : .regular))
                     .foregroundStyle(selected ? Color.white : .white.opacity(0.7))
@@ -990,28 +1266,21 @@ struct MainWindowView: View {
                                                    : Color.white.opacity(0.08)))
                 }
             }
-            .padding(.horizontal, 10).padding(.vertical, 9)
-            .background(
-                RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
-                    .fill(selected ? accent.opacity(0.20)
-                          : (hovered ? Color.white.opacity(0.06) : .clear))
-            )
+            .background(rowSurface(key, selected: selected))
             // A slim accent bar marks the selected row, like a sidebar cursor.
+            // The rail is too narrow for it — there the filled tile carries the
+            // selection on its own.
             .overlay(alignment: .leading) {
-                if selected {
+                if selected && !sidebarCollapsed {
                     Capsule().fill(accent)
                         .frame(width: 3, height: 16)
                         .padding(.leading, 2)
                 }
             }
-            .contentShape(Rectangle())
         }
         .buttonStyle(.pressableSubtle)
         .padding(.horizontal, 8)
-        .onHover { inside in
-            if inside { hoveredNav = s }
-            else if hoveredNav == s { hoveredNav = nil }
-        }
+        .onHover { trackHover($0, key) }
         .animation(DS.Motion.hover, value: selected)
         .animation(DS.Motion.hover, value: hovered)
     }
@@ -1024,9 +1293,17 @@ struct MainWindowView: View {
         case .timer:
             TimerDetailView(timer: timer)
         case .tasks:
-            detailScaffold(title: "Tasks") {
+            // Full-width, like Week — the docked detail panel needs room
+            // beside the list that the 640pt-capped scaffold can't give it.
+            VStack(alignment: .leading, spacing: 18) {
+                Text("Tasks")
+                    .font(.system(.largeTitle, design: .rounded).weight(.bold))
+                    .foregroundStyle(.white)
                 TasksView(timer: timer, embeddedInScroll: true)
             }
+            .padding(.horizontal, 40)
+            .padding(.top, 40)
+            .padding(.bottom, 24)
         case .week:
             // Full-width — the 7-day board manages its own horizontal layout
             // rather than the width-capped scaffold used by the other sections.
@@ -1124,7 +1401,7 @@ private struct TimerDetailView: View {
                 showTaskPicker = true
             } label: {
                 let active = tasks.activeTask
-                Label(active?.title ?? "Choose a task",
+                Label(tasks.activeFocusTitle ?? "Choose a task",
                       systemImage: active != nil ? "target" : "plus.circle.fill")
                     .font(.system(.title3, design: .rounded).weight(.semibold))
                     .foregroundStyle(active != nil ? .white : .white.opacity(0.85))
