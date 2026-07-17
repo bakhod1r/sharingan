@@ -154,14 +154,6 @@ struct SharinganBoardView: View {
         let isFirst = columns.enabled.first?.id == column.id
         return VStack(alignment: .leading, spacing: 12) {
             columnHeader(column, count: cards.count)
-                .draggable("column:\(column.id)") {
-                    Text(column.name)
-                        .font(.system(.callout, design: .rounded).weight(.semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 12).padding(.vertical, 8)
-                        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .fill(accent.opacity(0.9)))
-                }
             if isFirst { quickAdd }
             if cards.isEmpty {
                 emptyDrop(targeted: targeted)
@@ -205,9 +197,18 @@ struct SharinganBoardView: View {
     private func columnHeader(_ column: BoardColumn, count: Int) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "line.3.horizontal")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.3))
-                .help("Drag to reorder")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.4))
+                .contentShape(Rectangle())
+                .help("Drag to reorder this column")
+                .draggable("column:\(column.id)") {
+                    Text(column.name)
+                        .font(.system(.callout, design: .rounded).weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12).padding(.vertical, 8)
+                        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                            .fill(accent.opacity(0.9)))
+                }
             if column.role == .done {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 12, weight: .semibold))
