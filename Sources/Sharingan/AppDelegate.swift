@@ -49,7 +49,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         self.timer = timer
         self.coordinator = coordinator
 
-        seedPositionOnFirstLaunch()
+        forceFarRightPosition()
         makeStatusItem()
 
         let popover = NSPopover()
@@ -112,30 +112,15 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         }
     }
 
-    /// Claims a visible menu-bar slot on a fresh install. With no stored
-    /// position AppKit hands a new status item the leftmost third-party slot,
-    /// which on a crowded menu bar is off-screen (or under the camera housing
-    /// on a notched MacBook) — the icon never appears and the user has no way
-    /// to find it. Seeding the same far-right position `rescueFromNotchIfHidden`
-    /// uses puts the icon next to the system items, visible on every Mac, from
-    /// the first launch rather than seconds later and only on notched screens.
-    ///
-    /// Seeds only when the key is absent, so a user's own ⌘-drag sticks —
-    /// except a stored negative value, which is repaired (never a real drag;
-    /// only a bad seed from 1.7.0 could have written one).
-    private func seedPositionOnFirstLaunch() {
-        let defaults = UserDefaults.standard
-        // Heal installs that were seeded -1.0 (a negative "distance from the
-        // right edge" is past the screen edge — AppKit never places the item,
-        // so on notched Macs the icon simply never appeared). The guard below
-        // skips them because the key exists, hence this one-shot repair.
-        if defaults.object(forKey: Self.positionKey) != nil {
-            if defaults.double(forKey: Self.positionKey) < 0 {
-                defaults.set(6.0, forKey: Self.positionKey)
-            }
-            return
-        }
-        defaults.set(6.0, forKey: Self.positionKey)
+    /// Forces the far-right slot on EVERY launch (1.7.2): the icon always
+    /// appears at the end of the menu bar, next to the system items — the
+    /// rightmost position a third-party item can hold, visible on every Mac
+    /// including notched ones. A ⌘-drag still works within the session but
+    /// deliberately no longer survives a relaunch; a stored stale/negative
+    /// slot (the 1.7.0 bad seed, or one parked under the notch) can hide the
+    /// icon for good, and always-visible wins over drag persistence.
+    private func forceFarRightPosition() {
+        UserDefaults.standard.set(6.0, forKey: Self.positionKey)
     }
 
     /// Creates (or re-creates) the status item and wires its button. Split out

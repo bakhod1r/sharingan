@@ -5,6 +5,14 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.7.2] - 2026-07-17
+
+### Changed
+- The menu bar icon now always appears at the end of the menu bar (the
+  rightmost third-party slot, next to the system icons) on every launch,
+  so a stale or notch-parked stored position can never hide it. A ⌘-drag
+  still works within a session but no longer survives a relaunch.
+
 ## [1.7.1] - 2026-07-17
 
 ### Fixed
