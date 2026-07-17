@@ -13,6 +13,9 @@ public final class BoardColumnStore: ObservableObject {
 
     /// UserDefaults key — also on `SettingsSync.syncedKeys`.
     public static let defaultsKey = "board.columns"
+    /// Tracks which `BoardColumn.seedVersion` was last seeded, so a shipped
+    /// change to the default columns rolls out to existing installs once.
+    static let seedVersionKey = "board.columns.seedVersion"
 
     @Published public private(set) var columns: [BoardColumn]
 
@@ -20,8 +23,14 @@ public final class BoardColumnStore: ObservableObject {
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        self.columns = Self.load(from: defaults) ?? BoardColumn.defaults
-        if Self.load(from: defaults) == nil { persist() }   // seed on first run
+        let storedVersion = defaults.integer(forKey: Self.seedVersionKey)
+        if let saved = Self.load(from: defaults), storedVersion == BoardColumn.seedVersion {
+            self.columns = saved
+        } else {
+            // First run, or the shipped defaults changed — (re)seed them.
+            self.columns = BoardColumn.defaults
+            persist()
+        }
     }
 
     // MARK: - Derived
@@ -108,6 +117,7 @@ public final class BoardColumnStore: ObservableObject {
         guard let data = try? JSONEncoder().encode(columns),
               let json = String(data: data, encoding: .utf8) else { return }
         defaults.set(json, forKey: Self.defaultsKey)
+        defaults.set(BoardColumn.seedVersion, forKey: Self.seedVersionKey)
     }
 
     private static func load(from defaults: UserDefaults) -> [BoardColumn]? {

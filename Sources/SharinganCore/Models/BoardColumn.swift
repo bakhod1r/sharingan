@@ -48,24 +48,33 @@ public struct BoardColumn: Identifiable, Codable, Equatable, Sendable {
     // MARK: - Seed
 
     /// Fixed slugs for the seeded columns, so migration and the `.done`
-    /// coupling can find them by id.
+    /// coupling can find them by id. Slugs are reused across default revisions
+    /// where the meaning carries over, so a task's column survives a re-seed.
     public enum Seed {
+        public static let inbox = "inbox"
         public static let today = "today"
         public static let thisWeek = "this-week"
         public static let inProgress = "in-progress"
-        public static let paused = "paused"
-        public static let done = "done"
+        public static let onHold = "on-hold"
+        public static let done = "done"        // "Completed"
         public static let cancelled = "cancelled"
+        public static let archived = "archived"
     }
+
+    /// Bumped whenever `defaults` changes, so `BoardColumnStore` can re-seed an
+    /// existing install onto the new default set.
+    public static let seedVersion = 2
 
     /// The default column set, in display order, seeded on first run.
     public static let defaults: [BoardColumn] = [
-        BoardColumn(id: Seed.today,      name: "Today",       order: 0),
-        BoardColumn(id: Seed.thisWeek,   name: "This Week",   order: 1),
-        BoardColumn(id: Seed.inProgress, name: "In Progress", order: 2),
-        BoardColumn(id: Seed.paused,     name: "Paused",      order: 3),
-        BoardColumn(id: Seed.done,       name: "Done",        order: 4, role: .done),
-        BoardColumn(id: Seed.cancelled,  name: "Cancelled",   order: 5),
+        BoardColumn(id: Seed.inbox,      name: "📥 Inbox",       order: 0),
+        BoardColumn(id: Seed.today,      name: "⭐ Today",       order: 1),
+        BoardColumn(id: Seed.thisWeek,   name: "📅 This Week",   order: 2),
+        BoardColumn(id: Seed.inProgress, name: "🚀 In Progress", order: 3),
+        BoardColumn(id: Seed.onHold,     name: "⏸️ On Hold",     order: 4),
+        BoardColumn(id: Seed.done,       name: "✅ Completed",   order: 5, role: .done),
+        BoardColumn(id: Seed.cancelled,  name: "❌ Cancelled",   order: 6),
+        BoardColumn(id: Seed.archived,   name: "📦 Archived",    order: 7),
     ]
 
     /// The id a task lands in when migrated from the pre-columns board:

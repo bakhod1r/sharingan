@@ -16,11 +16,11 @@ struct BoardColumnStoreTests {
     @Test("a fresh store seeds the six defaults and persists them")
     func seedsDefaults() {
         let (store, d) = freshStore("seed")
-        #expect(store.columns.map(\.name) == ["Today", "This Week", "In Progress", "Paused", "Done", "Cancelled"])
+        #expect(store.columns.map(\.id) == BoardColumn.defaults.map(\.id))
         // Persisted, so a second store over the same defaults reads them back.
         #expect(d.string(forKey: BoardColumnStore.defaultsKey) != nil)
         let reopened = BoardColumnStore(defaults: d)
-        #expect(reopened.columns.count == 6)
+        #expect(reopened.columns.count == 8)
     }
 
     @Test("adding a column appends it enabled at the end")
@@ -36,8 +36,8 @@ struct BoardColumnStoreTests {
     @Test("rename, disable and delete take effect")
     func editColumns() {
         let (store, _) = freshStore("edit")
-        store.rename(BoardColumn.Seed.paused, to: "On Hold")
-        #expect(store.columns.first { $0.id == BoardColumn.Seed.paused }?.name == "On Hold")
+        store.rename(BoardColumn.Seed.onHold, to: "Blocked")
+        #expect(store.columns.first { $0.id == BoardColumn.Seed.onHold }?.name == "Blocked")
 
         store.setEnabled(BoardColumn.Seed.cancelled, false)
         #expect(!store.enabled.contains { $0.id == BoardColumn.Seed.cancelled })
@@ -57,12 +57,13 @@ struct BoardColumnStoreTests {
     @Test("moveColumn drops a column into another's slot")
     func moveColumnToSlot() {
         let (store, _) = freshStore("moveTo")
-        // Move Cancelled (last) into Today's slot (first).
-        store.moveColumn(BoardColumn.Seed.cancelled, toSlotOf: BoardColumn.Seed.today)
-        #expect(store.enabled.first?.id == BoardColumn.Seed.cancelled)
+        // Move Archived (last) into Inbox's slot (first).
+        store.moveColumn(BoardColumn.Seed.archived, toSlotOf: BoardColumn.Seed.inbox)
+        #expect(store.enabled.first?.id == BoardColumn.Seed.archived)
         #expect(store.enabled.map(\.id) == [
-            BoardColumn.Seed.cancelled, BoardColumn.Seed.today, BoardColumn.Seed.thisWeek,
-            BoardColumn.Seed.inProgress, BoardColumn.Seed.paused, BoardColumn.Seed.done,
+            BoardColumn.Seed.archived, BoardColumn.Seed.inbox, BoardColumn.Seed.today,
+            BoardColumn.Seed.thisWeek, BoardColumn.Seed.inProgress, BoardColumn.Seed.onHold,
+            BoardColumn.Seed.done, BoardColumn.Seed.cancelled,
         ])
     }
 
@@ -78,11 +79,11 @@ struct BoardColumnStoreTests {
     @Test("move reorders columns and reload re-reads persisted state")
     func moveAndReload() {
         let (store, d) = freshStore("move")
-        // Move "This Week" (order 1) left, ahead of "Today".
-        store.move(BoardColumn.Seed.thisWeek, by: -1)
-        #expect(store.enabled.first?.id == BoardColumn.Seed.thisWeek)
+        // Move "Today" (order 1) left, ahead of "Inbox".
+        store.move(BoardColumn.Seed.today, by: -1)
+        #expect(store.enabled.first?.id == BoardColumn.Seed.today)
         // A separate store reading the same defaults sees the new order.
         let other = BoardColumnStore(defaults: d)
-        #expect(other.enabled.first?.id == BoardColumn.Seed.thisWeek)
+        #expect(other.enabled.first?.id == BoardColumn.Seed.today)
     }
 }

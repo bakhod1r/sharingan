@@ -5,11 +5,15 @@ import Testing
 @Suite("Board columns")
 struct BoardColumnTests {
 
-    @Test("default seed is the six columns in order, Done is the only .done role")
+    @Test("default seed is the eight columns in order, Completed is the only .done role")
     func defaultSeed() {
         let d = BoardColumn.defaults
-        #expect(d.map(\.name) == ["Today", "This Week", "In Progress", "Paused", "Done", "Cancelled"])
-        #expect(d.map(\.order) == [0, 1, 2, 3, 4, 5])
+        #expect(d.map(\.id) == [
+            BoardColumn.Seed.inbox, BoardColumn.Seed.today, BoardColumn.Seed.thisWeek,
+            BoardColumn.Seed.inProgress, BoardColumn.Seed.onHold, BoardColumn.Seed.done,
+            BoardColumn.Seed.cancelled, BoardColumn.Seed.archived,
+        ])
+        #expect(d.map(\.order) == [0, 1, 2, 3, 4, 5, 6, 7])
         #expect(d.filter { $0.role == .done }.map(\.id) == [BoardColumn.Seed.done])
         #expect(d.filter { !$0.isEnabled }.isEmpty)
     }
@@ -52,15 +56,15 @@ struct BoardColumnTests {
         let cols = BoardColumn.defaults
         // A real, enabled id resolves to itself.
         #expect(cols.resolvedColumn(for: BoardColumn.Seed.inProgress)?.id == BoardColumn.Seed.inProgress)
-        // nil / unknown fall back to the first column (Today).
-        #expect(cols.resolvedColumn(for: nil)?.id == BoardColumn.Seed.today)
-        #expect(cols.resolvedColumn(for: "deleted-col")?.id == BoardColumn.Seed.today)
+        // nil / unknown fall back to the first column (Inbox).
+        #expect(cols.resolvedColumn(for: nil)?.id == BoardColumn.Seed.inbox)
+        #expect(cols.resolvedColumn(for: "deleted-col")?.id == BoardColumn.Seed.inbox)
     }
 
     @Test("with the first column disabled, fallback is the next enabled one")
     func fallbackSkipsDisabledFirst() {
         var cols = BoardColumn.defaults
-        cols[0].isEnabled = false          // disable Today
-        #expect(cols.resolvedColumn(for: nil)?.id == BoardColumn.Seed.thisWeek)
+        cols[0].isEnabled = false          // disable Inbox
+        #expect(cols.resolvedColumn(for: nil)?.id == BoardColumn.Seed.today)
     }
 }
