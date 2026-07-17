@@ -434,6 +434,25 @@ public final class SharinganCoordinator: ObservableObject {
             }
             .store(in: &cancellables)
 
+        // Analytics feed: every really-ended session (completed, or abandoned
+        // after ≥1 min) lands in the session log, with the focus target
+        // attached here — the timer doesn't know about tasks.
+        NotificationCenter.default.publisher(for: .sessionDidEnd, object: timer)
+            .receive(on: DispatchQueue.main)
+            .sink { note in
+                guard var record = note.userInfo?["record"] as? SessionRecord
+                else { return }
+                if record.phase == .focus,
+                   let taskID = TaskStore.shared.activeTaskID {
+                    record.taskID = taskID
+                    record.subtaskID = TaskStore.shared.activeSubtaskID
+                    record.taskTitle = TaskStore.shared.tasks
+                        .first(where: { $0.id == taskID })?.title
+                }
+                FocusSessionLog.shared.append(record)
+            }
+            .store(in: &cancellables)
+
         NotificationCenter.default.publisher(for: .focusFiveMinLeft)
             .receive(on: DispatchQueue.main)
             .sink { _ in NotificationService.shared.focusFiveMinLeft() }

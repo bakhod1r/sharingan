@@ -80,3 +80,48 @@ struct SessionLogTests {
         #expect(log.records.count == 1)
     }
 }
+
+@Suite("Session end notification")
+@MainActor
+struct SessionDidEndTests {
+    @Test func completionPostsRecordWithCompletedTrue() async throws {
+        let timer = PomodoroTimer(settings: .init())
+        var received: [SessionRecord] = []
+        let obs = NotificationCenter.default.addObserver(
+            forName: .sessionDidEnd, object: timer, queue: .main) { note in
+            if let r = note.userInfo?["record"] as? SessionRecord {
+                received.append(r)
+            }
+        }
+        defer { NotificationCenter.default.removeObserver(obs) }
+
+        timer.setCustomDuration(1)
+        timer.start()
+        try await Task.sleep(for: .milliseconds(1600))
+
+        #expect(received.count == 1)
+        #expect(received.first?.completed == true)
+        #expect(received.first?.phase == .focus)
+        #expect(received.first?.plannedSeconds == 1)
+    }
+
+    @Test func quickSkipPostsNothing() async throws {
+        let timer = PomodoroTimer(settings: .init())
+        var count = 0
+        let obs = NotificationCenter.default.addObserver(
+            forName: .sessionDidEnd, object: timer, queue: .main) { _ in count += 1 }
+        defer { NotificationCenter.default.removeObserver(obs) }
+
+        timer.start()
+        try await Task.sleep(for: .milliseconds(300))
+        timer.skip()          // < 60 s elapsed — fat-finger, not a session
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(count == 0)
+    }
+
+    @Test func abandonThresholdIsOneMinute() {
+        #expect(!PomodoroTimer.shouldLogAbandoned(elapsed: 59))
+        #expect(PomodoroTimer.shouldLogAbandoned(elapsed: 60))
+    }
+}
+
