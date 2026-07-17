@@ -181,10 +181,53 @@ public final class JiraBoardModel: ObservableObject {
                 }
             }
         } catch {
+            // The Agile API needs granular *:jira-software scopes that can't be
+            // mixed with the classic scopes the rest of the app uses, so it can
+            // answer "scope does not match" even with a valid token. Rather than
+            // fail, fall back to a status-category board built purely from the
+            // platform search API (which the same token *can* call).
+            if await loadStatusCategoryBoard(projectKey: projectKey) { return }
             if !showCachedBoard() {
                 phase = .error
                 errorMessage = Self.describe(error)
             }
+        }
+    }
+
+    /// A board that needs no Agile API: search the user's issues via the
+    /// platform API and group them into To Do / In Progress / Done by Jira's
+    /// status category. Used when the Agile endpoints are unauthorized.
+    private func loadStatusCategoryBoard(projectKey: String) async -> Bool {
+        do {
+            let issues = try await fetchAllIssues(
+                jql: "project = \"\(projectKey)\" AND assignee = currentUser()")
+            let cols = Self.buildStatusCategoryColumns(issues: issues)
+            guard cols.contains(where: { !$0.cards.isEmpty }) else { return false }
+            columns = cols
+            sprintName = nil
+            isShowingCached = false
+            phase = .loaded
+            errorMessage = nil
+            cacheLoadedBoard()
+            cacheIssues(issues)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// Groups issues into the three Jira status categories — the Agile-free
+    /// board layout.
+    nonisolated static func buildStatusCategoryColumns(issues: [JiraIssue]) -> [Column] {
+        let buckets: [(id: String, name: String, key: String)] = [
+            ("To Do", "To Do", "new"),
+            ("In Progress", "In Progress", "indeterminate"),
+            ("Done", "Done", "done"),
+        ]
+        return buckets.map { bucket in
+            let cards = issues.map(Card.init).filter { $0.statusCategoryKey == bucket.key }
+            return Column(id: bucket.id, name: bucket.name, statusIds: [],
+                          cards: cards, isOther: false)
         }
     }
 

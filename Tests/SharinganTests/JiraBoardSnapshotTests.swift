@@ -51,6 +51,23 @@ struct JiraBoardSnapshotTests {
         #expect(store.boardSnapshot(projectKey: "nope") == nil)
     }
 
+    @Test("the Agile-free board groups issues into To Do / In Progress / Done by status category")
+    func statusCategoryColumns() throws {
+        func issue(_ key: String, _ category: String) throws -> JiraIssue {
+            let json = #"""
+            {"id":"\#(key)","key":"\#(key)","fields":{"summary":"\#(key)","status":{"id":"1","name":"S","statusCategory":{"key":"\#(category)"}}}}
+            """#
+            return try JSONDecoder().decode(JiraIssue.self, from: Data(json.utf8))
+        }
+        let issues = [try issue("A", "new"), try issue("B", "indeterminate"),
+                      try issue("C", "done"), try issue("D", "new")]
+        let cols = JiraBoardModel.buildStatusCategoryColumns(issues: issues)
+        #expect(cols.map(\.name) == ["To Do", "In Progress", "Done"])
+        #expect(cols[0].cards.map(\.key) == ["A", "D"])
+        #expect(cols[1].cards.map(\.key) == ["B"])
+        #expect(cols[2].cards.map(\.key) == ["C"])
+    }
+
     @Test("the model's Column list encodes and decodes for the cache")
     func columnCodable() throws {
         let card = JiraBoardModel.Card(id: "SHRGN-1", key: "SHRGN-1", summary: "Do it",
