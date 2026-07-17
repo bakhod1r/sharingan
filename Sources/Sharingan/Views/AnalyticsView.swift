@@ -95,7 +95,9 @@ struct AnalyticsView: View {
     private var filterBar: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
-                rangePicker
+                // The Timeline drives its own day via its date picker; a range
+                // makes no sense for a single-day view.
+                if tab != .timeline { rangePicker }
                 filterMenu
                 completedToggle
                 Spacer()

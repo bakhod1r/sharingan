@@ -10,6 +10,7 @@ struct AnalyticsTimelineView: View {
     var allowedTaskIDs: Set<UUID>? = nil
     @ObservedObject private var log = FocusSessionLog.shared
     @State private var day = Calendar.current.startOfDay(for: Date())
+    @State private var showDatePicker = false
 
     private var accent: Color { timer.settings.theme.accent }
     private let breakColor = Color.green
@@ -147,12 +148,29 @@ struct AnalyticsTimelineView: View {
             Button { step(-1) } label: { Image(systemName: "chevron.left") }
                 .buttonStyle(.pressableSubtle)
             Spacer()
-            Text(Calendar.current.isDateInToday(day)
-                 ? "Today"
-                 : day.formatted(date: .abbreviated, time: .omitted))
+            Button { showDatePicker.toggle() } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "calendar")
+                    Text(Calendar.current.isDateInToday(day)
+                         ? "Today"
+                         : day.formatted(date: .abbreviated, time: .omitted))
+                        .contentTransition(.numericText())
+                }
                 .font(.system(.headline, design: .rounded).weight(.bold))
                 .foregroundStyle(.white)
-                .contentTransition(.numericText())
+            }
+            .buttonStyle(.pressableSubtle)
+            .popover(isPresented: $showDatePicker, arrowEdge: .bottom) {
+                DatePicker("Jump to date", selection: Binding(
+                    get: { day },
+                    set: { day = min(Calendar.current.startOfDay(for: $0),
+                                     Calendar.current.startOfDay(for: Date())) }),
+                    in: ...Date(), displayedComponents: .date)
+                    .datePickerStyle(.graphical)
+                    .labelsHidden()
+                    .frame(width: 260)
+                    .padding(12)
+            }
             Spacer()
             Button { step(1) } label: { Image(systemName: "chevron.right") }
                 .buttonStyle(.pressableSubtle)
