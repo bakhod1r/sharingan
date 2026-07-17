@@ -5,7 +5,21 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
-## [1.8.1] - 2026-07-17
+## [1.8.2] - 2026-07-17
+
+### Changed
+- **Analytics filters are now multi-select** — pick several categories,
+  projects, and tags at once (OR within a facet, AND across facets); each
+  choice shows as a removable chip with a "Clear all".
+- **GitHub-style heatmap** — month labels along the top, weekday labels
+  down the left, rounded cells, and a range-driven span.
+- The **time range** now applies to every Analytics tab: it averages the
+  Overview scores, sets how far the heatmap spans (4 weeks … 1 year), and
+  sets the focus-load average window.
+
+### Added
+- The **Big** pomodoro size is now called **Deep Work** (its saved data is
+  unchanged; task search still matches both "deep work" and "big").
 
 ### Added
 - **Analytics filters** — a filter bar on the Analytics page:

@@ -37,10 +37,12 @@ struct AnalyticsView: View {
                     // the heatmap a session-derived series instead.
                     override: filter.narrowsSessions
                         ? AnalyticsEngine.dailyCounts(from: filteredAllSessions)
-                        : nil)
+                        : nil,
+                    spanDays: filter.range.heatmapDays)
             case .load:
                 AnalyticsLoadView(timer: timer, completedOnly: filter.completedOnly,
-                                  allowedTaskIDs: allowedTaskIDs)
+                                  allowedTaskIDs: allowedTaskIDs,
+                                  averageDays: filter.range.loadAverageDays)
             }
         }
     }
@@ -79,13 +81,48 @@ struct AnalyticsView: View {
     // MARK: - Filter bar
 
     private var filterBar: some View {
-        HStack(spacing: 10) {
-            if tab == .overview { rangePicker }
-            filterMenu
-            completedToggle
-            if let dim = filter.dimension { activeChip(dim) }
-            Spacer()
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                rangePicker
+                filterMenu
+                completedToggle
+                Spacer()
+            }
+            if filter.hasAttributionFilter { chipRow }
         }
+    }
+
+    private var chipRow: some View {
+        // Wraps so many selections don't overflow the width.
+        FlowChips(spacing: 6) {
+            ForEach(Array(filter.categories).sorted(), id: \.self) { c in
+                chip(c) { filter.categories.remove(c) }
+            }
+            ForEach(Array(filter.projects).sorted(), id: \.self) { p in
+                chip(p) { filter.projects.remove(p) }
+            }
+            ForEach(Array(filter.tags).sorted(), id: \.self) { t in
+                chip("#\(t)") { filter.tags.remove(t) }
+            }
+            Button("Clear all") { withAnimation(DS.Motion.hover) { filter.clearAttribution() } }
+                .buttonStyle(.plain)
+                .font(.system(.caption2, design: .rounded).weight(.semibold))
+                .foregroundStyle(.white.opacity(0.5))
+        }
+    }
+
+    private func chip(_ label: String, remove: @escaping () -> Void) -> some View {
+        HStack(spacing: 5) {
+            Text(label)
+                .font(.system(.caption2, design: .rounded).weight(.semibold))
+            Button { withAnimation(DS.Motion.hover) { remove() } } label: {
+                Image(systemName: "xmark").font(.system(size: 8, weight: .bold))
+            }
+            .buttonStyle(.plain)
+        }
+        .foregroundStyle(accent)
+        .padding(.horizontal, 9).padding(.vertical, 5)
+        .background(Capsule().fill(accent.opacity(0.15)))
     }
 
     @Namespace private var rangeNS
@@ -120,38 +157,57 @@ struct AnalyticsView: View {
             if !tasks.allCategories.isEmpty {
                 Section("Category") {
                     ForEach(tasks.allCategories) { cat in
-                        Button(cat.name) { filter.dimension = .category(cat.name) }
+                        toggleButton(cat.name, on: filter.categories.contains(cat.name)) {
+                            toggle(&filter.categories, cat.name)
+                        }
                     }
                 }
             }
             if !tasks.projects.isEmpty {
                 Section("Project") {
                     ForEach(tasks.projects, id: \.self) { proj in
-                        Button(proj) { filter.dimension = .project(proj) }
+                        toggleButton(proj, on: filter.projects.contains(proj)) {
+                            toggle(&filter.projects, proj)
+                        }
                     }
                 }
             }
             if !tasks.allTags.isEmpty {
                 Section("Tag") {
                     ForEach(tasks.allTags, id: \.self) { tag in
-                        Button("#\(tag)") { filter.dimension = .tag(tag) }
+                        toggleButton("#\(tag)", on: filter.tags.contains(tag)) {
+                            toggle(&filter.tags, tag)
+                        }
                     }
                 }
             }
-            if filter.dimension != nil {
+            if filter.hasAttributionFilter {
                 Divider()
-                Button("Clear filter", role: .destructive) { filter.dimension = nil }
+                Button("Clear all", role: .destructive) { filter.clearAttribution() }
             }
         } label: {
-            Image(systemName: filter.dimension != nil
+            Image(systemName: filter.hasAttributionFilter
                   ? "line.3.horizontal.decrease.circle.fill"
                   : "line.3.horizontal.decrease.circle")
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(filter.dimension != nil ? accent : .white.opacity(0.55))
+                .foregroundStyle(filter.hasAttributionFilter ? accent : .white.opacity(0.55))
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .fixedSize()
+    }
+
+    /// A menu row that shows a checkmark when its value is selected — SwiftUI
+    /// menus keep multi-select menus open between taps.
+    private func toggleButton(_ label: String, on: Bool,
+                              action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(label, systemImage: on ? "checkmark" : "")
+        }
+    }
+
+    private func toggle(_ set: inout Set<String>, _ value: String) {
+        if set.contains(value) { set.remove(value) } else { set.insert(value) }
     }
 
     private var completedToggle: some View {
@@ -172,35 +228,28 @@ struct AnalyticsView: View {
         .buttonStyle(.pressableSubtle)
     }
 
-    private func activeChip(_ dim: AnalyticsFilter.Dimension) -> some View {
-        HStack(spacing: 5) {
-            Text("Filtered by \(dim.label)")
-                .font(.system(.caption2, design: .rounded).weight(.semibold))
-            Button { withAnimation(DS.Motion.hover) { filter.dimension = nil } } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 8, weight: .bold))
-            }
-            .buttonStyle(.plain)
-        }
-        .foregroundStyle(accent)
-        .padding(.horizontal, 9).padding(.vertical, 5)
-        .background(Capsule().fill(accent.opacity(0.15)))
-    }
-
     // MARK: - Filtering helpers
 
-    /// The tasks matching the active attribution dimension → their IDs; nil when
-    /// no dimension is set (meaning "no attribution filter"). Deleted tasks
-    /// aren't in the live list, so their sessions drop — same as the Report tab.
+    /// Tasks matching the active facets → their IDs; nil when no facet is set.
+    /// OR within a facet, AND across facets (a task must satisfy every non-empty
+    /// facet). Deleted tasks aren't in the live list, so their sessions drop —
+    /// same as the Report tab.
     private var allowedTaskIDs: Set<UUID>? {
-        guard let dim = filter.dimension else { return nil }
+        guard filter.hasAttributionFilter else { return nil }
         let ids = tasks.tasks.filter { t in
-            switch dim {
-            case .category(let c): return t.category == c
-            case .project(let p):  return t.project == p
-            case .tag(let tag):
-                return t.tags.contains { $0.caseInsensitiveCompare(tag) == .orderedSame }
+            if !filter.categories.isEmpty && !filter.categories.contains(t.category) {
+                return false
             }
+            if !filter.projects.isEmpty {
+                guard let p = t.project, filter.projects.contains(p) else { return false }
+            }
+            if !filter.tags.isEmpty {
+                let hit = t.tags.contains { tag in
+                    filter.tags.contains { $0.caseInsensitiveCompare(tag) == .orderedSame }
+                }
+                if !hit { return false }
+            }
+            return true
         }.map(\.id)
         return Set(ids)
     }
@@ -347,5 +396,38 @@ struct AnalyticsView: View {
         .padding(.horizontal, 20)
         .glassRounded(DS.Radius.xl, material: .regular)
         .liquidShadow(radius: 14, y: 7)
+    }
+}
+
+/// Simple wrapping HStack for the filter chips — flows onto new rows instead of
+/// overflowing the width when many facets are selected.
+struct FlowChips: Layout {
+    var spacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews,
+                      cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0
+        for v in subviews {
+            let s = v.sizeThatFits(.unspecified)
+            if x + s.width > maxWidth, x > 0 { x = 0; y += rowHeight + spacing; rowHeight = 0 }
+            x += s.width + spacing
+            rowHeight = max(rowHeight, s.height)
+        }
+        return CGSize(width: maxWidth == .infinity ? x : maxWidth, height: y + rowHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize,
+                       subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX, y = bounds.minY, rowHeight: CGFloat = 0
+        for v in subviews {
+            let s = v.sizeThatFits(.unspecified)
+            if x + s.width > bounds.maxX, x > bounds.minX {
+                x = bounds.minX; y += rowHeight + spacing; rowHeight = 0
+            }
+            v.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(s))
+            x += s.width + spacing
+            rowHeight = max(rowHeight, s.height)
+        }
     }
 }

@@ -1,11 +1,10 @@
 import Foundation
 
-/// The Analytics page's shared filter state: a time range (drives the Overview
-/// scores), one optional task-attribution dimension (category / project / tag,
-/// mirroring the app's one-dimension-at-a-time filter idiom), and a
-/// completed-only toggle. Applying the attribution dimension to sessions needs
-/// the live task list, so the view resolves it to a `Set<UUID>` and hands that
-/// to `AnalyticsEngine.filter`.
+/// The Analytics page's shared filter state: a time range, multi-select
+/// task-attribution facets (categories / projects / tags — OR within a facet,
+/// AND across facets), and a completed-only toggle. Resolving the facets to
+/// sessions needs the live task list, so the view turns them into a
+/// `Set<UUID>` of matching task IDs and hands that to `AnalyticsEngine.filter`.
 public struct AnalyticsFilter: Equatable, Sendable {
     public enum Range: String, CaseIterable, Identifiable, Sendable {
         case today   = "Today"
@@ -15,7 +14,7 @@ public struct AnalyticsFilter: Equatable, Sendable {
         case year    = "1Y"
         public var id: String { rawValue }
 
-        /// How many days back the Overview averages over (today included).
+        /// Days back the Overview averages over (today included).
         public var days: Int {
             switch self {
             case .today:   return 1
@@ -25,34 +24,39 @@ public struct AnalyticsFilter: Equatable, Sendable {
             case .year:    return 365
             }
         }
-    }
 
-    public enum Dimension: Equatable, Sendable {
-        case category(String)
-        case project(String)
-        case tag(String)
+        /// Days the heatmap spans — floored to 4 weeks so short ranges still
+        /// render a readable grid, capped at a year.
+        public var heatmapDays: Int { min(364, max(28, days)) }
 
-        public var label: String {
-            switch self {
-            case .category(let c): return c
-            case .project(let p):  return p
-            case .tag(let t):      return "#\(t)"
-            }
-        }
+        /// Rolling window (days) for the focus-load average line.
+        public var loadAverageDays: Int { max(7, days) }
     }
 
     public var range: Range
     public var completedOnly: Bool
-    public var dimension: Dimension?
+    public var categories: Set<String>
+    public var projects: Set<String>
+    public var tags: Set<String>
 
     public init(range: Range = .today, completedOnly: Bool = false,
-                dimension: Dimension? = nil) {
+                categories: Set<String> = [], projects: Set<String> = [],
+                tags: Set<String> = []) {
         self.range = range
         self.completedOnly = completedOnly
-        self.dimension = dimension
+        self.categories = categories
+        self.projects = projects
+        self.tags = tags
     }
 
-    /// True when anything narrows the raw session list (so surfaces that
-    /// otherwise read the aggregate history know to recompute from sessions).
-    public var narrowsSessions: Bool { completedOnly || dimension != nil }
+    public var hasAttributionFilter: Bool {
+        !categories.isEmpty || !projects.isEmpty || !tags.isEmpty
+    }
+
+    /// True when anything narrows the raw session list.
+    public var narrowsSessions: Bool { completedOnly || hasAttributionFilter }
+
+    public mutating func clearAttribution() {
+        categories.removeAll(); projects.removeAll(); tags.removeAll()
+    }
 }

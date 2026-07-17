@@ -9,6 +9,7 @@ struct AnalyticsLoadView: View {
     @ObservedObject var timer: PomodoroTimer
     var completedOnly: Bool = false
     var allowedTaskIDs: Set<UUID>? = nil
+    var averageDays: Int = 30
     @ObservedObject private var log = FocusSessionLog.shared
     @State private var day = Calendar.current.startOfDay(for: Date())
 
@@ -29,11 +30,11 @@ struct AnalyticsLoadView: View {
 
     private var data: [HourLoad] {
         let today = AnalyticsEngine.hourlyLoad(sessions: sessions(on: day))
-        // 30-day average per hour (only days that have data count).
+        // Rolling average per hour over the selected window (days with data).
         let cal = Calendar.current
         var sums = [TimeInterval](repeating: 0, count: 24)
         var daysWithData = 0
-        for back in 1...30 {
+        for back in 1...max(1, averageDays) {
             guard let d = cal.date(byAdding: .day, value: -back, to: day)
             else { continue }
             let s = sessions(on: d)
