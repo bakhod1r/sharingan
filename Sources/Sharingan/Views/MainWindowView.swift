@@ -271,7 +271,7 @@ struct MainWindowView: View {
         .shadow(color: .black.opacity(0.38), radius: 28, x: 0, y: 14)
     }
 
-    /// Todoist-style "Add task" at the very top of the sidebar — an accent
+    /// An "Add task" at the very top of the sidebar — an accent
     /// plus-circle and bold accent label, opening the quick-capture panel.
     private var addTaskButton: some View {
         Button { QuickAddWindowManager.shared.showQuickAdd() } label: {
@@ -300,7 +300,7 @@ struct MainWindowView: View {
         .padding(.bottom, 6)
     }
 
-    /// Todoist's "My Projects" analog: every category with its open-task count.
+    /// The "Projects" list: every category with its open-task count.
     /// "+" adds a custom category; a custom category's context menu deletes it.
     @ViewBuilder
     private var categoriesSection: some View {
@@ -527,7 +527,7 @@ struct MainWindowView: View {
         showAddTag = false
     }
 
-    /// Todoist-style shortcut row: not a section of its own, just a deep-link
+    /// Shortcut row: not a section of its own, just a deep-link
     /// into Tasks (search focus / smart filter). Count badge optional.
     private func shortcutRow(icon: String, title: String, count: Int = 0,
                              countTint: Color? = nil,
@@ -557,7 +557,7 @@ struct MainWindowView: View {
         .onHover { trackHover($0, key) }
     }
 
-    /// Category row: Todoist-style "#" mark, a hover pencil opening the editor
+    /// Category row: a "#" mark, a hover pencil opening the editor
     /// (rename for custom categories, recolor for all, delete for custom).
     private func categoryRow(_ cat: TaskCategory, count: Int) -> some View {
         let key = "cat:\(cat.name)"
@@ -652,7 +652,7 @@ struct MainWindowView: View {
         .padding(14)
     }
 
-    /// Todoist's "Labels": free-form tags across all tasks, most-used first.
+    /// "Labels": free-form tags across all tasks, most-used first.
     /// Clicking narrows the Tasks list; the context menu deletes the label
     /// everywhere. Tags are born by typing #tag when adding/editing a task.
     @ViewBuilder
@@ -1002,7 +1002,7 @@ struct MainWindowView: View {
 
     /// A small glass status card pinned to the bottom of the sidebar — today's
     /// focus count and the current streak, so the panel closes on a live signal
-    /// instead of empty space (the way Todoist parks account/karma at the foot).
+    /// instead of empty space (parking account/summary info at the foot).
     @ViewBuilder
     private var sidebarFooter: some View {
         let today = timer.stats.completedTodayCount()
@@ -1165,7 +1165,7 @@ struct MainWindowView: View {
         }
     }
 
-    /// Todoist-style sidebar group label: sentence case at row size, instead
+    /// Sidebar group label: sentence case at row size, instead
     /// of the app-wide 10 pt uppercase `dsSectionLabel` (too small next to
     /// 13 pt rows). The icon shares the rows' 20pt gutter so headers and rows
     /// hang off one left edge — and it doubles as the group's rail tile.
@@ -1259,7 +1259,7 @@ struct MainWindowView: View {
         } label: {
             rowShell(help: s.title) {
                 // Icon glows in the theme accent when the row is selected, so the
-                // active section reads instantly (Todoist-style accent selection).
+                // active section reads instantly (accent selection).
                 Image(systemName: s.icon)
                     .font(.system(size: 15, weight: selected ? .semibold : .regular))
                     .foregroundStyle(selected ? accent

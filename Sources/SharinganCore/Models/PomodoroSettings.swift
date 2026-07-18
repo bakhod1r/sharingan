@@ -286,7 +286,7 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     /// automatically. 0 = keep forever (only manual "Delete forever" removes it).
     public var trashRetentionDays: Int = 30
     /// Custom display names for priority levels, keyed by String(rawValue).
-    /// Missing keys fall back to the built-in Todoist-style labels.
+    /// Missing keys fall back to the built-in default labels.
     public var priorityNames: [String: String] = [:]
     /// Custom flag colors (hex) per priority level, keyed by String(rawValue).
     public var priorityColors: [String: String] = [:]

@@ -2096,7 +2096,7 @@ struct TasksView: View {
         let revealed = revealedTaskID == task.id
         let prio = timer.settings.priorityColorHex(task.priority).map { Color(hex: $0) }
         return HStack(spacing: 11) {
-            // Checkbox — priority-tinted ring (Todoist-style), fills green when done.
+            // Checkbox — priority-tinted ring, fills green when done.
             Button { store.toggleDone(task.id) } label: {
                 Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 19))

@@ -150,7 +150,7 @@ public enum Recurrence: Codable, Equatable, Hashable, Sendable, CaseIterable, Id
     }
 }
 
-/// Task priority, Todoist-style: P1 (urgent, red) … P4 (none). Higher rawValue
+/// Task priority: P1 (urgent, red) … P4 (none). Higher rawValue
 /// = more urgent, so sorting descending puts P1 first.
 ///
 /// Was an `Int` enum; now a struct so users can add their own levels ABOVE P1
@@ -247,7 +247,7 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
     public var recurrence: Recurrence
     /// Optional project grouping (a second axis above category).
     public var project: String?
-    /// Todoist-style priority flag.
+    /// Priority flag.
     public var priority: TaskPriority
     /// When the task was completed (nil while open; cleared on un-complete).
     public var completedAt: Date?

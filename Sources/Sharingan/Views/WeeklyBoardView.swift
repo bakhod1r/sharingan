@@ -1,7 +1,7 @@
 import SwiftUI
 import SharinganCore
 
-/// A beautiful Trello/Todoist-style weekly planner: a backlog + Mon–Sun columns,
+/// A beautiful kanban-style weekly planner: a backlog + Mon–Sun columns,
 /// each a frosted-glass drop target. Drag a task card onto a day to plan it, or
 /// back onto "Unscheduled" to clear its plan. Everything animates — cards spring
 /// into place, the target column glows, cards lift on hover, the week slides.

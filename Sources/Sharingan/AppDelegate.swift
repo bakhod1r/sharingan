@@ -240,7 +240,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         // Keep the Dock artwork on the user's Sharingan style (no-op unless
         // the style actually changed).
         dockAnimator?.syncStyle(timer.settings.sharinganStyle)
-        // Todoist-style minimal menu bar: just the stopwatch icon at rest, and
+        // Minimal menu bar: just the stopwatch icon at rest, and
         // the icon + countdown only while a session is actually engaged
         // (running or paused mid-way). A fresh/reset timer shows the icon alone.
         let s = max(0, timer.remainingSeconds)
