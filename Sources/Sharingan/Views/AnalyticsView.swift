@@ -16,7 +16,6 @@ struct AnalyticsView: View {
 
     enum Tab: String, CaseIterable, Identifiable {
         case overview = "Overview"
-        case progress = "Progress"
         case heatmap  = "Heatmap"
         case load     = "Focus load"
         case timeline = "Timeline"
@@ -26,7 +25,6 @@ struct AnalyticsView: View {
         var icon: String {
             switch self {
             case .overview: return "gauge.with.needle"
-            case .progress: return "chart.line.uptrend.xyaxis"
             case .heatmap:  return "square.grid.3x3.fill"
             case .load:     return "chart.bar.fill"
             case .timeline: return "clock.fill"
@@ -46,8 +44,6 @@ struct AnalyticsView: View {
                 switch tab {
                 case .overview:
                     overview
-                case .progress:
-                    progress
                 case .heatmap:
                     AnalyticsHeatmapView(
                         stats: timer.stats, accent: accent,
@@ -547,6 +543,8 @@ struct AnalyticsView: View {
                     .font(.system(.callout, design: .rounded))
                     .foregroundStyle(.white.opacity(0.6))
             }
+            // Progress detail (the former standalone Progress tab), folded in.
+            progress
         }
     }
 
