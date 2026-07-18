@@ -617,9 +617,7 @@ struct MenuBarView: View {
                         .font(.system(size: 10, weight: .bold))
                         .foregroundStyle(Color.dsTertiary)
                         .rotationEffect(.degrees(isCollapsed ? 0 : 90))
-                    Image(systemName: tasks.icon(for: group.category))
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(accent)
+                    CategoryGlyph(symbol: tasks.icon(for: group.category), color: accent, size: 11)
                     Text(group.category).dsSectionLabel()
                     Text("\(group.items.count)")
                         .font(.system(.caption2, design: .rounded).weight(.semibold))
@@ -679,7 +677,7 @@ struct MenuBarView: View {
     private func miniRow(_ task: TaskItem, showCategory: Bool = true) -> some View {
         let isActive = tasks.activeTaskID == task.id
         let accent = Color(hex: tasks.color(for: task.category))
-        return HStack(spacing: 10) {
+        return HStack(spacing: 8) {
             Button {
                 tasks.toggleDone(task.id)
             } label: {
@@ -745,8 +743,6 @@ struct MenuBarView: View {
                     SubtaskProgressBadge(task.subtaskProgress)
                         .fixedSize()
                 }
-                pomodoroBadge(task)
-                    .fixedSize()
             }
 
             // Every secondary action, subtasks/notes included, lives in this ⋮
@@ -766,16 +762,26 @@ struct MenuBarView: View {
             .fixedSize()
             .help("More actions")
 
-            Button {
-                startFocus(on: task)
-            } label: {
-                Image(systemName: isActive && timer.isRunning
-                      ? "pause.circle.fill" : "play.circle.fill")
-                    .font(.system(size: 22))
-                    .foregroundStyle(isActive ? Color.accentColor : .secondary)
+            // Merged focus control: the pomodoro ring and the play/pause button
+            // sit in one capsule so they read as a single unit — the task's
+            // tomato count and the control that runs a pomodoro on it.
+            HStack(spacing: 3) {
+                if editingTaskID != task.id {
+                    pomodoroBadge(task).fixedSize()
+                }
+                Button {
+                    startFocus(on: task)
+                } label: {
+                    Image(systemName: isActive && timer.isRunning
+                          ? "pause.circle.fill" : "play.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(isActive ? Color.accentColor : .secondary)
+                }
+                .buttonStyle(.pressableSubtle)
+                .help("Run a focus pomodoro on this task")
             }
-            .buttonStyle(.pressableSubtle)
-            .help("Run a focus pomodoro on this task")
+            .padding(.horizontal, 4).padding(.vertical, 2)
+            .background(Capsule().fill(Color.white.opacity(0.06)))
         }
         .padding(.horizontal, 10).padding(.vertical, 7)
         .background(
@@ -920,8 +926,7 @@ struct MenuBarView: View {
     /// Colored bucket pill for a task's category.
     private func categoryTag(_ name: String, accent: Color) -> some View {
         HStack(spacing: 4) {
-            Image(systemName: tasks.icon(for: name))
-                .font(.system(size: 9, weight: .semibold))
+            CategoryGlyph(symbol: tasks.icon(for: name), color: accent, size: 9)
             Text(name)
                 .font(.system(.caption2, design: .rounded).weight(.semibold))
                 .lineLimit(1)

@@ -426,9 +426,8 @@ struct MainWindowView: View {
         let key = "proj:\(proj.name)"
         return Button { router.openTasks(project: proj.name) } label: {
             HStack(spacing: 11) {
-                Image(systemName: proj.icon)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color(hex: proj.colorHex))
+                CategoryGlyph(symbol: tasks.projectIcon(proj.name),
+                              color: Color(hex: proj.colorHex), size: 13)
                     .frame(width: 20, alignment: .center)
                 Text(proj.name)
                     .font(.system(size: 13, design: .rounded))
@@ -560,9 +559,8 @@ struct MainWindowView: View {
         let key = "cat:\(cat.name)"
         return Button { router.openTasks(category: cat.name) } label: {
             HStack(spacing: 11) {
-                Image(systemName: tasks.icon(for: cat.name))
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color(hex: cat.colorHex))
+                CategoryGlyph(symbol: tasks.icon(for: cat.name),
+                              color: Color(hex: cat.colorHex), size: 13)
                     .frame(width: 20, alignment: .center)
                 Text(cat.name)
                     .font(.system(size: 13, design: .rounded))
@@ -606,9 +604,9 @@ struct MainWindowView: View {
         LazyVGrid(columns: Array(repeating: GridItem(.fixed(24), spacing: 4), count: 8), spacing: 4) {
             ForEach(TaskCategory.iconChoices, id: \.self) { icon in
                 Button { choose(icon) } label: {
-                    Image(systemName: icon)
-                        .font(.system(size: 11))
-                        .foregroundStyle(selected == icon ? Color.accentColor : .white.opacity(0.7))
+                    CategoryGlyph(symbol: icon,
+                                  color: selected == icon ? Color.accentColor : .white.opacity(0.7),
+                                  size: 12)
                         .frame(width: 22, height: 22)
                         .background(RoundedRectangle(cornerRadius: 5)
                             .fill(Color.white.opacity(selected == icon ? 0.14 : 0.05)))
@@ -622,9 +620,7 @@ struct MainWindowView: View {
     /// Live preview chip — the current icon in the current color, with the name.
     private func editorPreview(icon: String, name: String, colorHex: String) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Color(hex: colorHex))
+            CategoryGlyph(symbol: icon, color: Color(hex: colorHex), size: 14)
                 .frame(width: 24, height: 24)
                 .background(RoundedRectangle(cornerRadius: 6).fill(Color(hex: colorHex).opacity(0.15)))
             Text(name.isEmpty ? "—" : name)
