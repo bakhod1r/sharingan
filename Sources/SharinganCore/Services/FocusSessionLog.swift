@@ -85,12 +85,13 @@ public final class FocusSessionLog: ObservableObject {
     private func save() {
         let snapshot = records
         let url = fileURL
+        let logger = Self.log
         saveQueue.async {
             do {
                 let data = try JSONEncoder().encode(snapshot)
                 try data.write(to: url, options: .atomic)
             } catch {
-                Self.log.error("session log save failed: \(String(describing: error))")
+                logger.error("session log save failed: \(String(describing: error))")
             }
         }
     }

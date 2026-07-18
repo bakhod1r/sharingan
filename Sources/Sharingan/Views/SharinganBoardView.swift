@@ -84,7 +84,7 @@ struct SharinganBoardView: View {
             Button("Add") {
                 let name = newColumnName; newColumnName = ""
                 if !name.trimmingCharacters(in: .whitespaces).isEmpty {
-                    withAnimation(DS.Motion.standard) { columns.addColumn(name: name) }
+                    _ = withAnimation(DS.Motion.standard) { columns.addColumn(name: name) }
                 }
             }
             Button("Cancel", role: .cancel) { newColumnName = "" }
@@ -183,11 +183,11 @@ struct SharinganBoardView: View {
             guard let s = dropped.first else { return false }
             // A column drag (reorder) is prefixed; anything else is a task card.
             if let colID = s.columnDragID {
-                withAnimation(DS.Motion.standard) { columns.moveColumn(colID, toSlotOf: column.id) }
+                _ = withAnimation(DS.Motion.standard) { columns.moveColumn(colID, toSlotOf: column.id) }
                 return true
             }
             guard let id = UUID(uuidString: s) else { return false }
-            withAnimation(DS.Motion.standard) { drop(id, into: column) }
+            _ = withAnimation(DS.Motion.standard) { drop(id, into: column) }
             return true
         } isTargeted: { inside in
             targetedColumn = inside ? column.id : (targetedColumn == column.id ? nil : targetedColumn)
@@ -233,18 +233,18 @@ struct SharinganBoardView: View {
             Button { renamingColumn = column; renameText = column.name } label: {
                 Label("Rename…", systemImage: "pencil")
             }
-            Button { withAnimation(DS.Motion.standard) { columns.move(column.id, by: -1) } } label: {
+            Button { _ = withAnimation(DS.Motion.standard) { columns.move(column.id, by: -1) } } label: {
                 Label("Move left", systemImage: "arrow.left")
             }
-            Button { withAnimation(DS.Motion.standard) { columns.move(column.id, by: 1) } } label: {
+            Button { _ = withAnimation(DS.Motion.standard) { columns.move(column.id, by: 1) } } label: {
                 Label("Move right", systemImage: "arrow.right")
             }
             Divider()
-            Button { withAnimation(DS.Motion.standard) { columns.setEnabled(column.id, false) } } label: {
+            Button { _ = withAnimation(DS.Motion.standard) { columns.setEnabled(column.id, false) } } label: {
                 Label("Hide column", systemImage: "eye.slash")
             }
             Button(role: .destructive) {
-                withAnimation(DS.Motion.standard) { columns.delete(column.id) }
+                _ = withAnimation(DS.Motion.standard) { columns.delete(column.id) }
             } label: {
                 Label("Delete column", systemImage: "trash")
             }
