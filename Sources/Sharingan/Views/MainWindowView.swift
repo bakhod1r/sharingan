@@ -308,13 +308,13 @@ struct MainWindowView: View {
         let counts = Dictionary(grouping: tasks.tasks.filter { !$0.isDone && $0.trashedAt == nil },
                                 by: \.category).mapValues(\.count)
         if sidebarCollapsed {
-            railGroupTile("cats", icon: "number", help: "Categories") {
+            railGroupTile("cats", icon: TaskCategory.defaultCategoryIcon, help: "Categories") {
                 ForEach(tasks.allCategories) { cat in
                     categoryRow(cat, count: counts[cat.name] ?? 0)
                 }
             }
         } else {
-            sectionHeader("Categories", icon: "number", collapsed: $catsCollapsed,
+            sectionHeader("Categories", icon: TaskCategory.defaultCategoryIcon, collapsed: $catsCollapsed,
                           addHelp: "New category") {
                 showAddCategory = true
             }
@@ -368,13 +368,13 @@ struct MainWindowView: View {
         let counts = Dictionary(grouping: tasks.tasks.filter { !$0.isDone && $0.trashedAt == nil && $0.project != nil },
                                 by: { $0.project ?? "" }).mapValues(\.count)
         if sidebarCollapsed {
-            railGroupTile("projs", icon: "folder", help: "Projects") {
+            railGroupTile("projs", icon: TaskCategory.defaultProjectIcon, help: "Projects") {
                 ForEach(tasks.allProjects) { proj in
                     projectRow(proj, count: counts[proj.name] ?? 0)
                 }
             }
         } else {
-            sectionHeader("Projects", icon: "folder", collapsed: $projsCollapsed,
+            sectionHeader("Projects", icon: TaskCategory.defaultProjectIcon, collapsed: $projsCollapsed,
                           addHelp: "New project") {
                 showAddProject = true
             }
@@ -1211,9 +1211,7 @@ struct MainWindowView: View {
     /// hang off one left edge — and it doubles as the group's rail tile.
     private func sidebarHeaderLabel(_ title: String, icon: String) -> some View {
         HStack(spacing: 11) {
-            Image(systemName: icon)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.4))
+            CategoryGlyph(symbol: icon, color: .white.opacity(0.4), size: 12)
                 .frame(width: 20, alignment: .center)
             Text(title)
                 .font(.system(size: 13, weight: .semibold, design: .rounded))
@@ -1253,9 +1251,8 @@ struct MainWindowView: View {
                                @ViewBuilder rows: @escaping () -> some View) -> some View {
         Button { railFlyout = railFlyout == key ? nil : key } label: {
             rowShell(help: help) {
-                Image(systemName: icon)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white.opacity(railFlyout == key ? 0.9 : 0.5))
+                CategoryGlyph(symbol: icon,
+                              color: .white.opacity(railFlyout == key ? 0.9 : 0.5), size: 14)
             } trailing: { EmptyView() }
             .transition(.opacity)
             .background(rowSurface("rail:\(key)", selected: railFlyout == key))
