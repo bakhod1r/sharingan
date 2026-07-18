@@ -74,19 +74,18 @@ struct AnalyticsView: View {
 
     // MARK: - Progress tab (the former standalone Progress page)
 
+    /// The former Progress content, minus the pieces that now duplicate the
+    /// Overview hero: StatsSummaryView repeated the KPI row's Focus time /
+    /// Sessions / Streak / Active days, and StatsChartView repeated the
+    /// focus-trend chart. Only the unique surfaces remain — milestone badges
+    /// and the project/tag/weekday breakdowns.
     private var progress: some View {
         VStack(spacing: 20) {
-            StatsSummaryView(stats: timer.stats,
-                             focusMinutes: timer.settings.focusMinutes,
-                             accent: accent,
-                             dailyGoal: timer.settings.dailyPomodoroGoal)
-                .staggeredAppear(0)
             StreakBadgeView(streak: timer.stats.streak)
-                .staggeredAppear(1)
-            StatsChartView(stats: timer.stats, accent: accent)
-                .staggeredAppear(2)
-            StatsExtrasView(stats: timer.stats, accent: accent)
-                .staggeredAppear(3)
+                .staggeredAppear(7)
+            StatsExtrasView(stats: timer.stats, accent: accent,
+                            showActivityAndTimeOfDay: false)
+                .staggeredAppear(8)
         }
     }
 

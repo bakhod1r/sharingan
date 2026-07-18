@@ -7,12 +7,16 @@ struct StatsExtrasView: View {
     let stats: PomodoroStats
     @ObservedObject private var store = TaskStore.shared
     var accent: Color = .paletteFocusStart
+    /// The dashboard already has dedicated Heatmap and Focus-load tabs, so it
+    /// hides the Activity heatmap and Time-of-day cards here to avoid showing
+    /// the same data twice. Standalone/rendered uses keep them (default true).
+    var showActivityAndTimeOfDay: Bool = true
 
     private let weeks = 14
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            heatmapCard
+            if showActivityAndTimeOfDay { heatmapCard }
             if !todayTaskEntries.isEmpty { byTaskTodayCard }
             HStack(alignment: .top, spacing: 16) {
                 weekdayCard
@@ -25,7 +29,7 @@ struct StatsExtrasView: View {
                 }
             }
             HStack(alignment: .top, spacing: 16) {
-                timeOfDayCard
+                if showActivityAndTimeOfDay { timeOfDayCard }
                 recordsCard
             }
         }
