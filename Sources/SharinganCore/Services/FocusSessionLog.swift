@@ -15,7 +15,9 @@ public final class FocusSessionLog: ObservableObject {
     private let fileURL: URL
     private let saveQueue = DispatchQueue(label: "sharingan.sessionlog.save",
                                           qos: .utility)
-    private static let log = Logger(subsystem: "sharingan", category: "sessionlog")
+    // nonisolated so the background save closure can log without hopping actors
+    // (Logger is Sendable).
+    nonisolated private static let log = Logger(subsystem: "sharingan", category: "sessionlog")
     /// Only the last `retentionDays` days are kept — enough history for the
     /// yearly heatmap and time machine.
     private static let retentionDays = 400
