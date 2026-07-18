@@ -253,7 +253,7 @@ struct NotchExpandedPanel: View {
         let accent = Color(hex: tasks.color(for: task.category))
         let subtasks = task.subtaskProgress
 
-        return HStack(spacing: 8) {
+        return HStack(spacing: 7) {
             Button { tasks.toggleDone(task.id) } label: {
                 Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 12, weight: .medium))
@@ -264,53 +264,74 @@ struct NotchExpandedPanel: View {
 
             // The title is the row's "open" affordance: it raises the main
             // window on the Tasks section, scrolled to and flashing this task
-            // (`AppRouter.revealTask`). The done box and the play button keep
-            // their jobs either side of it.
+            // (`AppRouter.revealTask`). The task code sits just before it, the way
+            // the main window's rows read; the done box and the focus control keep
+            // their jobs either side.
             Button {
                 MainWindowManager.shared.show()
                 AppRouter.shared.revealTask(task.id)
             } label: {
-                Text(task.title)
-                    .font(.system(size: 12, design: .rounded).weight(isActive ? .semibold : .regular))
-                    .strikethrough(task.isDone, color: Color.dsTertiary)
-                    .foregroundStyle(isActive ? Color.dsPrimary : Color.dsSecondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                HStack(spacing: 5) {
+                    if let code = task.code {
+                        Text(code)
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(Color.dsTertiary)
+                            .lineLimit(1).fixedSize()
+                    }
+                    Text(task.title)
+                        .font(.system(size: 12, design: .rounded).weight(isActive ? .semibold : .regular))
+                        .strikethrough(task.isDone, color: Color.dsTertiary)
+                        .foregroundStyle(isActive ? Color.dsPrimary : Color.dsSecondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    // Widen the title's claim on the row: it takes all the free
+                    // width up to the trailing cluster instead of stopping at its
+                    // intrinsic length.
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .help("Open “\(task.title)” in Sharingan")
-
-            Spacer(minLength: 4)
 
             if subtasks.total > 0 {
                 SubtaskProgressBadge(subtasks, size: 9)
             }
 
-            // Gated on the same setting as every other pomodoro badge in the app:
-            // a user who turned the tomatoes off does not want them in the notch
-            // either. The ring is the tallest thing in the row, and the row is
-            // pinned to it below — so switching the badges off (or a task simply
-            // having none) changes what the row shows, never how tall it is.
-            if timer.settings.showPomodoroBadges {
-                TaskPomodoroBadge(done: task.pomodorosDone,
-                                  estimate: task.effectiveEstimate,
-                                  color: accent,
-                                  diameter: NotchGeometry.taskRowContentHeight)
+            // The pomodoro ring and the focus control read as one unit — the ring
+            // is the task's tomato count, the button beside it starts/pauses the
+            // clock on that task. Gated on the same badge setting as everywhere
+            // else; the ring is the tallest thing in the row and the row is pinned
+            // to it below, so toggling badges changes what shows, never the height.
+            HStack(spacing: 3) {
+                if timer.settings.showPomodoroBadges {
+                    TaskPomodoroBadge(done: task.pomodorosDone,
+                                      estimate: task.effectiveEstimate,
+                                      color: accent,
+                                      diameter: NotchGeometry.taskRowContentHeight)
+                }
+                Button { focus(on: task) } label: {
+                    Image(systemName: isRunning ? "pause.circle.fill" : "play.circle.fill")
+                        .font(.system(size: 13))
+                        // The running row's control takes the phase color — it is the
+                        // task the timer is counting down, tied to the clock above it.
+                        // Through the theme so Mono desaturates it (`notchPhaseAccent`)
+                        // rather than dropping one saturated glyph onto a grey panel.
+                        .foregroundStyle(isRunning
+                            ? timer.settings.theme.notchPhaseAccent(model.phase)
+                            : Color.dsSecondary)
+                }
+                .buttonStyle(.plain)
+                .help(isRunning ? "Pause “\(task.title)”" : "Focus on “\(task.title)”")
             }
-
-            Button { focus(on: task) } label: {
-                Image(systemName: isRunning ? "pause.circle.fill" : "play.circle.fill")
-                    .font(.system(size: 13))
-                    // The running row's control takes the phase color — it is the
-                    // task the timer is counting down, tied to the clock above it.
-                    // Through the theme so Mono desaturates it (`notchPhaseAccent`)
-                    // rather than dropping one saturated glyph onto a grey panel.
-                    .foregroundStyle(isRunning
-                        ? timer.settings.theme.notchPhaseAccent(model.phase)
-                        : Color.dsSecondary)
-            }
-            .buttonStyle(.plain)
-            .help(isRunning ? "Pause “\(task.title)”" : "Focus on “\(task.title)”")
+            .padding(.leading, 3)
+            .padding(.trailing, 4)
+            .frame(height: NotchGeometry.taskRowContentHeight)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color.white.opacity(0.06))
+            )
         }
         // The row *is* `NotchGeometry.taskRowHeight` — not "about" it. See above.
         .frame(height: NotchGeometry.taskRowContentHeight)
