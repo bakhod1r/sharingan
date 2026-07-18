@@ -181,17 +181,75 @@ struct ThemeWindowWash: View {
     var highlightRadius: CGFloat = 620
 
     var body: some View {
-        let colors = theme.gradient
+        // `surface` is already a dark, text-safe base (see SharinganTheme), so the
+        // darkening ramp only needs to deepen the bottom a touch for depth, and the
+        // corner highlight is kept gentle — it lifts the top-leading corner without
+        // ever blowing it out to a light patch that would swallow the white text.
+        let colors = theme.surface
         ZStack {
             LinearGradient(colors: colors,
                            startPoint: .topLeading, endPoint: .bottomTrailing)
-            LinearGradient(colors: [Color.black.opacity(0.30),
-                                    Color.black.opacity(0.62)],
+            LinearGradient(colors: [Color.black.opacity(0.0),
+                                    Color.black.opacity(0.28)],
                            startPoint: .top, endPoint: .bottom)
-            RadialGradient(colors: [(colors.first ?? .blue).opacity(0.45), .clear],
+            RadialGradient(colors: [(colors.first ?? .blue).opacity(0.55), .clear],
                            center: .topLeading, startRadius: 0,
                            endRadius: highlightRadius)
                 .blendMode(.screen)
+            // The Hacker theme's signature: green digital rain falling behind the
+            // UI. Kept dim so the white content still reads on top.
+            if theme.hasMatrixRain {
+                MatrixRainView(color: theme.accent)
+                    .opacity(0.5)
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+}
+
+// MARK: - Matrix digital rain (Hacker theme)
+
+/// A lightweight "digital rain" — columns of glyphs falling down the surface,
+/// the lead glyph bright and a fading green trail behind it. Drawn in a single
+/// `Canvas` off a `TimelineView` clock so the whole effect is one layer with no
+/// per-glyph views. Deterministic per column (seeded speeds/offsets) so it looks
+/// organic without storing mutable state.
+struct MatrixRainView: View {
+    var color: Color
+
+    private static let glyphs = Array("01ｱｲｳｴｵｶｷｸｹｺｻｼｽｾ日ﾊﾋﾎ012789ﾘﾙﾚﾜ")
+    private let cell: CGFloat = 14
+    private let fontSize: CGFloat = 13
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 12.0)) { timeline in
+            let t = timeline.date.timeIntervalSinceReferenceDate
+            Canvas { ctx, size in
+                let cols = max(1, Int(size.width / cell))
+                let rows = max(1, Int(size.height / cell))
+                for c in 0..<cols {
+                    // Deterministic per-column speed and phase from a cheap hash.
+                    let seed = Double((c &* 2654435761) & 0xffff) / 0xffff
+                    let speed = 4.0 + seed * 10.0          // rows per second
+                    let head = (t * speed + seed * Double(rows)) .truncatingRemainder(dividingBy: Double(rows + 12))
+                    let trail = 10
+                    for k in 0..<trail {
+                        let row = Int(head) - k
+                        guard row >= 0, row < rows else { continue }
+                        let fade = 1.0 - Double(k) / Double(trail)
+                        let gi = (c &* 31 &+ row &* 17 &+ Int(t * 8)) % Self.glyphs.count
+                        let glyph = Self.glyphs[(gi + Self.glyphs.count) % Self.glyphs.count]
+                        let isHead = k == 0
+                        let text = Text(String(glyph))
+                            .font(.system(size: fontSize, weight: isHead ? .bold : .regular,
+                                          design: .monospaced))
+                            .foregroundStyle(isHead ? Color.white.opacity(0.95)
+                                                    : color.opacity(fade * 0.85))
+                        ctx.draw(text, at: CGPoint(x: CGFloat(c) * cell + cell / 2,
+                                                   y: CGFloat(row) * cell + cell / 2))
+                    }
+                }
+            }
         }
     }
 }
