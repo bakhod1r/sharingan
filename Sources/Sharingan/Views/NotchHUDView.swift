@@ -214,17 +214,28 @@ struct NotchHUDView: View {
     @ViewBuilder
     private func expandedShoulders(_ l: NotchLayout) -> some View {
         if model.state.size == .expanded {
-            let shoulderH = l.silhouette.bodyTop
             let stemW = l.silhouette.stemWidth
             let sideW = max(0, (l.island.width - stemW) / 2)
+            // Run a hair past the menu-bar row so the shoulder laps over the
+            // body's top edge — no seam between the two.
+            let shoulderH = l.silhouette.bodyTop + 2
+            let theme = timer.settings.theme
             HStack(spacing: 0) {
-                Rectangle().fill(.black).frame(width: sideW, height: shoulderH)
+                shoulderFill(theme).frame(width: sideW, height: shoulderH)
                 Spacer(minLength: 0).frame(width: stemW)   // leave the cutout untouched
-                Rectangle().fill(.black).frame(width: sideW, height: shoulderH)
+                shoulderFill(theme).frame(width: sideW, height: shoulderH)
             }
             .frame(width: l.island.width, height: l.island.height, alignment: .top)
             .allowsHitTesting(false)
         }
+    }
+
+    /// The shoulders take the body's exact flat tone (`bodyGlass`'s recipe) so
+    /// they read as the same surface — smooth, theme-colored, no seam.
+    private func shoulderFill(_ theme: SharinganTheme) -> some View {
+        LinearGradient(colors: theme.surface,
+                       startPoint: .topLeading, endPoint: .bottomTrailing)
+            .overlay(Color.black.opacity(Self.flatDarkening))
     }
 
     /// How far down the island's black fill runs. Full height everywhere but
