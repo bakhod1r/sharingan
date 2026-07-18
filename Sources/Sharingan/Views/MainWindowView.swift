@@ -11,6 +11,7 @@ struct MainWindowView: View {
     @State private var showAddCategory = false
     @State private var newCatName = ""
     @State private var newCatColor = TaskCategory.palette[0]
+    @State private var newCatIcon = TaskCategory.defaultCategoryIcon
     /// Priority level whose name/color editor popover is open.
     @State private var editingPriority: TaskPriority?
     /// Inline "new priority level" popover state (sidebar Priority +).
@@ -25,6 +26,8 @@ struct MainWindowView: View {
     /// Inline "new tag" popover state (sidebar Tags +).
     @State private var showAddTag = false
     @State private var newTagName = ""
+    @State private var newTagIcon = "number"
+    @State private var newTagColor = TaskCategory.palette[0]
     /// The sidebar row under the pointer — drives every row's hover highlight
     /// and reveals a filter row's edit pencil.
     @State private var hoveredRowKey: String?
@@ -36,6 +39,7 @@ struct MainWindowView: View {
     @State private var showAddProject = false
     @State private var newProjName = ""
     @State private var newProjColor = TaskCategory.palette[0]
+    @State private var newProjIcon = TaskCategory.defaultProjectIcon
     /// Project whose rename/recolor editor popover is open.
     @State private var editingProject: String?
     @State private var editProjName = ""
@@ -304,16 +308,16 @@ struct MainWindowView: View {
     /// "+" adds a custom category; a custom category's context menu deletes it.
     @ViewBuilder
     private var categoriesSection: some View {
-        let counts = Dictionary(grouping: tasks.tasks.filter { !$0.isDone },
+        let counts = Dictionary(grouping: tasks.tasks.filter { !$0.isDone && $0.trashedAt == nil },
                                 by: \.category).mapValues(\.count)
         if sidebarCollapsed {
-            railGroupTile("cats", icon: "number", help: "Categories") {
+            railGroupTile("cats", icon: TaskCategory.defaultCategoryIcon, help: "Categories") {
                 ForEach(tasks.allCategories) { cat in
                     categoryRow(cat, count: counts[cat.name] ?? 0)
                 }
             }
         } else {
-            sectionHeader("Categories", icon: "number", collapsed: $catsCollapsed,
+            sectionHeader("Categories", icon: TaskCategory.defaultCategoryIcon, collapsed: $catsCollapsed,
                           addHelp: "New category") {
                 showAddCategory = true
             }
@@ -329,33 +333,35 @@ struct MainWindowView: View {
     }
 
     private var addCategoryPopover: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("New category").dsSectionLabel()
+        VStack(alignment: .leading, spacing: 12) {
+            editorPreview(icon: newCatIcon, name: newCatName.isEmpty ? "New category" : newCatName,
+                          colorHex: newCatColor)
+            Divider().overlay(Color.white.opacity(0.1))
+
+            Text("Name").dsSectionLabel()
             TextField("Name", text: $newCatName)
                 .textFieldStyle(DarkGlassFieldStyle())
-                .frame(width: 180)
+                .frame(width: 200)
                 .onSubmit(commitNewCategory)
-            HStack(spacing: 6) {
-                ForEach(TaskCategory.palette, id: \.self) { hex in
-                    Button { newCatColor = hex } label: {
-                        Circle()
-                            .fill(Color(hex: hex))
-                            .frame(width: 16, height: 16)
-                            .overlay(Circle().stroke(.white.opacity(newCatColor == hex ? 0.9 : 0),
-                                                     lineWidth: 2))
-                    }
-                    .buttonStyle(.pressableSubtle)
-                }
-            }
-            Button("Add", action: commitNewCategory)
+
+            Text("Icon").dsSectionLabel()
+            iconGrid(selected: newCatIcon) { newCatIcon = $0 }
+
+            Text("Color").dsSectionLabel()
+            colorPalette(current: newCatColor) { newCatColor = $0 }
+
+            Button("Add category", action: commitNewCategory)
                 .disabled(newCatName.trimmingCharacters(in: .whitespaces).isEmpty)
         }
         .padding(14)
+        .frame(width: 248)
     }
 
     private func commitNewCategory() {
-        guard tasks.addCategory(name: newCatName, colorHex: newCatColor) != nil else { return }
+        guard tasks.addCategory(name: newCatName, colorHex: newCatColor, icon: newCatIcon) != nil else { return }
         newCatName = ""
+        newCatColor = TaskCategory.palette[0]
+        newCatIcon = TaskCategory.defaultCategoryIcon
         showAddCategory = false
     }
 
@@ -364,16 +370,16 @@ struct MainWindowView: View {
     /// pencil opens rename/recolor/delete.
     @ViewBuilder
     private var projectsSection: some View {
-        let counts = Dictionary(grouping: tasks.tasks.filter { !$0.isDone && $0.project != nil },
+        let counts = Dictionary(grouping: tasks.tasks.filter { !$0.isDone && $0.trashedAt == nil && $0.project != nil },
                                 by: { $0.project ?? "" }).mapValues(\.count)
         if sidebarCollapsed {
-            railGroupTile("projs", icon: "folder", help: "Projects") {
+            railGroupTile("projs", icon: TaskCategory.defaultProjectIcon, help: "Projects") {
                 ForEach(tasks.allProjects) { proj in
                     projectRow(proj, count: counts[proj.name] ?? 0)
                 }
             }
         } else {
-            sectionHeader("Projects", icon: "folder", collapsed: $projsCollapsed,
+            sectionHeader("Projects", icon: TaskCategory.defaultProjectIcon, collapsed: $projsCollapsed,
                           addHelp: "New project") {
                 showAddProject = true
             }
@@ -389,33 +395,35 @@ struct MainWindowView: View {
     }
 
     private var addProjectPopover: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("New project").dsSectionLabel()
+        VStack(alignment: .leading, spacing: 12) {
+            editorPreview(icon: newProjIcon, name: newProjName.isEmpty ? "New project" : newProjName,
+                          colorHex: newProjColor)
+            Divider().overlay(Color.white.opacity(0.1))
+
+            Text("Name").dsSectionLabel()
             TextField("Name", text: $newProjName)
                 .textFieldStyle(DarkGlassFieldStyle())
-                .frame(width: 180)
+                .frame(width: 200)
                 .onSubmit(commitNewProject)
-            HStack(spacing: 6) {
-                ForEach(TaskCategory.palette, id: \.self) { hex in
-                    Button { newProjColor = hex } label: {
-                        Circle()
-                            .fill(Color(hex: hex))
-                            .frame(width: 16, height: 16)
-                            .overlay(Circle().stroke(.white.opacity(newProjColor == hex ? 0.9 : 0),
-                                                     lineWidth: 2))
-                    }
-                    .buttonStyle(.pressableSubtle)
-                }
-            }
-            Button("Add", action: commitNewProject)
+
+            Text("Icon").dsSectionLabel()
+            iconGrid(selected: newProjIcon) { newProjIcon = $0 }
+
+            Text("Color").dsSectionLabel()
+            colorPalette(current: newProjColor) { newProjColor = $0 }
+
+            Button("Add project", action: commitNewProject)
                 .disabled(newProjName.trimmingCharacters(in: .whitespaces).isEmpty)
         }
         .padding(14)
+        .frame(width: 248)
     }
 
     private func commitNewProject() {
-        guard tasks.addProject(name: newProjName, colorHex: newProjColor) != nil else { return }
+        guard tasks.addProject(name: newProjName, colorHex: newProjColor, icon: newProjIcon) != nil else { return }
         newProjName = ""
+        newProjColor = TaskCategory.palette[0]
+        newProjIcon = TaskCategory.defaultProjectIcon
         showAddProject = false
     }
 
@@ -425,9 +433,8 @@ struct MainWindowView: View {
         let key = "proj:\(proj.name)"
         return Button { router.openTasks(project: proj.name) } label: {
             HStack(spacing: 11) {
-                Image(systemName: proj.icon)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color(hex: proj.colorHex))
+                CategoryGlyph(symbol: tasks.projectIcon(proj.name),
+                              color: Color(hex: proj.colorHex), size: 13)
                     .frame(width: 20, alignment: .center)
                 Text(proj.name)
                     .font(.system(size: 13, design: .rounded))
@@ -436,7 +443,7 @@ struct MainWindowView: View {
                 Spacer()
                 if hoveredRowKey == key {
                     editPencil {
-                        editProjName = ""
+                        editProjName = proj.name
                         editingProject = proj.name
                     }
                 } else if count > 0 {
@@ -466,64 +473,93 @@ struct MainWindowView: View {
     /// Rename + color editor for a project, with delete (tasks fall back to
     /// "no project") at the bottom.
     private func projectEditorPopover(_ proj: TaskCategory) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(proj.name).dsSectionLabel()
+        VStack(alignment: .leading, spacing: 12) {
+            editorPreview(icon: tasks.projectIcon(proj.name), name: proj.name,
+                          colorHex: tasks.projectColor(proj.name))
+            Divider().overlay(Color.white.opacity(0.1))
+
+            Text("Name").dsSectionLabel()
             TextField(proj.name, text: $editProjName)
                 .textFieldStyle(DarkGlassFieldStyle())
-                .frame(width: 180)
+                .frame(width: 200)
                 .onSubmit {
                     if tasks.renameProject(proj.name, to: editProjName) {
                         editingProject = nil
                     }
                 }
-            HStack(spacing: 6) {
-                ForEach(TaskCategory.palette, id: \.self) { hex in
-                    Button {
-                        tasks.setProjectColor(proj.name, colorHex: hex)
-                    } label: {
-                        Circle()
-                            .fill(Color(hex: hex))
-                            .frame(width: 16, height: 16)
-                            .overlay(Circle().stroke(
-                                .white.opacity(tasks.projectColor(proj.name) == hex ? 0.9 : 0),
-                                lineWidth: 2))
-                    }
-                    .buttonStyle(.pressableSubtle)
-                }
+
+            Text("Icon").dsSectionLabel()
+            iconGrid(selected: tasks.projectIcon(proj.name)) { tasks.setProjectIcon(proj.name, icon: $0) }
+
+            Text("Color").dsSectionLabel()
+            colorPalette(current: tasks.projectColor(proj.name)) { tasks.setProjectColor(proj.name, colorHex: $0) }
+
+            Divider().overlay(Color.white.opacity(0.1))
+            Button(role: .destructive) {
+                tasks.deleteProject(proj.name)
+                editingProject = nil
+            } label: {
+                Label("Delete project", systemImage: "trash")
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(.red.opacity(0.9))
             }
-            HStack {
-                Spacer()
-                Button(role: .destructive) {
-                    tasks.deleteProject(proj.name)
-                    editingProject = nil
-                } label: {
-                    Text("Delete project")
-                        .foregroundStyle(.red.opacity(0.9))
-                }
-            }
-            .font(.system(.caption, design: .rounded))
+            .buttonStyle(.plain)
         }
         .padding(14)
+        .frame(width: 248)
     }
 
     /// Precreate a tag with no color UI — per-tag icon/color live on the
     /// row's own editor popover (`tagEditorPopover`) once the tag exists.
     private var addTagPopover: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("New tag").dsSectionLabel()
+        VStack(alignment: .leading, spacing: 12) {
+            editorPreview(icon: newTagIcon, name: newTagName.isEmpty ? "New tag" : "#\(newTagName)",
+                          colorHex: newTagColor)
+            Divider().overlay(Color.white.opacity(0.1))
+
+            Text("Name").dsSectionLabel()
             TextField("Name", text: $newTagName)
                 .textFieldStyle(DarkGlassFieldStyle())
-                .frame(width: 180)
+                .frame(width: 200)
                 .onSubmit(commitNewTag)
-            Button("Add", action: commitNewTag)
+
+            Text("Icon").dsSectionLabel()
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(24), spacing: 4), count: 8), spacing: 4) {
+                ForEach(TagStyle.iconChoices, id: \.self) { icon in
+                    Button { newTagIcon = icon } label: {
+                        Image(systemName: icon)
+                            .font(.system(size: 11))
+                            .foregroundStyle(newTagIcon == icon ? Color.accentColor : .white.opacity(0.7))
+                            .frame(width: 22, height: 22)
+                            .background(RoundedRectangle(cornerRadius: 5)
+                                .fill(Color.white.opacity(newTagIcon == icon ? 0.14 : 0.05)))
+                    }
+                    .buttonStyle(.pressableSubtle)
+                }
+            }
+            .frame(width: 220)
+
+            Text("Color").dsSectionLabel()
+            colorPalette(current: newTagColor) { newTagColor = $0 }
+
+            Button("Add tag", action: commitNewTag)
                 .disabled(newTagName.trimmingCharacters(in: .whitespaces).isEmpty)
         }
         .padding(14)
+        .frame(width: 248)
     }
 
     private func commitNewTag() {
+        let name = newTagName.trimmingCharacters(in: .whitespaces)
         guard tasks.addCustomTag(newTagName) else { return }
+        // Persist the chosen icon/color as the tag's style.
+        var style = TagStyle()
+        style.icon = newTagIcon == "number" ? nil : newTagIcon
+        style.colorHex = newTagColor
+        timer.settings.tagStyles[name] = style.isEmpty ? nil : style
         newTagName = ""
+        newTagIcon = "number"
+        newTagColor = TaskCategory.palette[0]
         showAddTag = false
     }
 
@@ -563,9 +599,8 @@ struct MainWindowView: View {
         let key = "cat:\(cat.name)"
         return Button { router.openTasks(category: cat.name) } label: {
             HStack(spacing: 11) {
-                Text("#")
-                    .font(.system(.body, design: .rounded).weight(.bold))
-                    .foregroundStyle(Color(hex: cat.colorHex))
+                CategoryGlyph(symbol: tasks.icon(for: cat.name),
+                              color: Color(hex: cat.colorHex), size: 13)
                     .frame(width: 20, alignment: .center)
                 Text(cat.name)
                     .font(.system(size: 13, design: .rounded))
@@ -574,7 +609,7 @@ struct MainWindowView: View {
                 Spacer()
                 if hoveredRowKey == key {
                     editPencil {
-                        editCatName = ""
+                        editCatName = cat.name
                         editingCategory = cat.name
                     }
                 } else if count > 0 {
@@ -603,53 +638,98 @@ struct MainWindowView: View {
 
     /// Rename (custom only) + color editor for a category, with
     /// delete-and-reassign at the bottom for custom categories.
+    /// Shared icon picker for the category and project editors — a wrapping grid
+    /// of `TaskCategory.iconChoices`, the current icon highlighted.
+    private func iconGrid(selected: String, choose: @escaping (String) -> Void) -> some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.fixed(24), spacing: 4), count: 8), spacing: 4) {
+            ForEach(TaskCategory.iconChoices, id: \.self) { icon in
+                Button { choose(icon) } label: {
+                    CategoryGlyph(symbol: icon,
+                                  color: selected == icon ? Color.accentColor : .white.opacity(0.7),
+                                  size: 12)
+                        .frame(width: 22, height: 22)
+                        .background(RoundedRectangle(cornerRadius: 5)
+                            .fill(Color.white.opacity(selected == icon ? 0.14 : 0.05)))
+                }
+                .buttonStyle(.pressableSubtle)
+            }
+        }
+        .frame(width: 220)
+    }
+
+    /// Live preview chip — the current icon in the current color, with the name.
+    private func editorPreview(icon: String, name: String, colorHex: String) -> some View {
+        HStack(spacing: 8) {
+            CategoryGlyph(symbol: icon, color: Color(hex: colorHex), size: 14)
+                .frame(width: 24, height: 24)
+                .background(RoundedRectangle(cornerRadius: 6).fill(Color(hex: colorHex).opacity(0.15)))
+            Text(name.isEmpty ? "—" : name)
+                .font(.system(.callout, design: .rounded).weight(.semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// Color palette row bound to a getter/setter.
+    private func colorPalette(current: String, choose: @escaping (String) -> Void) -> some View {
+        HStack(spacing: 6) {
+            ForEach(TaskCategory.palette, id: \.self) { hex in
+                Button { choose(hex) } label: {
+                    Circle()
+                        .fill(Color(hex: hex))
+                        .frame(width: 16, height: 16)
+                        .overlay(Circle().stroke(.white.opacity(current == hex ? 0.9 : 0), lineWidth: 2))
+                }
+                .buttonStyle(.pressableSubtle)
+            }
+        }
+    }
+
     private func categoryEditorPopover(_ cat: TaskCategory) -> some View {
         let custom = tasks.isCustomCategory(cat.name)
-        return VStack(alignment: .leading, spacing: 10) {
-            Text("#\(cat.name)").dsSectionLabel()
+        return VStack(alignment: .leading, spacing: 12) {
+            editorPreview(icon: tasks.icon(for: cat.name), name: cat.name,
+                          colorHex: tasks.color(for: cat.name))
+            Divider().overlay(Color.white.opacity(0.1))
+
+            Text("Name").dsSectionLabel()
             if custom {
                 TextField(cat.name, text: $editCatName)
                     .textFieldStyle(DarkGlassFieldStyle())
-                    .frame(width: 180)
+                    .frame(width: 200)
                     .onSubmit {
                         if tasks.renameCategory(cat.name, to: editCatName) {
                             editingCategory = nil
                         }
                     }
+            } else {
+                Text("\(cat.name) · built-in preset (name fixed)")
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.5))
             }
-            HStack(spacing: 6) {
-                ForEach(TaskCategory.palette, id: \.self) { hex in
-                    Button {
-                        tasks.setColor(for: cat.name, colorHex: hex)
-                    } label: {
-                        Circle()
-                            .fill(Color(hex: hex))
-                            .frame(width: 16, height: 16)
-                            .overlay(Circle().stroke(
-                                .white.opacity(tasks.color(for: cat.name) == hex ? 0.9 : 0),
-                                lineWidth: 2))
-                    }
-                    .buttonStyle(.pressableSubtle)
+
+            Text("Icon").dsSectionLabel()
+            iconGrid(selected: tasks.icon(for: cat.name)) { tasks.setIcon(for: cat.name, icon: $0) }
+
+            Text("Color").dsSectionLabel()
+            colorPalette(current: tasks.color(for: cat.name)) { tasks.setColor(for: cat.name, colorHex: $0) }
+
+            if custom {
+                Divider().overlay(Color.white.opacity(0.1))
+                Button(role: .destructive) {
+                    tasks.deleteCategory(cat.name)
+                    editingCategory = nil
+                } label: {
+                    Label("Delete category", systemImage: "trash")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(.red.opacity(0.9))
                 }
+                .buttonStyle(.plain)
             }
-            HStack {
-                Spacer()
-                if custom {
-                    Button(role: .destructive) {
-                        tasks.deleteCategory(cat.name)
-                        editingCategory = nil
-                    } label: {
-                        Text("Delete category")
-                            .foregroundStyle(.red.opacity(0.9))
-                    }
-                } else {
-                    Text("Preset — rename & delete unavailable")
-                        .foregroundStyle(.white.opacity(0.5))
-                }
-            }
-            .font(.system(.caption, design: .rounded))
         }
         .padding(14)
+        .frame(width: 248)
     }
 
     /// Todoist's "Labels": free-form tags across all tasks, most-used first.
@@ -657,7 +737,7 @@ struct MainWindowView: View {
     /// everywhere. Tags are born by typing #tag when adding/editing a task.
     @ViewBuilder
     private var tagsSection: some View {
-        let open = tasks.tasks.filter { !$0.isDone }
+        let open = tasks.tasks.filter { !$0.isDone && $0.trashedAt == nil }
         let counts: [String: Int] = open.reduce(into: [:]) { acc, t in
             for tag in t.tags { acc[tag, default: 0] += 1 }
         }
@@ -833,7 +913,7 @@ struct MainWindowView: View {
     /// color are editable via the row's hover pencil.
     @ViewBuilder
     private var prioritySection: some View {
-        let open = tasks.tasks.filter { !$0.isDone }
+        let open = tasks.tasks.filter { !$0.isDone && $0.trashedAt == nil }
         if sidebarCollapsed {
             railGroupTile("prio", icon: "flag", help: "Priority") {
                 ForEach(TaskPriority.levels(custom: timer.settings.customPriorityLevels)) { p in
@@ -857,28 +937,25 @@ struct MainWindowView: View {
     }
 
     private var addPriorityPopover: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("New priority level").dsSectionLabel()
+        VStack(alignment: .leading, spacing: 12) {
+            editorPreview(icon: "flag.fill", name: newPrioName.isEmpty ? "New priority" : newPrioName,
+                          colorHex: newPrioColor)
+            Divider().overlay(Color.white.opacity(0.1))
+
+            Text("Name").dsSectionLabel()
             TextField("Name", text: $newPrioName)
                 .textFieldStyle(DarkGlassFieldStyle())
-                .frame(width: 180)
+                .frame(width: 200)
                 .onSubmit(commitNewPriority)
-            HStack(spacing: 6) {
-                ForEach(TaskCategory.palette, id: \.self) { hex in
-                    Button { newPrioColor = hex } label: {
-                        Circle()
-                            .fill(Color(hex: hex))
-                            .frame(width: 16, height: 16)
-                            .overlay(Circle().stroke(.white.opacity(newPrioColor == hex ? 0.9 : 0),
-                                                     lineWidth: 2))
-                    }
-                    .buttonStyle(.pressableSubtle)
-                }
-            }
-            Button("Add", action: commitNewPriority)
+
+            Text("Color").dsSectionLabel()
+            colorPalette(current: newPrioColor) { newPrioColor = $0 }
+
+            Button("Add priority", action: commitNewPriority)
                 .disabled(newPrioName.trimmingCharacters(in: .whitespaces).isEmpty)
         }
         .padding(14)
+        .frame(width: 248)
     }
 
     /// Adds a custom level above P1: next rawValue is one past the current max
@@ -886,7 +963,7 @@ struct MainWindowView: View {
     private func commitNewPriority() {
         let name = newPrioName.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return }
-        let raw = (timer.settings.customPriorityLevels.max() ?? 3) + 1
+        let raw = (timer.settings.customPriorityLevels.max() ?? TaskPriority.builtIns.max()!) + 1
         timer.settings.customPriorityLevels.append(raw)
         timer.settings.priorityNames[String(raw)] = name
         timer.settings.priorityColors[String(raw)] = newPrioColor
@@ -898,7 +975,7 @@ struct MainWindowView: View {
     /// Deletes a custom level: its tasks fall back to `.none`, and the level's
     /// rawValue + name/color overrides are dropped. Built-ins can't be deleted.
     private func deletePriorityLevel(_ p: TaskPriority) {
-        guard p.rawValue > 3 else { return }
+        guard p.rawValue > TaskPriority.builtIns.max()! else { return }
         tasks.reassignPriority(from: p, to: .none)
         timer.settings.customPriorityLevels.removeAll { $0 == p.rawValue }
         timer.settings.priorityNames[String(p.rawValue)] = nil
@@ -948,7 +1025,7 @@ struct MainWindowView: View {
             Button { editingPriority = p } label: {
                 Label("Edit…", systemImage: "pencil")
             }
-            if p.rawValue > 3 {
+            if p.rawValue > TaskPriority.builtIns.max()! {
                 Divider()
                 Button(role: .destructive) { deletePriorityLevel(p) } label: {
                     Label("Delete level", systemImage: "trash")
@@ -958,8 +1035,12 @@ struct MainWindowView: View {
     }
 
     private func editPriorityPopover(_ p: TaskPriority) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Edit \(p == .none ? "P4" : timer.settings.priorityShortLabel(p))").dsSectionLabel()
+        VStack(alignment: .leading, spacing: 12) {
+            editorPreview(icon: "flag.fill",
+                          name: timer.settings.priorityName(p),
+                          colorHex: timer.settings.priorityColorHex(p) ?? "#9AA3AF")
+            Divider().overlay(Color.white.opacity(0.1))
+            Text("Name").dsSectionLabel()
             TextField(p.menuLabel, text: Binding(
                 get: { timer.settings.priorityNames[String(p.rawValue)] ?? "" },
                 set: { timer.settings.priorityNames[String(p.rawValue)] =
@@ -1171,9 +1252,7 @@ struct MainWindowView: View {
     /// hang off one left edge — and it doubles as the group's rail tile.
     private func sidebarHeaderLabel(_ title: String, icon: String) -> some View {
         HStack(spacing: 11) {
-            Image(systemName: icon)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.4))
+            CategoryGlyph(symbol: icon, color: .white.opacity(0.4), size: 12)
                 .frame(width: 20, alignment: .center)
             Text(title)
                 .font(.system(size: 13, weight: .semibold, design: .rounded))
@@ -1213,9 +1292,8 @@ struct MainWindowView: View {
                                @ViewBuilder rows: @escaping () -> some View) -> some View {
         Button { railFlyout = railFlyout == key ? nil : key } label: {
             rowShell(help: help) {
-                Image(systemName: icon)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white.opacity(railFlyout == key ? 0.9 : 0.5))
+                CategoryGlyph(symbol: icon,
+                              color: .white.opacity(railFlyout == key ? 0.9 : 0.5), size: 14)
             } trailing: { EmptyView() }
             .transition(.opacity)
             .background(rowSurface("rail:\(key)", selected: railFlyout == key))
@@ -1318,9 +1396,9 @@ struct MainWindowView: View {
             .padding(.top, 40)
             .padding(.bottom, 24)
         case .week:
-            // Full-width — the 7-day board manages its own horizontal layout
+            // Full-width — the boards manage their own horizontal layout
             // rather than the width-capped scaffold used by the other sections.
-            WeeklyBoardView(timer: timer)
+            BoardSectionView(timer: timer)
                 .padding(.horizontal, 28)
                 .padding(.top, 32)
                 .padding(.bottom, 24)

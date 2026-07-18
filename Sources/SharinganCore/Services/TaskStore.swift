@@ -296,7 +296,7 @@ public final class TaskStore: ObservableObject {
 
     /// SF Symbol for a category name.
     public func icon(for name: String) -> String {
-        allCategories.first { $0.name == name }?.icon ?? "folder.fill"
+        allCategories.first { $0.name == name }?.icon ?? TaskCategory.defaultCategoryIcon
     }
 
     /// Adds or updates a category (color and/or icon). Works for presets too —
@@ -371,7 +371,7 @@ public final class TaskStore: ObservableObject {
     public var allProjects: [TaskCategory] {
         var result = customProjects
         for name in tasks.compactMap(\.project) where !result.contains(where: { $0.name == name }) {
-            result.append(.init(name: name, colorHex: "#9AA3AF", icon: "folder.fill"))
+            result.append(.init(name: name, colorHex: "#9AA3AF", icon: TaskCategory.defaultProjectIcon))
         }
         return result.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
@@ -381,7 +381,7 @@ public final class TaskStore: ObservableObject {
     }
 
     public func projectIcon(_ name: String) -> String {
-        allProjects.first { $0.name == name }?.icon ?? "folder.fill"
+        allProjects.first { $0.name == name }?.icon ?? TaskCategory.defaultProjectIcon
     }
 
     /// Adds or updates a project's colour/icon. Returns the resolved name.
@@ -641,6 +641,7 @@ public final class TaskStore: ObservableObject {
         copy.pomodorosDone = 0
         copy.completedAt = nil
         copy.createdAt = Date()
+        copy.number = 0        // a copy is a new task — persist() assigns it the next code, not the original's
         for k in copy.subtasks.indices {
             copy.subtasks[k].id = UUID()
             copy.subtasks[k].isDone = false
@@ -751,6 +752,33 @@ public final class TaskStore: ObservableObject {
     public var unscheduledTasks: [TaskItem] {
         tasks.filter { $0.trashedAt == nil && !$0.isDone && $0.plannedDate == nil }
             .sorted(by: Self.inListOrder)
+    }
+
+    /// Open tasks due on the given day, in list order — the weekly board draws
+    /// its columns by due date, so a card sits under whichever day its deadline
+    /// falls on. Trashed tasks are excluded.
+    public func tasksDue(on day: Date) -> [TaskItem] {
+        let cal = Calendar.current
+        return tasks
+            .filter { $0.trashedAt == nil && !$0.isDone
+                && ($0.dueDate.map { cal.isDate($0, inSameDayAs: day) } ?? false) }
+            .sorted(by: Self.inListOrder)
+    }
+
+    /// Open tasks with no due date — the weekly board's backlog column when it
+    /// is organized by due date.
+    public var undatedTasks: [TaskItem] {
+        tasks.filter { $0.trashedAt == nil && !$0.isDone && $0.dueDate == nil }
+            .sorted(by: Self.inListOrder)
+    }
+
+    /// Clears a task's due date (dragging a card back onto the backlog column).
+    /// Cancels any pending deadline reminders and persists.
+    public func clearDueDate(_ id: UUID) {
+        guard let i = tasks.firstIndex(where: { $0.id == id }) else { return }
+        tasks[i].dueDate = nil
+        cancelDueNotifications(for: id)
+        persist()
     }
 
     public func toggleDone(_ id: UUID) {
@@ -1029,6 +1057,27 @@ public final class TaskStore: ObservableObject {
         persist()
     }
 
+    /// Moves a task to a board column. `markDone` reflects the destination
+    /// column's role — a `.done` column completes the task, any other column
+    /// reopens a previously-done one — so dragging a card is fully reversible.
+    public func setBoardColumn(_ id: UUID, columnID: String?, markDone: Bool) {
+        guard let i = tasks.firstIndex(where: { $0.id == id }) else { return }
+        tasks[i].boardColumnID = columnID
+        if tasks[i].isDone != markDone { toggleDone(id) }  // keeps completedAt / reminders in sync
+        persist()
+    }
+
+    /// One-time backfill when the board columns first appear: completed tasks
+    /// land in the Done column, everything else stays unassigned (first column).
+    /// Idempotent — only touches tasks with no column yet.
+    public func backfillBoardColumns(doneColumnID: String) {
+        var changed = false
+        for i in tasks.indices where tasks[i].boardColumnID == nil {
+            if tasks[i].isDone { tasks[i].boardColumnID = doneColumnID; changed = true }
+        }
+        if changed { persist() }
+    }
+
     /// Bring a trashed task back to its lists.
     public func restore(_ id: UUID) {
         guard let i = tasks.firstIndex(where: { $0.id == id }) else { return }
@@ -1196,6 +1245,14 @@ public final class TaskStore: ObservableObject {
     /// picks up the step's pomodoro size (via `resolvedActiveKind`); otherwise
     /// focus the task itself. All the play/start entry points route through here.
     public func selectFocusTarget(_ taskID: UUID) {
+        // Preserve an explicitly-chosen, still-open subtask target: pressing play
+        // on a task whose step the user already aimed at must keep that step, not
+        // snap back to the first open one.
+        if activeTaskID == taskID, let sid = activeSubtaskID,
+           let sub = tasks.first(where: { $0.id == taskID })?.subtasks.first(where: { $0.id == sid }),
+           !sub.isDone {
+            return
+        }
         let firstOpen = tasks.first { $0.id == taskID }?
             .subtasks.first { !$0.isDone }?.id
         setActiveSubtask(taskID: taskID, subtaskID: firstOpen)
@@ -1233,8 +1290,31 @@ public final class TaskStore: ObservableObject {
         // predate numbering show a code the moment the app opens. It writes the
         // number column only — no modifiedAt, nothing pushed to sync.
         if assignMissingNumbers() { database?.backfillNumbers(tasks) }
+        migratePriorityScheme()
         persistedTaskHashes = Dictionary(uniqueKeysWithValues:
             tasks.map { ($0.id, $0.contentHash) })
+    }
+
+    /// One-time shift from the old 4-level priority scheme (none=0, low=1,
+    /// medium=2, high=3, customs 4+) to the 5-level P1–P5 scheme (Lowest=1 …
+    /// Critical=5, customs 6+). Every flagged task keeps its name and rank: the
+    /// built-ins slide up one (1→2, 2→3, 3→4) to make room for the new Lowest at
+    /// the bottom and Critical at the top; old custom levels (4+) slide up two.
+    /// Guarded by a defaults flag so it runs exactly once.
+    private func migratePriorityScheme() {
+        let key = "sharingan.priority.scheme.v2"
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: key) else { return }
+        defaults.set(true, forKey: key)
+        var changed = false
+        for i in tasks.indices {
+            let raw = tasks[i].priority.rawValue
+            guard raw >= 1 else { continue }
+            let newRaw = raw <= 3 ? raw + 1 : raw + 2
+            tasks[i].priority = TaskPriority(rawValue: newRaw)
+            changed = true
+        }
+        if changed { persist() }
     }
 
     /// Hands an issue number to every task that lacks one. This is the single

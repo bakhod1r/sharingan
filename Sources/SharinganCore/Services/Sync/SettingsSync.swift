@@ -65,6 +65,7 @@ public enum SettingsSync {
         "tasks.subtaskSortMode",
         "report.sortMode",
         TaskStore.preReminderDefaultsKey,    // "sharingan.task.preReminderMinutes"
+        BoardColumnStore.defaultsKey,        // "board.columns" — custom board columns
     ]
 
     /// Copies every allowlisted key that has a local value up to the KV store.

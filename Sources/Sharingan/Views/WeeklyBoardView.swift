@@ -62,10 +62,10 @@ struct WeeklyBoardView: View {
     /// Count of open tasks planned within the visible week — filtered, so the
     /// header agrees with the cards actually on the board.
     private var plannedThisWeek: Int {
-        days.reduce(0) { $0 + boardItems(store.tasksPlanned(on: $1)).count }
+        days.reduce(0) { $0 + boardItems(store.tasksDue(on: $1)).count }
     }
 
-    private var hasAnyOpenTask: Bool { store.tasks.contains { !$0.isDone } }
+    private var hasAnyOpenTask: Bool { store.tasks.contains { !$0.isDone && $0.trashedAt == nil } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -218,22 +218,22 @@ struct WeeklyBoardView: View {
     // MARK: - Columns
 
     private var backlogColumn: some View {
-        let items = boardItems(store.unscheduledTasks)
+        let items = boardItems(store.undatedTasks)
         return columnContainer(
             id: "unscheduled", isToday: false, isWeekend: false,
             header: AnyView(backlogHeader(count: items.count)),
             items: items,
-            onDrop: { store.setPlannedDate($0, nil) })
+            onDrop: { store.clearDueDate($0) })
     }
 
     private func dayColumn(_ day: Date) -> some View {
-        let items = boardItems(store.tasksPlanned(on: day))
+        let items = boardItems(store.tasksDue(on: day))
         let isToday = cal.isDateInToday(day)
         return columnContainer(
             id: dayKey(day), isToday: isToday, isWeekend: cal.isDateInWeekend(day),
             header: AnyView(dayHeader(day, isToday: isToday, count: items.count)),
             items: items,
-            onDrop: { store.setPlannedDate($0, day) })
+            onDrop: { store.snooze($0, to: day) })
     }
 
     private func backlogHeader(count: Int) -> some View {
@@ -477,8 +477,8 @@ struct WeeklyBoardView: View {
                     }
                 }
             } label: { Label("Priority", systemImage: "flag.fill") }
-            Button { store.setPlannedDate(task.id, nil) } label: {
-                Label("Unschedule", systemImage: "calendar.badge.minus")
+            Button { store.clearDueDate(task.id) } label: {
+                Label("Clear date", systemImage: "calendar.badge.minus")
             }
             Divider()
             Button(role: .destructive) { store.delete(task.id) } label: {

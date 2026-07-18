@@ -1075,3 +1075,91 @@ struct NotchTaskRowSizingTests {
         }
     }
 }
+
+/// The animating-silhouette morph's safety contract, in the row where it is
+/// safety: within the **menu-bar row**, every intermediate shape (frame and
+/// silhouette lerped together, as the critically damped springs do) is
+/// contained in the union of the two endpoint paths — which the union-mask
+/// hold (`hitTest(_:metrics:size:holdSize:config:)`) claims for the morph's
+/// duration, so no frame of the morph paints black over a menu-bar pixel the
+/// mask calls click-through. Below the menu bar the intermediate body can
+/// transiently poke outside the union (wide-and-short morphing to
+/// narrow-and-tall); those pixels sit over the desktop, are click-through,
+/// and are the same cosmetic overhang the pre-morph design already accepted.
+@Suite("Notch morph mask safety")
+struct NotchMorphMaskTests {
+    static let m = NotchScreenMetrics(screenWidth: 1512, menuBarHeight: 37,
+                                      notchWidth: 200, notchHeight: 37)
+
+    private func lerp(_ a: CGFloat, _ b: CGFloat, _ t: CGFloat) -> CGFloat {
+        a + (b - a) * t
+    }
+
+    private func lerp(_ a: CGRect, _ b: CGRect, _ t: CGFloat) -> CGRect {
+        CGRect(x: lerp(a.minX, b.minX, t), y: lerp(a.minY, b.minY, t),
+               width: lerp(a.width, b.width, t), height: lerp(a.height, b.height, t))
+    }
+
+    private func lerp(_ a: NotchSilhouette, _ b: NotchSilhouette,
+                      _ t: CGFloat) -> NotchSilhouette {
+        NotchSilhouette(stemWidth: lerp(a.stemWidth, b.stemWidth, t),
+                        bodyTop: lerp(a.bodyTop, b.bodyTop, t),
+                        cornerRadius: lerp(a.cornerRadius, b.cornerRadius, t),
+                        bodyTopRadius: a.bodyTopRadius,
+                        filletRadius: lerp(a.filletRadius, b.filletRadius, t))
+    }
+
+    private func assertMorphContained(from: NotchHUDSize, to: NotchHUDSize) {
+        let a = NotchGeometry.layout(Self.m, size: from)
+        let b = NotchGeometry.layout(Self.m, size: to)
+        let pathA = NotchGeometry.islandPath(in: a.island, silhouette: a.silhouette)
+        let pathB = NotchGeometry.islandPath(in: b.island, silhouette: b.silhouette)
+
+        for t in [CGFloat(0.25), 0.5, 0.75] {
+            let rect = lerp(a.island, b.island, t)
+            let mid = NotchGeometry.islandPath(
+                in: rect, silhouette: lerp(a.silhouette, b.silhouette, t))
+            // A grid over the intermediate rect's menu-bar row: every point the
+            // intermediate shape paints there must be inside one of the
+            // endpoint masks — that row is live menu-bar real estate.
+            let menuBar: CGFloat = 37
+            for xi in 0...80 {
+                for yi in 0...20 {
+                    let p = CGPoint(x: rect.minX + rect.width * CGFloat(xi) / 80,
+                                    y: rect.minY + menuBar * CGFloat(yi) / 20)
+                    if mid.contains(p) {
+                        #expect(pathA.contains(p) || pathB.contains(p),
+                                "escaped union at t=\(t), point \(p), \(from)→\(to)")
+                    }
+                }
+            }
+        }
+    }
+
+    @Test("intermediate morph shapes stay inside the union of the endpoints")
+    func morphIsContainedInUnion() {
+        assertMorphContained(from: .live, to: .expanded)
+        assertMorphContained(from: .idle, to: .expanded)
+        assertMorphContained(from: .expanded, to: .live)
+        assertMorphContained(from: .live, to: .activity)
+    }
+
+    @Test("the union hit test honors the held state's mask, and only then")
+    func unionHitTest() {
+        let expanded = NotchGeometry.layout(Self.m, size: .expanded)
+        // A point in the expanded body, well below the menu bar and off the
+        // live island entirely.
+        let p = CGPoint(x: expanded.island.midX - 200, y: expanded.island.maxY - 20)
+
+        #expect(NotchGeometry.hitTest(p, metrics: Self.m, size: .expanded))
+        #expect(!NotchGeometry.hitTest(p, metrics: Self.m, size: .live))
+        #expect(NotchGeometry.hitTest(p, metrics: Self.m, size: .live,
+                                      holdSize: .expanded))
+        #expect(!NotchGeometry.hitTest(p, metrics: Self.m, size: .live,
+                                       holdSize: nil))
+        // A held `.hidden` contributes nothing.
+        let hiddenHold = NotchGeometry.hitTest(p, metrics: Self.m, size: .live,
+                                               holdSize: .hidden)
+        #expect(!hiddenHold)
+    }
+}

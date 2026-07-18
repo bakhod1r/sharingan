@@ -1933,6 +1933,8 @@ struct TasksView: View {
                         Image(systemName: sub.isDone ? "checkmark.circle.fill" : "circle")
                             .font(.system(size: 13))
                             .foregroundStyle(sub.isDone ? Color.green : .secondary)
+                            .frame(width: 22, height: 22)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.pressableSubtle)
                     .accessibilityLabel(sub.isDone ? "Mark \(sub.title) not done" : "Mark \(sub.title) done")
@@ -1971,6 +1973,8 @@ struct TasksView: View {
                             Image(systemName: isTarget ? "scope" : "circle.dashed")
                                 .font(.system(size: 11))
                                 .foregroundStyle(isTarget ? Color.accentColor : .secondary)
+                                .frame(width: 22, height: 22)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.pressableSubtle)
                         .help("Focus pomodoros credit this step")
@@ -1980,6 +1984,8 @@ struct TasksView: View {
                     Button { store.deleteSubtask(task.id, sub.id) } label: {
                         Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
                             .foregroundStyle(.secondary)
+                            .frame(width: 22, height: 22)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.pressableSubtle)
                     .accessibilityLabel("Delete subtask \(sub.title)")
@@ -2177,6 +2183,25 @@ struct TasksView: View {
                 .buttonStyle(.pressableSubtle)
                 .help("Open task details")
                 .accessibilityLabel("Open details for \(task.title)")
+            }
+
+            // Hover-revealed disclosure chevron: hovering any row reveals a
+            // chevron.down that toggles the inline subtasks/notes panel (where
+            // steps are viewed *and added*); it flips to point up while open.
+            // (Notch and widget stay chevron-free — full-width surfaces only.)
+            if hovered || expanded.contains(task.id) {
+                Button { toggleExpanded(task) } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(expanded.contains(task.id) ? accent : Color.dsTertiary)
+                        .rotationEffect(.degrees(expanded.contains(task.id) ? 180 : 0))
+                        .frame(width: 20, height: 20)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.pressableSubtle)
+                .help(expanded.contains(task.id) ? "Hide subtasks & notes" : "Show subtasks & notes")
+                .accessibilityLabel("Toggle subtasks and notes for \(task.title)")
+                .transition(.opacity)
             }
 
             // Every secondary action — including the subtasks/notes expander

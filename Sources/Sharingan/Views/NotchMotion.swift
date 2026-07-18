@@ -44,24 +44,25 @@ final class ReduceMotionMonitor: ObservableObject {
 /// asymmetric one (opening carries mass, closing gets out of the way), and it
 /// works under a constraint no other surface has:
 ///
-/// **The hit-test mask does not animate.** `NotchGeometry.hitTest` masks against
-/// the island silhouette for the *current* `NotchHUDSize` and flips the instant
-/// the state does — while these springs are still running. So every spring that
-/// touches the island's **frame** here is critically damped (`dampingFraction`
-/// 1.0 → monotone, provably no overshoot) and every scale on it is ≤ 1: the
-/// drawn shape approaches `layout.island` from the inside and never grows past
-/// it. The overshoot that sells "mass" lives only where it cannot escape that
-/// rect — the anticipation squash (which only ever scales *down*), and the
-/// content, which is clipped to the silhouette.
+/// **The hit-test mask holds the union of both morph endpoints.** The whole
+/// silhouette animates now (`IslandShape` — stem, body top, fillet, corner all
+/// interpolate, so opening reads as the notch itself expanding and closing as
+/// the exact reverse). That is safe under two conditions this file enforces:
 ///
-/// Since the island became a **T** — a cutout-wide stem through the menu-bar row
-/// and a body below it — that rect is no longer the whole story: the mask is a
-/// non-convex *path* cut from it, and the menu-bar strip either side of the stem
-/// is outside both. The spring that would break it is not here but in
-/// `IslandShape`, and it is the one that does not exist: the silhouette's stem
-/// and body-top are deliberately **not** animatable, so they flip with the mask
-/// while the frame springs inside it. Read `IslandShape` before adding a spring
-/// to the shape's geometry.
+/// 1. Every spring that touches the island's frame or silhouette is critically
+///    damped (`dampingFraction` 1.0 → monotone, provably no overshoot) and
+///    every scale on it is ≤ 1 — so in the menu-bar row, the only row where a
+///    stray black pixel covers something clickable, every intermediate shape
+///    is contained in the union of the two endpoint paths.
+/// 2. For the morph's duration the mask honors *both* endpoints
+///    (`NotchHUDModel.maskHoldSize`, cleared by the manager after
+///    `windowShrinkDelay` — the same clock the window's shrink runs on).
+///
+/// The overshoot that sells "mass" still lives only where it cannot escape the
+/// silhouette — the anticipation squash (which only ever scales *down*), and
+/// the content, which is clipped. Read `IslandShape` before loosening any
+/// damping here: an underdamped shape spring would overshoot the union and
+/// paint black over click-through menu-bar pixels.
 enum NotchMotion {
 
     // MARK: - The shape
@@ -151,9 +152,10 @@ enum NotchMotion {
     /// so the panel assembles instead of blinking. 4 sections × 35ms = 105ms of
     /// stagger; the last one lands ~400ms in, inside the 450ms budget.
     static let stagger: Double = 0.035
-    /// Arriving content starts a touch small and a touch low, then settles: the
-    /// slight overshoot (damping 0.78) is safe because content is clipped to the
-    /// silhouette.
+    /// Arriving content starts a touch small and a touch *high* — it pours down
+    /// out of the notch with the widening cap, not up from below — then
+    /// settles: the slight overshoot (damping 0.78) is safe because content is
+    /// clipped to the silhouette.
     static let arriveScale: Double = 0.96
     static let arriveDrift: CGFloat = 6
     /// Leaving content just fades, fast — it has to be gone before the shape is.
@@ -185,6 +187,31 @@ enum NotchMotion {
     static func earArrival(reduceMotion: Bool) -> Animation {
         guard !reduceMotion else { return .easeInOut(duration: reducedCrossfade) }
         return .spring(response: 0.32, dampingFraction: 0.82).delay(contentLead)
+    }
+
+    // MARK: - The top cap
+
+    /// The expanded panel's top cap doesn't blink into place: it starts
+    /// squeezed to the cutout's width — hidden behind the hardware notch — and
+    /// *stretches out of it* on this spring. The black stem underneath now
+    /// widens on the shape's own spring (`openResponse`/`shapeDamping`), so the
+    /// cap rides exactly that curve — a softer or slower cap would visibly
+    /// shear against the silhouette it is supposed to be the surface of. No
+    /// delay — the widening IS the opening, it must move with the shape's
+    /// first frame, not after it.
+    static func shoulderEmerge(reduceMotion: Bool) -> Animation {
+        guard !reduceMotion else { return .easeInOut(duration: reducedCrossfade) }
+        return .spring(response: openResponse, dampingFraction: shapeDamping)
+    }
+
+    /// … and the reverse on close: the cap sweeps back into the cutout on the
+    /// shape's own closing clock (same response, no lead — the top row must
+    /// narrow *with* the body's collapse, not linger over the menu bar after
+    /// it). Critically damped: this drives a removal transition, and any
+    /// overshoot would flash the cap back over pixels already given back.
+    static func capRetract(reduceMotion: Bool) -> Animation {
+        guard !reduceMotion else { return .easeInOut(duration: reducedCrossfade) }
+        return .spring(response: closeResponse, dampingFraction: shapeDamping)
     }
 
     // MARK: - The progress line
@@ -277,7 +304,9 @@ extension View {
         return self
             .opacity(shown ? 1 : 0)
             .scaleEffect(settled ? 1 : NotchMotion.arriveScale, anchor: .top)
-            .offset(y: settled ? 0 : NotchMotion.arriveDrift)
+            // From *above*: the content emerges downward out of the notch,
+            // matching the cap's widening, instead of floating up from below.
+            .offset(y: settled ? 0 : -NotchMotion.arriveDrift)
             .animation(NotchMotion.arrival(section: section, reduceMotion: reduceMotion),
                        value: shown)
     }

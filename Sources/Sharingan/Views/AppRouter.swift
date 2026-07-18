@@ -47,6 +47,9 @@ final class AppRouter: ObservableObject {
     /// One-shot "open the bulk-import sheet" — set by File ▸ Import Tasks…,
     /// consumed by TasksView like the filters.
     @Published var openTaskImport = false
+    /// One-shot "land the Board section on this tab" — set by callers that want
+    /// a specific board (e.g. Timeline), consumed by BoardSectionView.
+    @Published var pendingBoardTab: BoardTab?
 
     /// Bumped whenever Settings is (re)opened from outside — the sidebar row,
     /// the menu-bar gear — so SettingsView pops any open sub-page back to the
@@ -80,5 +83,11 @@ final class AppRouter: ObservableObject {
     func revealTask(_ id: UUID) {
         pendingRevealTaskID = id
         section = .tasks
+    }
+
+    /// Jump to the Board section, optionally landing on a specific tab.
+    func openBoard(tab: BoardTab? = nil) {
+        pendingBoardTab = tab
+        section = .week
     }
 }

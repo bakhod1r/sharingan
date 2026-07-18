@@ -956,6 +956,11 @@ struct SettingsView: View {
                                   isOn: $settings.notchShowQuickActions)
                         ToggleRow(title: "Blocking and streak strip",
                                   isOn: $settings.notchShowStatusStrip)
+                        ToggleRow(title: "Sharingan iris on the ears",
+                                  isOn: $settings.notchShowIris)
+                        Text("A slowly spinning Sharingan iris on each ear either side of the notch, in your chosen eye styles.")
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.6))
                         Text("The island is sized to fit exactly what you leave on, so switching a section off gives that black back to your screen rather than emptying it.")
                             .font(.system(.caption2, design: .rounded))
                             .foregroundStyle(.white.opacity(0.6))

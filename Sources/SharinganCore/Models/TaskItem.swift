@@ -13,11 +13,19 @@ public struct Subtask: Identifiable, Codable, Equatable, Sendable {
     public var pomodoroKind: PomodoroKind?
     /// Per-step priority flag (`.none` = unflagged, the default).
     public var priority: TaskPriority
+    /// Jira issue key when this subtask mirrors a Jira sub-task issue, e.g.
+    /// WT-702. Lets worklog and status changes target the sub-task issue itself,
+    /// not just its parent. nil for ordinary local subtasks.
+    public var jiraKey: String?
+    /// Jira's stable issue ID for the mirrored sub-task.
+    public var jiraIssueID: String?
 
     public init(id: UUID = UUID(), title: String, isDone: Bool = false,
                 estimatedPomodoros: Int? = nil, pomodorosDone: Int = 0,
                 pomodoroKind: PomodoroKind? = nil,
-                priority: TaskPriority = .none) {
+                priority: TaskPriority = .none,
+                jiraKey: String? = nil,
+                jiraIssueID: String? = nil) {
         self.id = id
         self.title = title
         self.isDone = isDone
@@ -25,7 +33,12 @@ public struct Subtask: Identifiable, Codable, Equatable, Sendable {
         self.pomodorosDone = pomodorosDone
         self.pomodoroKind = pomodoroKind
         self.priority = priority
+        self.jiraKey = jiraKey
+        self.jiraIssueID = jiraIssueID
     }
+
+    /// True when this subtask mirrors a Jira sub-task issue.
+    public var isJiraLinked: Bool { jiraKey?.isEmpty == false }
 
     // Pomodoro/priority fields were added after subtasks first shipped —
     // decode them as optional so older persisted rows (subtasks JSON column)
@@ -39,6 +52,8 @@ public struct Subtask: Identifiable, Codable, Equatable, Sendable {
         pomodorosDone = try c.decodeIfPresent(Int.self, forKey: .pomodorosDone) ?? 0
         pomodoroKind = ((try? c.decodeIfPresent(PomodoroKind.self, forKey: .pomodoroKind)) ?? nil)
         priority = try c.decodeIfPresent(TaskPriority.self, forKey: .priority) ?? .none
+        jiraKey = try c.decodeIfPresent(String.self, forKey: .jiraKey)
+        jiraIssueID = try c.decodeIfPresent(String.self, forKey: .jiraIssueID)
     }
 }
 
@@ -164,10 +179,15 @@ public struct TaskPriority: RawRepresentable, Codable, Hashable, Sendable, Ident
 
     public var id: Int { rawValue }
 
-    public static let none   = TaskPriority(rawValue: 0)   // P4 — no flag
-    public static let low    = TaskPriority(rawValue: 1)   // P3 — blue
-    public static let medium = TaskPriority(rawValue: 2)   // P2 — orange
-    public static let high   = TaskPriority(rawValue: 3)   // P1 — red
+    public static let none     = TaskPriority(rawValue: 0)   // no flag
+    public static let lowest   = TaskPriority(rawValue: 1)   // P5 — teal
+    public static let low      = TaskPriority(rawValue: 2)   // P4 — blue
+    public static let medium   = TaskPriority(rawValue: 3)   // P3 — amber
+    public static let high     = TaskPriority(rawValue: 4)   // P2 — orange
+    public static let critical = TaskPriority(rawValue: 5)   // P1 — red
+
+    /// The built-in flagged levels, lowest raw first.
+    public static let builtIns: [Int] = [1, 2, 3, 4, 5]
 
     // Encode/decode as a single bare Int (matching the old enum) so old data
     // round-trips identically. The default struct synthesis would emit a
@@ -183,16 +203,17 @@ public struct TaskPriority: RawRepresentable, Codable, Hashable, Sendable, Ident
     /// All levels, most-urgent first, ending with `.none`. Built-ins (1…3)
     /// plus the user's custom levels (rawValues stored in settings).
     public static func levels(custom: [Int]) -> [TaskPriority] {
-        let flagged = ([1, 2, 3] + custom).sorted(by: >).map(TaskPriority.init(rawValue:))
+        let flagged = (builtIns + custom).sorted(by: >).map(TaskPriority.init(rawValue:))
         return flagged + [.none]
     }
 
-    /// "P1"…"P4" for the built-ins. Custom levels have no fixed rank in
-    /// isolation — UI shows their rank via `PomodoroSettings.priorityShortLabel`.
+    /// "P1"…"P5" for the built-ins (P1 = most urgent = highest raw). Custom
+    /// levels have no fixed rank in isolation — UI shows their rank via
+    /// `PomodoroSettings.priorityShortLabel`.
     public var label: String {
         switch rawValue {
-        case 0...3: return "P\(4 - rawValue)"
-        default:    return "P!"
+        case 1...5: return "P\(6 - rawValue)"
+        default:    return rawValue == 0 ? "" : "P!"
         }
     }
 
@@ -201,9 +222,11 @@ public struct TaskPriority: RawRepresentable, Codable, Hashable, Sendable, Ident
     public var menuLabel: String {
         switch rawValue {
         case 0:  return "No priority"
-        case 1:  return "P3 · Low"
-        case 2:  return "P2 · Medium"
-        case 3:  return "P1 · Urgent"
+        case 1:  return "P5 · Lowest"
+        case 2:  return "P4 · Low"
+        case 3:  return "P3 · Medium"
+        case 4:  return "P2 · High"
+        case 5:  return "P1 · Critical"
         default: return "Custom"
         }
     }
@@ -212,9 +235,11 @@ public struct TaskPriority: RawRepresentable, Codable, Hashable, Sendable, Ident
     /// (whose colors live in settings, read via `priorityColorHex`).
     public var colorHex: String? {
         switch rawValue {
-        case 1:  return "#4F8DFD"
-        case 2:  return "#FFB020"
-        case 3:  return "#FF5E5B"
+        case 1:  return "#34C7B5"   // Lowest — teal
+        case 2:  return "#4F8DFD"   // Low — blue
+        case 3:  return "#FFB020"   // Medium — amber
+        case 4:  return "#FF8A3D"   // High — orange
+        case 5:  return "#FF5E5B"   // Critical — red
         default: return nil
         }
     }
@@ -253,6 +278,19 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
     public var completedAt: Date?
     /// Pomodoro size to run against this task (nil = app default).
     public var pomodoroKind: PomodoroKind?
+    /// Jira issue key, e.g. SHR-123.
+    public var jiraKey: String?
+    /// Jira's stable issue ID string.
+    public var jiraIssueID: String?
+    /// Site host only (not a full URL), e.g. example.atlassian.net.
+    public var jiraSiteHost: String?
+    /// The Jira issue type this task came from ("Epic", "Story", "Bug", "Task",
+    /// "Sub-task"). Drives the type badge; nil for tasks not from Jira.
+    public var jiraIssueType: String?
+
+    /// Which Sharingan-board column this task sits in (`BoardColumn.id`).
+    /// `nil` renders in the first column. Local + synced (CloudKit field).
+    public var boardColumnID: String?
     /// When the task was moved to Trash (nil = live). A trashed task stays in
     /// the store so it can be restored, but every normal query filters it out.
     public var trashedAt: Date?
@@ -288,6 +326,11 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
                 priority: TaskPriority = .none,
                 completedAt: Date? = nil,
                 pomodoroKind: PomodoroKind? = nil,
+                jiraKey: String? = nil,
+                jiraIssueID: String? = nil,
+                jiraSiteHost: String? = nil,
+                jiraIssueType: String? = nil,
+                boardColumnID: String? = nil,
                 trashedAt: Date? = nil,
                 originDevice: String = DeviceIdentity.name,
                 number: Int = 0) {
@@ -310,6 +353,11 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         self.priority = priority
         self.completedAt = completedAt
         self.pomodoroKind = pomodoroKind
+        self.jiraKey = jiraKey
+        self.jiraIssueID = jiraIssueID
+        self.jiraSiteHost = jiraSiteHost
+        self.jiraIssueType = jiraIssueType
+        self.boardColumnID = boardColumnID
         self.trashedAt = trashedAt
         self.originDevice = originDevice
         self.number = number
@@ -341,6 +389,11 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         priority = try c.decodeIfPresent(TaskPriority.self, forKey: .priority) ?? .none
         completedAt = try c.decodeIfPresent(Date.self, forKey: .completedAt)
         pomodoroKind = ((try? c.decodeIfPresent(PomodoroKind.self, forKey: .pomodoroKind)) ?? nil)
+        jiraKey = try c.decodeIfPresent(String.self, forKey: .jiraKey)
+        jiraIssueID = try c.decodeIfPresent(String.self, forKey: .jiraIssueID)
+        jiraSiteHost = try c.decodeIfPresent(String.self, forKey: .jiraSiteHost)
+        jiraIssueType = try c.decodeIfPresent(String.self, forKey: .jiraIssueType)
+        boardColumnID = try c.decodeIfPresent(String.self, forKey: .boardColumnID)
         trashedAt = try c.decodeIfPresent(Date.self, forKey: .trashedAt)
         // Older records predate origin tracking — attribute them to this Mac.
         originDevice = try c.decodeIfPresent(String.self, forKey: .originDevice) ?? DeviceIdentity.name
@@ -455,6 +508,16 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         guard let plannedDate else { return false }
         return Calendar.current.isDate(plannedDate, inSameDayAs: now)
     }
+
+    public var isJiraLinked: Bool {
+        guard let jiraKey, let jiraSiteHost else { return false }
+        return !jiraKey.isEmpty && !jiraSiteHost.isEmpty
+    }
+
+    public var jiraBrowseURL: URL? {
+        guard let jiraKey, let jiraSiteHost, !jiraKey.isEmpty, !jiraSiteHost.isEmpty else { return nil }
+        return URL(string: "https://\(jiraSiteHost)/browse/\(jiraKey)")
+    }
 }
 
 /// A named, color-coded, icon-tagged bucket for tasks.
@@ -499,11 +562,20 @@ public struct TaskCategory: Identifiable, Codable, Equatable, Sendable {
         "#FFB020", "#22C3B8", "#FF6B5E", "#9AA3AF",
     ]
 
-    /// SF Symbols offered when choosing a category icon.
+    /// Default fallback icon for a category with no custom icon set — the
+    /// connected-nodes graph glyph.
+    public static let defaultCategoryIcon = "point.3.connected.trianglepath.dotted"
+    /// Default fallback icon for a project with no custom icon set — the grid.
+    public static let defaultProjectIcon = "square.grid.2x2.fill"
+
+    /// SF Symbols offered when choosing a category or project icon. The graph
+    /// and grid glyphs lead so the two new defaults are one tap away.
     public static let iconChoices: [String] = [
+        "point.3.connected.trianglepath.dotted", "square.grid.2x2.fill",
         "briefcase.fill", "book.fill", "person.fill", "heart.fill",
         "folder.fill", "star.fill", "flame.fill", "bolt.fill",
         "cart.fill", "house.fill", "gamecontroller.fill", "dumbbell.fill",
         "cup.and.saucer.fill", "airplane", "pencil", "paintbrush.fill",
+        "graduationcap.fill", "chart.bar.fill", "tag.fill", "flag.fill",
     ]
 }

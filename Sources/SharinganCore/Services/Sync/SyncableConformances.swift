@@ -16,7 +16,9 @@ extension TaskItem: SyncableRecord {
             plannedDate: plannedDate, notes: notes, subtasks: subtasks,
             recurrence: recurrence.stringValue, project: project,
             priority: priority.rawValue, completedAt: completedAt,
-            pomodoroKind: pomodoroKind?.rawValue, trashedAt: trashedAt))
+            pomodoroKind: pomodoroKind?.rawValue, jiraKey: jiraKey,
+            jiraIssueID: jiraIssueID, jiraSiteHost: jiraSiteHost,
+            boardColumnID: boardColumnID, trashedAt: trashedAt))
     }
 
     // originDevice and number are deliberately NOT hashed: both are immutable
@@ -32,7 +34,8 @@ extension TaskItem: SyncableRecord {
         let sortOrder: Int, estimatedPomodoros: Int?, plannedDate: Date?
         let notes: String, subtasks: [Subtask], recurrence: String
         let project: String?, priority: Int, completedAt: Date?, pomodoroKind: String?
-        let trashedAt: Date?
+        let jiraKey: String?, jiraIssueID: String?, jiraSiteHost: String?
+        let boardColumnID: String?, trashedAt: Date?
     }
 }
 

@@ -325,6 +325,10 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     public var notchShowTasks: Bool = true
     public var notchShowQuickActions: Bool = true
     public var notchShowStatusStrip: Bool = true
+    /// Whether the expanded notch panel wears a spinning Sharingan iris on each
+    /// of the two ears either side of the cutout. Cosmetic — off leaves the ears
+    /// as plain body-tone shoulders.
+    public var notchShowIris: Bool = true
     /// How many of today's tasks the island lists. Clamped to
     /// `NotchContentConfig.taskRowRange` — the range the panel was measured for.
     public var notchTaskRows: Int = NotchTaskRows.defaultLimit
@@ -494,6 +498,7 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
         notchShowTasks = try c.decodeIfPresent(Bool.self, forKey: .notchShowTasks) ?? d.notchShowTasks
         notchShowQuickActions = try c.decodeIfPresent(Bool.self, forKey: .notchShowQuickActions) ?? d.notchShowQuickActions
         notchShowStatusStrip = try c.decodeIfPresent(Bool.self, forKey: .notchShowStatusStrip) ?? d.notchShowStatusStrip
+        notchShowIris = try c.decodeIfPresent(Bool.self, forKey: .notchShowIris) ?? d.notchShowIris
         notchTaskRows = try c.decodeIfPresent(Int.self, forKey: .notchTaskRows) ?? d.notchTaskRows
     }
 

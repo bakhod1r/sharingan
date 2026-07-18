@@ -243,7 +243,7 @@ public enum NotchGeometry {
     /// The expanded island's width. Everything below is measured *at* this
     /// width — a wider island would rewrap nothing (every row is `lineLimit(1)`)
     /// but a narrower one would, so the width is part of the contract.
-    public static let expandedWidth: CGFloat = 340
+    public static let expandedWidth: CGFloat = 510
     public static let earWidth: CGFloat = 78
     /// The **live** island is the cutout plus this lip — the strip the
     /// progress line runs along. Idle grows no lip at all: it is exactly the
@@ -265,8 +265,9 @@ public enum NotchGeometry {
     /// (`idle`, the bare cutout; `live`, the cutout plus its 4pt lip).
     public static let cornerRadius: CGFloat = 14
     /// … and the radius of the tall one. The expanded panel wearing the notch's
-    /// 14pt corner looks pinched; 22pt reads as the same shape, grown.
-    public static let maxCornerRadius: CGFloat = 22
+    /// 14pt corner looks pinched; 26pt reads as the same shape, grown — the
+    /// softer, rounder body of the NotchNook reference.
+    public static let maxCornerRadius: CGFloat = 26
 
     // MARK: - The T
     //
@@ -279,7 +280,24 @@ public enum NotchGeometry {
     // into the desktop below it.
 
     /// The body's outer top corners, where it meets the bottom of the menu bar.
-    public static let bodyTopRadius: CGFloat = 12
+    /// Rounded so the panel flares naturally out of the hardware notch (the
+    /// Boring-Notch/NotchNook look) rather than as a hard-edged slab.
+    ///
+    /// Squared (0): while expanded the two menu-bar-row shoulders are painted in
+    /// the body tone (`expandedShoulders`), so the panel's *visible* top edge is
+    /// the shoulders' — full width, flush under the menu bar, with the rounded
+    /// outer corners provided there. A rounded body-top here would leave a wedge
+    /// of desktop showing between the body and the shoulder on each side.
+    public static let bodyTopRadius: CGFloat = 0
+    /// The concave flare at each shoulder's **outer-top** corner: the panel's
+    /// straight vertical edge, arriving at the top of the screen, sweeps
+    /// outward through a quarter-fillet of this radius into the flat top edge —
+    /// the inverse of a desktop corner, exactly the silhouette of the
+    /// snap-zones HUD reference. It is both how far the top edge over-hangs the
+    /// body's outer edge *and* how tall the sweep is; below it the outer edge
+    /// is dead vertical. Visual only: the hit-test mask is cut from
+    /// `islandPath`, which knows nothing of it.
+    public static let shoulderFlare: CGFloat = 22
     /// The concave fillet where the body meets the stem. It flares the black
     /// outward into the menu-bar row for these few points either side of the
     /// cutout — the join reads as the notch stretching instead of as two
@@ -382,7 +400,14 @@ public enum NotchGeometry {
         if config.showTasks {
             sections.append(taskSectionHeight(rows: config.renderedTaskRows))
         }
-        if config.showQuickActions { sections.append(quickActionsHeight) }
+        // The quick actions (+ / ⚙) ride the timer row's trailing cluster when it
+        // is shown — the two round controls are shorter than the clock, so they
+        // add no height there. They only cost a section of their own when there is
+        // no timer row for them to share (`NotchExpandedPanel` draws the fallback
+        // full-width chips in that case).
+        if config.showQuickActions && !config.showTimerControls {
+            sections.append(quickActionsHeight)
+        }
         if config.showStatusStrip { sections.append(statusStripHeight) }
 
         // n sections and the always-present `Spacer` are n+1 children, so n+1-1
@@ -488,7 +513,14 @@ public enum NotchGeometry {
         // click-through everywhere `hitTest` says no. The *mask* is what gives
         // the menu bar back, not the panel's width.
         let earReserve = config.ears.earCount > 0 ? 2 * earWidth : 0
-        let width = max(expanded.width,
+        // The expanded panel's shoulders flare `shoulderFlare` past the body's
+        // outer edge on each side (`NotchShouldersView` frames itself
+        // `island.width + 2 * shoulderFlare` wide). The island is centered in
+        // the panel, so unless the panel is at least that wide the flared outer
+        // corners are clipped away by the window edge. Reserve it here; it costs
+        // nothing (the panel is invisible and click-through wherever `hitTest`
+        // says no).
+        let width = max(expanded.width + 2 * shoulderFlare,
                         cutout.width + earReserve,
                         activityWidth)
         let height = max(expanded.height, cutout.height + liveLipHeight)
@@ -544,14 +576,12 @@ public enum NotchGeometry {
     /// rectangle these states have always drawn.
     ///
     /// `bodyTop` is carried anyway, and it matters *while the island is moving*.
-    /// The silhouette is not animated (see `IslandShape`) — it flips to the new
-    /// state's the instant the hit-test mask does — but the island's **frame**
-    /// springs. Closing from `.expanded`, the frame is still 340pt wide for a few
-    /// frames after the mask has shrunk to the live island; with `bodyTop` set,
-    /// those wide frames are drawn as a T whose stem is exactly the live island's
-    /// width, so the overhang hangs *below* the menu bar (over the desktop, where
-    /// it is click-through and harmless) instead of painting a slab across the
-    /// menu-bar titles on the way out.
+    /// The silhouette animates (see `IslandShape`): morphing between a flat state
+    /// and a T, `bodyTop` is the same `menuBarHeight` on both ends, so the body
+    /// edge holds still while the stem widens or narrows — the morph reads as
+    /// the notch itself stretching, and mid-morph frames stay a well-formed T
+    /// that `islandPath` degenerates cleanly (every radius clamps to the room
+    /// there actually is).
     private static func flat(width: CGFloat, cornerRadius: CGFloat,
                              menuBarHeight: CGFloat) -> NotchSilhouette {
         NotchSilhouette(stemWidth: width, bodyTop: menuBarHeight,
@@ -785,6 +815,27 @@ public enum NotchGeometry {
         let l = layout(metrics, size: size, config: config)
         guard !l.island.isEmpty else { return false }
         return islandPath(in: l.island, silhouette: l.silhouette).contains(point)
+    }
+
+    /// The union-mask **hold**: while the island morphs between two states, the
+    /// mask honors *both* endpoints. The silhouette now animates (see
+    /// `IslandShape`), and within the menu-bar row — the only row where a
+    /// drawn-but-unmasked pixel covers something clickable — every intermediate
+    /// shape is contained in the union of the two endpoint paths: the springs
+    /// are critically damped (monotone) and the stem's edges interpolate
+    /// between their endpoint positions. (Below the menu bar the intermediate
+    /// body can transiently poke outside the union; those pixels are over the
+    /// desktop and click-through — the same cosmetic overhang the non-animating
+    /// silhouette already had on close.) The caller (`NotchWindowManager`)
+    /// drops `holdSize` after `NotchMotion.windowShrinkDelay`, the same clock
+    /// the window's own shrink runs on — clicks in a just-vacated body region
+    /// are swallowed only as long as the window covering them exists anyway.
+    public static func hitTest(_ point: CGPoint, metrics: NotchScreenMetrics,
+                               size: NotchHUDSize, holdSize: NotchHUDSize?,
+                               config: NotchContentConfig = .default) -> Bool {
+        if hitTest(point, metrics: metrics, size: size, config: config) { return true }
+        guard let holdSize, holdSize != size else { return false }
+        return hitTest(point, metrics: metrics, size: holdSize, config: config)
     }
 
     /// Whether the pointer should count as *hovering* the island — deliberately

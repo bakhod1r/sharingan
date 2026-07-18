@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import SharinganCore
 
 /// The observable the panel and the SwiftUI island share. The manager writes,
@@ -12,10 +13,22 @@ final class NotchHUDModel: ObservableObject {
         didSet {
             guard oldValue.size != state.size else { return }
             previousSize = oldValue.size
+            // Arm the union-mask hold for the morph that just started. Under
+            // Reduce Motion the shape cuts instantly, so there is no morph to
+            // hold a mask for. The manager clears this on the shrink clock
+            // (`NotchWindowManager`, `maskJob`).
+            maskHoldSize = ReduceMotionMonitor.shared.isOn ? nil : oldValue.size
         }
     }
     /// The shape the island is morphing *from*.
     @Published private(set) var previousSize: NotchHUDSize = .hidden
+    /// The state whose hit-test mask is *additionally* honored while a morph is
+    /// running — the union-mask hold that makes the animating silhouette safe
+    /// (see `IslandShape`). Set by the manager on every size change and cleared
+    /// on `NotchMotion.windowShrinkDelay`'s clock; `previousSize` cannot serve
+    /// here because it persists forever and would swallow menu-bar clicks in
+    /// the vacated region permanently.
+    @Published var maskHoldSize: NotchHUDSize? = nil
     /// **No notch until something proves otherwise.** The whole safety argument
     /// of the HUD is "no cutout ⇒ nothing drawn and nothing hittable", so the
     /// unwritten default has to be the safe answer, not a plausible one. A
@@ -153,7 +166,9 @@ struct NotchHUDView: View {
                     // The silhouette (and with it the clip, the hover stroke
                     // and the hit mask) still spans the lip — only the black
                     // fill is held back.
-                    .fill(.black)
+                    .fill(model.state.size == .expanded
+                          ? AnyShapeStyle(flatSurfaceBase(timer.settings.theme))
+                          : AnyShapeStyle(Color.black))
                     .opacity(model.state.size == .idle ? 0 : 1)
                     .frame(height: blackFillHeight(l))
             }
@@ -196,7 +211,50 @@ struct NotchHUDView: View {
                 // overshoot safe: anything a content spring throws outside the
                 // silhouette is eaten here.
                 .clipShape(IslandShape(silhouette: l.silhouette))
+                // While expanded, cap the whole menu-bar row — stem strip and
+                // both shoulders — with ONE full-width body-tone shape
+                // (`NotchTopCapShape`). It used to be three separately-drawn
+                // surfaces (stem overlay + two shoulder slabs), and three
+                // surfaces means seams: hairline vertical edges flanking the
+                // cutout wherever the frames met. One shape has no seams by
+                // construction, and it doubles as the opening's hero move: it
+                // stretches out of the cutout like the notch itself widening.
+                // Added *after* the clip: the silhouette doesn't include the
+                // menu-bar row beside the stem, so the clip would eat it.
+                .overlay(alignment: .top) { expandedShoulders(l) }
                 .transition(.opacity)
+        }
+    }
+
+    /// The one body-tone cap filling the whole menu-bar row — stem strip and
+    /// both shoulders — while expanded, giving the panel its seamless
+    /// full-width top edge (see the call site).
+    ///
+    /// Extracted to its own view so each opening plays the emergence: the cap
+    /// stretches out of the hardware notch (`NotchShouldersView`), which needs
+    /// an `onAppear` of its own — a plain `@ViewBuilder` here would flip state
+    /// in the parent and never re-fire on the next expand. Closing is the same
+    /// move reversed: the removal transition sweeps the cap back *into* the
+    /// cutout on the closing spring, so the notch narrows shut instead of the
+    /// top row blinking away.
+    @ViewBuilder
+    private func expandedShoulders(_ l: NotchLayout) -> some View {
+        if model.state.size == .expanded {
+            let capW = l.island.width + 2 * NotchGeometry.shoulderFlare
+            let stemFraction = capW > 0 ? l.silhouette.stemWidth / capW : 1
+            NotchShouldersView(layout: l, theme: timer.settings.theme,
+                               showIris: timer.settings.notchShowIris,
+                               leftStyle: timer.settings.sharinganStyle,
+                               rightStyle: timer.settings.sharinganStyleRight
+                                ?? timer.settings.sharinganStyle,
+                               surface: flatSurfaceBase(timer.settings.theme),
+                               reduce: motion.isOn)
+                .transition(.asymmetric(
+                    insertion: .identity,   // the view stages its own emergence
+                    removal: .modifier(
+                        active: CapCollapse(progress: 0, stemFraction: stemFraction),
+                        identity: CapCollapse(progress: 1, stemFraction: stemFraction))
+                        .animation(NotchMotion.capRetract(reduceMotion: motion.isOn))))
         }
     }
 
@@ -224,6 +282,35 @@ struct NotchHUDView: View {
     /// housing, and live adds only the lip the progress line runs on.
     private static let flatDarkening: Double = 0.14
 
+    /// The panel's single flat surface tone — the theme's two surface colors
+    /// blended to one, so the body, the stem strip and the two shoulders can all
+    /// be painted the *same* flat color. A gradient painted piecewise (each with
+    /// its own frame) never lines up across the seams; one flat color makes the
+    /// expanded panel read as one uniform rectangle, which is the whole point.
+    private func flatSurface(_ theme: SharinganTheme) -> Color {
+        let s = theme.surface
+        guard s.count >= 2 else { return s.first ?? .black }
+        let a = NSColor(s[0]).usingColorSpace(.sRGB) ?? .black
+        let b = NSColor(s[1]).usingColorSpace(.sRGB) ?? .black
+        return Color(red: Double(a.redComponent + b.redComponent) / 2,
+                     green: Double(a.greenComponent + b.greenComponent) / 2,
+                     blue: Double(a.blueComponent + b.blueComponent) / 2)
+    }
+
+    /// The body's *final* visible tone — `flatSurface` after the `flatDarkening`
+    /// black overlay is folded in (overlaying black at α is a plain multiply by
+    /// 1−α). The expanded island's base fill uses this so the black slab behind
+    /// the body is the exact body color, and no black rim can peek at the edges
+    /// where an overlay stops a hair short. Idle/live keep the pure-black fill —
+    /// there the black is imitating the camera housing, not a panel.
+    private func flatSurfaceBase(_ theme: SharinganTheme) -> Color {
+        let k = 1 - Self.flatDarkening
+        let c = NSColor(flatSurface(theme)).usingColorSpace(.sRGB) ?? .black
+        return Color(red: Double(c.redComponent) * k,
+                     green: Double(c.greenComponent) * k,
+                     blue: Double(c.blueComponent) * k)
+    }
+
     @ViewBuilder
     private func bodyGlass(_ l: NotchLayout) -> some View {
         let body = l.body
@@ -236,8 +323,7 @@ struct NotchHUDView: View {
                 topTrailingRadius: s.bodyTopRadius,
                 style: .continuous)
             let theme = timer.settings.theme
-            LinearGradient(colors: theme.surface,
-                           startPoint: .topLeading, endPoint: .bottomTrailing)
+            flatSurface(theme)
                 .overlay(Color.black.opacity(Self.flatDarkening))
                 .clipShape(shape)
                 .overlay { shape.stroke(islandHairline(theme), lineWidth: 1) }
@@ -416,40 +502,253 @@ struct NotchActivityView: View {
 /// which is also what the hit-test mask is cut from: one definition, so what is
 /// drawn and what is clickable are the same shape by construction.
 ///
-/// **Only the corner radius animates, and that is a safety property, not an
-/// oversight.** SwiftUI interpolates `animatableData` and takes every other
-/// stored property at its new value immediately — so when the state flips, the
-/// stem's width and the body's top edge land on the new state's *at the same
-/// instant the hit-test mask does*, while the island's frame springs into place
-/// underneath them. That is what keeps the drawn shape inside the mask through
-/// the whole morph, in both directions:
+/// **The whole silhouette animates — stem, body top, fillet, corner — so the
+/// open reads as the notch itself expanding, and the close as the exact
+/// reverse.** That used to be forbidden (only the corner radius interpolated)
+/// because the hit-test mask flips instantly; it is safe now because the mask
+/// holds the **union** of both endpoint states for the morph's duration
+/// (`NotchHUDModel.maskHoldSize`, honored by `NotchGeometry.hitTest`'s
+/// `holdSize:` overload). The safety argument:
 ///
-/// - **Opening** (`live` → `expanded`), the mask is already the T. The stem is
-///   already the cutout's width, so the growing frame can only ever fill the
-///   T's body — which is below the menu bar. Not one frame of the open paints
-///   black over a menu-bar title. (The cost: the ears' black does not retract,
-///   it is simply gone on the first frame. Everything the eye is following —
-///   the body dropping out of the notch — is the part that moves.)
-/// - **Closing**, the mask has already shrunk to the live island, and the frame
-///   is still expanded-wide for a few frames. Those frames are drawn as a T
-///   whose stem is the *live* island's width (see `NotchGeometry.flat`), so the
-///   overhang hangs below the menu bar, over the desktop, where it is
-///   click-through and invisible against the wallpaper for 260ms.
+/// - Every spring that drives this shape is critically damped
+///   (`NotchMotion.shapeDamping` == 1.0), so each animated parameter moves
+///   monotonically between its endpoint values — no overshoot, ever.
+/// - Each edge of the T therefore interpolates between its position in the old
+///   state and its position in the new one, so in the **menu-bar row** — the
+///   only row where a drawn-but-unmasked pixel covers something clickable —
+///   every intermediate shape is contained in the union of the two endpoint
+///   paths, precisely the region the union mask claims. (Below the menu bar
+///   the intermediate body can transiently poke outside the union; that black
+///   sits over the desktop, click-through, the same cosmetic overhang the old
+///   snapped-silhouette close already had.)
+/// - The hold is dropped after `NotchMotion.windowShrinkDelay`, the same clock
+///   the window's own shrink runs on: for as long as the vacated body region
+///   is masked, the window covering it exists anyway.
 ///
-/// Interpolating the stem would look smoother and would be wrong: a stem
-/// halfway between 278pt and 200pt is 39pt of black over `Window` and `Help`
-/// that the mask has already given back to the menu bar — drawn, unclickable,
-/// and precisely the thing this shape exists to stop.
+/// The one cost is on the close: a click where the body just was falls through
+/// only after ~0.45s instead of instantly. The trade is the morph itself —
+/// mid-close the stem is genuinely between widths, and without the hold those
+/// frames would be black over `Window` and `Help` that the mask had already
+/// given back.
+/// A bare Sharingan iris for a notch ear (`MoveIrisView`, no lids), animated to
+/// feel premium: it turns slowly and ceaselessly, and every `awakenCycle`
+/// seconds it *awakens* — the tomoe collapse into the pupil, the iris whirls two
+/// fast turns and blooms back out, with a soft scale pulse riding the burst. Its
+/// own `TimelineView` clock drives all of it, so it lives whether or not a
+/// session is running. `reduce` freezes it still and fully formed for Reduce
+/// Motion.
+private struct NotchShoulderIris: View {
+    var style: SharinganStyle
+    var diameter: CGFloat
+    var reduce: Bool
+
+    /// Seconds per full turn of the ceaseless base rotation.
+    private let secondsPerTurn: Double = 16
+    /// Seconds between awakenings, and how long each awakening runs.
+    private let awakenCycle: Double = 9
+    private let awakenDur: Double = 1.7
+
+    var body: some View {
+        if reduce {
+            MoveIrisView(diameter: diameter, style: style)
+        } else {
+            TimelineView(.animation) { ctx in
+                let f = frame(at: ctx.date.timeIntervalSinceReferenceDate)
+                MoveIrisView(diameter: diameter, spin: f.spin, style: style,
+                             emergence: f.emergence)
+                    .scaleEffect(f.scale)
+                    // A faint bloom of the iris's own light on each awakening —
+                    // the premium glow, strongest as the tomoe whirl back out.
+                    .shadow(color: (style == .rinnegan ? Color.purple : Color.red)
+                        .opacity(f.glow), radius: 0.28 * diameter)
+            }
+        }
+    }
+
+    /// The whole animation as pure math for time `t`: a continuous base spin,
+    /// plus a periodic eased awakening burst (collapse → whirl → bloom).
+    private func frame(at t: TimeInterval) -> (spin: Double, emergence: CGFloat,
+                                               scale: CGFloat, glow: Double) {
+        let base = t * 360 / secondsPerTurn
+        let ph = t.truncatingRemainder(dividingBy: awakenCycle)
+        guard ph < awakenDur else {
+            // Resting: gentle breathing only.
+            return (base, 1, 1 + CGFloat(sin(t * 0.7)) * 0.015, 0)
+        }
+        let u = ph / awakenDur                      // 0…1 through the burst
+        // Collapse to a near-bare iris in the first third, bloom back over the
+        // rest — the tomoe suck into the pupil and spiral out (MoveIrisView's
+        // `emergence` carries the whirl-out for free).
+        let e: CGFloat = u < 0.33
+            ? 1 - CGFloat(u / 0.33) * 0.82
+            : 0.18 + CGFloat((u - 0.33) / 0.67) * 0.82
+        // Two full extra turns, eased out — a multiple of 360° so it rejoins the
+        // base spin with no visible snap when the burst ends.
+        let eased = 1 - pow(1 - u, 3)
+        let burstSpin = eased * 720
+        let pulse = sin(u * .pi)                    // 0→1→0 across the burst
+        return (base + burstSpin, e,
+                1 + CGFloat(pulse) * 0.09, pulse * 0.5)
+    }
+}
+
+/// The expanded panel's top cap — ONE full-width body-tone shape spanning the
+/// whole menu-bar row (both shoulders *and* the strip under the cutout), so
+/// there is no seam anywhere: the old stem-overlay/shoulder-slab junctions were
+/// three separately-framed surfaces and showed hairline vertical edges flanking
+/// the notch.
+///
+/// It is also the opening's hero move: on appear the cap starts squeezed to
+/// exactly the cutout's width — invisible behind the hardware notch — and
+/// stretches out to full width on a spring, so the panel reads as *the notch
+/// itself widening*. The irises ride their own slide out from behind the
+/// cutout. Driven by an `onAppear` `@State` so it replays on every open (a
+/// `.transition` inserts this subtree each time the island expands); the
+/// reverse sweep on close is the removal transition at the call site.
+private struct NotchShouldersView: View {
+    let layout: NotchLayout
+    let theme: SharinganTheme
+    let showIris: Bool
+    let leftStyle: SharinganStyle
+    let rightStyle: SharinganStyle
+    /// The flat body tone the cap is painted in — passed in so it matches the
+    /// body without re-deriving it here.
+    let surface: Color
+    let reduce: Bool
+
+    /// Flipped in `onAppear`. Reduce Motion pins it settled from the start, so
+    /// the cap is simply there — no stretch, no fade.
+    @State private var out = false
+
+    var body: some View {
+        let l = layout
+        let stemW = l.silhouette.stemWidth
+        let sideW = max(0, (l.island.width - stemW) / 2)
+        // Lap a hair past the menu-bar row so the cap meets the body's top edge
+        // with no seam between the two body-tone surfaces.
+        let capH = l.silhouette.bodyTop + 2
+        let flare = NotchGeometry.shoulderFlare
+        let capW = l.island.width + 2 * flare
+        let irisD = max(12, min(capH - 12, sideW - 14))
+        let irisInset = max(0, (sideW - irisD) / 2)
+        let settled = out || reduce
+        // How far each iris starts tucked toward the cutout: its own width plus
+        // its insets, so it begins fully under the hardware notch and slides
+        // out into place with the cap's stretch.
+        let irisSlide = irisD + irisInset + flare
+
+        NotchTopCapShape(flare: flare)
+            .fill(surface)
+            .frame(width: capW, height: capH)
+            // The widening itself: from the cutout's width out to full, pinned
+            // to the center so both sides emerge symmetrically — the notch
+            // stretching, not a slab arriving. Scale is ≤ 1 throughout, and the
+            // cap lives in the ear-reserve margin: it touches no rect the
+            // hit-test mask is cut from.
+            .scaleEffect(x: settled ? 1 : min(1, stemW / max(capW, 1)),
+                         anchor: .center)
+            .overlay(alignment: .leading) {
+                if showIris {
+                    NotchShoulderIris(style: leftStyle, diameter: irisD,
+                                      reduce: reduce)
+                        .padding(.leading, flare + irisInset)
+                        // Starts under the cutout (right, +x), slides out left.
+                        .offset(x: settled ? 0 : irisSlide)
+                        .opacity(settled ? 1 : 0)
+                }
+            }
+            .overlay(alignment: .trailing) {
+                if showIris {
+                    NotchShoulderIris(style: rightStyle, diameter: irisD,
+                                      reduce: reduce)
+                        .padding(.trailing, flare + irisInset)
+                        // Mirror: tucked toward the cutout (left, −x).
+                        .offset(x: settled ? 0 : -irisSlide)
+                        .opacity(settled ? 1 : 0)
+                }
+            }
+            .frame(width: capW, height: l.island.height, alignment: .top)
+            .allowsHitTesting(false)
+            .animation(NotchMotion.shoulderEmerge(reduceMotion: reduce), value: out)
+            .onAppear { out = true }
+    }
+}
+
+/// The closing half of the cap's story: sweeps it back down to the cutout's
+/// width (and fades it) as the island collapses, so the notch visibly narrows
+/// shut. `progress` 1 = at rest, 0 = swallowed by the notch.
+struct CapCollapse: ViewModifier {
+    var progress: Double
+    var stemFraction: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(x: stemFraction + (1 - stemFraction) * progress,
+                         anchor: .center)
+            .opacity(progress)
+    }
+}
+
+/// One notch shoulder — the body-tone slab filling the menu-bar row beside the
+/// cutout, in the **real-macOS-notch** silhouette the user picked: a flat top
+/// (a softly rounded outer-top corner, then straight across to the cutout), a
+/// straight outer edge down to the panel's side, and a concave fillet on the
+/// inner-bottom corner where the black notch melts outward into the menu bar.
+/// `outerLeading` picks which side the outer edge is on.
+struct NotchTopCapShape: Shape {
+    /// The concave outer-top flare: the radius of the quarter-fillet that
+    /// sweeps each vertical outer edge outward into the flat top edge — the
+    /// exact inverse of a desktop corner (the snap-zones reference look). The
+    /// rect handed to this shape already includes the flare on both sides.
+    var flare: CGFloat = NotchGeometry.shoulderFlare
+
+    func path(in rect: CGRect) -> Path {
+        // One continuous slab across the whole menu-bar row: flat top edge from
+        // flared tip to flared tip, a concave quarter-fillet down to each
+        // vertical body edge, and a straight bottom that laps the body below.
+        // No inner geometry at all — the hardware cutout covers its own span,
+        // so there is nothing to cut out and no seam to show.
+        let fl = max(0, min(flare, rect.height, rect.width / 2))
+        let leftBody = rect.minX + fl, rightBody = rect.maxX - fl
+        let top = rect.minY, bot = rect.maxY
+        var p = Path()
+        p.move(to: CGPoint(x: rect.minX, y: top))                 // left flared tip
+        p.addLine(to: CGPoint(x: rect.maxX, y: top))              // flat top, full width
+        // Concave quarter-fillet: the top edge bends down-and-inward, landing
+        // tangent on the right vertical body edge.
+        p.addQuadCurve(to: CGPoint(x: rightBody, y: top + fl),
+                       control: CGPoint(x: rightBody, y: top))
+        p.addLine(to: CGPoint(x: rightBody, y: bot))              // right edge, dead vertical
+        p.addLine(to: CGPoint(x: leftBody, y: bot))               // bottom, laps the body
+        p.addLine(to: CGPoint(x: leftBody, y: top + fl))          // left edge, dead vertical
+        p.addQuadCurve(to: CGPoint(x: rect.minX, y: top),         // mirror fillet
+                       control: CGPoint(x: leftBody, y: top))
+        p.closeSubpath()
+        return p
+    }
+}
+
 struct IslandShape: Shape {
     var silhouette: NotchSilhouette
 
-    /// The radius grows with the island's height, so it has to *interpolate*
-    /// with the morph rather than jump to the new state's value on frame one —
-    /// a 14pt corner snapping to 22pt at the start of the open is exactly the
-    /// snap this pass exists to remove.
-    var animatableData: CGFloat {
-        get { silhouette.cornerRadius }
-        set { silhouette.cornerRadius = newValue }
+    /// The full silhouette vector: stem width and body top in the first pair,
+    /// corner radius and fillet in the second. `bodyTopRadius` is a constant
+    /// across states and stays stored. These interpolate on the same spring the
+    /// frame does (the `.animation(value: state.size)` on the island), so the
+    /// waist widens exactly as the body grows — the notch stretching, not a
+    /// panel appearing under a snapped shape.
+    var animatableData: AnimatablePair<AnimatablePair<CGFloat, CGFloat>,
+                                       AnimatablePair<CGFloat, CGFloat>> {
+        get {
+            AnimatablePair(AnimatablePair(silhouette.stemWidth, silhouette.bodyTop),
+                           AnimatablePair(silhouette.cornerRadius, silhouette.filletRadius))
+        }
+        set {
+            silhouette.stemWidth = newValue.first.first
+            silhouette.bodyTop = newValue.first.second
+            silhouette.cornerRadius = newValue.second.first
+            silhouette.filletRadius = newValue.second.second
+        }
     }
 
     func path(in rect: CGRect) -> Path {
