@@ -53,23 +53,17 @@ struct AnalyticsHeatmapView: View {
 
     var body: some View {
         let days = self.days
-        let weeks = AnalyticsEngine.heatmapWeeks(days: days)
         let peak = days.map(\.count).max() ?? 0
-        let monthStart = monthStartFlags(weeks)
-        VStack(alignment: .leading, spacing: 12) {
+        let byDay = Dictionary(days.map { ($0.day, $0.count) }, uniquingKeysWith: +)
+        VStack(alignment: .leading, spacing: 14) {
+            statsHeader(days)
             ScrollView(.horizontal, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: gap) {
-                    monthHeader(weeks: weeks, monthStart: monthStart)
-                    HStack(alignment: .top, spacing: 0) {
-                        weekdayColumn
-                        ForEach(Array(weeks.enumerated()), id: \.offset) { i, week in
-                            VStack(spacing: gap) {
-                                ForEach(0..<7, id: \.self) { slot in
-                                    cellView(week[slot], peak: peak)
-                                }
-                            }
-                            .padding(.leading, leadingPad(i, monthStart))
-                        }
+                // LeetCode-style: one self-contained block per month, a clear gap
+                // between them, and the month name centred under its block.
+                HStack(alignment: .top, spacing: monthGap) {
+                    weekdayColumn
+                    ForEach(months(days), id: \.self) { month in
+                        monthBlock(month, byDay: byDay, peak: peak)
                     }
                 }
                 .padding(2)
@@ -79,6 +73,106 @@ struct AnalyticsHeatmapView: View {
         .padding(16)
         .glassRounded(DS.Radius.xl, material: .regular)
         .liquidShadow(radius: 12, y: 6)
+    }
+
+    // MARK: - LeetCode-style month blocks
+
+    /// First-of-month for every month the visible span touches, chronological.
+    private func months(_ days: [DailyCount]) -> [Date] {
+        let cal = Calendar.current
+        guard let first = days.first?.day, let last = days.last?.day else { return [] }
+        var out: [Date] = []
+        var cursor = cal.date(from: cal.dateComponents([.year, .month], from: first)) ?? first
+        let end = cal.date(from: cal.dateComponents([.year, .month], from: last)) ?? last
+        while cursor <= end {
+            out.append(cursor)
+            guard let next = cal.date(byAdding: .month, value: 1, to: cursor) else { break }
+            cursor = next
+        }
+        return out
+    }
+
+    /// One month drawn as week-columns (Monday-first rows), only that month's
+    /// days filled, with the month label centred beneath.
+    private func monthBlock(_ month: Date, byDay: [Date: Int], peak: Int) -> some View {
+        let cal = Calendar.current
+        let fmt = DateFormatter(); fmt.dateFormat = "MMM"
+        let cols = monthColumns(month)
+        let today = cal.startOfDay(for: Date())
+        return VStack(spacing: 6) {
+            HStack(alignment: .top, spacing: gap) {
+                ForEach(Array(cols.enumerated()), id: \.offset) { _, column in
+                    VStack(spacing: gap) {
+                        ForEach(0..<7, id: \.self) { row in
+                            if let day = column[row], day <= today {
+                                cellView(DailyCount(day: day, count: byDay[day] ?? 0), peak: peak)
+                            } else {
+                                Color.clear.frame(width: cell, height: cell)
+                            }
+                        }
+                    }
+                }
+            }
+            Text(fmt.string(from: month))
+                .font(.system(size: 9, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.5))
+        }
+    }
+
+    /// A month's days laid out into week-columns: `[column][weekdayRow]`,
+    /// Monday-first, nil outside the month.
+    private func monthColumns(_ month: Date) -> [[Date?]] {
+        let cal = Calendar.current
+        guard let first = cal.date(from: cal.dateComponents([.year, .month], from: month)),
+              let count = cal.range(of: .day, in: .month, for: first)?.count
+        else { return [] }
+        let lead = (cal.component(.weekday, from: first) + 5) % 7   // 0 = Mon
+        var slots = [Date?](repeating: nil, count: lead)
+        for d in 0..<count { slots.append(cal.date(byAdding: .day, value: d, to: first)) }
+        while slots.count % 7 != 0 { slots.append(nil) }
+        return stride(from: 0, to: slots.count, by: 7).map { c in
+            (0..<7).map { r in slots[c + r] }
+        }
+    }
+
+    // MARK: - Stats header (LeetCode-style totals)
+
+    private func statsHeader(_ days: [DailyCount]) -> some View {
+        let total = days.reduce(0) { $0 + $1.count }
+        let active = days.filter { $0.count > 0 }.count
+        let maxStreak = longestActiveStreak(days)
+        return HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text("\(total)")
+                .font(.system(.title3, design: .rounded).weight(.heavy))
+                .foregroundStyle(.white)
+            Text("pomodoros")
+                .font(.system(.subheadline, design: .rounded))
+                .foregroundStyle(.white.opacity(0.6))
+            Spacer()
+            statChip("Active days", active)
+            statChip("Max streak", maxStreak)
+        }
+    }
+
+    private func statChip(_ label: String, _ value: Int) -> some View {
+        HStack(spacing: 5) {
+            Text(label)
+                .font(.system(.caption2, design: .rounded))
+                .foregroundStyle(.white.opacity(0.5))
+            Text("\(value)")
+                .font(.system(.caption, design: .rounded).weight(.bold))
+                .foregroundStyle(.white.opacity(0.9))
+        }
+    }
+
+    /// Longest run of consecutive calendar days with ≥1 completed focus.
+    private func longestActiveStreak(_ days: [DailyCount]) -> Int {
+        var best = 0, run = 0
+        for d in days {                      // `days` is chronological, gap-free
+            run = d.count > 0 ? run + 1 : 0
+            best = max(best, run)
+        }
+        return best
     }
 
     // MARK: - Grid pieces
@@ -109,60 +203,6 @@ struct AnalyticsHeatmapView: View {
                     .frame(width: 26, height: cell, alignment: .leading)
             }
         }
-    }
-
-    private let gutter: CGFloat = 26
-
-    /// True for each week that begins a new calendar month (drives both the
-    /// month-separating gap and the header labels).
-    private func monthStartFlags(_ weeks: [[DailyCount?]]) -> [Bool] {
-        let cal = Calendar.current
-        var flags = [Bool](repeating: false, count: weeks.count)
-        var lastMonth = -1
-        for (i, week) in weeks.enumerated() {
-            guard let d = week.compactMap({ $0?.day }).first else { continue }
-            let m = cal.component(.month, from: d)
-            if m != lastMonth { flags[i] = true; lastMonth = m }
-        }
-        return flags
-    }
-
-    /// Leading space before week column `i`: the normal gap, plus the month gap
-    /// when this column opens a new month (never before the very first column).
-    private func leadingPad(_ i: Int, _ monthStart: [Bool]) -> CGFloat {
-        gap + (i > 0 && monthStart[i] ? monthGap : 0)
-    }
-
-    /// Absolute x of week column `i`'s left edge, matching the grid's per-column
-    /// leading padding so the header labels line up with the month gaps.
-    private func weekLeftX(_ i: Int, _ monthStart: [Bool]) -> CGFloat {
-        var x = gutter
-        for k in 0..<i { x += leadingPad(k, monthStart) + cell }
-        return x + leadingPad(i, monthStart)
-    }
-
-    /// Month abbreviation above the week column where each month starts.
-    /// Labels are placed by absolute x-offset and allowed to overflow, so
-    /// "Jul" isn't clipped to one 13pt cell.
-    private func monthHeader(weeks: [[DailyCount?]], monthStart: [Bool]) -> some View {
-        let cal = Calendar.current
-        let fmt = DateFormatter(); fmt.dateFormat = "MMM"
-        let starts: [(Int, String)] = weeks.enumerated().compactMap { i, week in
-            guard monthStart[i], let d = week.compactMap({ $0?.day }).first
-            else { return nil }
-            return (i, fmt.string(from: d))
-        }
-        return ZStack(alignment: .topLeading) {
-            ForEach(starts, id: \.0) { idx, name in
-                Text(name)
-                    .font(.system(size: 9, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.5))
-                    .fixedSize()
-                    .offset(x: weekLeftX(idx, monthStart))
-            }
-        }
-        .frame(height: 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var footer: some View {
