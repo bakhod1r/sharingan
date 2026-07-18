@@ -15,9 +15,27 @@ public enum DeviceIdentity {
         return fresh
     }
 
-    /// The user-visible machine name, for "Focus running on <name>" UI.
+    /// The user-visible machine name, for "Focus running on <name>" UI and for
+    /// tagging tasks/sessions per Mac. `Host.current().localizedName` gives the
+    /// pretty user-assigned name but returns nil inside the App Sandbox, so we
+    /// fall back to the POSIX host name (network suffix trimmed), never empty.
     public static var name: String {
-        Host.current().localizedName ?? "Mac"
+        resolveName()
+    }
+
+    /// Testable core of `name`: first non-empty of the localized name or the
+    /// trimmed host name, else "Mac".
+    static func resolveName(localized: String? = Host.current().localizedName,
+                            hostName: String = ProcessInfo.processInfo.hostName)
+        -> String {
+        if let localized, !localized.trimmingCharacters(in: .whitespaces).isEmpty {
+            return localized
+        }
+        let trimmed = hostName
+            .replacingOccurrences(of: ".local", with: "")
+            .replacingOccurrences(of: ".lan", with: "")
+            .trimmingCharacters(in: .whitespaces)
+        return trimmed.isEmpty ? "Mac" : trimmed
     }
 }
 
