@@ -15,8 +15,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ### Added
 - **Premium Overview** — a hero KPI row (focus time, sessions, day streak,
-  active days) with count-up numbers and a staggered card entrance, above
-  the Focus/Consistency score rings. All motion honours Reduce Motion.
+  active days) with count-up numbers and a staggered card entrance, a
+  full-width **focus-trend chart** (gradient area + smooth line + scrubbable
+  tooltip, with a ↑/↓ % badge comparing the window's two halves; draws itself
+  in on appear), above the Focus/Consistency score rings. Inspired by the
+  reference dashboards. All motion honours Reduce Motion.
 - **Calendar range picker** — a custom **from → to** date range (popover
   with two date pickers) that overrides the preset ranges across every tab
   and the score averages.

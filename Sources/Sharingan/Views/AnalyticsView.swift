@@ -531,13 +531,18 @@ struct AnalyticsView: View {
         return VStack(alignment: .leading, spacing: 16) {
             if burnout.isWarning { burnoutBanner(burnout) }
             kpiRow
+            if trendPoints.contains(where: { $0.value > 0 }) {
+                DashboardTrendChart(points: trendPoints, accent: accent,
+                                    delta: trendDelta)
+                    .staggeredAppear(4)
+            }
             HStack(spacing: 16) {
                 scoreCard(title: "Focus Score", score: scores.focus,
                           caption: "Diqqat sifati — hajm, yakunlash, tanaffuslar\(rangeSuffix)")
-                    .staggeredAppear(4)
+                    .staggeredAppear(5)
                 scoreCard(title: "Consistency", score: scores.consistency,
                           caption: "Rejaga rioya — reja, ritm, streak\(rangeSuffix)")
-                    .staggeredAppear(5)
+                    .staggeredAppear(6)
             }
             if !suggestions.isEmpty { suggestionsCard(suggestions) }
             if scores.focus == nil {
@@ -548,6 +553,43 @@ struct AnalyticsView: View {
                     .foregroundStyle(.white.opacity(0.6))
             }
         }
+    }
+
+    // MARK: - Focus trend series
+
+    /// Focus minutes per day across the selected window, zero-filled so the
+    /// trend line is continuous — the Overview's centrepiece chart.
+    private var trendPoints: [TrendPoint] {
+        let cal = Calendar.current
+        let interval = filter.interval()
+        var byDay: [Date: Double] = [:]
+        for s in filtered(log.sessions(in: interval))
+        where s.phase == .focus && s.completed {
+            byDay[cal.startOfDay(for: s.start), default: 0] += s.seconds / 60
+        }
+        // Cap the point count so a year range stays readable (bucket by day
+        // regardless; the chart hides dots past 31 points).
+        var out: [TrendPoint] = []
+        var cursor = cal.startOfDay(for: interval.start)
+        let end = cal.startOfDay(for: interval.end)
+        while cursor <= end {
+            out.append(TrendPoint(date: cursor, value: byDay[cursor] ?? 0))
+            guard let next = cal.date(byAdding: .day, value: 1, to: cursor) else { break }
+            cursor = next
+        }
+        return out
+    }
+
+    /// Percentage change of the window's second half vs its first half — the
+    /// trend badge (↑/↓ %). nil when the first half had no focus time.
+    private var trendDelta: Double? {
+        let pts = trendPoints
+        guard pts.count >= 2 else { return nil }
+        let mid = pts.count / 2
+        let first = pts.prefix(mid).reduce(0) { $0 + $1.value }
+        let second = pts.suffix(pts.count - mid).reduce(0) { $0 + $1.value }
+        guard first > 0 else { return nil }
+        return (second - first) / first * 100
     }
 
     // MARK: - Hero KPI row
