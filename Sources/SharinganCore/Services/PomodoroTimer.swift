@@ -114,6 +114,9 @@ public final class PomodoroTimer: ObservableObject {
     public func start() {
         guard !isRunning else { return }
         isMirroredSession = false
+        // Session start survives pause/resume — only a fresh session stamps it
+        // (it is cleared whenever a session ends: complete, skip, stop).
+        if sessionStartDate == nil { sessionStartDate = Date() }
         if phase == .paused { phase = previousPhase }
         isRunning = true
         fiveMinSent = false
@@ -134,7 +137,9 @@ public final class PomodoroTimer: ObservableObject {
     }
 
     public func stop() {
+        let wasMirrored = isMirroredSession
         isMirroredSession = false
+        postSessionEnd(completed: false, elapsed: preciseElapsed, mirrored: wasMirrored)
         isRunning = false
         cancelLoop()
         cancelRepeatJob()
@@ -151,8 +156,10 @@ public final class PomodoroTimer: ObservableObject {
         // Skipping while paused must advance from the REAL phase — falling
         // into transitionToNext's `.paused: break` arm changed nothing yet
         // still wiped durationOverride and repeatIndex.
+        let wasMirrored = isMirroredSession
         isMirroredSession = false
         if phase == .paused { phase = previousPhase }
+        postSessionEnd(completed: false, elapsed: preciseElapsed, mirrored: wasMirrored)
         // Kill the tick loop BEFORE transitioning (pause/stop/phaseComplete all
         // do). A live in-flight tick wakes ≤200 ms later and writes the dead
         // phase's preciseRemaining over the fresh duration — skipping a break
@@ -377,6 +384,9 @@ public final class PomodoroTimer: ObservableObject {
     private func phaseComplete() {
         isRunning = false
         cancelLoop()
+        // Log the finished session before any transition wipes durationOverride.
+        postSessionEnd(completed: true, elapsed: totalSeconds,
+                       mirrored: isMirroredSession)
         if phase == .focus {
             stats.registerFocusCompletion()
             persist(stats)
@@ -444,6 +454,34 @@ public final class PomodoroTimer: ObservableObject {
     private func cancelRepeatJob() {
         repeatJob?.cancel()
         repeatJob = nil
+    }
+
+    // MARK: - Session log feed
+
+    /// When the session started (survives pause/resume); nil while idle.
+    private var sessionStartDate: Date?
+
+    /// An abandoned (skipped/stopped) run only counts as a session once it ran
+    /// a full minute — anything shorter is a fat-finger start, not history.
+    nonisolated public static func shouldLogAbandoned(elapsed: TimeInterval) -> Bool {
+        elapsed >= 60
+    }
+
+    /// Posts `.sessionDidEnd` with a task-less `SessionRecord` (the coordinator
+    /// attaches the focus target and appends to `FocusSessionLog`). Mirrored
+    /// sessions never post — the owner Mac logs them. Always clears
+    /// `sessionStartDate` so the next `start()` stamps a fresh session.
+    private func postSessionEnd(completed: Bool, elapsed: TimeInterval,
+                                mirrored: Bool) {
+        defer { sessionStartDate = nil }
+        guard !mirrored, let start = sessionStartDate else { return }
+        guard completed || Self.shouldLogAbandoned(elapsed: elapsed) else { return }
+        let endPhase = phase == .paused ? previousPhase : phase
+        let record = SessionRecord(start: start, end: Date(), phase: endPhase,
+                                   completed: completed,
+                                   plannedSeconds: totalSeconds)
+        NotificationCenter.default.post(name: .sessionDidEnd, object: self,
+                                        userInfo: ["record": record])
     }
 
     private func triggerFlash() {
@@ -552,4 +590,9 @@ extension Notification.Name {
     static let breakShouldEnd   = Notification.Name("sharingan.breakShouldEnd")
     static let streakUpdated    = Notification.Name("sharingan.streakUpdated")
     static let dailyGoalReached = Notification.Name("sharingan.dailyGoalReached")
+    /// A session (focus or break) really ended — completed, skipped, or stopped
+    /// after meaningful progress. `userInfo["record"]` is a `SessionRecord`
+    /// without task attribution; the coordinator fills that in and appends it
+    /// to `FocusSessionLog`.
+    public static let sessionDidEnd = Notification.Name("sharingan.sessionDidEnd")
 }

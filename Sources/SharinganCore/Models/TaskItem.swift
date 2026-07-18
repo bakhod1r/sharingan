@@ -376,7 +376,9 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
 
         if priority != .none { parts += [priority.label, priority.menuLabel] }
         if recurrence != .none { parts += [recurrence.label, recurrence.stringValue] }
-        if let pomodoroKind { parts.append(pomodoroKind.label) }
+        // Both the display label ("Deep Work") and the stable rawValue ("big")
+        // so search keeps matching either.
+        if let pomodoroKind { parts += [pomodoroKind.label, pomodoroKind.rawValue] }
         if let estimatedPomodoros { parts.append("\(estimatedPomodoros)p") }
 
         parts.append(isDone ? "done completed" : "open todo")
