@@ -149,16 +149,13 @@ struct AnalyticsView: View {
     // MARK: - Calendar "from → to" range
 
     @State private var showCalendar = false
-    @State private var draftStart = Calendar.current.date(byAdding: .day, value: -6,
-                                                          to: Date()) ?? Date()
-    @State private var draftEnd = Date()
+    @State private var draftStart: Date? = nil
+    @State private var draftEnd: Date? = nil
 
     private var calendarPicker: some View {
         Button {
-            if filter.isCustomRange {
-                draftStart = filter.customStart ?? draftStart
-                draftEnd = filter.customEnd ?? draftEnd
-            }
+            draftStart = filter.customStart
+            draftEnd = filter.customEnd
             showCalendar.toggle()
         } label: {
             HStack(spacing: 5) {
@@ -174,11 +171,17 @@ struct AnalyticsView: View {
         .buttonStyle(.pressableSubtle)
         .popover(isPresented: $showCalendar, arrowEdge: .bottom) {
             VStack(alignment: .leading, spacing: 14) {
-                Text("Custom range").font(.system(.headline, design: .rounded).weight(.bold))
-                DatePicker("From", selection: $draftStart, in: ...draftEnd,
-                           displayedComponents: .date)
-                DatePicker("To", selection: $draftEnd, in: draftStart...Date(),
-                           displayedComponents: .date)
+                HStack {
+                    Text("Select a date range")
+                        .font(.system(.headline, design: .rounded).weight(.bold))
+                        .foregroundStyle(.white)
+                    Spacer()
+                    Text(draftRangeLabel)
+                        .font(.system(.caption, design: .rounded).weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+                RangeCalendar(start: $draftStart, end: $draftEnd, accent: accent,
+                              startsMonday: timer.settings.weekStartsOnMonday)
                 HStack {
                     if filter.isCustomRange {
                         Button("Clear") {
@@ -192,16 +195,18 @@ struct AnalyticsView: View {
                     Button("Apply") {
                         withAnimation(DS.Motion.standard) {
                             filter.customStart = draftStart
-                            filter.customEnd = draftEnd
+                            // A single tap (no end yet) means a one-day range.
+                            filter.customEnd = draftEnd ?? draftStart
                         }
                         showCalendar = false
                     }
                     .keyboardShortcut(.defaultAction)
+                    .disabled(draftStart == nil)
                 }
             }
-            .datePickerStyle(.compact)
-            .frame(width: 260)
-            .padding(16)
+            .frame(width: 560)
+            .padding(18)
+            .background(Color(nsColor: .windowBackgroundColor).opacity(0.4))
         }
     }
 
@@ -209,6 +214,16 @@ struct AnalyticsView: View {
         guard let s = filter.customStart, let e = filter.customEnd else { return "Custom" }
         let f = DateFormatter(); f.dateFormat = "d MMM"
         return "\(f.string(from: s)) – \(f.string(from: e))"
+    }
+
+    /// Live label of the in-progress selection inside the calendar popover.
+    private var draftRangeLabel: String {
+        let f = DateFormatter(); f.dateFormat = "d MMM"
+        switch (draftStart, draftEnd) {
+        case let (s?, e?): return "\(f.string(from: s)) – \(f.string(from: e))"
+        case let (s?, nil): return "\(f.string(from: s)) – …"
+        default: return "Pick a start day"
+        }
     }
 
     // MARK: - Per-Mac device filter
@@ -626,6 +641,9 @@ struct AnalyticsView: View {
                 AnimatedNumber(value: value, format: format)
                     .font(.system(size: 26, weight: .bold, design: .rounded).monospacedDigit())
                     .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(label)
                     .font(.system(.caption, design: .rounded).weight(.medium))
                     .foregroundStyle(.white.opacity(0.6))
