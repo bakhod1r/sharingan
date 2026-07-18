@@ -17,6 +17,9 @@ struct AnalyticsHeatmapView: View {
 
     private let cell: CGFloat = 13
     private let gap: CGFloat = 4
+    /// Extra space inserted before the week column that starts a new month, so
+    /// months read as separated blocks.
+    private let monthGap: CGFloat = 12
     private let weekdayLabels = ["Mon", "", "Wed", "", "Fri", "", ""]
 
     /// The daily series to render, padded to `spanDays` so idle days show.
@@ -52,18 +55,20 @@ struct AnalyticsHeatmapView: View {
         let days = self.days
         let weeks = AnalyticsEngine.heatmapWeeks(days: days)
         let peak = days.map(\.count).max() ?? 0
+        let monthStart = monthStartFlags(weeks)
         VStack(alignment: .leading, spacing: 12) {
             ScrollView(.horizontal, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: gap) {
-                    monthHeader(weeks: weeks)
-                    HStack(alignment: .top, spacing: gap) {
+                    monthHeader(weeks: weeks, monthStart: monthStart)
+                    HStack(alignment: .top, spacing: 0) {
                         weekdayColumn
-                        ForEach(Array(weeks.enumerated()), id: \.offset) { _, week in
+                        ForEach(Array(weeks.enumerated()), id: \.offset) { i, week in
                             VStack(spacing: gap) {
                                 ForEach(0..<7, id: \.self) { slot in
                                     cellView(week[slot], peak: peak)
                                 }
                             }
+                            .padding(.leading, leadingPad(i, monthStart))
                         }
                     }
                 }
@@ -108,18 +113,44 @@ struct AnalyticsHeatmapView: View {
 
     private let gutter: CGFloat = 26
 
-    /// Month abbreviation above the week column where each month starts.
-    /// Labels are placed by absolute x-offset and allowed to overflow, so
-    /// "Jul" isn't clipped to one 13pt cell.
-    private func monthHeader(weeks: [[DailyCount?]]) -> some View {
+    /// True for each week that begins a new calendar month (drives both the
+    /// month-separating gap and the header labels).
+    private func monthStartFlags(_ weeks: [[DailyCount?]]) -> [Bool] {
         let cal = Calendar.current
-        let fmt = DateFormatter(); fmt.dateFormat = "MMM"
-        var starts: [(Int, String)] = []
+        var flags = [Bool](repeating: false, count: weeks.count)
         var lastMonth = -1
         for (i, week) in weeks.enumerated() {
             guard let d = week.compactMap({ $0?.day }).first else { continue }
             let m = cal.component(.month, from: d)
-            if m != lastMonth { starts.append((i, fmt.string(from: d))); lastMonth = m }
+            if m != lastMonth { flags[i] = true; lastMonth = m }
+        }
+        return flags
+    }
+
+    /// Leading space before week column `i`: the normal gap, plus the month gap
+    /// when this column opens a new month (never before the very first column).
+    private func leadingPad(_ i: Int, _ monthStart: [Bool]) -> CGFloat {
+        gap + (i > 0 && monthStart[i] ? monthGap : 0)
+    }
+
+    /// Absolute x of week column `i`'s left edge, matching the grid's per-column
+    /// leading padding so the header labels line up with the month gaps.
+    private func weekLeftX(_ i: Int, _ monthStart: [Bool]) -> CGFloat {
+        var x = gutter
+        for k in 0..<i { x += leadingPad(k, monthStart) + cell }
+        return x + leadingPad(i, monthStart)
+    }
+
+    /// Month abbreviation above the week column where each month starts.
+    /// Labels are placed by absolute x-offset and allowed to overflow, so
+    /// "Jul" isn't clipped to one 13pt cell.
+    private func monthHeader(weeks: [[DailyCount?]], monthStart: [Bool]) -> some View {
+        let cal = Calendar.current
+        let fmt = DateFormatter(); fmt.dateFormat = "MMM"
+        let starts: [(Int, String)] = weeks.enumerated().compactMap { i, week in
+            guard monthStart[i], let d = week.compactMap({ $0?.day }).first
+            else { return nil }
+            return (i, fmt.string(from: d))
         }
         return ZStack(alignment: .topLeading) {
             ForEach(starts, id: \.0) { idx, name in
@@ -127,7 +158,7 @@ struct AnalyticsHeatmapView: View {
                     .font(.system(size: 9, design: .rounded))
                     .foregroundStyle(.white.opacity(0.5))
                     .fixedSize()
-                    .offset(x: gutter + gap + CGFloat(idx) * (cell + gap))
+                    .offset(x: weekLeftX(idx, monthStart))
             }
         }
         .frame(height: 12)

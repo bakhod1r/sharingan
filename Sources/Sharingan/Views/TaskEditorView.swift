@@ -63,6 +63,7 @@ struct TaskEditorView: View {
                     subtasksSection
                     if !history.isEmpty { historySection }
                     if !taskAppTotals.isEmpty { appsUsedSection }
+                    if !taskDeviceTotals.isEmpty { devicesUsedSection }
                     if presentation == .sheet { deleteButton }
                 }
                 .padding(20)
@@ -634,6 +635,45 @@ struct TaskEditorView: View {
     private var taskAppTotals: [AnalyticsEngine.AppTotal] {
         let sessions = FocusSessionLog.shared.records.filter { $0.taskID == draft.id }
         return AnalyticsEngine.appTotals(sessions: sessions)
+    }
+
+    /// Which Mac(s) this task's focus sessions ran on, with total focus time
+    /// each — answers "which device did I run this todo on", ranked by time.
+    private var taskDeviceTotals: [(name: String, seconds: TimeInterval)] {
+        let sessions = FocusSessionLog.shared.records.filter {
+            $0.taskID == draft.id && $0.phase == .focus
+        }
+        var byDevice: [String: TimeInterval] = [:]
+        for s in sessions {
+            byDevice[s.deviceName ?? "Unknown Mac", default: 0] += s.seconds
+        }
+        return byDevice.map { (name: $0.key, seconds: $0.value) }
+            .sorted { $0.seconds > $1.seconds }
+    }
+
+    private var devicesUsedSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("RUN ON")
+                .font(.system(size: 10, weight: .heavy, design: .rounded))
+                .tracking(1.2)
+                .foregroundStyle(.white.opacity(0.5))
+            ForEach(taskDeviceTotals, id: \.name) { dev in
+                HStack(spacing: 10) {
+                    Image(systemName: "desktopcomputer")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.6))
+                        .frame(width: 20)
+                    Text(dev.name)
+                        .font(.system(.caption, design: .rounded).weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                    Text(FocusReport.durationLabel(dev.seconds))
+                        .font(.system(.caption2, design: .rounded).weight(.bold).monospacedDigit())
+                        .foregroundStyle(accent)
+                }
+            }
+        }
     }
 
     private var appsUsedSection: some View {
