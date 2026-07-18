@@ -183,7 +183,7 @@ struct SharinganCalendar: View {
     /// Open tasks per due-day — powers the workload dots.
     private var dueCounts: [Date: Int] {
         var counts: [Date: Int] = [:]
-        for t in store.tasks where !t.isDone {
+        for t in store.tasks where !t.isDone && t.trashedAt == nil {
             guard let due = t.dueDate else { continue }
             counts[cal.startOfDay(for: due), default: 0] += 1
         }

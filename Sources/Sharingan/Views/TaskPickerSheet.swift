@@ -36,7 +36,7 @@ struct TaskPickerSheet: View {
     }
 
     private var allOpenTasks: [TaskItem] {
-        store.tasks.filter { !$0.isDone }
+        store.tasks.filter { !$0.isDone && $0.trashedAt == nil }
     }
 
     /// The list as shown: open tasks, narrowed by the filter menu, in the

@@ -19,7 +19,7 @@ struct EisenhowerView: View {
     /// Open tasks bucketed by quadrant, in the enum's canonical card order.
     private var buckets: [(quadrant: EisenhowerQuadrant, items: [TaskItem])] {
         let now = Date()
-        let open = store.tasks.filter { !$0.isDone }
+        let open = store.tasks.filter { !$0.isDone && $0.trashedAt == nil }
         var byQuadrant: [EisenhowerQuadrant: [TaskItem]] = [:]
         for task in open {
             byQuadrant[EisenhowerQuadrant.classify(task, now: now), default: []].append(task)

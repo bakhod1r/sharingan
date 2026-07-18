@@ -641,6 +641,7 @@ public final class TaskStore: ObservableObject {
         copy.pomodorosDone = 0
         copy.completedAt = nil
         copy.createdAt = Date()
+        copy.number = 0        // a copy is a new task — persist() assigns it the next code, not the original's
         for k in copy.subtasks.indices {
             copy.subtasks[k].id = UUID()
             copy.subtasks[k].isDone = false

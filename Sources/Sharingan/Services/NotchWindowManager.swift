@@ -153,7 +153,7 @@ final class NotchWindowManager {
         // stand-in for "most recently relevant" — a task added just now is the
         // likeliest thing the user means to work on.
         let fallback = store.tasks
-            .filter { !$0.isDone }
+            .filter { !$0.isDone && $0.trashedAt == nil }
             .sorted { $0.createdAt > $1.createdAt }
         return NotchTaskRows.rows(today: store.grouped(filter: .today).flatMap(\.items),
                                   queue: AppServices.focusQueue.taskIDs,

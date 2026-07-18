@@ -65,7 +65,7 @@ struct WeeklyBoardView: View {
         days.reduce(0) { $0 + boardItems(store.tasksPlanned(on: $1)).count }
     }
 
-    private var hasAnyOpenTask: Bool { store.tasks.contains { !$0.isDone } }
+    private var hasAnyOpenTask: Bool { store.tasks.contains { !$0.isDone && $0.trashedAt == nil } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {

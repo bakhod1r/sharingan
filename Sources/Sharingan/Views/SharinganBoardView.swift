@@ -46,7 +46,7 @@ struct SharinganBoardView: View {
     /// Tasks shown in a column: the Done column holds every completed task;
     /// other columns hold open tasks that resolve to them.
     private func tasks(in column: BoardColumn) -> [TaskItem] {
-        let all = store.tasks
+        let all = store.tasks.filter { $0.trashedAt == nil }
         let picked: [TaskItem]
         if column.role == .done {
             picked = all.filter(\.isDone)
@@ -112,7 +112,7 @@ struct SharinganBoardView: View {
                 Text("Board")
                     .font(.system(.largeTitle, design: .rounded).weight(.bold))
                     .foregroundStyle(.white)
-                let open = store.tasks.filter { !$0.isDone }.count
+                let open = store.tasks.filter { !$0.isDone && $0.trashedAt == nil }.count
                 Text(open == 0 ? "All clear" : "\(open) open task\(open == 1 ? "" : "s")")
                     .font(.system(.subheadline, design: .rounded))
                     .foregroundStyle(.white.opacity(0.5))

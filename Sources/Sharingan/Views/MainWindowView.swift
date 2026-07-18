@@ -305,7 +305,7 @@ struct MainWindowView: View {
     /// "+" adds a custom category; a custom category's context menu deletes it.
     @ViewBuilder
     private var categoriesSection: some View {
-        let counts = Dictionary(grouping: tasks.tasks.filter { !$0.isDone },
+        let counts = Dictionary(grouping: tasks.tasks.filter { !$0.isDone && $0.trashedAt == nil },
                                 by: \.category).mapValues(\.count)
         if sidebarCollapsed {
             railGroupTile("cats", icon: "number", help: "Categories") {
@@ -365,7 +365,7 @@ struct MainWindowView: View {
     /// pencil opens rename/recolor/delete.
     @ViewBuilder
     private var projectsSection: some View {
-        let counts = Dictionary(grouping: tasks.tasks.filter { !$0.isDone && $0.project != nil },
+        let counts = Dictionary(grouping: tasks.tasks.filter { !$0.isDone && $0.trashedAt == nil && $0.project != nil },
                                 by: { $0.project ?? "" }).mapValues(\.count)
         if sidebarCollapsed {
             railGroupTile("projs", icon: "folder", help: "Projects") {
@@ -658,7 +658,7 @@ struct MainWindowView: View {
     /// everywhere. Tags are born by typing #tag when adding/editing a task.
     @ViewBuilder
     private var tagsSection: some View {
-        let open = tasks.tasks.filter { !$0.isDone }
+        let open = tasks.tasks.filter { !$0.isDone && $0.trashedAt == nil }
         let counts: [String: Int] = open.reduce(into: [:]) { acc, t in
             for tag in t.tags { acc[tag, default: 0] += 1 }
         }
@@ -834,7 +834,7 @@ struct MainWindowView: View {
     /// color are editable via the row's hover pencil.
     @ViewBuilder
     private var prioritySection: some View {
-        let open = tasks.tasks.filter { !$0.isDone }
+        let open = tasks.tasks.filter { !$0.isDone && $0.trashedAt == nil }
         if sidebarCollapsed {
             railGroupTile("prio", icon: "flag", help: "Priority") {
                 ForEach(TaskPriority.levels(custom: timer.settings.customPriorityLevels)) { p in
