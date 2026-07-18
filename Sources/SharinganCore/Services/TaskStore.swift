@@ -754,6 +754,33 @@ public final class TaskStore: ObservableObject {
             .sorted(by: Self.inListOrder)
     }
 
+    /// Open tasks due on the given day, in list order — the weekly board draws
+    /// its columns by due date, so a card sits under whichever day its deadline
+    /// falls on. Trashed tasks are excluded.
+    public func tasksDue(on day: Date) -> [TaskItem] {
+        let cal = Calendar.current
+        return tasks
+            .filter { $0.trashedAt == nil && !$0.isDone
+                && ($0.dueDate.map { cal.isDate($0, inSameDayAs: day) } ?? false) }
+            .sorted(by: Self.inListOrder)
+    }
+
+    /// Open tasks with no due date — the weekly board's backlog column when it
+    /// is organized by due date.
+    public var undatedTasks: [TaskItem] {
+        tasks.filter { $0.trashedAt == nil && !$0.isDone && $0.dueDate == nil }
+            .sorted(by: Self.inListOrder)
+    }
+
+    /// Clears a task's due date (dragging a card back onto the backlog column).
+    /// Cancels any pending deadline reminders and persists.
+    public func clearDueDate(_ id: UUID) {
+        guard let i = tasks.firstIndex(where: { $0.id == id }) else { return }
+        tasks[i].dueDate = nil
+        cancelDueNotifications(for: id)
+        persist()
+    }
+
     public func toggleDone(_ id: UUID) {
         guard let i = tasks.firstIndex(where: { $0.id == id }) else { return }
         tasks[i].isDone.toggle()

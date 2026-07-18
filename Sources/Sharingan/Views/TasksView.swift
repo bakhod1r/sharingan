@@ -2179,6 +2179,25 @@ struct TasksView: View {
                 .accessibilityLabel("Open details for \(task.title)")
             }
 
+            // Hover-revealed disclosure chevron: hovering any row reveals a
+            // chevron.down that toggles the inline subtasks/notes panel (where
+            // steps are viewed *and added*); it flips to point up while open.
+            // (Notch and widget stay chevron-free — full-width surfaces only.)
+            if hovered || expanded.contains(task.id) {
+                Button { toggleExpanded(task) } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(expanded.contains(task.id) ? accent : Color.dsTertiary)
+                        .rotationEffect(.degrees(expanded.contains(task.id) ? 180 : 0))
+                        .frame(width: 20, height: 20)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.pressableSubtle)
+                .help(expanded.contains(task.id) ? "Hide subtasks & notes" : "Show subtasks & notes")
+                .accessibilityLabel("Toggle subtasks and notes for \(task.title)")
+                .transition(.opacity)
+            }
+
             // Every secondary action — including the subtasks/notes expander
             // the chevron used to own — lives in this one ⋮ menu, so the row
             // spends its width on the title instead of a control ladder.

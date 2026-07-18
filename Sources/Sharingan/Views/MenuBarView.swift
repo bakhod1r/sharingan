@@ -745,6 +745,27 @@ struct MenuBarView: View {
                 }
             }
 
+            // Hover-revealed disclosure chevron: reveals on hover and toggles
+            // the inline subtasks/notes panel (where steps are viewed and added).
+            if hoveredTask == task.id || expandedTasks.contains(task.id) {
+                Button {
+                    withAnimation(DS.Motion.gentle) {
+                        if expandedTasks.contains(task.id) { expandedTasks.remove(task.id) }
+                        else { expandedTasks.insert(task.id) }
+                    }
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(expandedTasks.contains(task.id) ? accent : Color.dsTertiary)
+                        .rotationEffect(.degrees(expandedTasks.contains(task.id) ? 180 : 0))
+                        .frame(width: 16, height: 20)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.pressableSubtle)
+                .help(expandedTasks.contains(task.id) ? "Hide subtasks & notes" : "Show subtasks & notes")
+                .transition(.opacity)
+            }
+
             // Every secondary action, subtasks/notes included, lives in this ⋮
             // menu — the chevron used to sit here and cost the title width.
             Menu {

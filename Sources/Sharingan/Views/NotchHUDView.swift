@@ -196,7 +196,31 @@ struct NotchHUDView: View {
                 // overshoot safe: anything a content spring throws outside the
                 // silhouette is eaten here.
                 .clipShape(IslandShape(silhouette: l.silhouette))
+                // In the expanded state, paint the stem strip (the menu-bar row
+                // under the cutout) in the body's own tone instead of leaving it
+                // the black cutout-imitation. The body then reads as one themed
+                // slab rising all the way to the hardware notch — the black
+                // block that otherwise stands between panel and notch is gone.
+                // (The real notch is a hardware cutout, so whatever sits under it
+                // is hidden; only the strip *below* the notch shows, and it now
+                // matches the panel.)
+                .overlay(alignment: .top) { expandedStem(l) }
                 .transition(.opacity)
+        }
+    }
+
+    /// Fills the cutout-width stem strip with the body tone while expanded, so
+    /// the panel connects to the hardware notch seamlessly (no black block).
+    @ViewBuilder
+    private func expandedStem(_ l: NotchLayout) -> some View {
+        if model.state.size == .expanded {
+            let theme = timer.settings.theme
+            LinearGradient(colors: theme.surface,
+                           startPoint: .topLeading, endPoint: .bottomTrailing)
+                .overlay(Color.black.opacity(Self.flatDarkening))
+                .frame(width: l.silhouette.stemWidth, height: l.silhouette.bodyTop + 2)
+                .frame(width: l.island.width, height: l.island.height, alignment: .top)
+                .allowsHitTesting(false)
         }
     }
 
