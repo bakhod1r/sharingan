@@ -1042,7 +1042,7 @@ struct MainWindowView: View {
                                          startPoint: .topLeading,
                                          endPoint: .bottomTrailing))
                     .frame(width: 14, height: 14)
-                    .overlay(Circle().stroke(.white.opacity(0.35), lineWidth: 1))
+                    .overlay(Circle().stroke(.white.opacity(0.5), lineWidth: 1))
             } trailing: {
                 Text(timer.settings.theme.label)
                     .font(.system(size: 13, design: .rounded))
@@ -1066,35 +1066,49 @@ struct MainWindowView: View {
     private var themePicker: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text("Theme").dsSectionLabel().padding(.horizontal, 12).padding(.bottom, 4)
-            ForEach(SharinganTheme.allCases, id: \.self) { theme in
-                let current = timer.settings.theme == theme
-                Button {
-                    withAnimation(DS.Motion.gentle) { timer.settings.theme = theme }
-                    showThemePicker = false
-                } label: {
-                    HStack(spacing: 10) {
-                        Circle()
-                            .fill(LinearGradient(colors: theme.gradient,
-                                                 startPoint: .topLeading,
-                                                 endPoint: .bottomTrailing))
-                            .frame(width: 16, height: 16)
-                            .overlay(Circle().stroke(.white.opacity(0.35), lineWidth: 1))
-                        Text(theme.label)
-                            .font(.system(size: 13, design: .rounded)
-                                .weight(current ? .semibold : .regular))
-                            .foregroundStyle(.white.opacity(current ? 1 : 0.75))
-                        Spacer()
-                        if current {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(theme.accent)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(SharinganTheme.allCases, id: \.self) { theme in
+                        let current = timer.settings.theme == theme
+                        Button {
+                            withAnimation(DS.Motion.gentle) { timer.settings.theme = theme }
+                            showThemePicker = false
+                        } label: {
+                            HStack(spacing: 10) {
+                                Circle()
+                                    .fill(LinearGradient(colors: theme.gradient,
+                                                         startPoint: .topLeading,
+                                                         endPoint: .bottomTrailing))
+                                    .frame(width: 16, height: 16)
+                                    .overlay(Circle().stroke(.white.opacity(0.5), lineWidth: 1))
+                                Text(theme.label)
+                                    .font(.system(size: 13, design: .rounded)
+                                        .weight(current ? .semibold : .regular))
+                                    .foregroundStyle(.white.opacity(current ? 1 : 0.75))
+                                if theme.isPremium {
+                                    Text("PRO")
+                                        .font(.system(size: 8, weight: .heavy, design: .rounded))
+                                        .foregroundStyle(theme.accent)
+                                        .padding(.horizontal, 4).padding(.vertical, 1)
+                                        .background(Capsule().fill(theme.accent.opacity(0.16)))
+                                        .overlay(Capsule().stroke(theme.accent.opacity(0.4),
+                                                                  lineWidth: 0.5))
+                                }
+                                Spacer()
+                                if current {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundStyle(theme.accent)
+                                }
+                            }
+                            .padding(.horizontal, 12).padding(.vertical, 7)
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.pressableSubtle)
                     }
-                    .padding(.horizontal, 12).padding(.vertical, 7)
-                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.pressableSubtle)
             }
+            .frame(maxHeight: 340)
         }
         .padding(.vertical, 10)
         .frame(width: 190)

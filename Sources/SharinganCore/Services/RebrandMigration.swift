@@ -23,10 +23,6 @@ public enum RebrandMigration {
     /// screen's RIGHT edge; AppKit reads it only at item creation).
     public static let menuBarSlotKey = "NSStatusItem Preferred Position sharingan.menubar"
 
-    /// The far-right slot next to the system items — visible on every Mac,
-    /// and the same value `rescueFromNotchIfHidden` seeds.
-    public static let rightmostSlot = 6.0
-
     /// Old→new UserDefaults keys (values copied verbatim, old kept).
     static let keyMap: [(old: String, new: String)] = [
         ("com.blink.settings", "com.sharingan.settings"),
@@ -90,9 +86,11 @@ public enum RebrandMigration {
             && defaults.object(forKey: key) == nil {
             defaults.set(value, forKey: key)
         }
-        if defaults.object(forKey: menuBarSlotKey) == nil {
-            defaults.set(rightmostSlot, forKey: menuBarSlotKey)
-        }
+        // No slot seeding: seeding the far-right slot (6 pt) re-parked the
+        // icon under the system Clock on macOS 26, where it draws over the
+        // item and it never appears. AppDelegate clears any stored slot on
+        // every launch so AppKit places a slotless item left of the system
+        // items itself.
     }
 
     public static func migrateDefaults(_ defaults: UserDefaults) {

@@ -5,111 +5,59 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
-## [1.10.0] - 2026-07-18
+## [1.9.0] - 2026-07-18
+
+### Added
+- **Analytics dashboard** — a unified page (replacing the standalone Progress
+  page) with scrollable, icon-labelled tabs and one shared filter bar:
+  - **Overview** — a hero KPI row (focus time, sessions, day streak, active
+    days) with count-up numbers, a full-width focus-trend chart (gradient
+    area + scrubbable tooltip + ↑/↓ % vs the window's first half), and the
+    daily **Focus Score** and **Consistency Score** rings. A burnout banner
+    and smart-insight cards surface here.
+  - **Progress** — the previous stats summary, streak, and charts.
+  - **Heatmap** — GitHub-style yearly grid of completed pomodoros (month +
+    weekday labels, hover details).
+  - **Focus load** — focus minutes per hour of day; Today shows the day's
+    curve with a rolling average, a wider range the total hourly load.
+  - **Timeline** — a day's sessions across the clock with a calendar date
+    picker to replay any past day (time machine).
+  - **Apps** — which apps were frontmost during focus, ranked by time.
+  - **Report** — the per-task focus report.
+  - **Export** — the filtered session history as CSV, real .xlsx
+    (dependency-free writer), or a one-page PDF.
+- **Per-session focus log** (`focus-sessions.json`): every finished session
+  (completed, or abandoned after ≥1 min) records start/end, phase, task,
+  planned length, per-app usage, and originating Mac. Writes never block the
+  timer; a corrupt file is set aside, not fatal.
+- **Filters** — a time range (Today / 1W / 1M / 3M / 1Y or a custom calendar
+  from→to range), multi-select category / project / tag facets, a completed-only
+  toggle, and a per-Mac device filter — all driving every tab.
+- **Active app tracking** — records the frontmost app during focus (app-level
+  only, no window titles, no Accessibility permission), configurable in
+  Settings → Tasks & Planning → Analytics (Off / During focus only / Always).
+- **Burnout detection** — an Overview banner and once-a-day notification on
+  warning signs (huge days, heavy streaks, skipped breaks, late-night focus).
+- **Smart insights** — best hour, best weekday, break/abandon nudges.
 
 ### Changed
-- **Unified Dashboard** — the separate **Progress**, **Analytics**, and
-  **Report** sidebar pages are now one **Dashboard** page with scrollable,
-  icon-labelled tabs: Overview, Progress, Heatmap, Focus load, Timeline,
-  Apps, Report, Export. One shared filter bar drives them all.
+- The **Big** pomodoro size is now called **Deep Work** (saved data unchanged;
+  task search still matches both "deep work" and "big").
+
+## [1.8.0] - 2026-07-18
 
 ### Added
-- **Premium Overview** — a hero KPI row (focus time, sessions, day streak,
-  active days) with count-up numbers and a staggered card entrance, a
-  full-width **focus-trend chart** (gradient area + smooth line + scrubbable
-  tooltip, with a ↑/↓ % badge comparing the window's two halves; draws itself
-  in on appear), above the Focus/Consistency score rings. Inspired by the
-  reference dashboards. All motion honours Reduce Motion.
-- **Calendar range picker** — a custom **from → to** date range (popover
-  with two date pickers) that overrides the preset ranges across every tab
-  and the score averages.
-- **Per-Mac analytics** — sessions now record which Mac they ran on
-  (`SessionRecord.deviceName`); a device filter in the bar (shown when more
-  than one Mac has data) slices every tab by machine.
-- **Apps used per task** — the task editor now shows which apps were
-  frontmost while focusing on that todo (its own and its subtasks'
-  sessions), ranked by time with icon + share bar.
-
-### Technical
-- `AnalyticsFilter` gains `devices`, `customStart/customEnd`, and
-  `interval(now:)` / `spanDays` / `heatmapSpanDays` helpers.
-- `AnalyticsEngine` gains `appTotals(sessions:)`, `devices(in:)`, and a
-  `devices:` argument on `filter(...)`.
-
-## [1.9.0] - 2026-07-17
-
-### Added
-- **Active app tracking** — Analytics → **Apps** tab shows which apps you
-  were focused in, ranked by time with icons and share bars. App-level
-  only (no window titles, no Accessibility permission), stored on your
-  Mac. Configurable in Settings → Tasks & Planning → Analytics
-  (Off / During focus only / Always; default focus-only).
-- **Timeline** tab — a day's sessions laid out across the clock (focus,
-  breaks, abandoned) with a session list; the day pager is a **time
-  machine** to replay any past day.
-- **Burnout detection** — an Overview banner (and a once-a-day
-  notification) when recent sessions show warning signs: huge days,
-  heavy streaks, skipped breaks, or repeated late-night focus.
-- **Smart insights** — templated suggestions on the Overview (best hour,
-  best weekday, break/abandon nudges).
-- **Export** tab — save the filtered session history as **CSV**, real
-  **.xlsx** (dependency-free writer), or a one-page **PDF** summary.
-
-## [1.8.2] - 2026-07-17
+- 13 new themes, and every theme's surfaces were reworked for legible
+  contrast in both light and dark.
+- The task list now loads in pages of 20 with an auto-loading "load more"
+  footer (a progress ring of how far through the list you are), so even a
+  few hundred tasks stay smooth to scroll.
+- Double-click a task row to expand its subtasks & notes panel.
 
 ### Changed
-- **Analytics filters are now multi-select** — pick several categories,
-  projects, and tags at once (OR within a facet, AND across facets); each
-  choice shows as a removable chip with a "Clear all".
-- **GitHub-style heatmap** — month labels along the top, weekday labels
-  down the left, rounded cells, and a range-driven span.
-- The **time range** now applies to every Analytics tab: it averages the
-  Overview scores, sets how far the heatmap spans (4 weeks … 1 year), and
-  drives the focus-load chart — Today shows the day's curve with a rolling
-  average, a wider range shows the total hourly load across that window.
-
-### Added
-- The **Big** pomodoro size is now called **Deep Work** (its saved data is
-  unchanged; task search still matches both "deep work" and "big").
-
-### Added
-- **Analytics filters** — a filter bar on the Analytics page:
-  - **Time range** (Today / 1W / 1M / 3M / 1Y) averages the Overview
-    Focus and Consistency scores over the window (past-day plan adherence
-    is unknown, so it uses its neutral default; the streak is
-    reconstructed from the session log).
-  - **Category / Project / Tag** narrows every tab to sessions credited
-    to matching tasks, with a "Filtered by …" chip (✕ to clear). The
-    heatmap recomputes from the session log while a filter is active.
-  - **Completed only** toggle drops skipped/abandoned sessions.
-
-### Changed
-- The Analytics page now uses the full window width (like the weekly
-  board) and scrolls, with larger score gauges — it was cramped in a
-  640pt column before.
-
-## [1.8.0] - 2026-07-17
-
-### Added
-- **Analytics page** (sidebar, between Progress and Report) with three tabs:
-  - **Overview** — daily **Focus Score** (0–100: focus volume vs goal,
-    completion ratio, break compliance, deep blocks) and **Consistency
-    Score** (plan adherence, start-time regularity, streak), drawn as
-    accent ring gauges. No sessions yet ⇒ "—", never a fake zero.
-  - **Heatmap** — GitHub-style yearly grid of completed pomodoros with a
-    5-step intensity legend and hover details, fed from the long-lived
-    daily history so it's full even before the new session log grows.
-  - **Focus load** — minutes of focus per hour of day ("diqqat
-    cho'qqilari") for any day (◀ ▶ pager) with a dashed 30-day-average
-    overlay.
-- **Per-session focus log**: every really-finished session (completed, or
-  skipped/stopped after ≥1 minute) is recorded with start/end, phase,
-  completion, planned length, and the focused task — the foundation for
-  the timeline/replay, time machine, burnout detection, and export
-  features coming next. Stored locally in `focus-sessions.json` (400-day
-  retention); writes never block the timer; a corrupt file is set aside,
-  never crashes the app. Mirrored (synced-from-another-Mac) sessions are
-  logged only by the owning Mac.
+- Large task lists scroll far more smoothly: the list is now a single flat
+  lazy stack that only builds the rows near the viewport, and the grouped
+  view is cached instead of being recomputed on every hover.
 
 ## [1.7.3] - 2026-07-17
 

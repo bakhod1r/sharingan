@@ -112,15 +112,17 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         }
     }
 
-    /// Forces the far-right slot on EVERY launch (1.7.2): the icon always
-    /// appears at the end of the menu bar, next to the system items — the
-    /// rightmost position a third-party item can hold, visible on every Mac
-    /// including notched ones. A ⌘-drag still works within the session but
-    /// deliberately no longer survives a relaunch; a stored stale/negative
-    /// slot (the 1.7.0 bad seed, or one parked under the notch) can hide the
-    /// icon for good, and always-visible wins over drag persistence.
+    /// Clears any stored menu-bar slot on EVERY launch (1.7.4). The 1.7.2
+    /// forced far-right slot (6 pt from the right edge) lands *under the
+    /// system Clock* on macOS 26, which draws over the item — the icon was
+    /// permanently invisible even though the item was placed. With no stored
+    /// position AppKit assigns the slot immediately left of the system items,
+    /// visible on every Mac including notched ones. A ⌘-drag still works
+    /// within the session but deliberately does not survive a relaunch; a
+    /// stored stale/negative/under-clock slot can hide the icon for good, and
+    /// always-visible wins over drag persistence.
     private func forceFarRightPosition() {
-        UserDefaults.standard.set(6.0, forKey: Self.positionKey)
+        UserDefaults.standard.removeObject(forKey: Self.positionKey)
     }
 
     /// Creates (or re-creates) the status item and wires its button. Split out
@@ -196,10 +198,11 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         }()
         guard !inMenuBar || behindHousing else { return }
 
-        // Re-seat the item where the system items sit — the rightmost slot a
-        // third-party item can hold, visible on every Mac. Distance from the
-        // screen's right edge; small means far right.
-        UserDefaults.standard.set(6.0, forKey: Self.positionKey)
+        // Drop the stored slot so AppKit re-places the item itself — it puts
+        // a slotless item immediately left of the system items, visible on
+        // every Mac. (Seeding 6 pt from the right edge instead re-parked it
+        // under the Clock on macOS 26, where the system draws over it.)
+        UserDefaults.standard.removeObject(forKey: Self.positionKey)
         // Hiding and re-showing makes AppKit place the window again from
         // scratch. Rebuilding the item alone does not: a parked item is parked
         // again the moment it is re-created, which is what every relaunch was
