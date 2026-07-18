@@ -3,8 +3,6 @@
 All notable changes to Sharingan are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
-
 ## [1.11.0] - 2026-07-18
 
 ### Added
