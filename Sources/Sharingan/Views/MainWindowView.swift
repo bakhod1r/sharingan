@@ -437,7 +437,7 @@ struct MainWindowView: View {
                 Spacer()
                 if hoveredRowKey == key {
                     editPencil {
-                        editProjName = ""
+                        editProjName = proj.name
                         editingProject = proj.name
                     }
                 } else if count > 0 {
@@ -467,45 +467,40 @@ struct MainWindowView: View {
     /// Rename + color editor for a project, with delete (tasks fall back to
     /// "no project") at the bottom.
     private func projectEditorPopover(_ proj: TaskCategory) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(proj.name).dsSectionLabel()
+        VStack(alignment: .leading, spacing: 12) {
+            editorPreview(icon: tasks.projectIcon(proj.name), name: proj.name,
+                          colorHex: tasks.projectColor(proj.name))
+            Divider().overlay(Color.white.opacity(0.1))
+
+            Text("Name").dsSectionLabel()
             TextField(proj.name, text: $editProjName)
                 .textFieldStyle(DarkGlassFieldStyle())
-                .frame(width: 180)
+                .frame(width: 200)
                 .onSubmit {
                     if tasks.renameProject(proj.name, to: editProjName) {
                         editingProject = nil
                     }
                 }
+
+            Text("Icon").dsSectionLabel()
             iconGrid(selected: tasks.projectIcon(proj.name)) { tasks.setProjectIcon(proj.name, icon: $0) }
-            HStack(spacing: 6) {
-                ForEach(TaskCategory.palette, id: \.self) { hex in
-                    Button {
-                        tasks.setProjectColor(proj.name, colorHex: hex)
-                    } label: {
-                        Circle()
-                            .fill(Color(hex: hex))
-                            .frame(width: 16, height: 16)
-                            .overlay(Circle().stroke(
-                                .white.opacity(tasks.projectColor(proj.name) == hex ? 0.9 : 0),
-                                lineWidth: 2))
-                    }
-                    .buttonStyle(.pressableSubtle)
-                }
+
+            Text("Color").dsSectionLabel()
+            colorPalette(current: tasks.projectColor(proj.name)) { tasks.setProjectColor(proj.name, colorHex: $0) }
+
+            Divider().overlay(Color.white.opacity(0.1))
+            Button(role: .destructive) {
+                tasks.deleteProject(proj.name)
+                editingProject = nil
+            } label: {
+                Label("Delete project", systemImage: "trash")
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(.red.opacity(0.9))
             }
-            HStack {
-                Spacer()
-                Button(role: .destructive) {
-                    tasks.deleteProject(proj.name)
-                    editingProject = nil
-                } label: {
-                    Text("Delete project")
-                        .foregroundStyle(.red.opacity(0.9))
-                }
-            }
-            .font(.system(.caption, design: .rounded))
+            .buttonStyle(.plain)
         }
         .padding(14)
+        .frame(width: 248)
     }
 
     /// Precreate a tag with no color UI — per-tag icon/color live on the
@@ -576,7 +571,7 @@ struct MainWindowView: View {
                 Spacer()
                 if hoveredRowKey == key {
                     editPencil {
-                        editCatName = ""
+                        editCatName = cat.name
                         editingCategory = cat.name
                     }
                 } else if count > 0 {
@@ -624,54 +619,81 @@ struct MainWindowView: View {
         .frame(width: 220)
     }
 
+    /// Live preview chip — the current icon in the current color, with the name.
+    private func editorPreview(icon: String, name: String, colorHex: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color(hex: colorHex))
+                .frame(width: 24, height: 24)
+                .background(RoundedRectangle(cornerRadius: 6).fill(Color(hex: colorHex).opacity(0.15)))
+            Text(name.isEmpty ? "—" : name)
+                .font(.system(.callout, design: .rounded).weight(.semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// Color palette row bound to a getter/setter.
+    private func colorPalette(current: String, choose: @escaping (String) -> Void) -> some View {
+        HStack(spacing: 6) {
+            ForEach(TaskCategory.palette, id: \.self) { hex in
+                Button { choose(hex) } label: {
+                    Circle()
+                        .fill(Color(hex: hex))
+                        .frame(width: 16, height: 16)
+                        .overlay(Circle().stroke(.white.opacity(current == hex ? 0.9 : 0), lineWidth: 2))
+                }
+                .buttonStyle(.pressableSubtle)
+            }
+        }
+    }
+
     private func categoryEditorPopover(_ cat: TaskCategory) -> some View {
         let custom = tasks.isCustomCategory(cat.name)
-        return VStack(alignment: .leading, spacing: 10) {
-            Text("#\(cat.name)").dsSectionLabel()
+        return VStack(alignment: .leading, spacing: 12) {
+            editorPreview(icon: tasks.icon(for: cat.name), name: cat.name,
+                          colorHex: tasks.color(for: cat.name))
+            Divider().overlay(Color.white.opacity(0.1))
+
+            Text("Name").dsSectionLabel()
             if custom {
                 TextField(cat.name, text: $editCatName)
                     .textFieldStyle(DarkGlassFieldStyle())
-                    .frame(width: 180)
+                    .frame(width: 200)
                     .onSubmit {
                         if tasks.renameCategory(cat.name, to: editCatName) {
                             editingCategory = nil
                         }
                     }
+            } else {
+                Text("\(cat.name) · built-in preset (name fixed)")
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.5))
             }
+
+            Text("Icon").dsSectionLabel()
             iconGrid(selected: tasks.icon(for: cat.name)) { tasks.setIcon(for: cat.name, icon: $0) }
-            HStack(spacing: 6) {
-                ForEach(TaskCategory.palette, id: \.self) { hex in
-                    Button {
-                        tasks.setColor(for: cat.name, colorHex: hex)
-                    } label: {
-                        Circle()
-                            .fill(Color(hex: hex))
-                            .frame(width: 16, height: 16)
-                            .overlay(Circle().stroke(
-                                .white.opacity(tasks.color(for: cat.name) == hex ? 0.9 : 0),
-                                lineWidth: 2))
-                    }
-                    .buttonStyle(.pressableSubtle)
+
+            Text("Color").dsSectionLabel()
+            colorPalette(current: tasks.color(for: cat.name)) { tasks.setColor(for: cat.name, colorHex: $0) }
+
+            if custom {
+                Divider().overlay(Color.white.opacity(0.1))
+                Button(role: .destructive) {
+                    tasks.deleteCategory(cat.name)
+                    editingCategory = nil
+                } label: {
+                    Label("Delete category", systemImage: "trash")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(.red.opacity(0.9))
                 }
+                .buttonStyle(.plain)
             }
-            HStack {
-                Spacer()
-                if custom {
-                    Button(role: .destructive) {
-                        tasks.deleteCategory(cat.name)
-                        editingCategory = nil
-                    } label: {
-                        Text("Delete category")
-                            .foregroundStyle(.red.opacity(0.9))
-                    }
-                } else {
-                    Text("Preset — rename & delete unavailable")
-                        .foregroundStyle(.white.opacity(0.5))
-                }
-            }
-            .font(.system(.caption, design: .rounded))
         }
         .padding(14)
+        .frame(width: 248)
     }
 
     /// Todoist's "Labels": free-form tags across all tasks, most-used first.
