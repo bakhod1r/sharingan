@@ -472,14 +472,27 @@ struct AnalyticsView: View {
             ? cal.startOfDay(for: filter.customEnd ?? Date())
             : cal.startOfDay(for: Date())
         let today = cal.startOfDay(for: Date())
-        let doneDays = completedFocusDays
+
+        // Filter the whole log ONCE and bucket by day, so the per-day loop below
+        // is O(1) dict lookups instead of re-scanning every record 15× per day
+        // (which froze the Overview on a 1-year range). `allowedTaskIDs` is also
+        // resolved once here rather than inside every `filtered` call.
+        let allowed = allowedTaskIDs
+        let all = AnalyticsEngine.filter(sessions: log.records,
+                                         completedOnly: filter.completedOnly,
+                                         allowedTaskIDs: allowed,
+                                         devices: filter.devices)
+        let byDay = Dictionary(grouping: all) { cal.startOfDay(for: $0.start) }
+        let doneDays = Set(all
+            .filter { $0.phase == .focus && $0.completed }
+            .map { cal.startOfDay(for: $0.start) })
+
         var focusScores: [Int?] = []
         var consistencyScores: [Int?] = []
-
         for back in 0..<filter.spanDays {
             guard let day = cal.date(byAdding: .day, value: -back, to: anchor)
             else { continue }
-            let daySessions = filtered(log.sessions(on: day))
+            let daySessions = byDay[day] ?? []
 
             focusScores.append(AnalyticsEngine.focusScore(
                 sessions: daySessions,
@@ -489,7 +502,7 @@ struct AnalyticsView: View {
             let recent: [[SessionRecord]] = (1...14).compactMap { b in
                 guard let d = cal.date(byAdding: .day, value: -b, to: day)
                 else { return nil }
-                let s = filtered(log.sessions(on: d))
+                let s = byDay[d] ?? []
                 return s.isEmpty ? nil : s
             }
             let isToday = cal.isDate(day, inSameDayAs: today)
@@ -610,8 +623,9 @@ struct AnalyticsView: View {
         let sessions = kpiFocus
         let totalMinutes = sessions.reduce(0.0) { $0 + $1.seconds } / 60
         let days = Set(sessions.map { Calendar.current.startOfDay(for: $0.start) }).count
-        let cols = [GridItem(.adaptive(minimum: 150, maximum: 260), spacing: 14)]
-        return LazyVGrid(columns: cols, spacing: 14) {
+        // One row of equal-width cards that stretch to fill the page, so the
+        // number always has room on a single line (no more 3-line "89h / 10 / m").
+        return HStack(spacing: 14) {
             kpiCard(icon: "clock.fill", value: totalMinutes,
                     format: { focusDuration(Int($0)) }, label: "Focus time",
                     tint: accent, index: 0)
@@ -625,6 +639,7 @@ struct AnalyticsView: View {
                     format: { "\(Int($0))" }, label: "Active days",
                     tint: .green, index: 3)
         }
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private func kpiCard(icon: String, value: Double,
@@ -642,8 +657,7 @@ struct AnalyticsView: View {
                     .font(.system(size: 26, weight: .bold, design: .rounded).monospacedDigit())
                     .foregroundStyle(.white)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.5)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .minimumScaleFactor(0.6)
                 Text(label)
                     .font(.system(.caption, design: .rounded).weight(.medium))
                     .foregroundStyle(.white.opacity(0.6))
