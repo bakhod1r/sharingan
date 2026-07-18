@@ -477,6 +477,7 @@ struct MainWindowView: View {
                         editingProject = nil
                     }
                 }
+            iconGrid(selected: tasks.projectIcon(proj.name)) { tasks.setProjectIcon(proj.name, icon: $0) }
             HStack(spacing: 6) {
                 ForEach(TaskCategory.palette, id: \.self) { hex in
                     Button {
@@ -604,6 +605,25 @@ struct MainWindowView: View {
 
     /// Rename (custom only) + color editor for a category, with
     /// delete-and-reassign at the bottom for custom categories.
+    /// Shared icon picker for the category and project editors — a wrapping grid
+    /// of `TaskCategory.iconChoices`, the current icon highlighted.
+    private func iconGrid(selected: String, choose: @escaping (String) -> Void) -> some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.fixed(24), spacing: 4), count: 8), spacing: 4) {
+            ForEach(TaskCategory.iconChoices, id: \.self) { icon in
+                Button { choose(icon) } label: {
+                    Image(systemName: icon)
+                        .font(.system(size: 11))
+                        .foregroundStyle(selected == icon ? Color.accentColor : .white.opacity(0.7))
+                        .frame(width: 22, height: 22)
+                        .background(RoundedRectangle(cornerRadius: 5)
+                            .fill(Color.white.opacity(selected == icon ? 0.14 : 0.05)))
+                }
+                .buttonStyle(.pressableSubtle)
+            }
+        }
+        .frame(width: 220)
+    }
+
     private func categoryEditorPopover(_ cat: TaskCategory) -> some View {
         let custom = tasks.isCustomCategory(cat.name)
         return VStack(alignment: .leading, spacing: 10) {
@@ -618,6 +638,7 @@ struct MainWindowView: View {
                         }
                     }
             }
+            iconGrid(selected: tasks.icon(for: cat.name)) { tasks.setIcon(for: cat.name, icon: $0) }
             HStack(spacing: 6) {
                 ForEach(TaskCategory.palette, id: \.self) { hex in
                     Button {

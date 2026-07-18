@@ -296,7 +296,7 @@ public final class TaskStore: ObservableObject {
 
     /// SF Symbol for a category name.
     public func icon(for name: String) -> String {
-        allCategories.first { $0.name == name }?.icon ?? "folder.fill"
+        allCategories.first { $0.name == name }?.icon ?? TaskCategory.defaultCategoryIcon
     }
 
     /// Adds or updates a category (color and/or icon). Works for presets too —
@@ -371,7 +371,7 @@ public final class TaskStore: ObservableObject {
     public var allProjects: [TaskCategory] {
         var result = customProjects
         for name in tasks.compactMap(\.project) where !result.contains(where: { $0.name == name }) {
-            result.append(.init(name: name, colorHex: "#9AA3AF", icon: "folder.fill"))
+            result.append(.init(name: name, colorHex: "#9AA3AF", icon: TaskCategory.defaultProjectIcon))
         }
         return result.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
@@ -381,7 +381,7 @@ public final class TaskStore: ObservableObject {
     }
 
     public func projectIcon(_ name: String) -> String {
-        allProjects.first { $0.name == name }?.icon ?? "folder.fill"
+        allProjects.first { $0.name == name }?.icon ?? TaskCategory.defaultProjectIcon
     }
 
     /// Adds or updates a project's colour/icon. Returns the resolved name.

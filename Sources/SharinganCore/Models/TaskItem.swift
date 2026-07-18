@@ -560,11 +560,20 @@ public struct TaskCategory: Identifiable, Codable, Equatable, Sendable {
         "#FFB020", "#22C3B8", "#FF6B5E", "#9AA3AF",
     ]
 
-    /// SF Symbols offered when choosing a category icon.
+    /// Default fallback icon for a category with no custom icon set — the
+    /// connected-nodes graph glyph.
+    public static let defaultCategoryIcon = "point.3.connected.trianglepath.dotted"
+    /// Default fallback icon for a project with no custom icon set — the grid.
+    public static let defaultProjectIcon = "square.grid.2x2.fill"
+
+    /// SF Symbols offered when choosing a category or project icon. The graph
+    /// and grid glyphs lead so the two new defaults are one tap away.
     public static let iconChoices: [String] = [
+        "point.3.connected.trianglepath.dotted", "square.grid.2x2.fill",
         "briefcase.fill", "book.fill", "person.fill", "heart.fill",
         "folder.fill", "star.fill", "flame.fill", "bolt.fill",
         "cart.fill", "house.fill", "gamecontroller.fill", "dumbbell.fill",
         "cup.and.saucer.fill", "airplane", "pencil", "paintbrush.fill",
+        "graduationcap.fill", "chart.bar.fill", "tag.fill", "flag.fill",
     ]
 }
