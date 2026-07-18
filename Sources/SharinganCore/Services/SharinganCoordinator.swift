@@ -466,6 +466,8 @@ public final class SharinganCoordinator: ObservableObject {
             .sink { [weak self] note in
                 guard var record = note.userInfo?["record"] as? SessionRecord
                 else { return }
+                // Which Mac ran this session, so analytics can slice per machine.
+                record.deviceName = Host.current().localizedName
                 if record.phase == .focus {
                     if let taskID = TaskStore.shared.activeTaskID {
                         record.taskID = taskID

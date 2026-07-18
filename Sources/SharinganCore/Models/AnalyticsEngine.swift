@@ -91,14 +91,23 @@ public enum AnalyticsEngine {
     /// attribution filter) keeps only sessions credited to one of those tasks —
     /// sessions with no task, and tasks outside the set, drop out.
     public static func filter(sessions: [SessionRecord], completedOnly: Bool,
-                              allowedTaskIDs: Set<UUID>?) -> [SessionRecord] {
+                              allowedTaskIDs: Set<UUID>?,
+                              devices: Set<String>? = nil) -> [SessionRecord] {
         sessions.filter { s in
             if completedOnly && !s.completed { return false }
             if let allowed = allowedTaskIDs {
                 guard let id = s.taskID, allowed.contains(id) else { return false }
             }
+            if let devices, !devices.isEmpty {
+                guard let d = s.deviceName, devices.contains(d) else { return false }
+            }
             return true
         }
+    }
+
+    /// Distinct Mac names present in the log, sorted — the device filter's menu.
+    public static func devices(in sessions: [SessionRecord]) -> [String] {
+        Set(sessions.compactMap(\.deviceName)).sorted()
     }
 
     /// Completed focus sessions per start-day — the heatmap's series when a

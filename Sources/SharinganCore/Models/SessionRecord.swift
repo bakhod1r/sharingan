@@ -17,15 +17,19 @@ public struct SessionRecord: Codable, Equatable, Sendable, Identifiable {
     public var taskTitle: String?
     public var plannedSeconds: TimeInterval
     /// Frontmost-app seconds during the session (bundleID → seconds).
-    /// Empty until active-app tracking lands (phase 2).
+    /// Empty when active-app tracking is off for the session.
     public var appUsage: [String: TimeInterval]
+    /// The Mac this session ran on (`Host.current().localizedName`), so a
+    /// multi-Mac user can slice analytics per machine. nil for pre-1.9 records.
+    public var deviceName: String?
 
     public var seconds: TimeInterval { end.timeIntervalSince(start) }
 
     public init(id: UUID = UUID(), start: Date, end: Date, phase: PomodoroPhase,
                 completed: Bool, taskID: UUID? = nil, subtaskID: UUID? = nil,
                 taskTitle: String? = nil, plannedSeconds: TimeInterval,
-                appUsage: [String: TimeInterval] = [:]) {
+                appUsage: [String: TimeInterval] = [:],
+                deviceName: String? = nil) {
         self.id = id
         self.start = start
         self.end = end
@@ -36,6 +40,7 @@ public struct SessionRecord: Codable, Equatable, Sendable, Identifiable {
         self.taskTitle = taskTitle
         self.plannedSeconds = plannedSeconds
         self.appUsage = appUsage
+        self.deviceName = deviceName
     }
 
     // Defensive decoding so adding fields never resets the user's log
@@ -53,5 +58,6 @@ public struct SessionRecord: Codable, Equatable, Sendable, Identifiable {
         plannedSeconds = try c.decodeIfPresent(TimeInterval.self, forKey: .plannedSeconds)
             ?? end.timeIntervalSince(start)
         appUsage = try c.decodeIfPresent([String: TimeInterval].self, forKey: .appUsage) ?? [:]
+        deviceName = try c.decodeIfPresent(String.self, forKey: .deviceName)
     }
 }

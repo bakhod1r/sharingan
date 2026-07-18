@@ -16,12 +16,26 @@ struct AnalyticsView: View {
 
     enum Tab: String, CaseIterable, Identifiable {
         case overview = "Overview"
+        case progress = "Progress"
         case heatmap  = "Heatmap"
         case load     = "Focus load"
         case timeline = "Timeline"
         case apps     = "Apps"
+        case report   = "Report"
         case export   = "Export"
         var id: String { rawValue }
+        var icon: String {
+            switch self {
+            case .overview: return "gauge.with.needle"
+            case .progress: return "chart.line.uptrend.xyaxis"
+            case .heatmap:  return "square.grid.3x3.fill"
+            case .load:     return "chart.bar.fill"
+            case .timeline: return "clock.fill"
+            case .apps:     return "app.badge.fill"
+            case .report:   return "list.bullet.rectangle"
+            case .export:   return "square.and.arrow.up"
+            }
+        }
     }
 
     private var accent: Color { timer.settings.theme.accent }
@@ -30,32 +44,58 @@ struct AnalyticsView: View {
         VStack(alignment: .leading, spacing: 16) {
             tabPicker
             filterBar
-            switch tab {
-            case .overview:
-                overview
-            case .heatmap:
-                AnalyticsHeatmapView(
-                    stats: timer.stats, accent: accent,
-                    // A narrowed view can't read the aggregate history, so feed
-                    // the heatmap a session-derived series instead.
-                    override: filter.narrowsSessions
-                        ? AnalyticsEngine.dailyCounts(from: filteredAllSessions)
-                        : nil,
-                    spanDays: filter.range.heatmapDays)
-            case .load:
-                AnalyticsLoadView(timer: timer, completedOnly: filter.completedOnly,
-                                  allowedTaskIDs: allowedTaskIDs, range: filter.range)
-            case .timeline:
-                AnalyticsTimelineView(timer: timer, completedOnly: filter.completedOnly,
-                                      allowedTaskIDs: allowedTaskIDs)
-            case .apps:
-                AnalyticsAppsView(totals: AnalyticsEngine.appTotals(sessions: rangeSessions),
-                                  accent: accent, range: filter.range,
-                                  trackingMode: timer.settings.appTrackingMode)
-            case .export:
-                AnalyticsExportView(sessions: rangeSessions, accent: accent,
-                                    range: filter.range)
+            Group {
+                switch tab {
+                case .overview:
+                    overview
+                case .progress:
+                    progress
+                case .heatmap:
+                    AnalyticsHeatmapView(
+                        stats: timer.stats, accent: accent,
+                        // A narrowed view can't read the aggregate history, so feed
+                        // the heatmap a session-derived series instead.
+                        override: filter.narrowsSessions || filter.isCustomRange
+                            ? AnalyticsEngine.dailyCounts(from: filteredAllSessions)
+                            : nil,
+                        spanDays: filter.heatmapSpanDays)
+                case .load:
+                    AnalyticsLoadView(timer: timer, completedOnly: filter.completedOnly,
+                                      allowedTaskIDs: allowedTaskIDs, range: filter.range)
+                case .timeline:
+                    AnalyticsTimelineView(timer: timer, completedOnly: filter.completedOnly,
+                                          allowedTaskIDs: allowedTaskIDs)
+                case .apps:
+                    AnalyticsAppsView(totals: AnalyticsEngine.appTotals(sessions: rangeSessions),
+                                      accent: accent, range: filter.range,
+                                      trackingMode: timer.settings.appTrackingMode)
+                case .report:
+                    ReportView(timer: timer)
+                case .export:
+                    AnalyticsExportView(sessions: rangeSessions, accent: accent,
+                                        range: filter.range)
+                }
             }
+            .transition(.opacity.combined(with: .offset(y: 8)))
+            .id(tab)
+        }
+    }
+
+    // MARK: - Progress tab (the former standalone Progress page)
+
+    private var progress: some View {
+        VStack(spacing: 20) {
+            StatsSummaryView(stats: timer.stats,
+                             focusMinutes: timer.settings.focusMinutes,
+                             accent: accent,
+                             dailyGoal: timer.settings.dailyPomodoroGoal)
+                .staggeredAppear(0)
+            StreakBadgeView(streak: timer.stats.streak)
+                .staggeredAppear(1)
+            StatsChartView(stats: timer.stats, accent: accent)
+                .staggeredAppear(2)
+            StatsExtrasView(stats: timer.stats, accent: accent)
+                .staggeredAppear(3)
         }
     }
 
@@ -63,17 +103,22 @@ struct AnalyticsView: View {
 
     @Namespace private var pickerNS
     private var tabPicker: some View {
-        HStack(spacing: 2) {
-            ForEach(Tab.allCases) { t in
-                let selected = t == tab
-                Button {
-                    withAnimation(DS.Motion.standard) { tab = t }
-                } label: {
-                    Text(t.rawValue)
-                        .font(.system(.caption, design: .rounded).weight(.bold))
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 2) {
+                ForEach(Tab.allCases) { t in
+                    let selected = t == tab
+                    Button {
+                        withAnimation(DS.Motion.standard) { tab = t }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: t.icon)
+                                .font(.system(size: 10, weight: .bold))
+                            Text(t.rawValue)
+                                .font(.system(.caption, design: .rounded).weight(.bold))
+                        }
                         .foregroundStyle(selected ? .white : .white.opacity(0.55))
                         .padding(.horizontal, 12)
-                        .frame(height: 26)
+                        .frame(height: 28)
                         .background {
                             if selected {
                                 Capsule().fill(accent.opacity(0.9))
@@ -82,11 +127,12 @@ struct AnalyticsView: View {
                             }
                         }
                         .contentShape(Capsule())
+                    }
+                    .buttonStyle(.pressableSubtle)
                 }
-                .buttonStyle(.pressableSubtle)
             }
+            .padding(3)
         }
-        .padding(3)
         .background(Capsule().fill(Color.white.opacity(0.06)))
     }
 
@@ -95,15 +141,117 @@ struct AnalyticsView: View {
     private var filterBar: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
-                // The Timeline drives its own day via its date picker; a range
-                // makes no sense for a single-day view.
-                if tab != .timeline { rangePicker }
+                // Timeline and Report drive their own day via their own pagers;
+                // a range makes no sense for those single-day views.
+                if tab != .timeline && tab != .report {
+                    if !filter.isCustomRange { rangePicker }
+                    calendarPicker
+                }
                 filterMenu
+                if deviceOptions.count > 1 { deviceMenu }
                 completedToggle
                 Spacer()
             }
             if filter.hasAttributionFilter { chipRow }
         }
+    }
+
+    // MARK: - Calendar "from → to" range
+
+    @State private var showCalendar = false
+    @State private var draftStart = Calendar.current.date(byAdding: .day, value: -6,
+                                                          to: Date()) ?? Date()
+    @State private var draftEnd = Date()
+
+    private var calendarPicker: some View {
+        Button {
+            if filter.isCustomRange {
+                draftStart = filter.customStart ?? draftStart
+                draftEnd = filter.customEnd ?? draftEnd
+            }
+            showCalendar.toggle()
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "calendar")
+                Text(filter.isCustomRange ? customRangeLabel : "Custom")
+            }
+            .font(.system(.caption2, design: .rounded).weight(.semibold))
+            .foregroundStyle(filter.isCustomRange ? accent : .white.opacity(0.55))
+            .padding(.horizontal, 9).padding(.vertical, 5)
+            .background(Capsule().fill(filter.isCustomRange
+                                       ? accent.opacity(0.15) : Color.white.opacity(0.05)))
+        }
+        .buttonStyle(.pressableSubtle)
+        .popover(isPresented: $showCalendar, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Custom range").font(.system(.headline, design: .rounded).weight(.bold))
+                DatePicker("From", selection: $draftStart, in: ...draftEnd,
+                           displayedComponents: .date)
+                DatePicker("To", selection: $draftEnd, in: draftStart...Date(),
+                           displayedComponents: .date)
+                HStack {
+                    if filter.isCustomRange {
+                        Button("Clear") {
+                            withAnimation(DS.Motion.standard) {
+                                filter.customStart = nil; filter.customEnd = nil
+                            }
+                            showCalendar = false
+                        }
+                    }
+                    Spacer()
+                    Button("Apply") {
+                        withAnimation(DS.Motion.standard) {
+                            filter.customStart = draftStart
+                            filter.customEnd = draftEnd
+                        }
+                        showCalendar = false
+                    }
+                    .keyboardShortcut(.defaultAction)
+                }
+            }
+            .datePickerStyle(.compact)
+            .frame(width: 260)
+            .padding(16)
+        }
+    }
+
+    private var customRangeLabel: String {
+        guard let s = filter.customStart, let e = filter.customEnd else { return "Custom" }
+        let f = DateFormatter(); f.dateFormat = "d MMM"
+        return "\(f.string(from: s)) – \(f.string(from: e))"
+    }
+
+    // MARK: - Per-Mac device filter
+
+    private var deviceOptions: [String] { AnalyticsEngine.devices(in: log.records) }
+
+    private var deviceMenu: some View {
+        Menu {
+            ForEach(deviceOptions, id: \.self) { d in
+                toggleButton(d, on: filter.devices.contains(d)) {
+                    toggle(&filter.devices, d)
+                }
+            }
+            if filter.hasDeviceFilter {
+                Divider()
+                Button("All Macs", role: .destructive) { filter.devices.removeAll() }
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "desktopcomputer")
+                Text(filter.hasDeviceFilter
+                     ? (filter.devices.count == 1 ? filter.devices.first! : "\(filter.devices.count) Macs")
+                     : "All Macs")
+            }
+            .font(.system(.caption2, design: .rounded).weight(.semibold))
+            .foregroundStyle(filter.hasDeviceFilter ? accent : .white.opacity(0.55))
+            .padding(.horizontal, 9).padding(.vertical, 5)
+            .background(Capsule().fill(filter.hasDeviceFilter
+                                       ? accent.opacity(0.15) : Color.white.opacity(0.05)))
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
     }
 
     private var chipRow: some View {
@@ -271,19 +419,17 @@ struct AnalyticsView: View {
     private func filtered(_ sessions: [SessionRecord]) -> [SessionRecord] {
         AnalyticsEngine.filter(sessions: sessions,
                                completedOnly: filter.completedOnly,
-                               allowedTaskIDs: allowedTaskIDs)
+                               allowedTaskIDs: allowedTaskIDs,
+                               devices: filter.devices)
     }
 
     /// Every logged session, filtered — used to derive the narrowed heatmap.
     private var filteredAllSessions: [SessionRecord] { filtered(log.records) }
 
-    /// Filtered sessions within the selected range window (for the Apps tab).
+    /// Filtered sessions within the selected range window (for the Apps/Export
+    /// tabs) — honours a custom calendar range when one is set.
     private var rangeSessions: [SessionRecord] {
-        let cal = Calendar.current
-        let today = cal.startOfDay(for: Date())
-        guard let start = cal.date(byAdding: .day, value: -(filter.range.days - 1),
-                                   to: today) else { return filteredAllSessions }
-        return filtered(log.sessions(in: DateInterval(start: start, end: Date())))
+        filtered(log.sessions(in: filter.interval()))
     }
 
     // MARK: - Overview
@@ -316,13 +462,17 @@ struct AnalyticsView: View {
     /// the streak is reconstructed from the log.
     private var overviewScores: (focus: Int?, consistency: Int?) {
         let cal = Calendar.current
+        // Anchor: a custom range counts back from its end day; a preset from today.
+        let anchor = filter.isCustomRange
+            ? cal.startOfDay(for: filter.customEnd ?? Date())
+            : cal.startOfDay(for: Date())
         let today = cal.startOfDay(for: Date())
         let doneDays = completedFocusDays
         var focusScores: [Int?] = []
         var consistencyScores: [Int?] = []
 
-        for back in 0..<filter.range.days {
-            guard let day = cal.date(byAdding: .day, value: -back, to: today)
+        for back in 0..<filter.spanDays {
+            guard let day = cal.date(byAdding: .day, value: -back, to: anchor)
             else { continue }
             let daySessions = filtered(log.sessions(on: day))
 
@@ -361,7 +511,8 @@ struct AnalyticsView: View {
     }
 
     private var rangeSuffix: String {
-        filter.range == .today ? "" : " · \(filter.range.rawValue) avg"
+        if filter.isCustomRange { return " · \(filter.spanDays)d avg" }
+        return filter.range == .today ? "" : " · \(filter.range.rawValue) avg"
     }
 
     /// Recent sessions (last 21 days) for burnout + suggestions.
@@ -379,11 +530,14 @@ struct AnalyticsView: View {
                                                     sessions: recentSessions)
         return VStack(alignment: .leading, spacing: 16) {
             if burnout.isWarning { burnoutBanner(burnout) }
+            kpiRow
             HStack(spacing: 16) {
                 scoreCard(title: "Focus Score", score: scores.focus,
                           caption: "Diqqat sifati — hajm, yakunlash, tanaffuslar\(rangeSuffix)")
+                    .staggeredAppear(4)
                 scoreCard(title: "Consistency", score: scores.consistency,
                           caption: "Rejaga rioya — reja, ritm, streak\(rangeSuffix)")
+                    .staggeredAppear(5)
             }
             if !suggestions.isEmpty { suggestionsCard(suggestions) }
             if scores.focus == nil {
@@ -394,6 +548,67 @@ struct AnalyticsView: View {
                     .foregroundStyle(.white.opacity(0.6))
             }
         }
+    }
+
+    // MARK: - Hero KPI row
+
+    /// The windowed, filtered focus sessions the KPI headline numbers summarise.
+    private var kpiFocus: [SessionRecord] {
+        rangeSessions.filter { $0.phase == .focus && $0.completed }
+    }
+
+    private var kpiRow: some View {
+        let sessions = kpiFocus
+        let totalMinutes = sessions.reduce(0.0) { $0 + $1.seconds } / 60
+        let days = Set(sessions.map { Calendar.current.startOfDay(for: $0.start) }).count
+        let cols = [GridItem(.adaptive(minimum: 150, maximum: 260), spacing: 14)]
+        return LazyVGrid(columns: cols, spacing: 14) {
+            kpiCard(icon: "clock.fill", value: totalMinutes,
+                    format: { focusDuration(Int($0)) }, label: "Focus time",
+                    tint: accent, index: 0)
+            kpiCard(icon: "checkmark.seal.fill", value: Double(sessions.count),
+                    format: { "\(Int($0))" }, label: "Sessions",
+                    tint: accent, index: 1)
+            kpiCard(icon: "flame.fill", value: Double(timer.stats.streak.currentStreak),
+                    format: { "\(Int($0))" }, label: "Day streak",
+                    tint: .orange, index: 2)
+            kpiCard(icon: "calendar", value: Double(days),
+                    format: { "\(Int($0))" }, label: "Active days",
+                    tint: .green, index: 3)
+        }
+    }
+
+    private func kpiCard(icon: String, value: Double,
+                         format: @escaping (Double) -> String, label: String,
+                         tint: Color, index: Int) -> some View {
+        HStack(spacing: 14) {
+            ZStack {
+                Circle().fill(tint.opacity(0.16)).frame(width: 44, height: 44)
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(tint)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                AnimatedNumber(value: value, format: format)
+                    .font(.system(size: 26, weight: .bold, design: .rounded).monospacedDigit())
+                    .foregroundStyle(.white)
+                Text(label)
+                    .font(.system(.caption, design: .rounded).weight(.medium))
+                    .foregroundStyle(.white.opacity(0.6))
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassRounded(DS.Radius.xl, material: .regular)
+        .liquidShadow(radius: 10, y: 5)
+        .staggeredAppear(index)
+    }
+
+    /// Compact "Xh Ym" / "Ym" focus-time label from minutes.
+    private func focusDuration(_ minutes: Int) -> String {
+        let h = minutes / 60, m = minutes % 60
+        return h > 0 ? "\(h)h \(m)m" : "\(m)m"
     }
 
     private func burnoutBanner(_ result: BurnoutDetector.Result) -> some View {

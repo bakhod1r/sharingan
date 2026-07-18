@@ -99,7 +99,7 @@ struct StatsExtrasView: View {
                 Text("By task — today").dsSectionLabel()
                 Spacer()
                 if todayTaskEntries.count > 5 {
-                    Button { AppRouter.shared.section = .report } label: {
+                    Button { AppRouter.shared.section = .dashboard } label: {
                         Text("Full report →")
                             .font(.system(.caption2, design: .rounded).weight(.semibold))
                             .foregroundStyle(accent)

@@ -5,6 +5,31 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-07-18
+
+### Changed
+- **Unified Dashboard** — the separate **Progress**, **Analytics**, and
+  **Report** sidebar pages are now one **Dashboard** page with scrollable,
+  icon-labelled tabs: Overview, Progress, Heatmap, Focus load, Timeline,
+  Apps, Report, Export. One shared filter bar drives them all.
+
+### Added
+- **Premium Overview** — a hero KPI row (focus time, sessions, day streak,
+  active days) with count-up numbers and a staggered card entrance, above
+  the Focus/Consistency score rings. All motion honours Reduce Motion.
+- **Calendar range picker** — a custom **from → to** date range (popover
+  with two date pickers) that overrides the preset ranges across every tab
+  and the score averages.
+- **Per-Mac analytics** — sessions now record which Mac they ran on
+  (`SessionRecord.deviceName`); a device filter in the bar (shown when more
+  than one Mac has data) slices every tab by machine.
+
+### Technical
+- `AnalyticsFilter` gains `devices`, `customStart/customEnd`, and
+  `interval(now:)` / `spanDays` / `heatmapSpanDays` helpers.
+- `AnalyticsEngine` gains `appTotals(sessions:)`, `devices(in:)`, and a
+  `devices:` argument on `filter(...)`.
+
 ## [1.9.0] - 2026-07-17
 
 ### Added
