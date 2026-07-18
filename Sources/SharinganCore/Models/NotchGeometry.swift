@@ -279,10 +279,9 @@ public enum NotchGeometry {
     // into the desktop below it.
 
     /// The body's outer top corners, where it meets the bottom of the menu bar.
-    /// Squared (0) so the panel's top edge runs flush into the menu-bar row with
-    /// no rounded gap at either side — a rounded corner there left the desktop
-    /// (the "blue" bleed) showing through beside the cutout.
-    public static let bodyTopRadius: CGFloat = 0
+    /// Rounded so the panel flares naturally out of the hardware notch (the
+    /// Boring-Notch/NotchNook look) rather than as a hard-edged slab.
+    public static let bodyTopRadius: CGFloat = 12
     /// The concave fillet where the body meets the stem. It flares the black
     /// outward into the menu-bar row for these few points either side of the
     /// cutout — the join reads as the notch stretching instead of as two
