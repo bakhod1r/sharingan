@@ -5,6 +5,21 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-07-18
+
+### Added
+- 13 new themes, and every theme's surfaces were reworked for legible
+  contrast in both light and dark.
+- The task list now loads in pages of 20 with an auto-loading "load more"
+  footer (a progress ring of how far through the list you are), so even a
+  few hundred tasks stay smooth to scroll.
+- Double-click a task row to expand its subtasks & notes panel.
+
+### Changed
+- Large task lists scroll far more smoothly: the list is now a single flat
+  lazy stack that only builds the rows near the viewport, and the grouped
+  view is cached instead of being recomputed on every hover.
+
 ## [1.7.3] - 2026-07-17
 
 ### Fixed
