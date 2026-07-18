@@ -565,8 +565,8 @@ struct MainWindowView: View {
         let key = "cat:\(cat.name)"
         return Button { router.openTasks(category: cat.name) } label: {
             HStack(spacing: 11) {
-                Text("#")
-                    .font(.system(.body, design: .rounded).weight(.bold))
+                Image(systemName: tasks.icon(for: cat.name))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Color(hex: cat.colorHex))
                     .frame(width: 20, alignment: .center)
                 Text(cat.name)
