@@ -187,7 +187,14 @@ public extension Array where Element == Subtask {
 public final class TaskStore: ObservableObject {
     public static let shared = TaskStore()
 
-    @Published public private(set) var tasks: [TaskItem] = []
+    @Published public private(set) var tasks: [TaskItem] = [] {
+        // `grouped(...)` is O(n log n) and gets called on every view-body pass
+        // (hover, scroll paging, …). Cache its result and drop the cache the
+        // moment the task list mutates — grouping only depends on `tasks`.
+        didSet { groupedCache.removeAll(keepingCapacity: true) }
+    }
+    /// Memoised `grouped(filter:search:sort:)` results, keyed by their inputs.
+    private var groupedCache: [String: [(category: String, items: [TaskItem])]] = [:]
     @Published public var activeTaskID: UUID?
     /// Subtask of the active task the current focus session is aimed at.
     /// Transient session state, like `activeTaskID` — never persisted.
@@ -487,6 +494,8 @@ public final class TaskStore: ObservableObject {
     /// within each group by `sort`.
     public func grouped(filter: TaskFilter, search: String = "",
                         sort: TaskSortMode = .manual) -> [(category: String, items: [TaskItem])] {
+        let cacheKey = "\(filter)|\(search)|\(sort.rawValue)"
+        if let cached = groupedCache[cacheKey] { return cached }
         let q = search.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let filtered = tasks.filter { task in
             guard matches(task, filter) else { return false }
@@ -496,9 +505,11 @@ public final class TaskStore: ObservableObject {
         let order = TaskCategory.presets.map(\.name)
         let names = Array(Set(filtered.map(\.category)))
             .sorted { (order.firstIndex(of: $0) ?? .max, $0) < (order.firstIndex(of: $1) ?? .max, $1) }
-        return names.map { name in
+        let result = names.map { name in
             (name, filtered.filter { $0.category == name }.sorted(by: sort.inOrder))
         }
+        groupedCache[cacheKey] = result
+        return result
     }
 
     /// Deletes every completed task (the Done view's "Clear" action).

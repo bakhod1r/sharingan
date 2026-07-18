@@ -107,9 +107,23 @@ struct TasksView: View {
     /// Row being flash-highlighted after a reveal deep-link (see `AppRouter.
     /// revealTask`) — cleared a couple of seconds after the scroll lands.
     @State private var revealedTaskID: UUID?
+    /// Infinite scroll: how many rows are materialised right now. Starts at one
+    /// page and grows by `pageSize` as the load-more footer nears the viewport.
+    /// Reset to `pageSize` whenever the list's shape changes (filter, search,
+    /// sort, narrowing) so a new view starts at the top of a fresh first page.
+    @State private var visibleCount = TasksView.pageSize
+    private static let pageSize = 20
     @ObservedObject private var router = AppRouter.shared
 
     private var newCategoryAccent: Color { Color(hex: store.color(for: newCategory)) }
+
+    /// One value that changes whenever the visible list is re-shaped (smart
+    /// view, search, sort, or any narrowing) — drives the paging reset.
+    private var listShapeKey: String {
+        "\(filter.label)|\(search)|\(sortModeRaw)|\(categoryFilter ?? "")|"
+            + "\(projectFilter ?? "")|\(tagFilter ?? "")|"
+            + "\(priorityFilter.map(String.init(describing:)) ?? "")|\(deviceFilter ?? "")"
+    }
 
     var body: some View {
         HStack(spacing: 16) {
@@ -235,6 +249,9 @@ struct TasksView: View {
             let n = store.trashedTasks.count
             Text("This permanently deletes \(n) task\(n == 1 ? "" : "s") in the Trash.")
         }
+        // Any change to the list's shape restarts paging at the first page, so
+        // a freshly-narrowed view opens at the top instead of mid-scroll.
+        .onChange(of: listShapeKey) { visibleCount = TasksView.pageSize }
         .onAppear(perform: consumeDeepLink)
         .onChange(of: router.pendingTaskFilter) { consumeDeepLink() }
         .onChange(of: router.pendingTaskCategory) { consumeDeepLink() }
@@ -356,20 +373,36 @@ struct TasksView: View {
     /// The Done view regroups by completion day instead of category — history
     /// reads chronologically, newest first.
     private func taskList(_ groups: [(category: String, items: [TaskItem])]) -> some View {
-        ScrollViewReader { proxy in
-            VStack(alignment: .leading, spacing: 16) {
-                if filter == .completed {
-                    ForEach(doneGroups(groups), id: \.label) { group in
-                        doneSection(group.label, group.items)
-                    }
-                } else {
-                    ForEach(groups, id: \.category) { group in
-                        section(group.category, group.items)
-                    }
+        // Normalise both layouts to (label, items): Done regroups by day, the
+        // open views stay grouped by category.
+        let isDone = filter == .completed
+        let allGroups: [(label: String, items: [TaskItem])] = isDone
+            ? doneGroups(groups)
+            : groups.map { (label: $0.category, items: $0.items) }
+        let total = allGroups.reduce(0) { $0 + $1.items.count }
+        let shown = min(visibleCount, total)
+        let visible = limitedGroups(allGroups, to: shown)
+
+        // Flatten headers + rows into ONE list. A single flat LazyVStack is the
+        // key to smooth scrolling: nested lazy stacks defeat each other's
+        // laziness and force a whole category to render at once. Here every
+        // header and row is a direct lazy child, so only what's near the
+        // viewport is ever built.
+        let rows = flattenRows(visible, isDone: isDone)
+
+        return ScrollViewReader { proxy in
+            LazyVStack(alignment: .leading, spacing: 4) {
+                ForEach(rows) { listRowView($0, isDone: isDone) }
+                // Infinite scroll: this footer auto-loads the next page as it
+                // nears the viewport. A fresh id per page re-arms its onAppear.
+                if shown < total {
+                    loadMoreFooter(shown: shown, total: total)
+                        .id("load-more-\(shown)")
+                        .padding(.top, 12)
                 }
                 // Trash lives in the full main window only — the menu-bar popover
                 // stays lean (it's the combined focus + task list now).
-                if embeddedInScroll { trashSection }
+                if embeddedInScroll { trashSection.padding(.top, 12) }
             }
             // Both hooks matter: onChange for a reveal that arrives while the
             // list is on screen, onAppear for one consumed before it was (the
@@ -379,10 +412,170 @@ struct TasksView: View {
         }
     }
 
+    /// A flattened list entry — either a group header or a task row. Flattening
+    /// lets the whole list live in one non-nested LazyVStack.
+    private enum ListRow: Identifiable {
+        case header(label: String, count: Int)
+        case task(TaskItem)
+        var id: String {
+            switch self {
+            case .header(let label, _): return "header-\(label)"
+            case .task(let t): return "task-\(t.id.uuidString)"
+            }
+        }
+    }
+
+    /// Interleaves each group's header with its rows into one flat sequence.
+    private func flattenRows(_ groups: [(label: String, items: [TaskItem])], isDone: Bool)
+        -> [ListRow] {
+        var rows: [ListRow] = []
+        rows.reserveCapacity(groups.reduce(0) { $0 + $1.items.count + 1 })
+        for g in groups {
+            rows.append(.header(label: g.label, count: g.items.count))
+            for t in g.items { rows.append(.task(t)) }
+        }
+        return rows
+    }
+
+    /// Renders one flattened entry. Headers get top spacing so groups still read
+    /// as separated sections without a nested container.
+    @ViewBuilder
+    private func listRowView(_ entry: ListRow, isDone: Bool) -> some View {
+        switch entry {
+        case .header(let label, let count):
+            sectionHeader(label, count: count, isDone: isDone)
+                .padding(.top, 12)
+        case .task(let task):
+            taskRow(task, isDone: isDone)
+                .id(task.id)   // scroll anchor for reveal deep-links
+        }
+    }
+
+    /// Group header — a category (icon + colour) for the open views, or a
+    /// completion-day label for Done, with a count badge.
+    private func sectionHeader(_ label: String, count: Int, isDone: Bool) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: isDone ? "checkmark.circle" : store.icon(for: label))
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(isDone ? Color.dsTertiary : Color(hex: store.color(for: label)))
+            Text(label).dsSectionLabel()
+            Spacer()
+            Text("\(count)")
+                .font(.system(.caption2, design: .rounded).weight(.bold).monospacedDigit())
+                .foregroundStyle(Color.dsSecondary)
+                .padding(.horizontal, 7).padding(.vertical, 2)
+                .background(Capsule().fill(Color.white.opacity(0.06)))
+        }
+    }
+
+    /// One task row plus its expanded subtask panel. Open views also carry the
+    /// drag-to-reorder handlers; Done rows don't reorder.
+    @ViewBuilder
+    private func taskRow(_ task: TaskItem, isDone: Bool) -> some View {
+        VStack(spacing: 4) {
+            if isDone {
+                row(task)
+            } else {
+                row(task)
+                    .draggable(task.id.uuidString)
+                    .dropDestination(for: String.self) { dropped, _ in
+                        guard let s = dropped.first, let id = UUID(uuidString: s) else { return false }
+                        store.moveTask(id, before: task.id)
+                        return true
+                    }
+            }
+            if expanded.contains(task.id) {
+                subtaskPanel(task)
+            }
+        }
+    }
+
+    /// Truncates the grouped list to at most `limit` tasks in total, keeping the
+    /// group structure — the last visible group is sliced mid-way if needed.
+    private func limitedGroups(_ groups: [(label: String, items: [TaskItem])], to limit: Int)
+        -> [(label: String, items: [TaskItem])] {
+        var remaining = limit
+        var out: [(label: String, items: [TaskItem])] = []
+        for g in groups {
+            if remaining <= 0 { break }
+            if g.items.count <= remaining {
+                out.append(g)
+                remaining -= g.items.count
+            } else {
+                out.append((g.label, Array(g.items.prefix(remaining))))
+                remaining = 0
+            }
+        }
+        return out
+    }
+
+    /// Grows the visible window by one page. Called from the footer's onAppear,
+    /// so it fires exactly when the user scrolls the footer into view.
+    private func loadMore(total: Int) {
+        guard visibleCount < total else { return }
+        // No animation: animating a 20-row insertion drops frames mid-scroll.
+        // The new rows simply appear below the footer as it scrolls off.
+        visibleCount = min(visibleCount + TasksView.pageSize, total)
+    }
+
+    /// Premium load-more footer — a progress ring of how far through the list
+    /// you are, the running "X of Y" count, and a soft accent glow. Auto-loads
+    /// via onAppear (true infinite scroll); also tappable as a fallback.
+    private func loadMoreFooter(shown: Int, total: Int) -> some View {
+        let accent = timer.settings.theme.accent
+        let progress = total > 0 ? Double(shown) / Double(total) : 0
+        return Button {
+            loadMore(total: total)
+        } label: {
+            HStack(spacing: 11) {
+                ZStack {
+                    Circle()
+                        .stroke(Color.white.opacity(0.10), lineWidth: 2.5)
+                    Circle()
+                        .trim(from: 0, to: progress)
+                        .stroke(accent, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                        .animation(DS.Motion.gentle, value: progress)
+                    Text("\(Int(progress * 100))%")
+                        .font(.system(size: 7, weight: .bold, design: .rounded).monospacedDigit())
+                        .foregroundStyle(Color.dsSecondary)
+                }
+                .frame(width: 22, height: 22)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Loading more")
+                        .font(.system(.caption, design: .rounded).weight(.semibold))
+                        .foregroundStyle(Color.dsPrimary)
+                    Text("\(shown) of \(total) tasks")
+                        .font(.system(size: 10, design: .rounded).monospacedDigit())
+                        .foregroundStyle(Color.dsTertiary)
+                }
+                Spacer(minLength: 6)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(accent.opacity(0.7))
+            }
+            .padding(.horizontal, 14).padding(.vertical, 11)
+            .frame(maxWidth: .infinity)
+            .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .fill(Color.dsFill))
+            .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .stroke(accent.opacity(0.18), lineWidth: 1))
+            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+        }
+        .buttonStyle(.pressableSubtle)
+        .help("Load the next \(TasksView.pageSize) tasks")
+        .transition(.opacity)
+        .onAppear { loadMore(total: total) }
+    }
+
     /// Centres the revealed row — one runloop later, so a filter change from
     /// the same deep-link has laid the row out before we scroll to it.
     private func scrollToRevealed(_ proxy: ScrollViewProxy) {
         guard let id = revealedTaskID else { return }
+        // The target may sit past the loaded window — materialise everything so
+        // the anchor exists before we scroll to it. Reveal is deliberate
+        // navigation, so the one-off full render is worth it.
+        if visibleCount < store.tasks.count { visibleCount = store.tasks.count }
         DispatchQueue.main.async {
             withAnimation(DS.Motion.gentle) { proxy.scrollTo(id, anchor: .center) }
         }
@@ -418,36 +611,6 @@ struct TasksView: View {
         f.locale = Locale(identifier: "en_US")
         f.dateStyle = .medium; f.timeStyle = .none
         return f.string(from: d)
-    }
-
-    /// One completion-day section of the Done history.
-    private func doneSection(_ label: String, _ items: [TaskItem]) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Image(systemName: "checkmark.circle")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Color.dsTertiary)
-                Text(label).dsSectionLabel()
-                Spacer()
-                Text("\(items.count)")
-                    .font(.system(.caption2, design: .rounded).weight(.bold).monospacedDigit())
-                    .foregroundStyle(Color.dsSecondary)
-                    .padding(.horizontal, 7).padding(.vertical, 2)
-                    .background(Capsule().fill(Color.white.opacity(0.06)))
-            }
-            ForEach(items) { task in
-                VStack(spacing: 4) {
-                    row(task)
-                    // Completed rows expand their subtask/notes panel too — the
-                    // chevron on the row toggles `expanded`, so Done must render
-                    // the panel just like the open sections do.
-                    if expanded.contains(task.id) {
-                        subtaskPanel(task)
-                    }
-                }
-                .id(task.id)   // scroll anchor for reveal deep-links
-            }
-        }
     }
 
     // MARK: - Smart views (filter + search)
@@ -1622,40 +1785,6 @@ struct TasksView: View {
         .padding(.vertical, 44)
     }
 
-    // MARK: - Section
-
-    private func section(_ category: String, _ items: [TaskItem]) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Image(systemName: store.icon(for: category))
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Color(hex: store.color(for: category)))
-                Text(category).dsSectionLabel()
-                Spacer()
-                Text("\(items.count)")
-                    .font(.system(.caption2, design: .rounded).weight(.bold).monospacedDigit())
-                    .foregroundStyle(Color.dsSecondary)
-                    .padding(.horizontal, 7).padding(.vertical, 2)
-                    .background(Capsule().fill(Color.white.opacity(0.06)))
-            }
-            ForEach(items) { task in
-                VStack(spacing: 4) {
-                    row(task)
-                        .draggable(task.id.uuidString)
-                        .dropDestination(for: String.self) { dropped, _ in
-                            guard let s = dropped.first, let id = UUID(uuidString: s) else { return false }
-                            store.moveTask(id, before: task.id)
-                            return true
-                        }
-                    if expanded.contains(task.id) {
-                        subtaskPanel(task)
-                    }
-                }
-                .id(task.id)   // scroll anchor for reveal deep-links
-            }
-        }
-    }
-
     /// Collapsible Trash bucket, pinned below the lists. Hidden when empty.
     /// Expands to show soft-deleted tasks, each with Restore and Delete-forever;
     /// a header "Empty" purges the lot (after a confirm).
@@ -2008,7 +2137,6 @@ struct TasksView: View {
                             .strikethrough(task.isDone, color: .dsTertiary)
                             .foregroundStyle(task.isDone ? Color.dsTertiary : Color.dsPrimary)
                             .lineLimit(1)
-                            .onTapGesture(count: 2) { beginEdit(task) }
                     }
                 }
                 metaRow(task)
@@ -2061,7 +2189,6 @@ struct TasksView: View {
             // while active it fills and shows the play / pause glyph.
             focusRing(task, isActive: isActive, hovered: hovered, accent: accent)
         }
-        .animation(DS.Motion.hover, value: hovered)
         .padding(.leading, 14).padding(.trailing, 12).padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
@@ -2085,6 +2212,11 @@ struct TasksView: View {
         .shadow(color: .black.opacity(hovered ? 0.18 : 0), radius: 6, y: 3)
         .scaleEffect(hovered && !isActive ? 1.006 : 1)
         .animation(DS.Motion.hover, value: hovered)
+        // Whole-row hit area, so a double-click anywhere on the row (not just the
+        // title's tight text bounds) toggles the subtask/notes panel. Buttons
+        // inside the row keep their own single-click actions.
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) { toggleExpanded(task) }
         .onHover { inside in
             if inside { hoveredTask = task.id }
             else if hoveredTask == task.id { hoveredTask = nil }
@@ -2232,6 +2364,15 @@ struct TasksView: View {
     private func beginEdit(_ task: TaskItem) {
         editingText = task.title
         editingTaskID = task.id
+    }
+
+    /// Double-clicking a task's title expands (or collapses) its subtask/notes
+    /// panel — the same toggle the ⋮ menu offers.
+    private func toggleExpanded(_ task: TaskItem) {
+        withAnimation(DS.Motion.gentle) {
+            if expanded.contains(task.id) { expanded.remove(task.id) }
+            else { expanded.insert(task.id) }
+        }
     }
 
     /// Persist an inline title edit. Ignores empty or unchanged input.
