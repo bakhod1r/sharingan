@@ -22,7 +22,6 @@ struct AnalyticsView: View {
         case timeline = "Timeline"
         case apps     = "Apps"
         case report   = "Report"
-        case export   = "Export"
         var id: String { rawValue }
         var icon: String {
             switch self {
@@ -33,7 +32,6 @@ struct AnalyticsView: View {
             case .timeline: return "clock.fill"
             case .apps:     return "app.badge.fill"
             case .report:   return "list.bullet.rectangle"
-            case .export:   return "square.and.arrow.up"
             }
         }
     }
@@ -71,9 +69,6 @@ struct AnalyticsView: View {
                                       trackingMode: timer.settings.appTrackingMode)
                 case .report:
                     ReportView(timer: timer)
-                case .export:
-                    AnalyticsExportView(sessions: rangeSessions, accent: accent,
-                                        range: filter.range)
                 }
             }
             .transition(.opacity.combined(with: .offset(y: 8)))

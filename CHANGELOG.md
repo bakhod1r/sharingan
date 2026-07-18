@@ -24,8 +24,6 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
     picker to replay any past day (time machine).
   - **Apps** — which apps were frontmost during focus, ranked by time.
   - **Report** — the per-task focus report.
-  - **Export** — the filtered session history as CSV, real .xlsx
-    (dependency-free writer), or a one-page PDF.
 - **Per-session focus log** (`focus-sessions.json`): every finished session
   (completed, or abandoned after ≥1 min) records start/end, phase, task,
   planned length, per-app usage, and originating Mac. Writes never block the
@@ -39,6 +37,9 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 - **Burnout detection** — an Overview banner and once-a-day notification on
   warning signs (huge days, heavy streaks, skipped breaks, late-night focus).
 - **Smart insights** — best hour, best weekday, break/abandon nudges.
+- **Apps used per task** — the task editor shows which apps were frontmost
+  while focusing on that todo (its own and its subtasks' sessions), ranked
+  by time with icon + share bar.
 
 ### Changed
 - The **Big** pomodoro size is now called **Deep Work** (saved data unchanged;
