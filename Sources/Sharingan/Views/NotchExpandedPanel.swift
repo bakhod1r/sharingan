@@ -302,14 +302,16 @@ struct NotchExpandedPanel: View {
             // The pomodoro ring and the focus control read as one unit — the ring
             // is the task's tomato count, the button beside it starts/pauses the
             // clock on that task. Gated on the same badge setting as everywhere
-            // else; the ring is the tallest thing in the row and the row is pinned
-            // to it below, so toggling badges changes what shows, never the height.
+            // else. The ring is inset a couple points from the row height so the
+            // cluster stays compact (like the Tasks rows) and leaves the title its
+            // width, instead of a fat ring that swallows the row and truncates a
+            // long title early. Toggling badges changes what shows, never the height.
             HStack(spacing: 3) {
                 if timer.settings.showPomodoroBadges {
                     TaskPomodoroBadge(done: task.pomodorosDone,
                                       estimate: task.effectiveEstimate,
                                       color: accent,
-                                      diameter: NotchGeometry.taskRowContentHeight)
+                                      diameter: NotchGeometry.taskRowContentHeight - 6)
                 }
                 Button { focus(on: task) } label: {
                     Image(systemName: isRunning ? "pause.circle.fill" : "play.circle.fill")
