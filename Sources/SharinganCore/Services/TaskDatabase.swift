@@ -39,6 +39,7 @@ final class TaskDatabase: SyncOutboxStorage {
     private static let subtaskAttributes: [(name: String, kind: String)] = [
         ("title", "str"), ("is_done", "int"), ("estimated_pomodoros", "int"),
         ("pomodoros_done", "int"), ("pomodoro_kind", "str"), ("priority", "int"),
+        ("jira_key", "str"), ("jira_issue_id", "str"),
     ]
 
     init?(path: String) {
@@ -89,6 +90,12 @@ final class TaskDatabase: SyncOutboxStorage {
         // The issue number behind "T-42". 0 = never assigned; TaskStore
         // backfills those on load, oldest task first.
         addColumnIfMissing("tasks", "number", "INTEGER NOT NULL DEFAULT 0")
+        // Jira linkage + Sharingan-board column (added by the Jira branch).
+        addColumnIfMissing("tasks", "jira_key", "VARCHAR(64)")
+        addColumnIfMissing("tasks", "jira_issue_id", "VARCHAR(64)")
+        addColumnIfMissing("tasks", "jira_site_host", "VARCHAR(255)")
+        addColumnIfMissing("tasks", "jira_issue_type", "VARCHAR(64)")
+        addColumnIfMissing("tasks", "board_column_id", "VARCHAR(64)")
         let tables = ["tasks", "categories", "projects", "tags", "task_tags",
                       "templates", "focus_log", "eav_attributes", "eav_entities",
                       "eav_values", "sync_shadow", "sync_state", "sync_outbox"]
@@ -153,6 +160,11 @@ final class TaskDatabase: SyncOutboxStorage {
             completed_at REAL,
             content_hash VARCHAR(64),
             number INTEGER NOT NULL DEFAULT 0 CHECK (number >= 0),
+            jira_key VARCHAR(64),
+            jira_issue_id VARCHAR(64),
+            jira_site_host VARCHAR(255),
+            jira_issue_type VARCHAR(64),
+            board_column_id VARCHAR(64),
             created_at REAL NOT NULL,
             updated_at REAL NOT NULL,
             deleted_at REAL,
@@ -292,6 +304,18 @@ final class TaskDatabase: SyncOutboxStorage {
                 bindText($0, 1, a.name); bindText($0, 2, a.kind)
             }
         }
+        if !tableHasColumn("tasks", "jiraKey") {
+            exec("ALTER TABLE tasks ADD COLUMN jiraKey TEXT;")
+        }
+        if !tableHasColumn("tasks", "jiraIssueID") {
+            exec("ALTER TABLE tasks ADD COLUMN jiraIssueID TEXT;")
+        }
+        if !tableHasColumn("tasks", "jiraSiteHost") {
+            exec("ALTER TABLE tasks ADD COLUMN jiraSiteHost TEXT;")
+        }
+        if !tableHasColumn("tasks", "jiraIssueType") {
+            exec("ALTER TABLE tasks ADD COLUMN jiraIssueType TEXT;")
+        }
     }
 
     private func loadAttributeIDs() {
@@ -350,7 +374,9 @@ final class TaskDatabase: SyncOutboxStorage {
     /// Some v1 columns arrived via ALTER; make sure they exist before we read.
     private func ensureV1Columns() {
         for (col, ddl) in [("completedAt", "REAL"), ("pomodoroKind", "TEXT"),
-                           ("modifiedAt", "REAL"), ("trashedAt", "REAL")]
+                           ("modifiedAt", "REAL"), ("trashedAt", "REAL"),
+                           ("jiraKey", "TEXT"), ("jiraIssueID", "TEXT"),
+                           ("jiraSiteHost", "TEXT"), ("jiraIssueType", "TEXT")]
         where !tableHasColumn("tasks", col) {
             exec("ALTER TABLE tasks ADD COLUMN \(col) \(ddl);")
         }
@@ -362,7 +388,8 @@ final class TaskDatabase: SyncOutboxStorage {
         let sql = """
         SELECT id,title,category,tags,isDone,pomodorosDone,createdAt,dueDate,\
         sortOrder,estimatedPomodoros,plannedDate,notes,subtasks,recurrence,project,priority,\
-        completedAt,pomodoroKind,modifiedAt,trashedAt FROM tasks;
+        completedAt,pomodoroKind,modifiedAt,trashedAt,\
+        jiraKey,jiraIssueID,jiraSiteHost,jiraIssueType FROM tasks;
         """
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return out }
@@ -388,6 +415,10 @@ final class TaskDatabase: SyncOutboxStorage {
             t.pomodoroKind = text(stmt, 17).flatMap(PomodoroKind.init(rawValue:))
             t.modifiedAt = date(stmt, 18) ?? t.createdAt
             t.trashedAt = date(stmt, 19)
+            t.jiraKey = isNull(stmt, 20) ? nil : text(stmt, 20)
+            t.jiraIssueID = isNull(stmt, 21) ? nil : text(stmt, 21)
+            t.jiraSiteHost = isNull(stmt, 22) ? nil : text(stmt, 22)
+            t.jiraIssueType = isNull(stmt, 23) ? nil : text(stmt, 23)
             out.append(t)
         }
         return out
@@ -493,7 +524,7 @@ final class TaskDatabase: SyncOutboxStorage {
         SELECT t.id, t.uuid, t.title, c.name, p.name, t.is_done, t.pomodoros_done, t.created_at,\
         t.due_at, t.sort_order, t.estimated_pomodoros, t.planned_at, t.notes, t.recurrence,\
         t.priority, t.completed_at, t.pomodoro_kind, t.updated_at, t.deleted_at, t.origin_device,\
-        t.number
+        t.number, t.jira_key, t.jira_issue_id, t.jira_site_host, t.jira_issue_type, t.board_column_id
         FROM tasks t
         JOIN categories c ON c.id = t.category_id
         LEFT JOIN projects p ON p.id = t.project_id
@@ -525,6 +556,11 @@ final class TaskDatabase: SyncOutboxStorage {
             t.trashedAt = date(stmt, 18)
             if let origin = text(stmt, 19), !origin.isEmpty { t.originDevice = origin }
             t.number = Int(int(stmt, 20))
+            t.jiraKey = isNull(stmt, 21) ? nil : text(stmt, 21)
+            t.jiraIssueID = isNull(stmt, 22) ? nil : text(stmt, 22)
+            t.jiraSiteHost = isNull(stmt, 23) ? nil : text(stmt, 23)
+            t.jiraIssueType = isNull(stmt, 24) ? nil : text(stmt, 24)
+            t.boardColumnID = isNull(stmt, 25) ? nil : text(stmt, 25)
             t.subtasks = subtasksByTask[rowID] ?? []
             out.append(t)
         }
@@ -552,7 +588,9 @@ final class TaskDatabase: SyncOutboxStorage {
             MAX(CASE WHEN a.name='estimated_pomodoros' THEN v.value_int END),
             MAX(CASE WHEN a.name='pomodoros_done'      THEN v.value_int END),
             MAX(CASE WHEN a.name='pomodoro_kind'       THEN v.value_str END),
-            MAX(CASE WHEN a.name='priority'            THEN v.value_int END)
+            MAX(CASE WHEN a.name='priority'            THEN v.value_int END),
+            MAX(CASE WHEN a.name='jira_key'            THEN v.value_str END),
+            MAX(CASE WHEN a.name='jira_issue_id'       THEN v.value_str END)
         FROM eav_entities e
         JOIN eav_values v ON v.entity_id = e.id
         JOIN eav_attributes a ON a.id = v.attribute_id
@@ -572,6 +610,8 @@ final class TaskDatabase: SyncOutboxStorage {
             s.pomodorosDone = Int(int(stmt, 5))
             s.pomodoroKind = text(stmt, 6).flatMap(PomodoroKind.init(rawValue:))
             s.priority = TaskPriority(rawValue: Int(int(stmt, 7)))
+            s.jiraKey = isNull(stmt, 8) ? nil : text(stmt, 8)
+            s.jiraIssueID = isNull(stmt, 9) ? nil : text(stmt, 9)
             out[owner, default: []].append(s)
         }
         return out
@@ -624,11 +664,12 @@ final class TaskDatabase: SyncOutboxStorage {
                 INSERT INTO tasks
                 (uuid,title,category_id,project_id,is_done,priority,recurrence,pomodoro_kind,\
                 pomodoros_done,estimated_pomodoros,notes,sort_order,due_at,planned_at,created_at,\
-                updated_at,completed_at,deleted_at,origin_device,content_hash,number)
+                updated_at,completed_at,deleted_at,origin_device,content_hash,number,\
+                jira_key,jira_issue_id,jira_site_host,jira_issue_type,board_column_id)
                 VALUES (?,?,\
                 (SELECT id FROM categories WHERE name=?),\
                 (SELECT id FROM projects WHERE name=?),\
-                ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(uuid) DO UPDATE SET
                     title=excluded.title, category_id=excluded.category_id,
                     project_id=excluded.project_id, is_done=excluded.is_done,
@@ -639,6 +680,9 @@ final class TaskDatabase: SyncOutboxStorage {
                     planned_at=excluded.planned_at, updated_at=excluded.updated_at,
                     completed_at=excluded.completed_at, deleted_at=excluded.deleted_at,
                     content_hash=excluded.content_hash,
+                    jira_key=excluded.jira_key, jira_issue_id=excluded.jira_issue_id,
+                    jira_site_host=excluded.jira_site_host, jira_issue_type=excluded.jira_issue_type,
+                    board_column_id=excluded.board_column_id,
                     -- Write-once: an unnumbered row takes the number the store
                     -- backfilled, but a row that already has one keeps it, so no
                     -- later write (a remote merge, a bad caller) can renumber a
@@ -669,6 +713,11 @@ final class TaskDatabase: SyncOutboxStorage {
                 bindText(stmt, 19, t.originDevice)
                 bindText(stmt, 20, t.contentHash)
                 sqlite3_bind_int64(stmt, 21, Int64(t.number))
+                if let v = t.jiraKey { bindText(stmt, 22, v) } else { sqlite3_bind_null(stmt, 22) }
+                if let v = t.jiraIssueID { bindText(stmt, 23, v) } else { sqlite3_bind_null(stmt, 23) }
+                if let v = t.jiraSiteHost { bindText(stmt, 24, v) } else { sqlite3_bind_null(stmt, 24) }
+                if let v = t.jiraIssueType { bindText(stmt, 25, v) } else { sqlite3_bind_null(stmt, 25) }
+                if let v = t.boardColumnID { bindText(stmt, 26, v) } else { sqlite3_bind_null(stmt, 26) }
                 let ok = sqlite3_step(stmt) == SQLITE_DONE
                 sqlite3_finalize(stmt)
                 guard ok else { return false }
@@ -737,6 +786,8 @@ final class TaskDatabase: SyncOutboxStorage {
             setValueInt(eid, "priority", Int64(s.priority.rawValue))
             if let est = s.estimatedPomodoros { setValueInt(eid, "estimated_pomodoros", Int64(est)) }
             if let k = s.pomodoroKind { setValueStr(eid, "pomodoro_kind", k.rawValue) }
+            if let k = s.jiraKey { setValueStr(eid, "jira_key", k) }
+            if let i = s.jiraIssueID { setValueStr(eid, "jira_issue_id", i) }
         }
         return true
     }

@@ -13,11 +13,19 @@ public struct Subtask: Identifiable, Codable, Equatable, Sendable {
     public var pomodoroKind: PomodoroKind?
     /// Per-step priority flag (`.none` = unflagged, the default).
     public var priority: TaskPriority
+    /// Jira issue key when this subtask mirrors a Jira sub-task issue, e.g.
+    /// WT-702. Lets worklog and status changes target the sub-task issue itself,
+    /// not just its parent. nil for ordinary local subtasks.
+    public var jiraKey: String?
+    /// Jira's stable issue ID for the mirrored sub-task.
+    public var jiraIssueID: String?
 
     public init(id: UUID = UUID(), title: String, isDone: Bool = false,
                 estimatedPomodoros: Int? = nil, pomodorosDone: Int = 0,
                 pomodoroKind: PomodoroKind? = nil,
-                priority: TaskPriority = .none) {
+                priority: TaskPriority = .none,
+                jiraKey: String? = nil,
+                jiraIssueID: String? = nil) {
         self.id = id
         self.title = title
         self.isDone = isDone
@@ -25,7 +33,12 @@ public struct Subtask: Identifiable, Codable, Equatable, Sendable {
         self.pomodorosDone = pomodorosDone
         self.pomodoroKind = pomodoroKind
         self.priority = priority
+        self.jiraKey = jiraKey
+        self.jiraIssueID = jiraIssueID
     }
+
+    /// True when this subtask mirrors a Jira sub-task issue.
+    public var isJiraLinked: Bool { jiraKey?.isEmpty == false }
 
     // Pomodoro/priority fields were added after subtasks first shipped —
     // decode them as optional so older persisted rows (subtasks JSON column)
@@ -39,6 +52,8 @@ public struct Subtask: Identifiable, Codable, Equatable, Sendable {
         pomodorosDone = try c.decodeIfPresent(Int.self, forKey: .pomodorosDone) ?? 0
         pomodoroKind = ((try? c.decodeIfPresent(PomodoroKind.self, forKey: .pomodoroKind)) ?? nil)
         priority = try c.decodeIfPresent(TaskPriority.self, forKey: .priority) ?? .none
+        jiraKey = try c.decodeIfPresent(String.self, forKey: .jiraKey)
+        jiraIssueID = try c.decodeIfPresent(String.self, forKey: .jiraIssueID)
     }
 }
 
@@ -253,6 +268,19 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
     public var completedAt: Date?
     /// Pomodoro size to run against this task (nil = app default).
     public var pomodoroKind: PomodoroKind?
+    /// Jira issue key, e.g. SHR-123.
+    public var jiraKey: String?
+    /// Jira's stable issue ID string.
+    public var jiraIssueID: String?
+    /// Site host only (not a full URL), e.g. example.atlassian.net.
+    public var jiraSiteHost: String?
+    /// The Jira issue type this task came from ("Epic", "Story", "Bug", "Task",
+    /// "Sub-task"). Drives the type badge; nil for tasks not from Jira.
+    public var jiraIssueType: String?
+
+    /// Which Sharingan-board column this task sits in (`BoardColumn.id`).
+    /// `nil` renders in the first column. Local + synced (CloudKit field).
+    public var boardColumnID: String?
     /// When the task was moved to Trash (nil = live). A trashed task stays in
     /// the store so it can be restored, but every normal query filters it out.
     public var trashedAt: Date?
@@ -288,6 +316,11 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
                 priority: TaskPriority = .none,
                 completedAt: Date? = nil,
                 pomodoroKind: PomodoroKind? = nil,
+                jiraKey: String? = nil,
+                jiraIssueID: String? = nil,
+                jiraSiteHost: String? = nil,
+                jiraIssueType: String? = nil,
+                boardColumnID: String? = nil,
                 trashedAt: Date? = nil,
                 originDevice: String = DeviceIdentity.name,
                 number: Int = 0) {
@@ -310,6 +343,11 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         self.priority = priority
         self.completedAt = completedAt
         self.pomodoroKind = pomodoroKind
+        self.jiraKey = jiraKey
+        self.jiraIssueID = jiraIssueID
+        self.jiraSiteHost = jiraSiteHost
+        self.jiraIssueType = jiraIssueType
+        self.boardColumnID = boardColumnID
         self.trashedAt = trashedAt
         self.originDevice = originDevice
         self.number = number
@@ -341,6 +379,11 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         priority = try c.decodeIfPresent(TaskPriority.self, forKey: .priority) ?? .none
         completedAt = try c.decodeIfPresent(Date.self, forKey: .completedAt)
         pomodoroKind = ((try? c.decodeIfPresent(PomodoroKind.self, forKey: .pomodoroKind)) ?? nil)
+        jiraKey = try c.decodeIfPresent(String.self, forKey: .jiraKey)
+        jiraIssueID = try c.decodeIfPresent(String.self, forKey: .jiraIssueID)
+        jiraSiteHost = try c.decodeIfPresent(String.self, forKey: .jiraSiteHost)
+        jiraIssueType = try c.decodeIfPresent(String.self, forKey: .jiraIssueType)
+        boardColumnID = try c.decodeIfPresent(String.self, forKey: .boardColumnID)
         trashedAt = try c.decodeIfPresent(Date.self, forKey: .trashedAt)
         // Older records predate origin tracking — attribute them to this Mac.
         originDevice = try c.decodeIfPresent(String.self, forKey: .originDevice) ?? DeviceIdentity.name
@@ -452,6 +495,16 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
     public func isPlannedToday(now: Date = Date()) -> Bool {
         guard let plannedDate else { return false }
         return Calendar.current.isDate(plannedDate, inSameDayAs: now)
+    }
+
+    public var isJiraLinked: Bool {
+        guard let jiraKey, let jiraSiteHost else { return false }
+        return !jiraKey.isEmpty && !jiraSiteHost.isEmpty
+    }
+
+    public var jiraBrowseURL: URL? {
+        guard let jiraKey, let jiraSiteHost, !jiraKey.isEmpty, !jiraSiteHost.isEmpty else { return nil }
+        return URL(string: "https://\(jiraSiteHost)/browse/\(jiraKey)")
     }
 }
 

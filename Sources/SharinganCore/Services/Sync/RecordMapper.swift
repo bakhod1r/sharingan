@@ -43,6 +43,11 @@ public enum RecordMapper {
         record["project"] = task.project as CKRecordValue?
         record["priority"] = task.priority.rawValue as CKRecordValue
         record["pomodoroKind"] = task.pomodoroKind?.rawValue as CKRecordValue?
+        record["jiraKey"] = task.jiraKey as CKRecordValue?
+        record["jiraIssueID"] = task.jiraIssueID as CKRecordValue?
+        record["jiraSiteHost"] = task.jiraSiteHost as CKRecordValue?
+        record["jiraIssueType"] = task.jiraIssueType as CKRecordValue?
+        record["boardColumnID"] = task.boardColumnID as CKRecordValue?
         record["originDevice"] = task.originDevice as CKRecordValue
         record["number"] = task.number as CKRecordValue
         // Subtasks are a nested value type with their own evolving shape —
@@ -83,6 +88,11 @@ public enum RecordMapper {
         if let kind = record["pomodoroKind"] as? String {
             task.pomodoroKind = PomodoroKind(rawValue: kind)
         }
+        task.jiraKey = record["jiraKey"] as? String
+        task.jiraIssueID = record["jiraIssueID"] as? String
+        task.jiraSiteHost = record["jiraSiteHost"] as? String
+        task.jiraIssueType = record["jiraIssueType"] as? String
+        task.boardColumnID = record["boardColumnID"] as? String
         if let raw = record["subtasksJSON"] as? String {
             task.subtasks = decode([Subtask].self, from: raw) ?? []
         }
