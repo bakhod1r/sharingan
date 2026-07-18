@@ -265,8 +265,9 @@ public enum NotchGeometry {
     /// (`idle`, the bare cutout; `live`, the cutout plus its 4pt lip).
     public static let cornerRadius: CGFloat = 14
     /// … and the radius of the tall one. The expanded panel wearing the notch's
-    /// 14pt corner looks pinched; 22pt reads as the same shape, grown.
-    public static let maxCornerRadius: CGFloat = 22
+    /// 14pt corner looks pinched; 26pt reads as the same shape, grown — the
+    /// softer, rounder body of the NotchNook reference.
+    public static let maxCornerRadius: CGFloat = 26
 
     // MARK: - The T
     //
@@ -281,7 +282,21 @@ public enum NotchGeometry {
     /// The body's outer top corners, where it meets the bottom of the menu bar.
     /// Rounded so the panel flares naturally out of the hardware notch (the
     /// Boring-Notch/NotchNook look) rather than as a hard-edged slab.
-    public static let bodyTopRadius: CGFloat = 12
+    ///
+    /// Squared (0): while expanded the two menu-bar-row shoulders are painted in
+    /// the body tone (`expandedShoulders`), so the panel's *visible* top edge is
+    /// the shoulders' — full width, flush under the menu bar, with the rounded
+    /// outer corners provided there. A rounded body-top here would leave a wedge
+    /// of desktop showing between the body and the shoulder on each side.
+    public static let bodyTopRadius: CGFloat = 0
+    /// The rounded outer top corners of the expanded panel — the shoulders'
+    /// corners, where the full-width slab meets the top of the screen either
+    /// side of the hardware notch. This is the reference's soft top corner.
+    public static let shoulderTopRadius: CGFloat = 22
+    /// How far each ear over-hangs the body on its outer side in the expanded
+    /// panel — the boring-notch flare, where the ear is widest at the screen top
+    /// and its outer edge slopes concavely in to the body's narrower side.
+    public static let shoulderFlare: CGFloat = 36
     /// The concave fillet where the body meets the stem. It flares the black
     /// outward into the menu-bar row for these few points either side of the
     /// cutout — the join reads as the notch stretching instead of as two
