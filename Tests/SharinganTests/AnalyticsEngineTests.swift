@@ -184,4 +184,22 @@ struct AnalyticsEngineTests {
     @Test func appTotalsEmptyWhenNoUsage() {
         #expect(AnalyticsEngine.appTotals(sessions: [focus(hour: 9)]).isEmpty)
     }
+
+    @Test func appTotalsByTaskGroupsPerTaskAndDropsTaskless() {
+        let t1 = UUID(), t2 = UUID()
+        var a = focus(hour: 9); a.taskID = t1
+        a.appUsage = ["com.a": 600, "com.b": 120]
+        var b = focus(hour: 11); b.taskID = t1        // same task, another day-part
+        b.appUsage = ["com.a": 300]
+        var c = focus(hour: 13); c.taskID = t2
+        c.appUsage = ["com.b": 480, "com.c": 0]        // zero-time app drops out
+        var d = focus(hour: 15)                        // no taskID → excluded
+        d.appUsage = ["com.a": 999]
+
+        let byTask = AnalyticsEngine.appTotalsByTask(sessions: [a, b, c, d])
+        #expect(byTask.count == 2)                      // taskless session ignored
+        #expect(byTask[t1]?.map(\.bundleID) == ["com.a", "com.b"])  // summed + sorted
+        #expect(byTask[t1]?.first?.seconds == 900)
+        #expect(byTask[t2]?.map(\.bundleID) == ["com.b"])           // zero-time dropped
+    }
 }
