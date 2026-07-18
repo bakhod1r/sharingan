@@ -179,10 +179,15 @@ public struct TaskPriority: RawRepresentable, Codable, Hashable, Sendable, Ident
 
     public var id: Int { rawValue }
 
-    public static let none   = TaskPriority(rawValue: 0)   // P4 — no flag
-    public static let low    = TaskPriority(rawValue: 1)   // P3 — blue
-    public static let medium = TaskPriority(rawValue: 2)   // P2 — orange
-    public static let high   = TaskPriority(rawValue: 3)   // P1 — red
+    public static let none     = TaskPriority(rawValue: 0)   // no flag
+    public static let lowest   = TaskPriority(rawValue: 1)   // P5 — teal
+    public static let low      = TaskPriority(rawValue: 2)   // P4 — blue
+    public static let medium   = TaskPriority(rawValue: 3)   // P3 — amber
+    public static let high     = TaskPriority(rawValue: 4)   // P2 — orange
+    public static let critical = TaskPriority(rawValue: 5)   // P1 — red
+
+    /// The built-in flagged levels, lowest raw first.
+    public static let builtIns: [Int] = [1, 2, 3, 4, 5]
 
     // Encode/decode as a single bare Int (matching the old enum) so old data
     // round-trips identically. The default struct synthesis would emit a
@@ -198,16 +203,17 @@ public struct TaskPriority: RawRepresentable, Codable, Hashable, Sendable, Ident
     /// All levels, most-urgent first, ending with `.none`. Built-ins (1…3)
     /// plus the user's custom levels (rawValues stored in settings).
     public static func levels(custom: [Int]) -> [TaskPriority] {
-        let flagged = ([1, 2, 3] + custom).sorted(by: >).map(TaskPriority.init(rawValue:))
+        let flagged = (builtIns + custom).sorted(by: >).map(TaskPriority.init(rawValue:))
         return flagged + [.none]
     }
 
-    /// "P1"…"P4" for the built-ins. Custom levels have no fixed rank in
-    /// isolation — UI shows their rank via `PomodoroSettings.priorityShortLabel`.
+    /// "P1"…"P5" for the built-ins (P1 = most urgent = highest raw). Custom
+    /// levels have no fixed rank in isolation — UI shows their rank via
+    /// `PomodoroSettings.priorityShortLabel`.
     public var label: String {
         switch rawValue {
-        case 0...3: return "P\(4 - rawValue)"
-        default:    return "P!"
+        case 1...5: return "P\(6 - rawValue)"
+        default:    return rawValue == 0 ? "" : "P!"
         }
     }
 
@@ -216,9 +222,11 @@ public struct TaskPriority: RawRepresentable, Codable, Hashable, Sendable, Ident
     public var menuLabel: String {
         switch rawValue {
         case 0:  return "No priority"
-        case 1:  return "P3 · Low"
-        case 2:  return "P2 · Medium"
-        case 3:  return "P1 · Urgent"
+        case 1:  return "P5 · Lowest"
+        case 2:  return "P4 · Low"
+        case 3:  return "P3 · Medium"
+        case 4:  return "P2 · High"
+        case 5:  return "P1 · Critical"
         default: return "Custom"
         }
     }
@@ -227,9 +235,11 @@ public struct TaskPriority: RawRepresentable, Codable, Hashable, Sendable, Ident
     /// (whose colors live in settings, read via `priorityColorHex`).
     public var colorHex: String? {
         switch rawValue {
-        case 1:  return "#4F8DFD"
-        case 2:  return "#FFB020"
-        case 3:  return "#FF5E5B"
+        case 1:  return "#34C7B5"   // Lowest — teal
+        case 2:  return "#4F8DFD"   // Low — blue
+        case 3:  return "#FFB020"   // Medium — amber
+        case 4:  return "#FF8A3D"   // High — orange
+        case 5:  return "#FF5E5B"   // Critical — red
         default: return nil
         }
     }

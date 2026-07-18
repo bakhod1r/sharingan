@@ -1255,8 +1255,31 @@ public final class TaskStore: ObservableObject {
         // predate numbering show a code the moment the app opens. It writes the
         // number column only — no modifiedAt, nothing pushed to sync.
         if assignMissingNumbers() { database?.backfillNumbers(tasks) }
+        migratePriorityScheme()
         persistedTaskHashes = Dictionary(uniqueKeysWithValues:
             tasks.map { ($0.id, $0.contentHash) })
+    }
+
+    /// One-time shift from the old 4-level priority scheme (none=0, low=1,
+    /// medium=2, high=3, customs 4+) to the 5-level P1–P5 scheme (Lowest=1 …
+    /// Critical=5, customs 6+). Every flagged task keeps its name and rank: the
+    /// built-ins slide up one (1→2, 2→3, 3→4) to make room for the new Lowest at
+    /// the bottom and Critical at the top; old custom levels (4+) slide up two.
+    /// Guarded by a defaults flag so it runs exactly once.
+    private func migratePriorityScheme() {
+        let key = "sharingan.priority.scheme.v2"
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: key) else { return }
+        defaults.set(true, forKey: key)
+        var changed = false
+        for i in tasks.indices {
+            let raw = tasks[i].priority.rawValue
+            guard raw >= 1 else { continue }
+            let newRaw = raw <= 3 ? raw + 1 : raw + 2
+            tasks[i].priority = TaskPriority(rawValue: newRaw)
+            changed = true
+        }
+        if changed { persist() }
     }
 
     /// Hands an issue number to every task that lacks one. This is the single

@@ -887,7 +887,7 @@ struct MainWindowView: View {
     private func commitNewPriority() {
         let name = newPrioName.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return }
-        let raw = (timer.settings.customPriorityLevels.max() ?? 3) + 1
+        let raw = (timer.settings.customPriorityLevels.max() ?? TaskPriority.builtIns.max()!) + 1
         timer.settings.customPriorityLevels.append(raw)
         timer.settings.priorityNames[String(raw)] = name
         timer.settings.priorityColors[String(raw)] = newPrioColor
