@@ -234,37 +234,9 @@ struct ReportView: View {
                     }
                     .padding(.leading, 38).padding(.trailing, 12).padding(.vertical, 6)
                 }
-                if !apps.isEmpty { appStrip(apps) }
+                if !apps.isEmpty { TaskAppStrip(apps: apps) }
             }
         }
-    }
-
-    /// The apps this task was focused in, shown under an expanded row: each app
-    /// as an icon · name · duration line, indented to sit under the title. Uses
-    /// AnalyticsAppsView's cached bundle → name/icon lookup so both surfaces
-    /// resolve apps the same way.
-    private func appStrip(_ apps: [AnalyticsEngine.AppTotal]) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("APPS")
-                .font(.system(size: 8, weight: .heavy, design: .rounded))
-                .tracking(0.8)
-                .foregroundStyle(.white.opacity(0.35))
-            ForEach(apps) { app in
-                HStack(spacing: 8) {
-                    Image(nsImage: AnalyticsAppsView.icon(for: app.bundleID))
-                        .resizable().frame(width: 15, height: 15)
-                    Text(AnalyticsAppsView.name(for: app.bundleID))
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.75))
-                        .lineLimit(1)
-                    Spacer(minLength: 8)
-                    Text(AnalyticsAppsView.durationLabel(app.seconds))
-                        .font(.system(.caption2, design: .rounded).weight(.semibold).monospacedDigit())
-                        .foregroundStyle(.white.opacity(0.55))
-                }
-            }
-        }
-        .padding(.leading, 38).padding(.trailing, 12).padding(.top, 2).padding(.bottom, 6)
     }
 
     private func metric(count: Int, seconds: TimeInterval) -> some View {
