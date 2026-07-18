@@ -221,32 +221,55 @@ struct MatrixRainView: View {
     private let cell: CGFloat = 14
     private let fontSize: CGFloat = 13
 
+    /// A stable pseudo-random in 0..<1 from a pair of ints — lets every drop's
+    /// speed, length, phase and gap be its own value without storing state, so
+    /// the rain looks scattered rather than marching in lockstep.
+    private func rand(_ a: Int, _ b: Int) -> Double {
+        var h = UInt64(bitPattern: Int64(a &* 73856093 ^ b &* 19349663))
+        h ^= h >> 33; h = h &* 0xff51afd7ed558ccd; h ^= h >> 33
+        return Double(h & 0xffffff) / Double(0xffffff)
+    }
+
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 12.0)) { timeline in
+        TimelineView(.animation(minimumInterval: 1.0 / 14.0)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
             Canvas { ctx, size in
                 let cols = max(1, Int(size.width / cell))
                 let rows = max(1, Int(size.height / cell))
+                let rowsD = Double(rows)
+
                 for c in 0..<cols {
-                    // Deterministic per-column speed and phase from a cheap hash.
-                    let seed = Double((c &* 2654435761) & 0xffff) / 0xffff
-                    let speed = 4.0 + seed * 10.0          // rows per second
-                    let head = (t * speed + seed * Double(rows)) .truncatingRemainder(dividingBy: Double(rows + 12))
-                    let trail = 10
-                    for k in 0..<trail {
-                        let row = Int(head) - k
-                        guard row >= 0, row < rows else { continue }
-                        let fade = 1.0 - Double(k) / Double(trail)
-                        let gi = (c &* 31 &+ row &* 17 &+ Int(t * 8)) % Self.glyphs.count
-                        let glyph = Self.glyphs[(gi + Self.glyphs.count) % Self.glyphs.count]
-                        let isHead = k == 0
-                        let text = Text(String(glyph))
-                            .font(.system(size: fontSize, weight: isHead ? .bold : .regular,
-                                          design: .monospaced))
-                            .foregroundStyle(isHead ? Color.white.opacity(0.95)
-                                                    : color.opacity(fade * 0.85))
-                        ctx.draw(text, at: CGPoint(x: CGFloat(c) * cell + cell / 2,
-                                                   y: CGFloat(row) * cell + cell / 2))
+                    // Each column runs a few independent drops. Their count,
+                    // speed, length, and — crucially — the empty gap between them
+                    // all vary per drop, so at any instant some columns are mid-
+                    // fall and others are blank: rain, not a filled grid.
+                    let dropsHere = 1 + Int(rand(c, 7) * 2.99)   // 1…3 drops per column
+                    for d in 0..<dropsHere {
+                        let speed = 3.0 + rand(c, d &+ 11) * 12.0            // rows/sec
+                        let trail = 5 + Int(rand(c, d &+ 23) * 13.0)         // 5…18 glyphs
+                        // Cycle = the visible fall plus a random blank gap after it.
+                        let gap = rowsD * (0.4 + rand(c, d &+ 31) * 2.2)
+                        let cycle = rowsD + Double(trail) + gap
+                        let phase = rand(c, d &+ 41) * cycle
+                        // Head marches down; once it clears the bottom+trail it
+                        // sits in the gap (off-screen) until the cycle repeats.
+                        let head = (t * speed + phase).truncatingRemainder(dividingBy: cycle) - Double(trail)
+
+                        for k in 0..<trail {
+                            let row = Int(head) - k
+                            guard row >= 0, row < rows else { continue }
+                            let fade = 1.0 - Double(k) / Double(trail)
+                            let gi = (c &* 31 &+ row &* 17 &+ Int(t * 9)) % Self.glyphs.count
+                            let glyph = Self.glyphs[(gi + Self.glyphs.count) % Self.glyphs.count]
+                            let isHead = k == 0
+                            let text = Text(String(glyph))
+                                .font(.system(size: fontSize, weight: isHead ? .bold : .regular,
+                                              design: .monospaced))
+                                .foregroundStyle(isHead ? Color.white.opacity(0.95)
+                                                        : color.opacity(fade * 0.8))
+                            ctx.draw(text, at: CGPoint(x: CGFloat(c) * cell + cell / 2,
+                                                       y: CGFloat(row) * cell + cell / 2))
+                        }
                     }
                 }
             }
