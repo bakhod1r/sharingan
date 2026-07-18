@@ -34,6 +34,7 @@ struct AnalyticsTimelineView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             header
+            legendAndSummary
             switch scale {
             case .day:   dayView
             case .week:  weekView
@@ -43,6 +44,45 @@ struct AnalyticsTimelineView: View {
         .padding(16)
         .glassRounded(DS.Radius.xl, material: .regular)
         .liquidShadow(radius: 12, y: 6)
+    }
+
+    // MARK: - Legend + summary (what the colours mean, and the period's totals)
+
+    private var legendAndSummary: some View {
+        let days: [Date] = scale == .day ? [anchor]
+            : (scale == .week ? weekDays : monthGridDays)
+        let all = days.flatMap { sessions(on: $0) }
+        let focus = all.filter { $0.phase == .focus && $0.completed }
+        let focusSecs = focus.reduce(0) { $0 + $1.seconds }
+        return HStack(spacing: 14) {
+            legendDot(accent, "Focus")
+            legendDot(breakColor, "Break")
+            legendDot(accent.opacity(0.35), "Skipped", dashed: true)
+            Spacer()
+            if !focus.isEmpty {
+                Text("\(focus.count) focus · \(FocusReport.durationLabel(focusSecs))")
+                    .font(.system(.caption2, design: .rounded).weight(.bold))
+                    .foregroundStyle(.white.opacity(0.75))
+                    .contentTransition(.numericText())
+            } else if scale != .month {
+                Text("No focus sessions")
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.4))
+            }
+        }
+    }
+
+    private func legendDot(_ color: Color, _ label: String, dashed: Bool = false) -> some View {
+        HStack(spacing: 5) {
+            RoundedRectangle(cornerRadius: 3)
+                .fill(color)
+                .frame(width: 11, height: 11)
+                .overlay(dashed ? RoundedRectangle(cornerRadius: 3)
+                    .strokeBorder(.white.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [2, 2])) : nil)
+            Text(label)
+                .font(.system(.caption2, design: .rounded).weight(.medium))
+                .foregroundStyle(.white.opacity(0.6))
+        }
     }
 
     // MARK: - Header (scale picker + pager + calendar jump)
@@ -266,25 +306,44 @@ struct AnalyticsTimelineView: View {
         let day = cal.startOfDay(for: s.start)
         let top = max(0, yOffset(s.start, day: day, range: range))
         let bottom = yOffset(s.end, day: day, range: range)
-        let height = max(14, bottom - top)
+        let height = max(18, bottom - top)
         let c = s.phase == .focus ? accent : breakColor
+        let title = s.phase == .focus ? (s.taskTitle ?? "Focus") : s.phase.label
+        let timeLabel = blockTimeLabel(s)
         return RoundedRectangle(cornerRadius: 4)
             .fill(c.opacity(s.completed ? 0.85 : 0.35))
             .overlay(
                 RoundedRectangle(cornerRadius: 4)
                     .strokeBorder(s.completed ? .clear : c,
                                   style: StrokeStyle(lineWidth: 1, dash: [2, 2])))
-            .overlay(alignment: .topLeading) {
-                if height > 20 {
-                    Text(s.phase == .focus ? (s.taskTitle ?? "Focus") : s.phase.label)
-                        .font(.system(size: 9, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .lineLimit(2)
-                        .padding(.horizontal, 3).padding(.top, 2)
+            .overlay(alignment: .leading) {
+                // A single-line "10:30 · Task" label that fits even thin blocks;
+                // wider day columns get the task title, narrow week columns just
+                // the time so it stays legible.
+                HStack(spacing: 4) {
+                    Text(timeLabel)
+                        .font(.system(size: 9, weight: .bold, design: .rounded).monospacedDigit())
+                    if width > 90 {
+                        Text(title)
+                            .font(.system(size: 9, weight: .medium, design: .rounded))
+                            .lineLimit(1)
+                    }
                 }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 4)
             }
             .frame(width: max(0, width - 3), height: height)
             .offset(x: 1, y: top)
+            .help("\(title) · \(timeLabel)–\(endTimeLabel(s)) · \(FocusReport.durationLabel(s.seconds))\(s.completed ? "" : " (skipped)")")
+    }
+
+    private func blockTimeLabel(_ s: SessionRecord) -> String {
+        let f = DateFormatter(); f.dateFormat = "H:mm"
+        return f.string(from: s.start)
+    }
+    private func endTimeLabel(_ s: SessionRecord) -> String {
+        let f = DateFormatter(); f.dateFormat = "H:mm"
+        return f.string(from: s.end)
     }
 
     // MARK: - Month view
