@@ -99,7 +99,11 @@ struct AnalyticsHeatmapView: View {
         let fmt = DateFormatter(); fmt.dateFormat = "MMM"
         let cols = monthColumns(month)
         let today = cal.startOfDay(for: Date())
-        return VStack(spacing: 6) {
+        return VStack(alignment: .leading, spacing: 6) {
+            // LeetCode puts the month name ABOVE its block, left-aligned.
+            Text(fmt.string(from: month))
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.55))
             HStack(alignment: .top, spacing: gap) {
                 ForEach(Array(cols.enumerated()), id: \.offset) { _, column in
                     VStack(spacing: gap) {
@@ -113,9 +117,6 @@ struct AnalyticsHeatmapView: View {
                     }
                 }
             }
-            Text(fmt.string(from: month))
-                .font(.system(size: 9, weight: .semibold, design: .rounded))
-                .foregroundStyle(.white.opacity(0.5))
         }
     }
 
@@ -195,12 +196,18 @@ struct AnalyticsHeatmapView: View {
     }
 
     private var weekdayColumn: some View {
-        VStack(spacing: gap) {
-            ForEach(0..<7, id: \.self) { i in
-                Text(weekdayLabels[i])
-                    .font(.system(size: 9, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.4))
-                    .frame(width: 26, height: cell, alignment: .leading)
+        // Mirror a month block's layout (label line on top, then rows) so the
+        // Mon/Wed/Fri labels line up with the cell rows.
+        VStack(alignment: .leading, spacing: 6) {
+            Text(" ")
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+            VStack(spacing: gap) {
+                ForEach(0..<7, id: \.self) { i in
+                    Text(weekdayLabels[i])
+                        .font(.system(size: 9, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.4))
+                        .frame(width: 26, height: cell, alignment: .leading)
+                }
             }
         }
     }
