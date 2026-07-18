@@ -1,13 +1,17 @@
 import SwiftUI
 import SharinganCore
 
-/// A Teamup-style project timeline: rows are groups (Project / Category / each
-/// Task), and every task is a bar laid across a horizontal date axis from its
-/// planned date to its due date. Bars in the same group are lane-packed so
-/// overlapping work stacks instead of colliding.
+/// A project timeline: rows are groups (Project / Category / each Task), and
+/// every task is a bar laid across a horizontal date axis. A bar runs from a
+/// task's planned/start date to its due date, so its length reads as the work
+/// window; a task with only one date shows a single-day marker on that day.
+/// Bars in a group are lane-packed so overlapping work stacks instead of
+/// colliding.
 ///
-/// Shares the Tasks list's sort preference (`tasks.sortMode`) and the same
-/// one-dimension filter (category / tag / priority) as the other boards.
+/// The row-label column is pinned: only the date axis scrolls sideways, so a
+/// row never loses its name. A vertical "today" line runs the full height.
+/// Shares the Tasks list's sort preference and the same one-dimension filter as
+/// the other boards.
 struct TimelineBoardView: View {
     @ObservedObject var timer: PomodoroTimer
     @ObservedObject private var store = TaskStore.shared
@@ -62,19 +66,19 @@ struct TimelineBoardView: View {
         categoryFilter != nil || tagFilter != nil || priorityFilter != nil
     }
 
-    private let labelWidth: CGFloat = 156
+    private let labelWidth: CGFloat = 160
     private let dayWidth: CGFloat = 46
     private let laneHeight: CGFloat = 30
     private let rowPadding: CGFloat = 8
+    private let headerHeight: CGFloat = 44
     private var accent: Color { timer.settings.theme.accent }
     private var cal: Calendar { Calendar.current }
 
     // MARK: - Date axis
 
-    /// First day shown — today's range start, shifted by the offset.
+    /// First day shown — today's range start, shifted by whole ranges.
     private var rangeStart: Date {
         let today = cal.startOfDay(for: Date())
-        // Anchor the base range on today; step by whole ranges.
         let anchored = cal.date(byAdding: .day, value: rangeOffset * range.days, to: today) ?? today
         return cal.startOfDay(for: anchored)
     }
@@ -89,20 +93,33 @@ struct TimelineBoardView: View {
         cal.dateComponents([.day], from: rangeStart, to: cal.startOfDay(for: date)).day ?? 0
     }
 
-    // MARK: - Task span
-
-    /// A task's [start, end] on the day axis: planned→due, falling back to
-    /// whichever single date exists. `nil` when the task carries no date at all.
-    private func span(_ t: TaskItem) -> (start: Date, end: Date)? {
-        let dates = [t.plannedDate, t.dueDate].compactMap { $0 }.map { cal.startOfDay(for: $0) }
-        guard let lo = dates.min(), let hi = dates.max() else { return nil }
-        return (lo, hi)
+    /// x-offset of today within the axis, or nil when today is out of range.
+    private var todayOffset: CGFloat? {
+        let today = cal.startOfDay(for: Date())
+        guard today >= rangeStart && today <= rangeEnd else { return nil }
+        return CGFloat(dayIndex(today)) * dayWidth
     }
 
-    /// Tasks eligible for the timeline: live, open-or-recent, filtered, dated,
-    /// and touching the visible window.
+    // MARK: - Task span
+
+    /// A task's placement on the axis: [start, end] in days plus whether the end
+    /// is a real deadline (so the bar earns a due marker). planned+due → the
+    /// work window; a single date → a one-day marker; no date → nil.
+    private func span(_ t: TaskItem) -> (start: Date, end: Date, hasDue: Bool)? {
+        let planned = t.plannedDate.map { cal.startOfDay(for: $0) }
+        let due = t.dueDate.map { cal.startOfDay(for: $0) }
+        switch (planned, due) {
+        case let (p?, d?): return (min(p, d), max(p, d), true)
+        case let (p?, nil): return (p, p, false)
+        case let (nil, d?): return (d, d, true)
+        default: return nil
+        }
+    }
+
+    /// Tasks eligible for the timeline: live, filtered, dated, and touching the
+    /// visible window.
     private var visibleTasks: [TaskItem] {
-        let base = store.tasks.filter { !$0.isTrashed }
+        let base = store.tasks.filter { $0.trashedAt == nil }
         let narrowed = narrowTasks(base, category: categoryFilter, tag: tagFilter,
                                    priority: priorityFilter)
         return narrowed.filter { t in
@@ -112,7 +129,7 @@ struct TimelineBoardView: View {
     }
 
     private var undatedCount: Int {
-        let base = narrowTasks(store.tasks.filter { !$0.isTrashed },
+        let base = narrowTasks(store.tasks.filter { $0.trashedAt == nil },
                                category: categoryFilter, tag: tagFilter, priority: priorityFilter)
         return base.filter { span($0) == nil && !$0.isDone }.count
     }
@@ -123,19 +140,17 @@ struct TimelineBoardView: View {
         let id: String
         let title: String
         let colorHex: String
-        var lanes: [[TaskItem]]   // lane-packed rows of bars
+        var lanes: [[TaskItem]]
         var height: CGFloat
     }
 
     private var groups: [Group] {
-        let tasks = visibleTasks
-        // Bucket by the chosen dimension.
         var buckets: [(key: String, title: String, colorHex: String, items: [TaskItem])] = []
         func bucketIndex(key: String, title: String, colorHex: String) -> Int {
             if let i = buckets.firstIndex(where: { $0.key == key }) { return i }
             buckets.append((key, title, colorHex, [])); return buckets.count - 1
         }
-        for t in tasks.sorted(by: sortMode.inOrder) {
+        for t in visibleTasks.sorted(by: sortMode.inOrder) {
             switch grouping {
             case .project:
                 let name = t.project ?? "No project"
@@ -151,7 +166,8 @@ struct TimelineBoardView: View {
             }
         }
         return buckets.map { b in
-            let lanes = packLanes(b.items)
+            // A per-task row is always a single lane; grouped rows lane-pack.
+            let lanes = grouping == .task ? [b.items] : packLanes(b.items)
             let height = CGFloat(max(1, lanes.count)) * laneHeight + rowPadding * 2
             return Group(id: b.key, title: b.title, colorHex: b.colorHex, lanes: lanes, height: height)
         }
@@ -308,12 +324,24 @@ struct TimelineBoardView: View {
 
     // MARK: - Chart
 
+    /// Pinned label column + a horizontally-scrollable date axis, both driven by
+    /// the same `groups` so their rows line up. The whole thing scrolls
+    /// vertically as one.
     private var chart: some View {
-        ScrollView([.horizontal, .vertical], showsIndicators: true) {
-            VStack(alignment: .leading, spacing: 0) {
-                axisHeader
-                ForEach(groups) { group in
-                    groupRow(group)
+        ScrollView(.vertical, showsIndicators: true) {
+            HStack(alignment: .top, spacing: 0) {
+                labelColumn
+                Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1)
+                ScrollView(.horizontal, showsIndicators: true) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        axisHeader
+                        ZStack(alignment: .topLeading) {
+                            VStack(spacing: 0) {
+                                ForEach(groups) { barsRow($0) }
+                            }
+                            todayLine
+                        }
+                    }
                 }
             }
         }
@@ -323,15 +351,44 @@ struct TimelineBoardView: View {
             .stroke(Color.white.opacity(0.07), lineWidth: 1))
     }
 
-    /// The sticky-feeling top row: a spacer over the label gutter, then one
-    /// column head per day (weekday + date, today highlighted).
-    private var axisHeader: some View {
-        HStack(spacing: 0) {
+    private var labelColumn: some View {
+        VStack(spacing: 0) {
+            // Corner cell over the axis header.
             Text(grouping.title.uppercased())
                 .font(.system(size: 10, weight: .bold, design: .rounded))
                 .foregroundStyle(.white.opacity(0.4))
-                .frame(width: labelWidth, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.leading, 14)
+                .frame(height: headerHeight)
+                .background(Color.white.opacity(0.04))
+                .overlay(alignment: .bottom) {
+                    Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
+                }
+            ForEach(groups) { group in
+                HStack(spacing: 8) {
+                    Circle().fill(Color(hex: group.colorHex)).frame(width: 8, height: 8)
+                    Text(group.title)
+                        .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.9))
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                    Text("\(group.lanes.reduce(0) { $0 + $1.count })")
+                        .font(.system(.caption2, design: .rounded).weight(.bold))
+                        .foregroundStyle(.white.opacity(0.4))
+                }
+                .padding(.horizontal, 14)
+                .frame(height: group.height, alignment: .leading)
+                .overlay(alignment: .bottom) {
+                    Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1)
+                }
+            }
+        }
+        .frame(width: labelWidth)
+    }
+
+    /// Weekday + date column heads; today and weekends shaded.
+    private var axisHeader: some View {
+        HStack(spacing: 0) {
             ForEach(days, id: \.self) { day in
                 let isToday = cal.isDateInToday(day)
                 let isWeekend = cal.isDateInWeekend(day)
@@ -343,45 +400,25 @@ struct TimelineBoardView: View {
                         .font(.system(size: 12, weight: .bold, design: .rounded))
                         .foregroundStyle(isToday ? accent : .white.opacity(isWeekend ? 0.45 : 0.85))
                 }
-                .frame(width: dayWidth, height: 40)
+                .frame(width: dayWidth, height: headerHeight)
                 .background(isToday ? accent.opacity(0.12) : (isWeekend ? Color.white.opacity(0.02) : .clear))
             }
         }
-        .frame(height: 44)
-        .background(Color.white.opacity(0.04))
         .overlay(alignment: .bottom) {
             Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
         }
     }
 
-    private func groupRow(_ group: Group) -> some View {
-        HStack(spacing: 0) {
-            // Row label gutter.
-            HStack(spacing: 8) {
-                Circle().fill(Color(hex: group.colorHex)).frame(width: 8, height: 8)
-                Text(group.title)
-                    .font(.system(.subheadline, design: .rounded).weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.9))
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-                Text("\(group.lanes.reduce(0) { $0 + $1.count })")
-                    .font(.system(.caption2, design: .rounded).weight(.bold))
-                    .foregroundStyle(.white.opacity(0.4))
-            }
-            .padding(.horizontal, 14)
-            .frame(width: labelWidth, height: group.height, alignment: .leading)
-
-            // Bars area, with day gridlines behind.
-            ZStack(alignment: .topLeading) {
-                gridlines
-                ForEach(Array(group.lanes.enumerated()), id: \.offset) { laneIdx, lane in
-                    ForEach(lane) { task in
-                        bar(task, lane: laneIdx)
-                    }
+    private func barsRow(_ group: Group) -> some View {
+        ZStack(alignment: .topLeading) {
+            gridlines
+            ForEach(Array(group.lanes.enumerated()), id: \.offset) { laneIdx, lane in
+                ForEach(lane) { task in
+                    bar(task, lane: laneIdx)
                 }
             }
-            .frame(width: CGFloat(days.count) * dayWidth, height: group.height, alignment: .topLeading)
         }
+        .frame(width: CGFloat(days.count) * dayWidth, height: group.height, alignment: .topLeading)
         .overlay(alignment: .bottom) {
             Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1)
         }
@@ -391,8 +428,7 @@ struct TimelineBoardView: View {
         HStack(spacing: 0) {
             ForEach(days, id: \.self) { day in
                 Rectangle()
-                    .fill(cal.isDateInToday(day) ? accent.opacity(0.06)
-                          : (cal.isDateInWeekend(day) ? Color.white.opacity(0.02) : .clear))
+                    .fill(cal.isDateInWeekend(day) ? Color.white.opacity(0.02) : .clear)
                     .frame(width: dayWidth)
                     .overlay(alignment: .leading) {
                         Rectangle().fill(Color.white.opacity(0.04)).frame(width: 1)
@@ -401,17 +437,29 @@ struct TimelineBoardView: View {
         }
     }
 
+    /// A single accent line at today, spanning every row.
+    @ViewBuilder
+    private var todayLine: some View {
+        if let x = todayOffset {
+            Rectangle()
+                .fill(accent.opacity(0.6))
+                .frame(width: 2)
+                .frame(maxHeight: .infinity)
+                .offset(x: x + dayWidth / 2 - 1)
+                .allowsHitTesting(false)
+        }
+    }
+
     private func bar(_ task: TaskItem, lane: Int) -> some View {
         guard let s = span(task) else { return AnyView(EmptyView()) }
-        // Clamp the span to the visible window.
         let startIdx = max(0, dayIndex(s.start))
         let endIdx = min(days.count - 1, dayIndex(s.end))
-        let width = max(1, CGFloat(endIdx - startIdx + 1)) * dayWidth - 6
+        let width = max(dayWidth - 6, CGFloat(endIdx - startIdx + 1) * dayWidth - 6)
         let x = CGFloat(startIdx) * dayWidth + 3
         let y = CGFloat(lane) * laneHeight + rowPadding
         let color = Color(hex: store.color(for: task.category))
         let hovered = hoveredTask == task.id
-        let overdue = task.isOverdue()
+        let overdue = task.isOverdue() && !task.isDone
 
         return AnyView(
             HStack(spacing: 5) {
@@ -424,19 +472,24 @@ struct TimelineBoardView: View {
                     .strikethrough(task.isDone, color: .white.opacity(0.5))
                     .lineLimit(1)
                 Spacer(minLength: 0)
+                if s.hasDue {
+                    Image(systemName: task.isDone ? "checkmark" : "flag.fill")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.85))
+                }
             }
             .padding(.horizontal, 8)
             .frame(width: width, height: laneHeight - 8, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
                     .fill(LinearGradient(colors: [color.opacity(task.isDone ? 0.35 : 0.9),
-                                                  color.opacity(task.isDone ? 0.25 : 0.65)],
+                                                  color.opacity(task.isDone ? 0.25 : 0.6)],
                                          startPoint: .leading, endPoint: .trailing))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
-                    .stroke(overdue && !task.isDone ? Color.red.opacity(0.9) : Color.white.opacity(0.18),
-                            lineWidth: overdue && !task.isDone ? 1.5 : 1)
+                    .stroke(overdue ? Color.red.opacity(0.95) : Color.white.opacity(0.18),
+                            lineWidth: overdue ? 1.5 : 1)
             )
             .shadow(color: .black.opacity(hovered ? 0.3 : 0.15), radius: hovered ? 8 : 3, y: 2)
             .scaleEffect(hovered ? 1.02 : 1, anchor: .leading)
@@ -449,14 +502,18 @@ struct TimelineBoardView: View {
         )
     }
 
-    private func barTooltip(_ task: TaskItem, _ s: (start: Date, end: Date)) -> String {
+    private func barTooltip(_ task: TaskItem, _ s: (start: Date, end: Date, hasDue: Bool)) -> String {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US")
         f.dateFormat = "MMM d"
-        let range = cal.isDate(s.start, inSameDayAs: s.end)
-            ? f.string(from: s.start)
-            : "\(f.string(from: s.start)) → \(f.string(from: s.end))"
-        return "\(task.title)\n\(range)"
+        var line: String
+        if cal.isDate(s.start, inSameDayAs: s.end) {
+            line = s.hasDue ? "Due \(f.string(from: s.end))" : "Planned \(f.string(from: s.start))"
+        } else {
+            line = "\(f.string(from: s.start)) → \(f.string(from: s.end))"
+        }
+        if let code = task.code { line = "\(code) · \(line)" }
+        return "\(task.title)\n\(line)"
     }
 
     // MARK: - Empty state
