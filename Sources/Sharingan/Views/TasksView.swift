@@ -1933,6 +1933,8 @@ struct TasksView: View {
                         Image(systemName: sub.isDone ? "checkmark.circle.fill" : "circle")
                             .font(.system(size: 13))
                             .foregroundStyle(sub.isDone ? Color.green : .secondary)
+                            .frame(width: 22, height: 22)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.pressableSubtle)
                     .accessibilityLabel(sub.isDone ? "Mark \(sub.title) not done" : "Mark \(sub.title) done")
@@ -1971,6 +1973,8 @@ struct TasksView: View {
                             Image(systemName: isTarget ? "scope" : "circle.dashed")
                                 .font(.system(size: 11))
                                 .foregroundStyle(isTarget ? Color.accentColor : .secondary)
+                                .frame(width: 22, height: 22)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.pressableSubtle)
                         .help("Focus pomodoros credit this step")
@@ -1980,6 +1984,8 @@ struct TasksView: View {
                     Button { store.deleteSubtask(task.id, sub.id) } label: {
                         Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
                             .foregroundStyle(.secondary)
+                            .frame(width: 22, height: 22)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.pressableSubtle)
                     .accessibilityLabel("Delete subtask \(sub.title)")

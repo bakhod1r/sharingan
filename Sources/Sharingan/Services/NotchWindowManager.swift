@@ -28,6 +28,10 @@ final class NotchWindowManager {
     /// change — a rapid re-open flips the frame back before this ever lands —
     /// and by anything that re-places or tears down the panel wholesale.
     private var frameJob: Task<Void, Never>?
+    /// Clears `model.maskHoldSize` once the morph has settled. Cancel-and-replace
+    /// on every size change, like `frameJob` — a stale hold would keep swallowing
+    /// menu-bar clicks in a region the island has long since left.
+    private var maskJob: Task<Void, Never>?
     /// What the in-flight `hoverJob` is about to commit, `nil` when nothing is
     /// pending. Debouncing has to compare against *this*, not the committed
     /// `state.hovering` — see `hoverChanged(_:)`.
@@ -376,6 +380,17 @@ final class NotchWindowManager {
     private func syncPanelFrame(for size: NotchHUDSize) {
         frameJob?.cancel()
         frameJob = nil
+        // The union-mask hold (armed in the model's `state.didSet`, which runs
+        // just after this sink) lives exactly as long as the morph: one clock
+        // with the window's own shrink, so the mask never outlives the window
+        // covering the same pixels.
+        maskJob?.cancel()
+        maskJob = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(NotchMotion.windowShrinkDelay))
+            guard !Task.isCancelled else { return }
+            self?.model.maskHoldSize = nil
+            self?.maskJob = nil
+        }
         guard let panel, let screen = Self.hudScreen() else { return }
 
         guard size != .hidden else {
@@ -599,8 +614,12 @@ private final class NotchHostingView<Content: View>: NSHostingView<Content> {
         // `model.config` — the same value the view drew the island from. Masking
         // with anything else (the default, say) would keep swallowing clicks in
         // a strip of menu bar the user's ears setting has already given back.
+        // `holdSize` keeps the *previous* state's mask alive while the
+        // silhouette morphs between the two — the union-mask hold that lets the
+        // shape itself animate (see `IslandShape`).
         guard NotchGeometry.hitTest(geometryPoint(local), metrics: model.metrics,
                                     size: model.state.size,
+                                    holdSize: model.maskHoldSize,
                                     config: model.config) else { return nil }
         return super.hitTest(point)
     }
@@ -617,6 +636,12 @@ private final class NotchHostingView<Content: View>: NSHostingView<Content> {
     }
 
     override func mouseMoved(with event: NSEvent) {
+        // Let SwiftUI process the move first: on current SDKs `NSHostingView`
+        // drives `.onHover`/`.onContinuousHover` off the hosting view's own
+        // mouse events, so swallowing them here (no `super`) leaves every nested
+        // row's hover dead — which is exactly what happened to the task rows'
+        // focus rings until this call went back in.
+        super.mouseMoved(with: event)
         guard let model else { return }
         let local = convert(event.locationInWindow, from: nil)
         // Hovering the *island* opens it; hovering the expanded body keeps it
@@ -629,6 +654,7 @@ private final class NotchHostingView<Content: View>: NSHostingView<Content> {
     }
 
     override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
         NotchWindowManager.shared.pointerMoved(inside: false)
     }
 }

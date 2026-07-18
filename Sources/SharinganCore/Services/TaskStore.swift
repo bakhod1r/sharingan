@@ -1245,6 +1245,14 @@ public final class TaskStore: ObservableObject {
     /// picks up the step's pomodoro size (via `resolvedActiveKind`); otherwise
     /// focus the task itself. All the play/start entry points route through here.
     public func selectFocusTarget(_ taskID: UUID) {
+        // Preserve an explicitly-chosen, still-open subtask target: pressing play
+        // on a task whose step the user already aimed at must keep that step, not
+        // snap back to the first open one.
+        if activeTaskID == taskID, let sid = activeSubtaskID,
+           let sub = tasks.first(where: { $0.id == taskID })?.subtasks.first(where: { $0.id == sid }),
+           !sub.isDone {
+            return
+        }
         let firstOpen = tasks.first { $0.id == taskID }?
             .subtasks.first { !$0.isDone }?.id
         setActiveSubtask(taskID: taskID, subtaskID: firstOpen)

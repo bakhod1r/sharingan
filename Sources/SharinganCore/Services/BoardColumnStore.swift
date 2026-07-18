@@ -12,7 +12,7 @@ public final class BoardColumnStore: ObservableObject {
     public static let shared = BoardColumnStore()
 
     /// UserDefaults key — also on `SettingsSync.syncedKeys`.
-    public static let defaultsKey = "board.columns"
+    public nonisolated static let defaultsKey = "board.columns"
     /// Tracks which `BoardColumn.seedVersion` was last seeded, so a shipped
     /// change to the default columns rolls out to existing installs once.
     static let seedVersionKey = "board.columns.seedVersion"

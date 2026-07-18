@@ -1,8 +1,9 @@
 import SwiftUI
 import SharinganCore
 
-/// The island opened up: the session at the top, today's tasks in the middle,
-/// quick actions and a blocker/streak strip at the bottom. Deliberately dumb —
+/// The island opened up: the session at the top (its control row also carrying
+/// the + / ⚙ quick actions), today's tasks in the middle, a blocker/streak strip
+/// at the bottom. Deliberately dumb —
 /// every button routes into a service that is already tested (PomodoroTimer /
 /// TaskStore / FocusQueue / AppBlockerService), exactly as `TodayPanelView` does.
 ///
@@ -33,6 +34,9 @@ struct NotchExpandedPanel: View {
     /// animation. Child `.transition`s would not run here — SwiftUI animates the
     /// transition of the outermost inserted view only, and that is this panel.
     @State private var assembled = false
+    /// The task row the pointer is over — drives the focus ring's rest ↔ play
+    /// swap, exactly the way the main window's rows behave (`TasksView`).
+    @State private var hoveredRow: UUID?
 
     /// What the island was configured to show. The same value `NotchGeometry`
     /// sized `layout.island` from — so a section rendered here has room here by
@@ -121,7 +125,10 @@ struct NotchExpandedPanel: View {
 
             Spacer(minLength: 0)
 
-            if shows(.quickActions) {
+            // The quick actions ride the timer row's trailing cluster (see
+            // `timerRow`); they only fall back to a row of their own when there is
+            // no timer row for them to share.
+            if shows(.quickActions) && !shows(.timer) {
                 quickActions
                     .notchArrival(assembled, section: arrival(.quickActions),
                                   reduceMotion: reduceMotion)
@@ -166,6 +173,16 @@ struct NotchExpandedPanel: View {
                     .foregroundStyle(Color.dsSecondary)
             }
             Spacer(minLength: 0)
+            // The quick actions (+ / ⚙) sit at the head of the control cluster,
+            // on the same line as the play row rather than in a band of their own
+            // above it. Shown only when `showQuickActions` is on — with the timer
+            // row hidden they fall back to a full-width row (see `quickActions`).
+            if config.showQuickActions {
+                control("plus", "Quick add a task") {
+                    AppServices.coordinator?.quickAddController?.showQuickAdd()
+                }
+                control("gearshape.fill", "Open Sharingan") { MainWindowManager.shared.show() }
+            }
             // Same start path as the menu bar and the today panel, so the
             // "require a task before focusing" guard holds here too.
             control(timer.isRunning ? "pause.fill" : "play.fill",
@@ -299,41 +316,11 @@ struct NotchExpandedPanel: View {
                 SubtaskProgressBadge(subtasks, size: 9)
             }
 
-            // The pomodoro ring and the focus control read as one unit — the ring
-            // is the task's tomato count, the button beside it starts/pauses the
-            // clock on that task. Gated on the same badge setting as everywhere
-            // else. The ring is inset a couple points from the row height so the
-            // cluster stays compact (like the Tasks rows) and leaves the title its
-            // width, instead of a fat ring that swallows the row and truncates a
-            // long title early. Toggling badges changes what shows, never the height.
-            HStack(spacing: 3) {
-                if timer.settings.showPomodoroBadges {
-                    TaskPomodoroBadge(done: task.pomodorosDone,
-                                      estimate: task.effectiveEstimate,
-                                      color: accent,
-                                      diameter: NotchGeometry.taskRowContentHeight - 6)
-                }
-                Button { focus(on: task) } label: {
-                    Image(systemName: isRunning ? "pause.circle.fill" : "play.circle.fill")
-                        .font(.system(size: 13))
-                        // The running row's control takes the phase color — it is the
-                        // task the timer is counting down, tied to the clock above it.
-                        // Through the theme so Mono desaturates it (`notchPhaseAccent`)
-                        // rather than dropping one saturated glyph onto a grey panel.
-                        .foregroundStyle(isRunning
-                            ? timer.settings.theme.notchPhaseAccent(model.phase)
-                            : Color.dsSecondary)
-                }
-                .buttonStyle(.plain)
-                .help(isRunning ? "Pause “\(task.title)”" : "Focus on “\(task.title)”")
-            }
-            .padding(.leading, 3)
-            .padding(.trailing, 4)
-            .frame(height: NotchGeometry.taskRowContentHeight)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(Color.white.opacity(0.06))
-            )
+            // The pomodoro ring and the focus control are one nested circle, the
+            // way the main window's rows read (`TasksView.focusRing`): at rest the
+            // ring's centre holds the tomato count, and on hover — or while the row
+            // is the one running — it fills and swaps in the play / pause glyph.
+            focusRing(task, isActive: isActive, isRunning: isRunning, accent: accent)
         }
         // The row *is* `NotchGeometry.taskRowHeight` — not "about" it. See above.
         .frame(height: NotchGeometry.taskRowContentHeight)
@@ -355,6 +342,65 @@ struct NotchExpandedPanel: View {
                             .stroke(tint.opacity(0.4), lineWidth: 1))
             }
         }
+        .onHover { inside in
+            if inside { hoveredRow = task.id }
+            else if hoveredRow == task.id { hoveredRow = nil }
+        }
+    }
+
+    /// The focus button and the pomodoro-progress badge fused into one circle —
+    /// the notch's take on `TasksView.focusRing`, scaled to the tight task row.
+    /// At rest the ring's centre shows the done-count; on hover, or while this
+    /// row is the one the clock is counting down, it fills and shows play / pause.
+    @ViewBuilder
+    private func focusRing(_ task: TaskItem, isActive: Bool, isRunning: Bool,
+                           accent: Color) -> some View {
+        let diameter = NotchGeometry.taskRowContentHeight - 4
+        let hovered = hoveredRow == task.id
+        let showRing = timer.settings.showPomodoroBadges && task.effectiveEstimate != nil
+        let est = task.effectiveEstimate ?? 0
+        let frac = est > 0 ? min(1, Double(task.pomodorosDone) / Double(est)) : 0
+        let complete = est > 0 && task.pomodorosDone >= est
+        // The running row's fill takes the phase color through the theme so Mono
+        // desaturates it (`notchPhaseAccent`) rather than dropping one saturated
+        // glyph onto a grey panel; any other engaged state uses the category tint.
+        let fill = isRunning ? timer.settings.theme.notchPhaseAccent(model.phase) : accent
+        // Show the glyph while engaged (or when there's no count to show);
+        // otherwise the ring's centre holds the done-count, badge-style.
+        let showGlyph = isActive || hovered || task.pomodorosDone == 0
+        Button { focus(on: task) } label: {
+            ZStack {
+                if showRing {
+                    Circle().stroke(Color.dsFillStrong, lineWidth: 2.5)
+                    Circle().trim(from: 0, to: frac)
+                        .stroke(complete ? Color.green : accent,
+                                style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                }
+                Circle()
+                    .fill(isActive ? fill : (hovered ? fill.opacity(0.9) : Color.clear))
+                    .padding(showRing ? 3.5 : 0)
+                if showGlyph {
+                    Image(systemName: isRunning ? "pause.fill" : "play.fill")
+                        .font(.system(size: 7.5, weight: .semibold))
+                        // `play.fill`'s triangle sits visually left of centre in a
+                        // circle; a hair of trailing offset optically re-centres it.
+                        .offset(x: isRunning ? 0 : 0.5)
+                        .foregroundStyle(isActive || hovered ? .white : Color.dsSecondary)
+                } else {
+                    Text("\(task.pomodorosDone)")
+                        .font(.system(size: 9, design: .rounded).weight(.bold))
+                        .foregroundStyle(complete ? Color.green : Color.dsPrimary)
+                }
+            }
+            .frame(width: diameter, height: diameter)
+            .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .help(isRunning ? "Pause “\(task.title)”"
+              : showRing ? "\(task.pomodorosDone) of \(est) pomodoros — click to focus"
+              : "Focus on “\(task.title)”")
+        .accessibilityLabel(isRunning ? "Pause focus" : "Start focus on \(task.title)")
     }
 
     /// Play/pause for one row — the same two calls the main window's row makes
@@ -383,12 +429,11 @@ struct NotchExpandedPanel: View {
 
     // MARK: - Actions
 
-    /// Two actions, on purpose. "Break now" would be `timer.skip()` — the Skip
-    /// button one row up. The app-blocker toggle and the Today-panel toggle
-    /// were here and got cut on user feedback ("these two buttons aren't
-    /// needed"): blocking still *shows* in the status strip below, and both
-    /// live one ⚙ away. The row keeps its measured `quickActionsHeight` — the
-    /// chips just share the width two ways instead of four.
+    /// The **fallback** quick-actions row — the two full-width chips, drawn only
+    /// when the timer row is hidden and so cannot carry the + / ⚙ controls in its
+    /// cluster (see `timerRow`). With the timer row shown, these two actions live
+    /// there instead and this row is not drawn. Kept at its measured
+    /// `quickActionsHeight` for the geometry that reserves it.
     private var quickActions: some View {
         HStack(spacing: 6) {
             action("plus", "Quick add a task") {
