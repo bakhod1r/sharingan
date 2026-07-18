@@ -196,7 +196,34 @@ struct NotchHUDView: View {
                 // overshoot safe: anything a content spring throws outside the
                 // silhouette is eaten here.
                 .clipShape(IslandShape(silhouette: l.silhouette))
+                // Fill the two menu-bar-row shoulders beside the cutout with
+                // black. The silhouette is a T (stem + body below the menu bar),
+                // so at menu-bar height only the stem is painted and the desktop
+                // shows either side of the notch. This paints those two rects
+                // black in the expanded state, so the panel reads as a seamless
+                // black slab wrapping the hardware notch. Added *after* the clip
+                // (the silhouette doesn't include the shoulders, so the clip
+                // would otherwise eat them).
+                .overlay(alignment: .top) { expandedShoulders(l) }
                 .transition(.opacity)
+        }
+    }
+
+    /// The two black rectangles filling the menu-bar row either side of the
+    /// cutout while the panel is expanded (see the call site).
+    @ViewBuilder
+    private func expandedShoulders(_ l: NotchLayout) -> some View {
+        if model.state.size == .expanded {
+            let shoulderH = l.silhouette.bodyTop
+            let stemW = l.silhouette.stemWidth
+            let sideW = max(0, (l.island.width - stemW) / 2)
+            HStack(spacing: 0) {
+                Rectangle().fill(.black).frame(width: sideW, height: shoulderH)
+                Spacer(minLength: 0).frame(width: stemW)   // leave the cutout untouched
+                Rectangle().fill(.black).frame(width: sideW, height: shoulderH)
+            }
+            .frame(width: l.island.width, height: l.island.height, alignment: .top)
+            .allowsHitTesting(false)
         }
     }
 
