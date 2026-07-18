@@ -203,4 +203,22 @@ public enum AnalyticsEngine {
         return totals.map { AppTotal(bundleID: $0.key, seconds: $0.value) }
             .sorted { $0.seconds > $1.seconds }
     }
+
+    /// Per-task app breakdown: for each task that logged focus, which apps were
+    /// frontmost and for how long, most-used first. Sessions with no `taskID`
+    /// (or no app usage) drop out — this is what powers the Report tab's
+    /// per-task app strip.
+    public static func appTotalsByTask(sessions: [SessionRecord]) -> [UUID: [AppTotal]] {
+        var byTask: [UUID: [String: TimeInterval]] = [:]
+        for s in sessions {
+            guard let taskID = s.taskID else { continue }
+            for (bundleID, seconds) in s.appUsage where seconds > 0 {
+                byTask[taskID, default: [:]][bundleID, default: 0] += seconds
+            }
+        }
+        return byTask.mapValues { dict in
+            dict.map { AppTotal(bundleID: $0.key, seconds: $0.value) }
+                .sorted { $0.seconds > $1.seconds }
+        }
+    }
 }

@@ -5,6 +5,16 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-07-18
+
+### Added
+- **Per-task app breakdown in the Report tab** — expanding a task row now shows,
+  under its subtasks, an **APPS** strip: which apps were frontmost while focusing
+  on that task and for how long, most-used first (icon · name · duration). Fed by
+  each session's `appUsage` (same tracking as the Apps tab), grouped by task via
+  the new pure `AnalyticsEngine.appTotalsByTask`. Rows with app activity are now
+  expandable even when they have no subtasks. Empty when app tracking is off.
+
 ## [1.9.0] - 2026-07-18
 
 ### Added

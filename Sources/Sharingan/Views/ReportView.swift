@@ -8,6 +8,7 @@ import SharinganCore
 struct ReportView: View {
     @ObservedObject var timer: PomodoroTimer
     @ObservedObject private var store = TaskStore.shared
+    @ObservedObject private var log = FocusSessionLog.shared
     @State private var day = Calendar.current.startOfDay(for: Date())
     @State private var expanded: Set<String> = []
     /// Row ordering — persisted; its own key, the report is a different list.
@@ -29,6 +30,13 @@ struct ReportView: View {
         let narrowed = categoryFilter.map { c in allRows.filter { $0.category == c } }
             ?? allRows
         return sortMode.apply(narrowed)
+    }
+
+    /// Which apps each task was focused in on this day, most-used first — the
+    /// strip shown under an expanded task row. Empty when tracking is off or
+    /// nothing was recorded. Keyed by task ID (deleted-task rows keep theirs).
+    private var appsByTask: [UUID: [AnalyticsEngine.AppTotal]] {
+        AnalyticsEngine.appTotalsByTask(sessions: log.sessions(on: day))
     }
 
     var body: some View {
@@ -155,14 +163,16 @@ struct ReportView: View {
     // MARK: - Rows
 
     private func reportRow(_ row: FocusReportRow) -> some View {
-        VStack(spacing: 2) {
+        let apps = appsByTask[row.entry.taskID] ?? []
+        let canExpand = !row.subrows.isEmpty || !apps.isEmpty
+        return VStack(spacing: 2) {
             HStack(spacing: 10) {
-                // No reserved slot for rows without subrows — the chevron only
+                // No reserved slot for rows without detail — the chevron only
                 // takes space where it actually appears, so a leaf row starts
                 // flush with the code instead of leaving a blank gap. The
                 // checkmark/circle "done" icon is gone too: the strikethrough
                 // on the title already carries that.
-                if !row.subrows.isEmpty {
+                if canExpand {
                     Button {
                         if expanded.contains(row.id) { expanded.remove(row.id) }
                         else { expanded.insert(row.id) }
@@ -224,8 +234,37 @@ struct ReportView: View {
                     }
                     .padding(.leading, 38).padding(.trailing, 12).padding(.vertical, 6)
                 }
+                if !apps.isEmpty { appStrip(apps) }
             }
         }
+    }
+
+    /// The apps this task was focused in, shown under an expanded row: each app
+    /// as an icon · name · duration line, indented to sit under the title. Uses
+    /// AnalyticsAppsView's cached bundle → name/icon lookup so both surfaces
+    /// resolve apps the same way.
+    private func appStrip(_ apps: [AnalyticsEngine.AppTotal]) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("APPS")
+                .font(.system(size: 8, weight: .heavy, design: .rounded))
+                .tracking(0.8)
+                .foregroundStyle(.white.opacity(0.35))
+            ForEach(apps) { app in
+                HStack(spacing: 8) {
+                    Image(nsImage: AnalyticsAppsView.icon(for: app.bundleID))
+                        .resizable().frame(width: 15, height: 15)
+                    Text(AnalyticsAppsView.name(for: app.bundleID))
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.75))
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                    Text(AnalyticsAppsView.durationLabel(app.seconds))
+                        .font(.system(.caption2, design: .rounded).weight(.semibold).monospacedDigit())
+                        .foregroundStyle(.white.opacity(0.55))
+                }
+            }
+        }
+        .padding(.leading, 38).padding(.trailing, 12).padding(.top, 2).padding(.bottom, 6)
     }
 
     private func metric(count: Int, seconds: TimeInterval) -> some View {
