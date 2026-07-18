@@ -123,7 +123,22 @@ OSA
       fi
     fi
 
-    hdiutil detach "$MOUNT_POINT" >/dev/null
+    # Eject can race a background reader (Finder, mds/Spotlight indexing the
+    # freshly styled volume) and fail with "Resource busy" on CI. Retry a few
+    # times with a pause, then force-detach as a last resort, so a transient
+    # busy mount never fails the whole release.
+    detached=false
+    for attempt in 1 2 3 4 5; do
+      if hdiutil detach "$MOUNT_POINT" >/dev/null 2>&1; then
+        detached=true
+        break
+      fi
+      echo "  ⚠ volume busy — retrying detach ($attempt/5)…"
+      sleep 3
+    done
+    if [[ "$detached" != true ]]; then
+      hdiutil detach "$MOUNT_POINT" -force >/dev/null
+    fi
   fi
 fi
 
