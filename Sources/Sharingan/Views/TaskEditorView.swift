@@ -62,6 +62,7 @@ struct TaskEditorView: View {
                     notesSection
                     subtasksSection
                     if !history.isEmpty { historySection }
+                    if !taskAppTotals.isEmpty { appsUsedSection }
                     if presentation == .sheet { deleteButton }
                 }
                 .padding(20)
@@ -622,6 +623,48 @@ struct TaskEditorView: View {
                         }
                         .padding(.leading, 12)
                     }
+                }
+            }
+        }
+    }
+
+    /// Apps that were frontmost while focusing on this task (its own + subtask
+    /// sessions carry the parent `taskID`), aggregated across the whole log and
+    /// ranked by time — answers "which apps did I use on this todo".
+    private var taskAppTotals: [AnalyticsEngine.AppTotal] {
+        let sessions = FocusSessionLog.shared.records.filter { $0.taskID == draft.id }
+        return AnalyticsEngine.appTotals(sessions: sessions)
+    }
+
+    private var appsUsedSection: some View {
+        let totals = taskAppTotals
+        let peak = totals.first?.seconds ?? 1
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("APPS USED WHILE FOCUSING")
+                .font(.system(size: 10, weight: .heavy, design: .rounded))
+                .tracking(1.2)
+                .foregroundStyle(.white.opacity(0.5))
+            ForEach(totals.prefix(6)) { total in
+                HStack(spacing: 10) {
+                    Image(nsImage: AnalyticsAppsView.icon(for: total.bundleID))
+                        .resizable().frame(width: 20, height: 20)
+                    Text(AnalyticsAppsView.name(for: total.bundleID))
+                        .font(.system(.caption, design: .rounded).weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .lineLimit(1)
+                    GeometryReader { geo in
+                        Capsule().fill(Color.white.opacity(0.07))
+                            .overlay(alignment: .leading) {
+                                Capsule().fill(accent.opacity(0.8))
+                                    .frame(width: geo.size.width
+                                           * CGFloat(total.seconds / peak))
+                            }
+                    }
+                    .frame(height: 5)
+                    Text(AnalyticsAppsView.durationLabel(total.seconds))
+                        .font(.system(.caption2, design: .rounded).weight(.bold).monospacedDigit())
+                        .foregroundStyle(accent)
+                        .frame(minWidth: 40, alignment: .trailing)
                 }
             }
         }

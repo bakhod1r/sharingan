@@ -26,6 +26,9 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 - **Per-Mac analytics** — sessions now record which Mac they ran on
   (`SessionRecord.deviceName`); a device filter in the bar (shown when more
   than one Mac has data) slices every tab by machine.
+- **Apps used per task** — the task editor now shows which apps were
+  frontmost while focusing on that todo (its own and its subtasks'
+  sessions), ranked by time with icon + share bar.
 
 ### Technical
 - `AnalyticsFilter` gains `devices`, `customStart/customEnd`, and
