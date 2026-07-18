@@ -6,6 +6,25 @@
     <description>Sharingan updates</description>
     <language>en</language>
     <item>
+      <title>Sharingan 1.11.0</title>
+      <pubDate>Sat, 18 Jul 2026 13:33:28 +0000</pubDate>
+      <sparkle:version>476</sparkle:version>
+      <sparkle:shortVersionString>1.11.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+
+### Added
+- **Per-task app breakdown in the Report tab** — expanding a task row now shows,
+  under its subtasks, an **APPS** strip: which apps were frontmost while focusing
+  on that task and for how long, most-used first (icon · name · duration). Fed by
+  each session's `appUsage` (same tracking as the Apps tab), grouped by task via
+  the new pure `AnalyticsEngine.appTotalsByTask`. Rows with app activity are now
+  expandable even when they have no subtasks. Empty when app tracking is off.
+
+      ]]></description>
+      <enclosure url="https://github.com/bakhod1r/sharingan/releases/download/v1.11.0/Sharingan.dmg" length="18053877" type="application/octet-stream" sparkle:edSignature="uoZyZGRCe8iM7IZTKpSA+ZKkOb5VhhsCt1EVu0uZJMIr6cYgB0K0+/FwZzp5DzJtkQI93Un/Gd+Oo6IJXR7SAQ=="/>
+    </item>
+    <item>
       <title>Sharingan 1.9.0</title>
       <pubDate>Sat, 18 Jul 2026 08:41:15 +0000</pubDate>
       <sparkle:version>463</sparkle:version>
