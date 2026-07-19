@@ -35,7 +35,8 @@ final class TaskSearchTests: XCTestCase {
         XCTAssertTrue(t.matchesSearch("p1"))
         XCTAssertTrue(t.matchesSearch("urgent"))
         XCTAssertTrue(t.matchesSearch("weekly"))
-        XCTAssertTrue(t.matchesSearch("big"))
+        XCTAssertTrue(t.matchesSearch("deep work"))   // the visible chip
+        XCTAssertTrue(t.matchesSearch("big"))          // stable rawValue still matches
         XCTAssertTrue(t.matchesSearch("open"))
     }
 

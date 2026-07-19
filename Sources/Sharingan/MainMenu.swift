@@ -86,7 +86,7 @@ extension AppDelegate {
     /// menu), ⌘1…⌘5 in sidebar order, plus Search Tasks.
     private func viewMenuItem() -> NSMenuItem {
         let menu = NSMenu(title: "View")
-        let sections: [AppSection] = [.timer, .tasks, .week, .stats, .report]
+        let sections: [AppSection] = [.timer, .tasks, .week, .dashboard]
         for (i, section) in sections.enumerated() {
             let row = item(section.title, #selector(menuGoToSection(_:)), "\(i + 1)")
             row.tag = i
@@ -159,7 +159,7 @@ extension AppDelegate {
     }
 
     @MainActor @objc private func menuGoToSection(_ sender: NSMenuItem) {
-        let sections: [AppSection] = [.timer, .tasks, .week, .stats, .report]
+        let sections: [AppSection] = [.timer, .tasks, .week, .dashboard]
         guard sections.indices.contains(sender.tag) else { return }
         MainWindowManager.shared.show()
         AppRouter.shared.section = sections[sender.tag]

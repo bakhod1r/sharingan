@@ -4,14 +4,14 @@
 > whenever a feature is added, changed, or removed, update this document in the
 > same change.**
 
-- Version: 1.9.0
+- Version: 1.10.0
 - Platform: macOS 14+, lives in the menu bar
 
 ---
 
 ## Timer / Pomodoro
 
-- Configurable focus, short break, and long break durations (25 / 5 / 15 by default). Settings' "Pomodoro sizes" section renders as a compact grid (Small/Normal/Big rows × Focus/Break/Long break columns); each size can override its own long-break length, falling back to the global long-break minutes when not overridden.
+- Configurable focus, short break, and long break durations (25 / 5 / 15 by default). Settings' "Pomodoro sizes" section renders as a compact grid (Small/Normal/Deep Work rows × Focus/Break/Long break columns); each size can override its own long-break length, falling back to the global long-break minutes when not overridden.
 - Countdown and count-up modes.
 - Long break automatically after every N pomodoros.
 - Auto-start focus and auto-start break toggles.
@@ -21,7 +21,7 @@
 - Sleep-aware: closing the lid during focus doesn't wrongly credit hours; a break still completes when you wake the Mac.
 - Custom one-off session length that survives mode changes.
 - Skip kills the tick loop before transitioning (like pause/stop/complete) — a live in-flight tick used to overwrite the fresh phase's countdown with the skipped phase's leftover time.
-- Main-window timer page: while idle, the ring hosts the Small/Normal/Big size switch (accent-tinted active chip + the selected size's lengths caption) instead of the phase label; a live/paused/pending-break session shows the label. Chips call the same `applyKind` as the sidebar selector, so both stay in sync and an idle tap refreshes the countdown instantly.
+- Main-window timer page: while idle, the ring hosts the Small/Normal/Deep Work size switch (accent-tinted active chip + the selected size's lengths caption) instead of the phase label; a live/paused/pending-break session shows the label. Chips call the same `applyKind` as the sidebar selector, so both stay in sync and an idle tap refreshes the countdown instantly.
 
 ---
 
@@ -30,7 +30,7 @@
 - Full task system: title, priority, tags, projects, categories, due dates, notes, and estimates.
 - **Extensible priority levels.** The four built-ins (P1 Urgent … P4 No priority) ship by default, but the sidebar's Priority section has a "+" to add your own levels *above* P1 (each requires a name + flag color); a custom row's context menu deletes it, moving its tasks back to No priority. `TaskPriority` is an `Int`-backed struct (was an enum) that Codes as a bare `Int`, so old tasks.json / SQLite rows decode byte-for-byte unchanged. **Renumbering semantic:** chip labels are rank-based, not fixed — adding one custom level makes it "P1" and pushes the built-in Urgent to "P2", etc. Everything above P2 (medium) counts as *important* in the Eisenhower matrix, so custom levels are always important.
 - Sidebar Tags section has a "+" to precreate a tag (name only, no color UI) before it's ever typed on a task; it shows dimmed with 0 uses until applied, and its own "Remove tag" (distinct from the destructive "Delete label" that strips a tag off every task) drops it again.
-- Per-task pomodoro type (Small/Normal/Big, or Auto to inherit the app default) — shown as a small icon+label badge in the task row's metadata line when set (nil/Auto shows nothing); subtasks can override it too, shown as an icon-only badge next to the subtask row.
+- Per-task pomodoro type (Small/Normal/Deep Work, or Auto to inherit the app default) — shown as a small icon+label badge in the task row's metadata line when set (nil/Auto shows nothing); subtasks can override it too, shown as an icon-only badge next to the subtask row.
 - Subtasks with their own estimates **and their own priority flag** (set in the editor's per-step flag menu or imported via `p1`…`p4` tokens; shown as a colored rank chip on subtask rows) — reorder them, or promote a subtask into a full task (the step's own flag and pomodoro size carry onto the promoted task, falling back to the parent's priority). A task's displayed estimate (row badges, editor summary, menu-bar rows) is its own estimate when it has no subtasks, or the **sum of its subtasks' estimates** when it does (falling back to its own estimate if no subtask carries one); the stored per-task estimate is unchanged and still what the editor/composer/parser write.
 - Recurrence: none, daily, weekdays, weekly, every N days, or monthly (on a chosen day). Completing a recurring task spawns the next occurrence.
 - Natural-language quick add in the **world's 25 most-spoken languages** at once, e.g. `ertaga 15:00 p1 #ish @blink ~2 hisobot yozish` — with live parse chips while you type, in both the main composer and the menu-bar quick-add. Recognizes:
@@ -85,6 +85,23 @@
 - Animated eye pair on the break screen that follows the exercise gaze, blinks, and winks.
 - **Live wallpaper**: desktop-level eyes that follow the cursor, blink and wink when idle, doze when you're away, and wake with the next pattern.
 - Menu-bar icon: a Sharingan iris with rotating tomoe and a progress ring (red-orange during focus, green during breaks, dimmed when paused), with an optional countdown readout.
+
+---
+
+## Analytics
+
+- **Per-session focus log** (`SessionRecord` + `FocusSessionLog`, SharinganCore): every really-ended session — completed, or skipped/stopped after ≥1 minute (`PomodoroTimer.shouldLogAbandoned`) — is appended as `{start, end, phase, completed, taskID/subtaskID/title snapshot, plannedSeconds, appUsage, deviceName}` to `focus-sessions.json` in Application Support (400-day retention). The timer posts `.sessionDidEnd` (task-less record) from its complete/skip/stop paths; the coordinator attaches the active task and appends. Session start survives pause/resume; mirrored sessions never post (the owner Mac logs them). Writes are fire-and-forget on a background queue (never block the timer); a corrupt file is renamed `focus-sessions.corrupt.json` and the log restarts empty. `appUsage` is filled by `ActiveAppTracker` (see Apps tab); `deviceName` is stamped from `Host.current().localizedName` for per-Mac slicing.
+- **Dashboard page** (sidebar `AppSection.dashboard`, bar-chart icon — the former separate Progress/Analytics/Report sidebar pages, merged in 1.10.0) with a horizontally-scrollable, icon-labelled tab row (`AnalyticsView.Tab`): Overview, Progress (the former Stats page — `StatsSummaryView`/`StreakBadgeView`/`StatsChartView`/`StatsExtrasView`), Heatmap, Focus load, Timeline, Apps, Report (`ReportView`), Export. The **Overview** leads with a hero KPI grid (focus time / sessions / day streak / active days) using `AnimatedNumber` (count-up, `.numericText`) + `staggeredAppear` cascade (both in `DashboardAnimations.swift`, no-op under Reduce Motion), then the score rings below. Tab content cross-fades via `.transition`. Tabs:
+  - **Overview** — two ring gauges. **Focus Score** (0–100, `AnalyticsEngine.focusScore`): focus volume vs the daily pomodoro goal (fallback 8) 40%, completed/abandoned ratio 25%, break compliance 20%, deep blocks (longest run of consecutive completed pomodoros, 4 caps it) 15%. **Consistency Score** (`consistencyScore`): today's-plan completion ratio 40% (Today-view members incl. those completed today; no plan ⇒ neutral 0.7), start-hour regularity vs the median first-start of up to 14 prior logged days 30% (full within ±1 h, zero at ±4 h; <3 prior days ⇒ neutral), streak 30% (7 days caps). Empty day ⇒ "—" (nil), never zero.
+  - **Heatmap** — GitHub-style 52-week grid from `PomodoroStats.recentDays(364)` (so it's full for long-time users regardless of the new log), Monday-first columns via the pure `AnalyticsEngine.heatmapWeeks` mapper, 5-step accent intensity scaled to the year's peak day, hover shows "N 🍅 · date", Less→More legend.
+  - **Focus load** — Swift Charts area chart of focus minutes per hour of day (`AnalyticsEngine.hourlyLoad`, sessions split proportionally across hour boundaries; breaks excluded), with a dashed 30-day-average line (averaged over days that have data) and a ◀ ▶ day pager clamped at today.
+- **Filter bar** (`AnalyticsFilter`, SharinganCore), applied to every tab: a time **range** (Today/1W/1M/3M/1Y) averages the Overview scores over the window via per-day computation (`AnalyticsEngine.average` over daily scores; past-day plan adherence is unknown ⇒ neutral default, streak reconstructed from the log's completed-focus days), sets the heatmap span (`range.heatmapDays`, 4 weeks…1 year) and the focus-load average window (`range.loadAverageDays`); **multi-select attribution facets** (categories/projects/tags — OR within a facet, AND across facets, resolved to a `Set<UUID>` of matching task IDs by the view and applied via `AnalyticsEngine.filter`) shown as removable chips in a wrapping `FlowChips` layout; and a **completed-only** toggle. A **calendar from → to** picker (popover, two `DatePicker`s) sets a custom `customStart/customEnd` window that overrides the presets across every tab and the score averages (`AnalyticsFilter.interval(now:)` / `spanDays` / `heatmapSpanDays`). A **per-Mac device filter** (shown when >1 Mac has data — `AnalyticsEngine.devices(in:)`, sessions carry `deviceName` stamped from `Host.current().localizedName`) slices every tab by machine via the `devices:` argument on `AnalyticsEngine.filter`. While a filter narrows sessions the heatmap recomputes from `AnalyticsEngine.dailyCounts(from:)` instead of the aggregate history. Deleted tasks aren't in the live list, so their sessions drop from an attribution filter (same as the Report tab).
+- **Apps tab** — per-app focus time (`AnalyticsEngine.appTotals` over each session's `appUsage`), ranked with icon + share bar. Fed by **`ActiveAppTracker`** (SharinganCore): observes `NSWorkspace.didActivateApplicationNotification` for the frontmost app (app-level, no window titles, no Accessibility), accumulates into the pure `AppUsageAccumulator`, parks on idle (`CGEventSource.secondsSinceLastEventType` > 120 s). The coordinator starts it on focus begin per `settings.appTrackingMode` (`AppTrackingMode` off / focusOnly / always, default focusOnly), and stamps the session's `appUsage` on `.sessionDidEnd`. Setting lives in Settings → Tasks & Planning → Analytics.
+- **Timeline tab** — a day's sessions across a 0–24h track (focus = accent, break = green, abandoned = dashed) plus a session list; the day pager is the **time machine** for replaying any past day.
+- **Burnout detection** (`BurnoutDetector`, pure): over the last 21 days — a huge day (≥12 completed), a heavy streak (≥5 consecutive ≥8-pomodoro days), skipping >50% of breaks, or late-night (≥23:00) focus on ≥3 days. Two+ reasons ⇒ warning: an Overview banner and a once-per-day notification (`checkBurnout` in the coordinator, `UserDefaults` cooldown).
+- **Smart insights** (`SmartSuggestions`, pure): best hour, best weekday, break/abandon nudges — up to 2, shown on the Overview.
+- **Export tab** (`AnalyticsExport`): the filtered sessions as CSV, real `.xlsx` (dependency-free `XLSXWriter` + store-only `Zip`/`CRC32`), or a one-page PDF (`ImageRenderer` → `CGContext` PDF).
+- All score/grid/load/filter/burnout/export math is pure and unit-tested (`AnalyticsEngineTests`, `SessionLogTests`, `BurnoutSuggestionsTests`, `AnalyticsExportTests`, `AppUsageAccumulatorTests`).
 
 ---
 
@@ -225,7 +242,7 @@ Simple/Advanced switch and nothing to seed at launch.
   content, in its own `Section`s, shown when `advancedExpanded` is `true`.
   `advancedExpanded` resets to `false` whenever the open category changes.
 - Timer's always-visible part shows the full "Pomodoro sizes" section (the
-  Small/Normal/Big grid) — there's no simplified two-stepper substitute. The
+  Small/Normal/Deep Work grid) — there's no simplified two-stepper substitute. The
   "Floating widget" section (master toggle, then size / position / expand-on-
   hover / opacity once it's on, gated on `settings.dockWidgetEnabled`) is
   also essentials-tier — it isn't behind the Advanced accordion. Eye Care's

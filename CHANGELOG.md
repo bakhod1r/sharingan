@@ -5,7 +5,7 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
-## [1.9.0] - 2026-07-19
+## [1.10.0] - 2026-07-19
 
 ### Added
 - **Text size** setting (Settings › Appearance): Small / Standard / Large /
@@ -17,6 +17,45 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
   sibling step no longer inherits the leftover Small — a targeted step now
   resolves to a definite size (its own, else the task's, else Normal), so
   its break is the correct length (5′ instead of 3′).
+
+## [1.9.0] - 2026-07-18
+
+### Added
+- **Analytics dashboard** — a unified page (replacing the standalone Progress
+  page) with scrollable, icon-labelled tabs and one shared filter bar:
+  - **Overview** — a hero KPI row (focus time, sessions, day streak, active
+    days) with count-up numbers, a full-width focus-trend chart (gradient
+    area + scrubbable tooltip + ↑/↓ % vs the window's first half), and the
+    daily **Focus Score** and **Consistency Score** rings. A burnout banner
+    and smart-insight cards surface here.
+  - **Progress** — the previous stats summary, streak, and charts.
+  - **Heatmap** — GitHub-style yearly grid of completed pomodoros (month +
+    weekday labels, hover details).
+  - **Focus load** — focus minutes per hour of day; Today shows the day's
+    curve with a rolling average, a wider range the total hourly load.
+  - **Timeline** — a day's sessions across the clock with a calendar date
+    picker to replay any past day (time machine).
+  - **Apps** — which apps were frontmost during focus, ranked by time.
+  - **Report** — the per-task focus report.
+  - **Export** — the filtered session history as CSV, real .xlsx
+    (dependency-free writer), or a one-page PDF.
+- **Per-session focus log** (`focus-sessions.json`): every finished session
+  (completed, or abandoned after ≥1 min) records start/end, phase, task,
+  planned length, per-app usage, and originating Mac. Writes never block the
+  timer; a corrupt file is set aside, not fatal.
+- **Filters** — a time range (Today / 1W / 1M / 3M / 1Y or a custom calendar
+  from→to range), multi-select category / project / tag facets, a completed-only
+  toggle, and a per-Mac device filter — all driving every tab.
+- **Active app tracking** — records the frontmost app during focus (app-level
+  only, no window titles, no Accessibility permission), configurable in
+  Settings → Tasks & Planning → Analytics (Off / During focus only / Always).
+- **Burnout detection** — an Overview banner and once-a-day notification on
+  warning signs (huge days, heavy streaks, skipped breaks, late-night focus).
+- **Smart insights** — best hour, best weekday, break/abandon nudges.
+
+### Changed
+- The **Big** pomodoro size is now called **Deep Work** (saved data unchanged;
+  task search still matches both "deep work" and "big").
 
 ## [1.8.0] - 2026-07-18
 
