@@ -1226,9 +1226,13 @@ public final class TaskStore: ObservableObject {
     public var resolvedActiveKind: PomodoroKind? {
         guard let task = activeTask else { return nil }
         if let sid = activeSubtaskID,
-           let sub = task.subtasks.first(where: { $0.id == sid }),
-           let kind = sub.pomodoroKind {
-            return kind
+           let sub = task.subtasks.first(where: { $0.id == sid }) {
+            // A targeted step must yield a DEFINITE size — its own kind, else
+            // the task's, else the app default (.normal). Never nil: nil means
+            // "keep the timer's current kind", so a kindless ("default") step
+            // inherited a leftover Small from a sibling step's session and its
+            // break came out Small (3′) instead of the default 5′.
+            return sub.pomodoroKind ?? task.pomodoroKind ?? .normal
         }
         return task.pomodoroKind
     }
