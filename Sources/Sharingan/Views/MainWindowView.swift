@@ -93,6 +93,8 @@ struct MainWindowView: View {
         // One app accent: controls (pickers, toggles, sliders, menus) follow the
         // chosen theme instead of the stock system blue.
         .tint(timer.settings.theme.accent)
+        // App-wide reading-text scale (Settings › Appearance › Text size).
+        .dynamicTypeSize(timer.settings.textSize.dynamicTypeSize)
     }
 
     // MARK: - Sidebar collapse

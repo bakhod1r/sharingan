@@ -726,6 +726,17 @@ struct SettingsView: View {
                     .pickerStyle(.menu)
                     .glassMenu()
 
+                    Picker("Text size", selection: $settings.textSize) {
+                        ForEach(TextSize.allCases) { size in
+                            Text(size.label).tag(size)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .glassMenu()
+                    Text("Scales the app's reading text. The timer digits keep their size.")
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(.secondary)
+
                     ToggleRow(title: "Spin the Sharingan",
                               isOn: $settings.animateIcon)
                     Text("The tomoe rotate slowly in the menu bar and Dock. Pauses when macOS Reduce Motion is on.")

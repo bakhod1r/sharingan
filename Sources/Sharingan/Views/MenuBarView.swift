@@ -146,6 +146,8 @@ struct MenuBarView: View {
         .animation(DS.Motion.standard, value: tab)
         // One app accent: controls follow the chosen theme, not system blue.
         .tint(timer.settings.theme.accent)
+        // App-wide reading-text scale (Settings › Appearance › Text size).
+        .dynamicTypeSize(timer.settings.textSize.dynamicTypeSize)
         .sheet(item: $editorTask) { task in
             TaskEditorView(task: task,
                            accent: timer.settings.theme.accent,

@@ -189,6 +189,9 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     /// Mouse shuncha soniya tinch tursa wallpaper ko'zlari yumilib mudraydi.
     public var wallpaperDozeSeconds: Double = 60
     public var theme: SharinganTheme = .liquidGlass
+    /// App-wide reading-text size (applied as a DynamicTypeSize at each view
+    /// root). `.standard` == SwiftUI's default, so it's a no-op until changed.
+    public var textSize: TextSize = .standard
     public var repeatConfig: RepeatConfig = .init()
     public var flashAtFiveSecLeft: Bool = true
     /// Floating widget: a control pill — active task, remaining time,
@@ -405,6 +408,7 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
         wallpaperIdleDelay = try c.decodeIfPresent(Double.self, forKey: .wallpaperIdleDelay) ?? d.wallpaperIdleDelay
         wallpaperDozeSeconds = try c.decodeIfPresent(Double.self, forKey: .wallpaperDozeSeconds) ?? d.wallpaperDozeSeconds
         theme = try c.decodeIfPresent(SharinganTheme.self, forKey: .theme) ?? d.theme
+        textSize = ((try? c.decodeIfPresent(TextSize.self, forKey: .textSize)) ?? nil) ?? d.textSize
         repeatConfig = try c.decodeIfPresent(RepeatConfig.self, forKey: .repeatConfig) ?? d.repeatConfig
         flashAtFiveSecLeft = try c.decodeIfPresent(Bool.self, forKey: .flashAtFiveSecLeft) ?? d.flashAtFiveSecLeft
         // Note: the `floating*` fields (Task 11 removed the floating timer) are
