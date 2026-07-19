@@ -5,6 +5,19 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-07-19
+
+### Added
+- **Text size** setting (Settings › Appearance): Small / Standard / Large /
+  Extra Large scales the app's reading text across the popover and main
+  window. The timer digits keep their size.
+
+### Fixed
+- Running a subtask marked "default" (no pomodoro size) after a Small
+  sibling step no longer inherits the leftover Small — a targeted step now
+  resolves to a definite size (its own, else the task's, else Normal), so
+  its break is the correct length (5′ instead of 3′).
+
 ## [1.8.0] - 2026-07-18
 
 ### Added
