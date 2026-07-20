@@ -7,6 +7,12 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [1.10.1] - 2026-07-20
 
+### Changed
+- The sidebar's **Week** entry is now **Board**, with a column-grid icon in
+  place of the calendar — it opens all three boards (Weekly, Kanban,
+  Timeline), not just the week. The stored section key is unchanged, so the
+  last-opened section survives the rename.
+
 ### Fixed
 - **Board columns scroll again.** The Kanban and Weekly boards only had a
   horizontal scroll view, and each column grew unbounded from a fixed

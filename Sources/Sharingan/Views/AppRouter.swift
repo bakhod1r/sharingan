@@ -10,7 +10,7 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .timer:     return "Pomodoro"
         case .tasks:     return "Tasks"
-        case .week:      return "Week"
+        case .week:      return "Board"
         case .dashboard: return "Dashboard"
         case .settings:  return "Settings"
         }
@@ -19,7 +19,7 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .timer:     return "timer"
         case .tasks:     return "checklist"
-        case .week:      return "calendar"
+        case .week:      return "square.grid.3x2"
         case .dashboard: return "chart.bar.xaxis.ascending"
         case .settings:  return "gearshape"
         }
