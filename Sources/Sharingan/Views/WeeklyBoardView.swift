@@ -94,7 +94,9 @@ struct WeeklyBoardView: View {
                 .transition(.asymmetric(
                     insertion: .opacity.combined(with: .offset(x: weekOffset >= 0 ? 44 : -44)),
                     removal: .opacity))
+                .frame(maxHeight: .infinity, alignment: .top)
             }
+            .frame(maxHeight: .infinity)
         }
         .sheet(item: $editorTask) { task in
             TaskEditorView(task: task, accent: accent, settings: timer.settings)
@@ -319,23 +321,28 @@ struct WeeklyBoardView: View {
         let targeted = targetedColumn == id
         return VStack(alignment: .leading, spacing: 12) {
             header
-            if items.isEmpty {
-                emptyDrop(targeted: targeted)
-            } else {
-                VStack(spacing: 9) {
-                    ForEach(items) { task in
-                        card(task)
-                            .transition(.asymmetric(
-                                insertion: .scale(scale: 0.88).combined(with: .opacity),
-                                removal: .scale(scale: 0.9).combined(with: .opacity)))
+            // Cards scroll within the column so a long day never overflows the
+            // board; the header stays pinned.
+            ScrollView(.vertical, showsIndicators: false) {
+                if items.isEmpty {
+                    emptyDrop(targeted: targeted)
+                } else {
+                    VStack(spacing: 9) {
+                        ForEach(items) { task in
+                            card(task)
+                                .transition(.asymmetric(
+                                    insertion: .scale(scale: 0.88).combined(with: .opacity),
+                                    removal: .scale(scale: 0.9).combined(with: .opacity)))
+                        }
                     }
+                    .padding(.bottom, 4)
                 }
             }
-            Spacer(minLength: 0)
+            .scrollBounceBehavior(.basedOnSize)
         }
         .padding(12)
         .frame(width: columnWidth, alignment: .top)
-        .frame(minHeight: 440, alignment: .top)
+        .frame(minHeight: 440, maxHeight: .infinity, alignment: .top)
         .background(columnBackground(isToday: isToday, isWeekend: isWeekend, targeted: targeted))
         .overlay(
             RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)

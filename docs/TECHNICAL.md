@@ -4,7 +4,7 @@
 > whenever a feature is added, changed, or removed, update this document in the
 > same change.**
 
-- Version: 1.10.0
+- Version: 1.10.1
 - Platform: macOS 14+, lives in the menu bar
 
 ---
@@ -56,6 +56,7 @@
 - **Focus queue**: line up several tasks — each finished pomodoro advances to the next one, the break screen shows "Next: …", and after a break a picker asks what to work on next.
 - **Eisenhower matrix** view: tasks sorted into do-first / schedule / delegate / eliminate by urgency and importance.
 - **Weekly board**: drag tasks between days to reschedule; sort & filter controls in the header order every column and narrow the whole board. The menu-bar popover’s Week tab carries the same two controls.
+- **Board column scrolling** (Weekly `columnContainer` + Kanban `columnView`, 1.10.1): the boards scroll horizontally across columns, and each column scrolls its cards *vertically* on its own (`ScrollView(.vertical)` + `.scrollBounceBehavior(.basedOnSize)`) while the column header — and the Kanban quick-add — stays pinned. Columns keep `minHeight: 440` but now also take `maxHeight: .infinity` so they fill the board area instead of growing past it and clipping overflow cards. The Timeline board wraps its whole canvas in a vertical scroll view instead.
 - **Today panel**: a floating desktop card showing today's tasks and the timer.
 - Optional guard that requires an active task before focus can start.
 

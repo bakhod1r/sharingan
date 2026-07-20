@@ -5,6 +5,16 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.10.1] - 2026-07-20
+
+### Fixed
+- **Board columns scroll again.** The Kanban and Weekly boards only had a
+  horizontal scroll view, and each column grew unbounded from a fixed
+  `minHeight`, so once a column held more cards than fit on screen the
+  overflow was clipped and unreachable. Cards now scroll vertically inside
+  their own column while the column header (and the Kanban quick-add) stays
+  pinned. The Timeline board was unaffected.
+
 ## [1.10.0] - 2026-07-19
 
 ### Added

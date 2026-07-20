@@ -73,7 +73,9 @@ struct SharinganBoardView: View {
                 }
                 .padding(.vertical, 4)
                 .padding(.horizontal, 2)
+                .frame(maxHeight: .infinity, alignment: .top)
             }
+            .frame(maxHeight: .infinity)
         }
         .onAppear(perform: backfillOnce)
         .sheet(item: $editorTask) { task in
@@ -155,18 +157,23 @@ struct SharinganBoardView: View {
         return VStack(alignment: .leading, spacing: 12) {
             columnHeader(column, count: cards.count)
             if isFirst { quickAdd }
-            if cards.isEmpty {
-                emptyDrop(targeted: targeted)
-            } else {
-                VStack(spacing: 9) {
-                    ForEach(cards) { card($0) }
+            // Cards scroll within the column so a long list never overflows
+            // the board; the header and quick-add stay pinned.
+            ScrollView(.vertical, showsIndicators: false) {
+                if cards.isEmpty {
+                    emptyDrop(targeted: targeted)
+                } else {
+                    VStack(spacing: 9) {
+                        ForEach(cards) { card($0) }
+                    }
+                    .padding(.bottom, 4)
                 }
             }
-            Spacer(minLength: 0)
+            .scrollBounceBehavior(.basedOnSize)
         }
         .padding(12)
         .frame(width: columnWidth, alignment: .top)
-        .frame(minHeight: 440, alignment: .top)
+        .frame(minHeight: 440, maxHeight: .infinity, alignment: .top)
         .background(
             RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
                 .fill(Color.white.opacity(targeted ? 0.07 : 0.03))
