@@ -247,6 +247,14 @@ struct SharinganBoardView: View {
                 Label("Move right", systemImage: "arrow.right")
             }
             Divider()
+            Button {
+                withAnimation(DS.Motion.standard) {
+                    columns.setDoneRole(column.id, column.role != .done)
+                }
+            } label: {
+                Label(column.role == .done ? "Not the Done column" : "Use as Done column",
+                      systemImage: "checkmark.circle")
+            }
             Button { withAnimation(DS.Motion.standard) { columns.setEnabled(column.id, false) } } label: {
                 Label("Hide column", systemImage: "eye.slash")
             }

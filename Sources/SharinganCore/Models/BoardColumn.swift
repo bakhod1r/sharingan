@@ -43,6 +43,11 @@ public struct BoardColumn: Identifiable, Codable, Equatable, Sendable {
         order = try c.decodeIfPresent(Int.self, forKey: .order) ?? 0
         isEnabled = try c.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
         role = try c.decodeIfPresent(Role.self, forKey: .role) ?? .plain
+        // The seeded Done column always keeps its `.done` coupling, even when
+        // the stored list came from a build that wrote no role (or from a
+        // synced Mac running such a build) — otherwise dropping a card into
+        // "Completed" would silently stop completing the task.
+        if id == Seed.done { role = .done }
     }
 
     // MARK: - Seed

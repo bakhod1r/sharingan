@@ -3,6 +3,25 @@
 All notable changes to Sharingan are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [1.10.2] - 2026-07-28
+
+### Fixed
+- **Tasks stopped saving after a busy database** — a `COMMIT` that failed
+  (SQLite reporting the database busy against the sync engine's connection)
+  left the connection inside a transaction while the depth counter had
+  already unwound. Every later write then issued a plain `BEGIN`, hit
+  "cannot start a transaction within a transaction", and returned early, so
+  the app silently dropped **every** save for the rest of the session —
+  completing a task, adding one, editing one — while the write-ahead log grew
+  unbounded because the open transaction blocked checkpoints. Transactions now
+  read SQLite's own autocommit state, take the write lock up front with
+  `BEGIN IMMEDIATE`, and always roll back rather than leaving one open.
+- **Board: dropping a card into Completed marks the task done again.** The
+  seeded Done column lost its `.done` role whenever the column list came from
+  a build (or a synced Mac) that stored no role, which turned the drop into a
+  plain move. The Done column now keeps its role, and any column can be made
+  the Done column from its `⋯` menu.
+
 ## [Unreleased]
 
 ## [1.10.1] - 2026-07-20

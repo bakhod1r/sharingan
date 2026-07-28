@@ -1167,19 +1167,38 @@ final class TaskDatabase: SyncOutboxStorage {
     /// all-or-nothing unit — a crash mid-migration then leaves the whole thing
     /// uncommitted and SQLite restores the pre-migration database on reopen.
     private func transaction(_ body: () -> Bool) {
-        let nested = txDepth > 0
+        // Nesting is decided by SQLite's own autocommit flag, not by `txDepth`
+        // alone: a COMMIT that failed (SQLITE_BUSY against the sync engine's
+        // connection) leaves the connection *inside* a transaction with
+        // txDepth back at 0. Trusting the counter there meant every later
+        // write issued a plain BEGIN, got "cannot start a transaction within a
+        // transaction", and returned early — the process then silently dropped
+        // every save for the rest of its life while the WAL grew unbounded
+        // (checkpoints blocked by the open transaction).
+        let nested = txDepth > 0 || sqlite3_get_autocommit(db) == 0
         let name = "sp\(txDepth)"
-        guard exec(nested ? "SAVEPOINT \(name);" : "BEGIN;") else { return }
+        // BEGIN IMMEDIATE takes the write lock up front, so a busy database
+        // fails here (where the retry is harmless) instead of at COMMIT.
+        guard exec(nested ? "SAVEPOINT \(name);" : "BEGIN IMMEDIATE;") else { return }
         txDepth += 1
         let ok = body()
         txDepth -= 1
         if ok {
-            exec(nested ? "RELEASE \(name);" : "COMMIT;")
+            if !exec(nested ? "RELEASE \(name);" : "COMMIT;") {
+                // Never leave the connection mid-transaction: an uncommittable
+                // transaction is rolled back so the next write starts clean.
+                if nested { exec("ROLLBACK TO \(name);"); exec("RELEASE \(name);") }
+                else { exec("ROLLBACK;") }
+            }
         } else if nested {
             exec("ROLLBACK TO \(name);"); exec("RELEASE \(name);")
         } else {
             exec("ROLLBACK;")
         }
+        // Belt and braces: if anything above still left a transaction open
+        // (a failed ROLLBACK TO, a body that ran raw SQL), clear it here so
+        // the leak can never outlive this call.
+        if !nested && sqlite3_get_autocommit(db) == 0 { exec("ROLLBACK;") }
     }
 
     private func bindText(_ stmt: OpaquePointer?, _ i: Int32, _ value: String) {

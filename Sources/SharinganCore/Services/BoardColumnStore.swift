@@ -74,6 +74,18 @@ public final class BoardColumnStore: ObservableObject {
         persist()
     }
 
+    /// Makes `id` the board's Done column (or demotes it back to a plain
+    /// bucket). Only one column carries the `.done` role, so promoting one
+    /// clears it everywhere else.
+    public func setDoneRole(_ id: String, _ isDone: Bool) {
+        guard columns.contains(where: { $0.id == id }) else { return }
+        for i in columns.indices {
+            if columns[i].id == id { columns[i].role = isDone ? .done : .plain }
+            else if isDone { columns[i].role = .plain }
+        }
+        persist()
+    }
+
     /// Removes a column. Tasks that named it keep the id and fall back to the
     /// first enabled column on render, so no task is lost.
     public func delete(_ id: String) {
