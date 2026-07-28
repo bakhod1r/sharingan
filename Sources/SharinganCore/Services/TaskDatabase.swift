@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import SQLite3
 
 /// Thin SQLite persistence layer (SQLite3 C library bundled with macOS, no
@@ -691,7 +692,9 @@ final class TaskDatabase: SyncOutboxStorage {
                     -- created_at and origin_device are immutable: never updated.
                 """
                 var stmt: OpaquePointer?
-                guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
+                guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+                    logSQL("saveTasks/prepare", sql); return false
+                }
                 bindText(stmt, 1, t.id.uuidString)
                 bindText(stmt, 2, t.title)
                 bindText(stmt, 3, t.category)
@@ -719,12 +722,16 @@ final class TaskDatabase: SyncOutboxStorage {
                 if let v = t.jiraIssueType { bindText(stmt, 25, v) } else { sqlite3_bind_null(stmt, 25) }
                 if let v = t.boardColumnID { bindText(stmt, 26, v) } else { sqlite3_bind_null(stmt, 26) }
                 let ok = sqlite3_step(stmt) == SQLITE_DONE
+                if !ok { logSQL("saveTasks/upsert \(t.title)", sql) }
                 sqlite3_finalize(stmt)
                 guard ok else { return false }
 
                 guard let taskID = queryInt64("SELECT id FROM tasks WHERE uuid=?;", { bindText($0, 1, t.id.uuidString) })
-                else { return false }
-                guard writeTaskTags(taskID, t.tags), writeSubtasks(taskID, t.subtasks) else { return false }
+                else { logSQL("saveTasks/rowid \(t.title)", "SELECT id FROM tasks WHERE uuid=?"); return false }
+                guard writeTaskTags(taskID, t.tags), writeSubtasks(taskID, t.subtasks) else {
+                    Self.log.error("saveTasks children failed for \(t.title, privacy: .public)")
+                    return false
+                }
             }
             sweepEmptiedTrash(keeping: tasks.map(\.id.uuidString))
             return true
@@ -770,12 +777,22 @@ final class TaskDatabase: SyncOutboxStorage {
         run("DELETE FROM eav_entities WHERE owner_id=? AND kind='subtask';") { sqlite3_bind_int64($0, 1, taskID) }
         for (i, s) in subtasks.enumerated() {
             var stmt: OpaquePointer?
+            // `uuid` is UNIQUE across the whole table, so a subtask id that
+            // still belongs to another task row — two task copies of the same
+            // record arriving from sync share their subtask ids — would fail
+            // the insert, abort the transaction, and take every other task's
+            // save down with it. The id names one subtask, so claim it here:
+            // last writer wins, and one duplicated task can't wedge the store.
+            run("DELETE FROM eav_entities WHERE uuid=?;") { bindText($0, 1, s.id.uuidString) }
             let sql = "INSERT INTO eav_entities (uuid, kind, owner_id, sort_order) VALUES (?,'subtask',?,?);"
-            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+                logSQL("writeSubtasks/prepare", sql); return false
+            }
             bindText(stmt, 1, s.id.uuidString)
             sqlite3_bind_int64(stmt, 2, taskID)
             sqlite3_bind_int64(stmt, 3, Int64(i))
             let ok = sqlite3_step(stmt) == SQLITE_DONE
+            if !ok { logSQL("writeSubtasks/insert", sql) }
             sqlite3_finalize(stmt)
             guard ok else { return false }
             let eid = sqlite3_last_insert_rowid(db)
@@ -1138,16 +1155,37 @@ final class TaskDatabase: SyncOutboxStorage {
         return false
     }
 
+    /// Every SQLite failure below is otherwise swallowed (the callers return
+    /// `false` and the store keeps its in-memory state), which is how a save
+    /// path can silently stop persisting. Log the statement and SQLite's own
+    /// message so `log show --predicate 'subsystem == "com.sharingan.app"'`
+    /// says what actually failed.
+    static let log = Logger(subsystem: "com.sharingan.app", category: "db")
+
+    private func logSQL(_ what: String, _ sql: String) {
+        let message = String(cString: sqlite3_errmsg(db))
+        let code = sqlite3_extended_errcode(db)
+        Self.log.error("\(what, privacy: .public) failed (\(code)): \(message, privacy: .public) — \(sql.prefix(120), privacy: .public)")
+    }
+
     @discardableResult
-    private func exec(_ sql: String) -> Bool { sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK }
+    private func exec(_ sql: String) -> Bool {
+        guard sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK else {
+            logSQL("exec", sql); return false
+        }
+        return true
+    }
 
     /// Prepares `sql`, lets `binds` bind its parameters, steps once, finalizes.
     private func run(_ sql: String, _ binds: (OpaquePointer?) -> Void) {
         var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+            logSQL("prepare", sql); return
+        }
         defer { sqlite3_finalize(stmt) }
         binds(stmt)
-        _ = sqlite3_step(stmt)
+        let rc = sqlite3_step(stmt)
+        if rc != SQLITE_DONE && rc != SQLITE_ROW { logSQL("step", sql) }
     }
 
     /// Prepares `sql`, binds, and returns the first column of the first row.
@@ -1179,7 +1217,10 @@ final class TaskDatabase: SyncOutboxStorage {
         let name = "sp\(txDepth)"
         // BEGIN IMMEDIATE takes the write lock up front, so a busy database
         // fails here (where the retry is harmless) instead of at COMMIT.
-        guard exec(nested ? "SAVEPOINT \(name);" : "BEGIN IMMEDIATE;") else { return }
+        guard exec(nested ? "SAVEPOINT \(name);" : "BEGIN IMMEDIATE;") else {
+            Self.log.error("transaction not started (nested: \(nested)) — write dropped")
+            return
+        }
         txDepth += 1
         let ok = body()
         txDepth -= 1

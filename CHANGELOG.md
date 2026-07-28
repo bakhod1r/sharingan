@@ -3,6 +3,21 @@
 All notable changes to Sharingan are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [1.10.3] - 2026-07-28
+
+### Fixed
+- **Marking a task done never stuck** — the real cause behind 1.10.2's
+  symptom. A subtask id is `UNIQUE` across the whole `eav_entities` table, but
+  two copies of the same task arriving from sync carry the *same* subtask ids.
+  Saving the second copy hit the unique constraint, `saveTasks` reported
+  failure, and the transaction rolled back — so **every** task's save was
+  discarded on every write, forever, while the app's in-memory list drifted
+  further from the database. Writing a subtask now claims its id from any
+  stale row first, so one duplicated task can no longer wedge the whole store.
+- Every SQLite failure is logged (`log show --predicate 'subsystem ==
+  "com.sharingan.app"'`) instead of being swallowed, so a save that stops
+  persisting says why.
+
 ## [1.10.2] - 2026-07-28
 
 ### Fixed
