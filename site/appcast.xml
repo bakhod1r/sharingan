@@ -6,6 +6,34 @@
     <description>Sharingan updates</description>
     <language>en</language>
     <item>
+      <title>Sharingan 1.10.2</title>
+      <pubDate>Tue, 28 Jul 2026 04:37:21 +0000</pubDate>
+      <sparkle:version>501</sparkle:version>
+      <sparkle:shortVersionString>1.10.2</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+
+### Fixed
+- **Tasks stopped saving after a busy database** — a `COMMIT` that failed
+  (SQLite reporting the database busy against the sync engine's connection)
+  left the connection inside a transaction while the depth counter had
+  already unwound. Every later write then issued a plain `BEGIN`, hit
+  "cannot start a transaction within a transaction", and returned early, so
+  the app silently dropped **every** save for the rest of the session —
+  completing a task, adding one, editing one — while the write-ahead log grew
+  unbounded because the open transaction blocked checkpoints. Transactions now
+  read SQLite's own autocommit state, take the write lock up front with
+  `BEGIN IMMEDIATE`, and always roll back rather than leaving one open.
+- **Board: dropping a card into Completed marks the task done again.** The
+  seeded Done column lost its `.done` role whenever the column list came from
+  a build (or a synced Mac) that stored no role, which turned the drop into a
+  plain move. The Done column now keeps its role, and any column can be made
+  the Done column from its `⋯` menu.
+
+      ]]></description>
+      <enclosure url="https://github.com/bakhod1r/sharingan/releases/download/v1.10.2/Sharingan.dmg" length="18721567" type="application/octet-stream" sparkle:edSignature="m2XXNVVbC5ffWRzS824TXK3idv3OHC7rzwF1fyQ4SCl0HL2nn1WRbrT87KDalI5zQh9gB8gqADtwTZsJ8PbCBg=="/>
+    </item>
+    <item>
       <title>Sharingan 1.10.1</title>
       <pubDate>Mon, 20 Jul 2026 05:56:16 +0000</pubDate>
       <sparkle:version>499</sparkle:version>
