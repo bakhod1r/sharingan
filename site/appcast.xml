@@ -6,6 +6,30 @@
     <description>Sharingan updates</description>
     <language>en</language>
     <item>
+      <title>Sharingan 1.10.3</title>
+      <pubDate>Tue, 28 Jul 2026 05:42:50 +0000</pubDate>
+      <sparkle:version>502</sparkle:version>
+      <sparkle:shortVersionString>1.10.3</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+
+### Fixed
+- **Marking a task done never stuck** — the real cause behind 1.10.2's
+  symptom. A subtask id is `UNIQUE` across the whole `eav_entities` table, but
+  two copies of the same task arriving from sync carry the *same* subtask ids.
+  Saving the second copy hit the unique constraint, `saveTasks` reported
+  failure, and the transaction rolled back — so **every** task's save was
+  discarded on every write, forever, while the app's in-memory list drifted
+  further from the database. Writing a subtask now claims its id from any
+  stale row first, so one duplicated task can no longer wedge the whole store.
+- Every SQLite failure is logged (`log show --predicate 'subsystem ==
+  "com.sharingan.app"'`) instead of being swallowed, so a save that stops
+  persisting says why.
+
+      ]]></description>
+      <enclosure url="https://github.com/bakhod1r/sharingan/releases/download/v1.10.3/Sharingan.dmg" length="18720026" type="application/octet-stream" sparkle:edSignature="PoJmIsLMRMRImfHdescsKuyV3qrtW65EFY+JAEhU0lsZEDp9WguRGqae5T8CvtZVXCdN9i8hwTk/zRtyIQPuCw=="/>
+    </item>
+    <item>
       <title>Sharingan 1.10.2</title>
       <pubDate>Tue, 28 Jul 2026 04:37:21 +0000</pubDate>
       <sparkle:version>501</sparkle:version>
