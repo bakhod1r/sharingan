@@ -804,6 +804,9 @@ public final class TaskStore: ObservableObject {
     private func spawnNextOccurrence(of task: TaskItem) {
         var next = task
         next.id = UUID()
+        // A new task, so a new issue number: copying the parent's would put two
+        // live tasks behind the same "T-42" everywhere a task is named.
+        next.number = 0                      // 0 = unnumbered; persist() backfills
         next.isDone = false
         next.completedAt = nil
         next.pomodorosDone = 0
@@ -1422,7 +1425,20 @@ public final class TaskStore: ObservableObject {
 
         for remote in remoteTasks {
             if let i = tasks.firstIndex(where: { $0.id == remote.id }) {
-                tasks[i] = MergePolicy.mergeTask(local: tasks[i], remote: remote)
+                let before = tasks[i]
+                tasks[i] = MergePolicy.mergeTask(local: before, remote: remote)
+                // A fetch that flips a completion is the one merge outcome a
+                // user notices immediately ("I ticked it and it came back"),
+                // so it is on the record with both timestamps.
+                if tasks[i].isDone != before.isDone {
+                    TaskDatabase.log.error("""
+                    merge flipped isDone \(before.isDone, privacy: .public) → \
+                    \(self.tasks[i].isDone, privacy: .public) for \
+                    \(before.title, privacy: .public) — local \
+                    \(before.modifiedAt.timeIntervalSince1970, privacy: .public) vs remote \
+                    \(remote.modifiedAt.timeIntervalSince1970, privacy: .public)
+                    """)
+                }
             } else {
                 tasks.append(MergePolicy.mergeTask(local: nil, remote: remote))
             }
