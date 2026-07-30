@@ -5,6 +5,22 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.11.1] - 2026-07-30
+
+### Fixed
+- **The mirrored break screen no longer flickers back up over and over on a
+  second Mac.** When the owner Mac's break ran out, its timer record lingered
+  in iCloud until the owner published what came next; the mirror kept
+  re-adopting that already-expired break every sync poll, re-opening the break
+  overlay (and re-hiding apps via the blocker) in a loop. An expired record is
+  now recognized as a finished phase and ignored.
+- **The break overlay is now driven by the timer's actual state, not a single
+  sync edge.** It reconciles on every phase/isRunning change — the same trigger
+  the app blocker uses — so it can no longer drift out of step: a local skip
+  into a break now raises the overlay, and a break that ends always tears it
+  down together with the app blocker (previously apps could be hidden with no
+  overlay showing, or the overlay could strand after the break ended).
+
 ## [1.11.0] - 2026-07-30
 
 ### Changed

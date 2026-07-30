@@ -33,6 +33,21 @@ struct BreakTeardownTests {
         }
     }
 
+    /// The overlay follows break STATE, not the one `applyRemoteTimer` edge:
+    /// a local skip jumps focus → break WITHOUT posting `.phaseDidComplete`, so
+    /// an edge-triggered present missed it and the break screen never came up.
+    @Test func skippingIntoBreakPresentsOverlay() async {
+        let (c, spy, cleanup) = makeCoordinator()
+        defer { cleanup() }
+        c.timer.settings.blockScreenDuringBreak = true
+
+        c.timer.skip()                       // focus → break, no .phaseDidComplete
+        await drainMainQueue()
+
+        #expect(c.timer.phase.isBreak)
+        #expect(spy.presented == 1)
+    }
+
     @Test func skipDuringBreakDismissesOverlay() async {
         let (c, spy, cleanup) = makeCoordinator()
         defer { cleanup() }

@@ -49,6 +49,21 @@ struct MirroredBreakTests {
         #expect(spy.presented == 1)
     }
 
+    /// The owner's break already ran out, but its record lingers in CloudKit
+    /// until the owner publishes the sequel. Re-adopting an already-expired
+    /// phase re-drove the break every poll — the overlay flickered back up over
+    /// and over on the mirror. An expired record must never open the overlay.
+    @Test func expiredRemoteBreakNeverOpensOverlay() {
+        let (c, spy, cleanup) = makeCoordinator()
+        defer { cleanup() }
+        c.timer.settings.blockScreenDuringBreak = true
+
+        c.applyRemoteTimer(remoteState(phase: PomodoroPhase.shortBreak.rawValue, endsIn: -5))
+
+        #expect(spy.presented == 0)
+        #expect(!c.timer.isMirroredSession)
+    }
+
     @Test func mirroredBreakEndingRemotelyDismissesOverlay() {
         let (c, spy, cleanup) = makeCoordinator()
         defer { cleanup() }

@@ -258,7 +258,6 @@ public final class SharinganCoordinator: ObservableObject {
         // overwritten by sync.
         let engaged = timer.isRunning || timer.phase == .paused
         guard !engaged || timer.isMirroredSession else { return }
-        let wasBreak = engaged && timer.effectivePhase.isBreak
         isApplyingRemoteTimer = true
         // Remember the remote payload as "already published" so the echo of
         // this apply (if any sink slips through) is deduped by content too.
@@ -270,24 +269,27 @@ public final class SharinganCoordinator: ObservableObject {
         if state.isIdle {
             timer.stop()
         } else if let phase = PomodoroPhase(rawValue: state.phase), phase != .paused {
-            timer.applyMirroredSession(phase: phase,
-                                       isPaused: state.isPaused,
-                                       startedAt: state.startedAt,
-                                       endsAt: state.endsAt,
-                                       asOf: state.updatedAt)
+            // A record whose deadline already passed is a FINISHED phase the
+            // owner simply hasn't published the sequel for yet. Re-adopting it
+            // re-ran the just-ended break on every poll — the overlay flickered
+            // back up over and over on the mirror. Skip it; our own idle (or
+            // the owner's next record) drives what comes next. Paused records
+            // carry no live deadline, so they are exempt.
+            let expired = !state.isPaused
+                && (state.endsAt.map { $0 <= Date() } ?? false)
+            if !expired {
+                timer.applyMirroredSession(phase: phase,
+                                           isPaused: state.isPaused,
+                                           startedAt: state.startedAt,
+                                           endsAt: state.endsAt,
+                                           asOf: state.updatedAt)
+            }
         }
         // Mirrored phase changes never post `.phaseDidComplete`, so the break
-        // overlay must be driven from HERE: a record that lands this Mac in a
-        // break blocks this screen (eye exercises) too, and one that leaves
-        // the break tears the overlay down again.
-        let isBreakNow = timer.isMirroredSession
-            && (timer.isRunning || timer.phase == .paused)
-            && timer.effectivePhase.isBreak
-        if isBreakNow && !wasBreak {
-            beginBreakSideEffects()
-        } else if wasBreak && !isBreakNow {
-            endBreakSideEffects()
-        }
+        // overlay is reconciled from the timer's resulting STATE here (and from
+        // the phase/isRunning sinks for local skips) — see
+        // `reconcileBreakSideEffects`.
+        reconcileBreakSideEffects()
         // The suppression flag must outlive this turn: the phase/isRunning
         // sinks re-deliver via DispatchQueue.main, i.e. on a LATER queue slot
         // — which is already enqueued by now, so clearing behind them is safe.
@@ -436,28 +438,6 @@ public final class SharinganCoordinator: ObservableObject {
             .sink { [weak self] note in self?.handlePhaseComplete(note) }
             .store(in: &cancellables)
 
-        // Safety net for the break overlay: `.phaseDidComplete` only fires when
-        // a countdown runs to zero, but a break can also end via skip/stop —
-        // global shortcut, CLI, `startFocusSession` — paths that jump straight
-        // to focus without the notification and used to strand the overlay
-        // (plus ambience/dim) on screen. Tear everything down on ANY arrival
-        // at focus; every call is idempotent, so the natural-completion path
-        // running them a second time is harmless. `.paused` is deliberately
-        // not a teardown: a paused break is still a break.
-        timer.$phase
-            .removeDuplicates()
-            .dropFirst()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] phase in
-                guard let self, phase == .focus else { return }
-                self.breakPresenter?.dismissAll()
-                BreakAmbienceService.shared.stop()
-                self.restoreBrightness()
-                EyeTracker.shared.stop()
-                CameraService.shared.stop()
-            }
-            .store(in: &cancellables)
-
         // Analytics feed: every really-ended session (completed, or abandoned
         // after ≥1 min) lands in the session log, with the focus target
         // attached here — the timer doesn't know about tasks.
@@ -526,6 +506,7 @@ public final class SharinganCoordinator: ObservableObject {
                 // Blocking distracting apps follows the running state so pausing
                 // a focus session releases them, resuming re-blocks.
                 self.refreshAppBlocker()
+                self.reconcileBreakSideEffects()
                 self.syncDND()
                 self.publishSnapshot()
                 // Start/pause/resume/stop all flip isRunning — the timer-sync
@@ -557,6 +538,10 @@ public final class SharinganCoordinator: ObservableObject {
             .sink { [weak self] _ in
                 self?.publishSnapshot()
                 self?.refreshAppBlocker()
+                // The overlay follows break STATE, not just the applyRemoteTimer
+                // edge: a skip/complete jumps focus↔break with no
+                // `.phaseDidComplete`, so reconcile from here too (idempotent).
+                self?.reconcileBreakSideEffects()
                 // Skip/complete change the phase without necessarily flipping
                 // isRunning (auto-start) — publish here too, deduped inside.
                 self?.publishTimerToSync()
@@ -786,23 +771,22 @@ public final class SharinganCoordinator: ObservableObject {
             }
 
             // A mirrored focus rolls to a *pending* break (the owner Mac
-            // decides when the break actually starts), so presenting the
-            // overlay here froze its countdown at full length. The overlay
-            // comes up when the owner's break record applies in
-            // `applyRemoteTimer` — with a live, ticking session behind it.
+            // decides when the break actually starts), so the overlay must NOT
+            // come up here — `reconcileBreakSideEffects` keeps a mirrored
+            // pending break dark until the owner's start record lands.
             if mirrored { return }
             NotificationService.shared.notify(
                 title: "Sharingan",
                 body: "Focus complete. Starting break.",
                 identifier: "sharingan.focusDone")
-            beginBreakSideEffects()
+            // The overlay is driven by the phase change through reconcile.
         case .shortBreak, .longBreak:
             NotificationService.shared.notify(
                 title: "Sharingan",
                 body: "Break complete. Back to focus.",
                 identifier: "sharingan.breakDone")
             AlarmSoundService.shared.playSelected()
-            endBreakSideEffects()
+            // The overlay tears down via reconcile on the phase→focus change.
             // Mirror Macs only tear the overlay down — the owner Mac runs the
             // "what's next" ceremony (TTS, task pick) and publishes the result.
             guard !mirrored else { return }
@@ -811,6 +795,33 @@ public final class SharinganCoordinator: ObservableObject {
             evaluateTaskPickAfterBreak(store: TaskStore.shared)
         case .paused:
             break
+        }
+    }
+
+    /// Tracks whether the break side effects (overlay/ambience/dim/blocker/
+    /// camera) are currently up, so `reconcileBreakSideEffects` fires begin/end
+    /// exactly once per transition however many times it is called.
+    private var breakSideEffectsActive = false
+
+    /// Single idempotent owner of the break overlay + ambience/dim/blocker/
+    /// camera. Driven from every phase/isRunning change (the same trigger the
+    /// app blocker uses) and from `applyRemoteTimer`, so the overlay can never
+    /// drift out of step with the timer's actual state. The old edge-triggered
+    /// begin/end missed local skips and mirrored/stale applies, stranding the
+    /// blocker on with no overlay (or flickering the break back up every poll).
+    ///
+    /// A *pending* break (not running, not paused) shows only when it is this
+    /// Mac's own — a mirrored pending break waits for the owner Mac to actually
+    /// start it.
+    func reconcileBreakSideEffects() {
+        let shouldBeActive = timer.effectivePhase.isBreak
+            && (timer.isRunning || timer.phase == .paused || !timer.isMirroredSession)
+        if shouldBeActive && !breakSideEffectsActive {
+            breakSideEffectsActive = true
+            beginBreakSideEffects()
+        } else if !shouldBeActive && breakSideEffectsActive {
+            breakSideEffectsActive = false
+            endBreakSideEffects()
         }
     }
 
