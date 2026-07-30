@@ -9,8 +9,8 @@ import Foundation
 ///    filled dots are that task's `pomodorosDone`.
 /// 2. The user's finite repeat selection (Repeat ×N) — filled dots are the
 ///    sessions already completed in the run (`repeatIndex`).
-/// 3. Neither → the classic 3-pomodoro default, filled by the focus sessions
-///    completed since the last reset (`cyclesCompletedInRound`).
+/// 3. Neither → the classic 3-pomodoro default, filled by the day's completed
+///    focus sessions modulo `longBreakEvery` (`cyclesCompletedInRound`).
 public struct FloatingWidgetPomodoroDots: Equatable, Sendable {
     /// Dots shown when neither the task nor repeat pins a count.
     public static let defaultCount = 3

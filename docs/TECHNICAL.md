@@ -13,7 +13,7 @@
 
 - Configurable focus, short break, and long break durations (25 / 5 / 15 by default). Settings' "Pomodoro sizes" section renders as a compact grid (Small/Normal/Deep Work rows × Focus/Break/Long break columns); each size can override its own long-break length, falling back to the global long-break minutes when not overridden.
 - Countdown and count-up modes.
-- Long break automatically after every N pomodoros.
+- Long break automatically after every N pomodoros, keyed off the **day's cumulative completion count** (`PomodoroStats.completedTodayCount()`), not a per-round counter — so the long break lands on today's 4th/8th/… pomodoro even across app restarts, and `PomodoroTimer.cyclesCompletedInRound` (the widget dots + menu `X/N` progress) mirrors `completedTodayCount % longBreakEvery`. Decision extracted as `PomodoroTimer.isLongBreak(todayCount:every:)` (divisor floored to 1).
 - Auto-start focus and auto-start break toggles.
 - Repeat: run focus sessions back-to-back with a delay, or loop focus↔break endlessly.
 - Natural-language time input: `5 min`, `2h 30m`, bare `25`, clock targets like `5pm`, deltas like `+5m` / `-1h`, and `reset` / `stop`.

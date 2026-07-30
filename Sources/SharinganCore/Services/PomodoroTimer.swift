@@ -368,6 +368,14 @@ public final class PomodoroTimer: ObservableObject {
         goal > 0 && count == goal
     }
 
+    /// The long break fires when the day's cumulative completion count lands on
+    /// a multiple of `every` — i.e. every 4th pomodoro *today*, not a counter
+    /// that resets each round. `every` is floored to 1 to guard the modulo.
+    nonisolated public static func isLongBreak(todayCount: Int, every: Int) -> Bool {
+        let e = max(1, every)
+        return todayCount > 0 && todayCount % e == 0
+    }
+
     /// Ticks land every ~200 ms; a gap of 30+ s means the machine was asleep
     /// (the process suspended). During focus that gap must NOT count — it
     /// credited entire lid-closed hours as completed pomodoros — so it
@@ -390,7 +398,11 @@ public final class PomodoroTimer: ObservableObject {
         if phase == .focus {
             stats.registerFocusCompletion()
             persist(stats)
-            cyclesCompletedInRound += 1
+            // Long-break cadence keys off the *day's* total completions, not a
+            // per-round counter — so the round progress mirrors today's count
+            // modulo `longBreakEvery` (0 right after each long-break boundary).
+            let every = max(1, settings.longBreakEvery)
+            cyclesCompletedInRound = stats.completedTodayCount() % every
             NotificationCenter.default.post(name: .streakUpdated,
                                             object: self,
                                             userInfo: ["streak": stats.streak])
@@ -498,16 +510,16 @@ public final class PomodoroTimer: ObservableObject {
         switch phase {
         case .focus:
             // Guard the divisor: a user-entered `longBreakEvery` of 0 would trap
-            // on `% 0` and crash the whole app.
-            let every = max(1, settings.longBreakEvery)
-            let isLong = cyclesCompletedInRound % every == 0
-                && cyclesCompletedInRound > 0
+            // on `% 0` and crash the whole app. The long break fires on the
+            // day's cumulative completion count (every 4th pomodoro *today*),
+            // not a counter that resets each round.
+            let isLong = Self.isLongBreak(todayCount: stats.completedTodayCount(),
+                                          every: settings.longBreakEvery)
             let next: PomodoroPhase = isLong ? .longBreak : .shortBreak
             remainingSeconds = settings.duration(for: next)
             elapsedSeconds = 0
             phase = next
         case .shortBreak, .longBreak:
-            if phase == .longBreak { cyclesCompletedInRound = 0 }
             remainingSeconds = settings.duration(for: .focus)
             elapsedSeconds = 0
             phase = .focus

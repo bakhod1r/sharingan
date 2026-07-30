@@ -15,6 +15,19 @@ struct PomodoroModelsTests {
         #expect(s.duration(for: .longBreak) == 15 * 60)
     }
 
+    @Test func longBreakFiresOnDailyCount() {
+        // Long break lands on every 4th completion *today*, not a per-round
+        // counter — so 4, 8, 12 are long; 1..3, 5..7 are short.
+        for n in 1...12 {
+            let expected = n % 4 == 0
+            #expect(PomodoroTimer.isLongBreak(todayCount: n, every: 4) == expected)
+        }
+        // Zero completions never triggers a long break.
+        #expect(PomodoroTimer.isLongBreak(todayCount: 0, every: 4) == false)
+        // `every` of 0 is floored to 1 — no crash, every completion is long.
+        #expect(PomodoroTimer.isLongBreak(todayCount: 3, every: 0) == true)
+    }
+
     @Test func settingsCodableRoundTrip() throws {
         var s = PomodoroSettings()
         s.focusMinutes = 40

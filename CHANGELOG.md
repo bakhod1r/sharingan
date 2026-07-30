@@ -3,6 +3,19 @@
 All notable changes to Sharingan are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+## [1.11.0] - 2026-07-30
+
+### Changed
+- **The long break now fires on the day's cumulative pomodoro count**, not a
+  per-round counter that reset after every long break. If you've completed 4
+  focus sessions *today* (or 8, 12, … at the default `longBreakEvery` of 4),
+  the next break is the 15-minute long break — even across app restarts or a
+  broken-up day. The Floating widget dots and the menu-bar `X/4` progress read
+  from the same day-count-modulo-`longBreakEvery` source, so the indicator and
+  the actual break cadence always agree.
+
 ## [1.10.3] - 2026-07-28
 
 ### Fixed
@@ -36,8 +49,6 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
   a build (or a synced Mac) that stored no role, which turned the drop into a
   plain move. The Done column now keeps its role, and any column can be made
   the Done column from its `⋯` menu.
-
-## [Unreleased]
 
 ## [1.10.1] - 2026-07-20
 
