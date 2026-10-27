@@ -5,6 +5,22 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-10-27
+
+### Changed
+- **Task priorities now have five levels (P1–P5)** instead of four. Quick input,
+  the CLI and task import accept `P1`…`P5` as well as
+  critical/high/medium/low/lowest (plus the Uzbek names).
+
+### Added
+- `make selftest` runs the SelfTest executable.
+
+### Fixed
+- Launching a second copy of the app now hands off to the running one instead
+  of starting a duplicate.
+- Category lookups are indexed in the task database, so task management stays
+  fast with many tasks.
+
 ## [1.11.1] - 2026-07-30
 
 ### Fixed
