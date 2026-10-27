@@ -160,8 +160,8 @@ public enum TaskImportParser {
                       let k = pomodoroKind(String(word.dropFirst().dropLast())) {
                 kind = k
             } else if lower.count == 2, lower.hasPrefix("p"),
-                      let n = Int(lower.dropFirst()), (1...4).contains(n) {
-                stepPriority = TaskPriority(rawValue: 4 - n)
+                      let n = Int(lower.dropFirst()), (1...5).contains(n) {
+                stepPriority = TaskPriority(rawValue: 6 - n)
             } else {
                 kept.append(word)
             }
@@ -248,17 +248,21 @@ public enum TaskImportParser {
         }.filter { !$0.isEmpty }
     }
 
-    /// "P1"…"P4", high/medium/low/none (plus Uzbek), or an int P-number
-    /// (1 = urgent).
+    /// "P1"…"P5", critical/high/medium/low/lowest/none (plus Uzbek), or an
+    /// int P-number (1 = Critical), matching the labels the app shows.
     private static func priority(_ value: String) -> TaskPriority? {
-        switch value.lowercased() {
-        case "p1", "high", "urgent", "yuqori": return .high
-        case "p2", "medium", "o'rta", "orta":  return .medium
-        case "p3", "low", "past":              return .low
-        case "p4", "none", "yo'q", "yoq":      return TaskPriority.none
+        let v = value.lowercased()
+        switch v {
+        case "critical", "urgent", "kritik":   return .critical
+        case "high", "yuqori":                 return .high
+        case "medium", "o'rta", "orta":        return .medium
+        case "low", "past":                    return .low
+        case "lowest":                         return .lowest
+        case "none", "yo'q", "yoq":            return TaskPriority.none
         default:
-            if let n = Int(value), (1...4).contains(n) {
-                return TaskPriority(rawValue: 4 - n)
+            let digits = v.hasPrefix("p") ? String(v.dropFirst()) : v
+            if let n = Int(digits), (1...5).contains(n) {
+                return TaskPriority(rawValue: 6 - n)
             }
             return nil
         }
@@ -365,8 +369,8 @@ public enum TaskImportParser {
                     t.tags = tagList(s)
                 }
             case "priority":
-                if let n = value as? Int, (1...4).contains(n) {
-                    t.priority = TaskPriority(rawValue: 4 - n)
+                if let n = value as? Int, (1...5).contains(n) {
+                    t.priority = TaskPriority(rawValue: 6 - n)
                 } else if let s = value as? String, let p = priority(s) {
                     t.priority = p
                 }
@@ -402,8 +406,8 @@ public enum TaskImportParser {
         let kind = (d["pomodoro"] as? String).flatMap(pomodoroKind)
         // Same lenient priority forms as the task level: "P1"/"high"/int.
         var stepPriority = TaskPriority.none
-        if let n = d["priority"] as? Int, (1...4).contains(n) {
-            stepPriority = TaskPriority(rawValue: 4 - n)
+        if let n = d["priority"] as? Int, (1...5).contains(n) {
+            stepPriority = TaskPriority(rawValue: 6 - n)
         } else if let s = d["priority"] as? String, let p = priority(s) {
             stepPriority = p
         }

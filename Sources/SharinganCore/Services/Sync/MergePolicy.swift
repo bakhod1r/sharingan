@@ -10,7 +10,13 @@ public enum MergePolicy {
     /// interleaving two edits can synthesize a task neither Mac ever had.
     public static func mergeTask(local: TaskItem?, remote: TaskItem) -> TaskItem {
         guard let local else { return remote }
-        return remote.modifiedAt > local.modifiedAt ? remote : local
+        guard remote.modifiedAt > local.modifiedAt else { return local }
+        // The number is write-once in the database, so a remote win must not
+        // swap in the other Mac's number: the in-memory code would differ from
+        // the stored one and flip back on the next launch.
+        var merged = remote
+        if local.number > 0 { merged.number = local.number }
+        return merged
     }
 
     /// Statistics are append-mostly counters: taking the max per field means

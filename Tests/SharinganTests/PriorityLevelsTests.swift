@@ -15,8 +15,8 @@ struct PriorityLevelsTests {
     @Test("decodes a bare Int, matching the old enum's encoding")
     func decodesBareInt() throws {
         let dec = JSONDecoder()
-        // `3` was the old enum's `.high` rawValue on disk.
-        #expect(try dec.decode(TaskPriority.self, from: Data("3".utf8)) == .high)
+        // `.high` is stored as 4 on the 5-level scale.
+        #expect(try dec.decode(TaskPriority.self, from: Data("4".utf8)) == .high)
         #expect(try dec.decode(TaskPriority.self, from: Data("0".utf8)) == .none)
         // A custom level round-trips as its rawValue.
         #expect(try dec.decode(TaskPriority.self, from: Data("7".utf8)).rawValue == 7)
@@ -25,7 +25,7 @@ struct PriorityLevelsTests {
     @Test("encodes as a bare Int (byte-identical to the enum)")
     func encodesBareInt() throws {
         let enc = JSONEncoder()
-        #expect(String(data: try enc.encode(TaskPriority.high), encoding: .utf8) == "3")
+        #expect(String(data: try enc.encode(TaskPriority.high), encoding: .utf8) == "4")
         #expect(String(data: try enc.encode(TaskPriority.none), encoding: .utf8) == "0")
         #expect(String(data: try enc.encode(TaskPriority(rawValue: 7)), encoding: .utf8) == "7")
     }
@@ -52,15 +52,15 @@ struct PriorityLevelsTests {
 
     @Test("levels are most-urgent first, .none last")
     func levelsOrdering() {
-        #expect(TaskPriority.levels(custom: []).map(\.rawValue) == [3, 2, 1, 0])
-        #expect(TaskPriority.levels(custom: [4, 5]).map(\.rawValue) == [5, 4, 3, 2, 1, 0])
+        #expect(TaskPriority.levels(custom: []).map(\.rawValue) == [5, 4, 3, 2, 1, 0])
+        #expect(TaskPriority.levels(custom: [6, 7]).map(\.rawValue) == [7, 6, 5, 4, 3, 2, 1, 0])
         // Order of the custom array doesn't matter — always sorted descending.
-        #expect(TaskPriority.levels(custom: [5, 4]).map(\.rawValue) == [5, 4, 3, 2, 1, 0])
+        #expect(TaskPriority.levels(custom: [7, 6]).map(\.rawValue) == [7, 6, 5, 4, 3, 2, 1, 0])
     }
 
-    @Test("zero custom levels reproduce the old P1..P4 menu order exactly")
+    @Test("zero custom levels give the P1..P5 menu order exactly")
     func defaultOrderUnchanged() {
-        #expect(TaskPriority.levels(custom: []) == [.high, .medium, .low, .none])
+        #expect(TaskPriority.levels(custom: []) == [.critical, .high, .medium, .low, .lowest, .none])
     }
 
     // MARK: - Rank labels
@@ -68,20 +68,22 @@ struct PriorityLevelsTests {
     @Test("built-in short labels with no custom levels")
     func builtinShortLabels() {
         let s = PomodoroSettings()
-        #expect(s.priorityShortLabel(.high) == "P1")
-        #expect(s.priorityShortLabel(.medium) == "P2")
-        #expect(s.priorityShortLabel(.low) == "P3")
+        #expect(s.priorityShortLabel(.critical) == "P1")
+        #expect(s.priorityShortLabel(.high) == "P2")
+        #expect(s.priorityShortLabel(.medium) == "P3")
+        #expect(s.priorityShortLabel(.low) == "P4")
+        #expect(s.priorityShortLabel(.lowest) == "P5")
         #expect(s.priorityShortLabel(.none) == "")   // .none never gets a chip
     }
 
     @Test("adding one custom level renumbers the built-ins down")
     func rankRenumbering() {
         var s = PomodoroSettings()
-        s.customPriorityLevels = [4]
-        #expect(s.priorityShortLabel(TaskPriority(rawValue: 4)) == "P1")
-        #expect(s.priorityShortLabel(.high) == "P2")
-        #expect(s.priorityShortLabel(.medium) == "P3")
-        #expect(s.priorityShortLabel(.low) == "P4")
+        s.customPriorityLevels = [6]
+        #expect(s.priorityShortLabel(TaskPriority(rawValue: 6)) == "P1")
+        #expect(s.priorityShortLabel(.critical) == "P2")
+        #expect(s.priorityShortLabel(.high) == "P3")
+        #expect(s.priorityShortLabel(.medium) == "P4")
         #expect(s.priorityShortLabel(.none) == "")
     }
 
@@ -106,7 +108,7 @@ struct PriorityLevelsTests {
             .appendingPathComponent("prio-\(UUID().uuidString).json")
         defer { try? FileManager.default.removeItem(at: url) }
         let store = TaskStore(fileURL: url)
-        let custom = TaskPriority(rawValue: 4)
+        let custom = TaskPriority(rawValue: 6)
         store.add(title: "a", priority: custom)
         store.add(title: "b", priority: .high)
         store.add(title: "c", priority: custom)

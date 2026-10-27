@@ -25,7 +25,11 @@ public final class PomodoroTimer: ObservableObject {
     /// the stats. `settings` has always worked this way, which is why it never
     /// had the bug.
     @Published public private(set) var stats: PomodoroStats {
-        didSet { persist(stats) }
+        didSet {
+            persist(stats)
+            // Remote stats (another Mac's completions) move today's count too.
+            cyclesCompletedInRound = roundProgress()
+        }
     }
 
     public func applyRemoteStats(_ value: PomodoroStats) {
@@ -34,7 +38,11 @@ public final class PomodoroTimer: ObservableObject {
     @Published public private(set) var isFlashing: Bool = false
 
     @Published public var settings: PomodoroSettings {
-        didSet { persist(settings) }
+        didSet {
+            persist(settings)
+            // A new `longBreakEvery` changes the modulus behind `X/N`.
+            cyclesCompletedInRound = roundProgress()
+        }
     }
 
     private var tickTask: Task<Void, Never>?
@@ -83,6 +91,7 @@ public final class PomodoroTimer: ObservableObject {
         self.settings = saved
         self.remainingSeconds = saved.focusSeconds
         self.stats = Self.loadStats()
+        self.cyclesCompletedInRound = roundProgress()
     }
 
     /// A timer driven by a settings **value** rather than by what is on disk.
@@ -103,6 +112,7 @@ public final class PomodoroTimer: ObservableObject {
         self.settings = settings
         self.remainingSeconds = settings.focusSeconds
         self.stats = Self.loadStats()
+        self.cyclesCompletedInRound = roundProgress()
     }
 
     /// The settings as they are on disk — a read, so a render can copy them,
@@ -118,6 +128,8 @@ public final class PomodoroTimer: ObservableObject {
         // (it is cleared whenever a session ends: complete, skip, stop).
         if sessionStartDate == nil { sessionStartDate = Date() }
         if phase == .paused { phase = previousPhase }
+        // Catches the day rolling over while idle: yesterday's count → 0.
+        cyclesCompletedInRound = roundProgress()
         isRunning = true
         fiveMinSent = false
         flashSent = false
@@ -147,7 +159,8 @@ public final class PomodoroTimer: ObservableObject {
         remainingSeconds = settings.duration(for: .focus)
         elapsedSeconds = 0
         phase = .focus
-        cyclesCompletedInRound = 0
+        // Round progress tracks today's count, which a stop doesn't undo.
+        cyclesCompletedInRound = roundProgress()
         repeatIndex = 0
         isFlashing = false
     }
@@ -401,8 +414,7 @@ public final class PomodoroTimer: ObservableObject {
             // Long-break cadence keys off the *day's* total completions, not a
             // per-round counter — so the round progress mirrors today's count
             // modulo `longBreakEvery` (0 right after each long-break boundary).
-            let every = max(1, settings.longBreakEvery)
-            cyclesCompletedInRound = stats.completedTodayCount() % every
+            cyclesCompletedInRound = roundProgress()
             NotificationCenter.default.post(name: .streakUpdated,
                                             object: self,
                                             userInfo: ["streak": stats.streak])
@@ -443,7 +455,13 @@ public final class PomodoroTimer: ObservableObject {
         // next phase and publishes it, and this Mac follows that record —
         // auto-starting here too raced the owner and spawned a second,
         // locally-owned session (a surprise pomodoro right after the break).
-        transitionToNext(auto: !isMirroredSession)
+        transitionToNext(auto: !isMirroredSession, focusCompleted: true)
+    }
+
+    /// Today's completions modulo `longBreakEvery` — the same source the
+    /// long-break trigger reads, so the dots and `X/N` always agree with it.
+    private func roundProgress() -> Int {
+        stats.completedTodayCount() % max(1, settings.longBreakEvery)
     }
 
     private func scheduleRepeat() {
@@ -504,7 +522,7 @@ public final class PomodoroTimer: ObservableObject {
         }
     }
 
-    private func transitionToNext(auto: Bool = false) {
+    private func transitionToNext(auto: Bool = false, focusCompleted: Bool = false) {
         // A new phase always uses its own settings duration.
         durationOverride = nil
         switch phase {
@@ -512,8 +530,10 @@ public final class PomodoroTimer: ObservableObject {
             // Guard the divisor: a user-entered `longBreakEvery` of 0 would trap
             // on `% 0` and crash the whole app. The long break fires on the
             // day's cumulative completion count (every 4th pomodoro *today*),
-            // not a counter that resets each round.
-            let isLong = Self.isLongBreak(todayCount: stats.completedTodayCount(),
+            // not a counter that resets each round. A skipped focus credits
+            // nothing, so it never earns one — otherwise the stale count (still
+            // on a multiple of `every`) handed out a long break on every skip.
+            let isLong = focusCompleted && Self.isLongBreak(todayCount: stats.completedTodayCount(),
                                           every: settings.longBreakEvery)
             let next: PomodoroPhase = isLong ? .longBreak : .shortBreak
             remainingSeconds = settings.duration(for: next)

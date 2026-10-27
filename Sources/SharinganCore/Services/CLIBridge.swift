@@ -54,7 +54,7 @@ public enum CLIBridge {
     public struct TaskSnapshotEntry: Codable, Equatable, Sendable {
         public var id: UUID
         public var title: String
-        /// "P1"…"P3"; empty when the task has no priority flag.
+        /// "P1"…"P5"; empty when the task has no priority flag.
         public var priorityLabel: String
         public var due: Date?
         public var tags: [String]

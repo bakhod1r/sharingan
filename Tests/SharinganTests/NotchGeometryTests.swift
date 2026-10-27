@@ -359,13 +359,13 @@ struct NotchGeometryTests {
     func expandedIslandFitsItsContent() {
         let expanded = NotchGeometry.layout(Self.notched, size: .expanded)
         let size = NotchGeometry.expandedSize(menuBarHeight: Self.menuBar)
-        #expect(size.height >= Self.menuBar + 288)
+        #expect(size.height >= Self.menuBar + 256)
         #expect(expanded.island.height == size.height)
         #expect(expanded.panelSize.height >= expanded.island.height)
         // …and every pixel of that content is *below* the menu bar: the body is
         // the whole of it, and it is as tall as the measured stack.
         #expect(expanded.body.minY == Self.menuBar)
-        #expect(expanded.body.height >= 288)
+        #expect(expanded.body.height >= 256)
     }
 }
 
@@ -596,16 +596,18 @@ struct NotchExpandedSizingTests {
         // Replica: five rows, every section on → 288pt of body, and an island of
         // the menu-bar row plus that. The geometry adds `bodySlack` on top, and
         // nothing else.
+        // Quick actions now ride the timer row's trailing cluster (5702645), so
+        // with the timer shown they cost no section: 288 − (24 + 8) = 256.
         let full = NotchContentConfig.default
         #expect(NotchGeometry.expandedBodyHeight(full)
-                == 288 + NotchGeometry.bodySlack)
+                == 256 + NotchGeometry.bodySlack)
         #expect(NotchGeometry.expandedSize(full, menuBarHeight: Self.menuBar).height
-                == Self.menuBar + 288 + NotchGeometry.bodySlack)
+                == Self.menuBar + 256 + NotchGeometry.bodySlack)
 
         // Replica: three rows, every section on → 228pt of body.
         var three = full
         three.taskRows = 3
-        #expect(NotchGeometry.expandedBodyHeight(three) == 228 + NotchGeometry.bodySlack)
+        #expect(NotchGeometry.expandedBodyHeight(three) == 196 + NotchGeometry.bodySlack)
 
         // Replica: tasks only, five rows → 176pt of body.
         let tasksOnly = NotchContentConfig(showTimerControls: false, showTasks: true,
@@ -618,10 +620,11 @@ struct NotchExpandedSizingTests {
                                            showQuickActions: false, showStatusStrip: false)
         #expect(NotchGeometry.expandedBodyHeight(timerOnly) == 79 + NotchGeometry.bodySlack)
 
-        // Replica: timer + quick actions, no tasks, no strip → 111pt of body.
+        // Timer + quick actions, no tasks, no strip: the actions share the timer
+        // row, so this is the timer-only 79pt body.
         let noTasks = NotchContentConfig(showTimerControls: true, showTasks: false,
                                          showQuickActions: true, showStatusStrip: false)
-        #expect(NotchGeometry.expandedBodyHeight(noTasks) == 111 + NotchGeometry.bodySlack)
+        #expect(NotchGeometry.expandedBodyHeight(noTasks) == 79 + NotchGeometry.bodySlack)
 
         // Replica: nothing on at all → 20pt of body (its own two paddings), which
         // is why the island has a floor.
@@ -638,6 +641,9 @@ struct NotchExpandedSizingTests {
         for keyPath: WritableKeyPath<NotchContentConfig, Bool> in [
             \.showTimerControls, \.showTasks, \.showQuickActions, \.showStatusStrip
         ] {
+            // Quick actions ride the timer row when it is shown: switching them
+            // off there frees no height, by design.
+            if keyPath == \.showQuickActions && full.showTimerControls { continue }
             var c = full
             c[keyPath: keyPath] = false
             let h = NotchGeometry.expandedSize(c, menuBarHeight: Self.menuBar).height
@@ -924,7 +930,8 @@ struct NotchTaskRowSizingTests {
             #expect(NotchGeometry.taskSectionHeight(rows: rows) == h)
         }
         // …and the body it lands in, likewise (10 top + 10 bottom + Σ + 8 × n).
-        let body: [Int: CGFloat] = [0: 170, 1: 168, 2: 198, 3: 228, 4: 258, 5: 288]
+        // Quick actions share the timer row, so 32pt (24 + 8) under the replica.
+        let body: [Int: CGFloat] = [0: 138, 1: 136, 2: 166, 3: 196, 4: 226, 5: 256]
         for (rows, h) in body {
             #expect(NotchGeometry.expandedBodyHeight(Self.config(count: rows))
                     == h + NotchGeometry.bodySlack)
@@ -937,7 +944,7 @@ struct NotchTaskRowSizingTests {
     func heightFollowsTheCountNotTheCap() {
         // Four tasks, cap five: an island for four, not for five — the menu-bar
         // row the stem passes through, plus a 258pt body (measured).
-        #expect(Self.height(count: 4) == Self.menuBar + 258 + NotchGeometry.bodySlack)
+        #expect(Self.height(count: 4) == Self.menuBar + 226 + NotchGeometry.bodySlack)
         #expect(Self.height(count: 4) < Self.height(count: 5))
         #expect(Self.height(count: 5) - Self.height(count: 4)
                 == NotchGeometry.taskRowHeight + NotchGeometry.taskRowSpacing)
@@ -975,7 +982,7 @@ struct NotchTaskRowSizingTests {
         let full = Self.height(count: 5)
 
         // 211 vs 329: 118pt of dead black gone.
-        #expect(empty == Self.menuBar + 170 + NotchGeometry.bodySlack)
+        #expect(empty == Self.menuBar + 138 + NotchGeometry.bodySlack)
         #expect(full - empty == 118)
         // "Materially" shorter — not a rounding: more than a quarter of the tall
         // island, and shorter than every list that has anything in it but one.

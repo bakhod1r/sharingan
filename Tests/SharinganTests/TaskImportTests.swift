@@ -29,7 +29,7 @@ struct TaskImportTests {
         #expect(tasks.count == 1)
         let t = tasks[0]
         #expect(t.title == "Write report")
-        #expect(t.priority == .high)
+        #expect(t.priority == .critical)
         #expect(t.tags == ["deep"])
         #expect(t.project == "blink")
         #expect(t.estimatedPomodoros == 4)
@@ -53,7 +53,7 @@ struct TaskImportTests {
         #expect(t.category == "Work")
         #expect(t.project == "Sharingan")
         #expect(t.tags == ["deep", "focus"])
-        #expect(t.priority == .high)
+        #expect(t.priority == .critical)
         #expect(t.dueDate == date(2026, 7, 20, 15, 0))
         #expect(t.plannedDate == Calendar.current.startOfDay(for: date(2026, 7, 21)))
         #expect(t.estimatedPomodoros == 4)
@@ -79,7 +79,7 @@ struct TaskImportTests {
         #expect(t.category == "Ish")
         #expect(t.project == "Sharingan")
         #expect(t.tags == ["chuqur"])
-        #expect(t.priority == .medium)
+        #expect(t.priority == .high)
         #expect(t.dueDate == date(2026, 7, 20))
         #expect(t.plannedDate == Calendar.current.startOfDay(for: date(2026, 7, 21)))
         #expect(t.estimatedPomodoros == 3)
@@ -107,13 +107,13 @@ struct TaskImportTests {
         #expect(subs.count == 3)
         #expect(subs[0].title == "Plan it")
         #expect(subs[0].estimatedPomodoros == 1)
-        #expect(subs[0].priority == .high)
+        #expect(subs[0].priority == .critical)
         #expect(subs[1].isDone)
         #expect(subs[1].priority == TaskPriority.none)
         #expect(subs[2].title == "Build")
         #expect(subs[2].estimatedPomodoros == 3)
         #expect(subs[2].pomodoroKind == .big)
-        #expect(subs[2].priority == .medium)
+        #expect(subs[2].priority == .high)
     }
 
     @Test func subtaskTitleWordsAreNotEatenByPriorityTokens() {
@@ -151,7 +151,7 @@ struct TaskImportTests {
         """)
         #expect(tasks.count == 2)
         #expect(tasks[0].title == "First")
-        #expect(tasks[0].priority == .high)
+        #expect(tasks[0].priority == .critical)
         #expect(tasks[0].subtasks.count == 1)
         #expect(tasks[1].title == "Second")
         #expect(tasks[1].estimatedPomodoros == 2)
@@ -230,7 +230,7 @@ struct TaskImportTests {
         #expect(t.category == "Work")
         #expect(t.project == "Sharingan")
         #expect(t.tags == ["deep", "focus"])
-        #expect(t.priority == .high)
+        #expect(t.priority == .critical)
         #expect(t.dueDate == date(2026, 7, 20, 15, 0))
         #expect(t.plannedDate == Calendar.current.startOfDay(for: date(2026, 7, 21)))
         #expect(t.estimatedPomodoros == 4)
@@ -239,10 +239,10 @@ struct TaskImportTests {
         #expect(t.notes == "multi\nline")
         #expect(t.subtasks.count == 3)
         #expect(t.subtasks[0].estimatedPomodoros == 1)
-        #expect(t.subtasks[0].priority == .high)
+        #expect(t.subtasks[0].priority == .critical)
         #expect(t.subtasks[1].isDone)
         #expect(t.subtasks[1].pomodoroKind == .small)
-        #expect(t.subtasks[1].priority == .medium)
+        #expect(t.subtasks[1].priority == .high)
         #expect(t.subtasks[2].title == "Just a string step")
     }
 
@@ -263,7 +263,7 @@ struct TaskImportTests {
         """)
         let t = tasks[0]
         #expect(t.tags == ["one", "two"])
-        #expect(t.priority == .high)
+        #expect(t.priority == .critical)
         #expect(t.recurrence == .daily)
         let utc = ISO8601DateFormatter().date(from: "2026-07-20T15:00:00Z")
         #expect(t.dueDate == utc)
@@ -285,7 +285,7 @@ struct TaskImportTests {
         """)
         #expect(tasks.count == 1)
         #expect(tasks[0].title == "Fenced")
-        #expect(tasks[0].priority == .high)
+        #expect(tasks[0].priority == .critical)
     }
 
     @Test func markdownInsideCodeFencesParses() {
@@ -296,7 +296,7 @@ struct TaskImportTests {
         """)
         #expect(tasks.count == 1)
         #expect(tasks[0].title == "Fenced task")
-        #expect(tasks[0].priority == .medium)
+        #expect(tasks[0].priority == .high)
     }
 
     @Test func trailingCommasAreTolerated() {

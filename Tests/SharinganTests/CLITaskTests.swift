@@ -63,7 +63,7 @@ struct CLITaskTests {
 
         #expect(entries.map(\.title) == ["first", "second"])
         #expect(entries[0].id == first.id)
-        #expect(entries[0].priorityLabel == "P1")
+        #expect(entries[0].priorityLabel == "P2")   // .high is P2 on the 5-level scale
         #expect(entries[0].tags == ["ish"])
         #expect(entries[0].project == "blink")
         #expect(entries[0].due == first.dueDate)

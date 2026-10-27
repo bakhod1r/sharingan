@@ -27,7 +27,7 @@ struct TaskImportEndToEndTests {
         #expect(reloaded.tasks.count == 2)
 
         let report = try #require(reloaded.tasks.first { $0.title == "Write the report" })
-        #expect(report.priority == .high)
+        #expect(report.priority == .critical)
         #expect(report.tags == ["deep-work"])
         #expect(report.project == "myproject")
         #expect(report.category == "Work")
@@ -40,13 +40,13 @@ struct TaskImportEndToEndTests {
         #expect(report.subtasks.count == 3)
         #expect(report.subtasks[0].estimatedPomodoros == 1)
         // Per-step priorities from the template survive the SQLite round-trip.
-        #expect(report.subtasks[0].priority == .high)
+        #expect(report.subtasks[0].priority == .critical)
         #expect(report.subtasks[1].pomodoroKind == .big)
-        #expect(report.subtasks[1].priority == .medium)
+        #expect(report.subtasks[1].priority == .high)
         #expect(report.subtasks[2].isDone)
 
         let reading = try #require(reloaded.tasks.first { $0.title == "Read 20 pages" })
-        #expect(reading.priority == .low)
+        #expect(reading.priority == .medium)
         #expect(reading.recurrence == .daily)
     }
 
@@ -74,7 +74,7 @@ struct TaskImportEndToEndTests {
 
         let reloaded = TaskStore(fileURL: url)
         let sprint = try #require(reloaded.tasks.first { $0.title == "Sprint planning" })
-        #expect(sprint.priority == .high)
+        #expect(sprint.priority == .critical)
         #expect(sprint.pomodoroKind == .big)
         #expect(sprint.dueDate != nil)
         #expect(sprint.subtasks.map(\.title) == ["Agenda", "Estimates"])

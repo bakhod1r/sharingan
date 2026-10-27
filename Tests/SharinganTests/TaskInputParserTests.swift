@@ -50,10 +50,10 @@ struct TaskInputParserTests {
     }
 
     @Test func priorityToken() {
-        #expect(parse("urgent thing p1").priority == .high)
-        #expect(parse("p2 medium thing").priority == .medium)
-        #expect(parse("p3 low thing").priority == .low)
-        #expect(parse("nothing p4").priority == TaskPriority.none)
+        #expect(parse("urgent thing p1").priority == .critical)
+        #expect(parse("p2 medium thing").priority == .high)
+        #expect(parse("p3 low thing").priority == .medium)
+        #expect(parse("nothing p4").priority == .low)
         // Not a standalone word — stays in the title.
         let p = parse("upgrade p10 board")
         #expect(p.priority == TaskPriority.none)
@@ -183,7 +183,7 @@ struct TaskInputParserTests {
         #expect(p.title == "hisobot yozish")
         #expect(p.tags == ["ish"])
         #expect(p.project == "blink")
-        #expect(p.priority == .high)
+        #expect(p.priority == .critical)
         #expect(p.estimatedPomodoros == 2)
         let due = try #require(p.dueDate)
         let cal = Calendar.current

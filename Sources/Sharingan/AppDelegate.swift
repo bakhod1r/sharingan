@@ -516,7 +516,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var updaterIdleCancellable: AnyCancellable?
     private var settingsApplyObserver: NSObjectProtocol?
 
+    /// Set when this launch found another copy already running and is quitting.
+    private var isDuplicateInstance = false
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Single instance: a stale login item (an old dist/ build, the pre-
+        // rebrand "Blink" entry) next to the real one launched two copies at
+        // login — two floating clocks, two timers fighting over one database.
+        // The copy that arrives second hands focus to the first and quits.
+        if let bundleID = Bundle.main.bundleIdentifier,
+           let other = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+               .first(where: { $0 != NSRunningApplication.current }) {
+            isDuplicateInstance = true
+            other.activate()
+            NSApp.terminate(nil)
+            return
+        }
+
         NSApp.setActivationPolicy(.accessory)
 
         // Accessory apps start with no main menu, and macOS dispatches the
@@ -745,6 +761,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        // A duplicate quitting must not publish "idle" over the live copy's widget.
+        guard !isDuplicateInstance else { return }
         // Best-effort: never leave the user's Focus stuck on after quit.
         if let timer {
             DNDShortcutService.shared.deactivate(settings: timer.settings)

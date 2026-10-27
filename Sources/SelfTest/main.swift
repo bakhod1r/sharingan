@@ -199,8 +199,9 @@ testBrightnessSettings()
         check(pt.priority == .none, "new task defaults to no priority")
         storeP.setPriority(pt.id, .high)
         check(storeP.tasks[0].priority == .high, "priority set to high")
-        check(TaskPriority.high.label == "P1", "high maps to P1")
-        check(TaskPriority.none.label == "P4", "none maps to P4")
+        check(TaskPriority.critical.label == "P1", "critical maps to P1")
+        check(TaskPriority.high.label == "P2", "high maps to P2")
+        check(TaskPriority.none.label == "", "none has no label")
         check(TaskPriority.high.colorHex != nil && TaskPriority.none.colorHex == nil,
               "flag color only for real priorities")
         // Legacy TaskItem JSON without `priority` decodes to .none.
@@ -583,7 +584,7 @@ testBrightnessSettings()
               "remaining == focus duration")
         check(timer.totalSeconds == timer.settings.focusSeconds, "total == focus")
         check(timer.progress == 0, "progress starts at 0")
-        check(timer.cyclesCompletedInRound == 0, "cycles start at 0")
+        check(timer.cyclesCompletedInRound == timer.stats.completedTodayCount() % max(1, timer.settings.longBreakEvery), "cycles start at 0")
         check(timer.elapsedSeconds == 0, "elapsed starts at 0")
     }
 
@@ -608,7 +609,7 @@ testBrightnessSettings()
         timer.skip()
         timer.stop()
         check(timer.phase == .focus, "stop resets phase to focus")
-        check(timer.cyclesCompletedInRound == 0, "stop clears cycles")
+        check(timer.cyclesCompletedInRound == timer.stats.completedTodayCount() % max(1, timer.settings.longBreakEvery), "stop clears cycles")
         check(timer.remainingSeconds == timer.settings.focusSeconds,
               "stop resets remaining")
         check(timer.elapsedSeconds == 0, "stop clears elapsed")
@@ -670,7 +671,7 @@ testBrightnessSettings()
         check(timer.remainingSeconds == 1140, "applyParsed removeTime")
 
         timer.applyParsed(.init(kind: .setDuration(0)))
-        check(timer.cyclesCompletedInRound == 0, "setDuration(0) resets")
+        check(timer.cyclesCompletedInRound == timer.stats.completedTodayCount() % max(1, timer.settings.longBreakEvery), "setDuration(0) resets")
         check(timer.phase == .focus, "setDuration(0) phase focus")
     }
 

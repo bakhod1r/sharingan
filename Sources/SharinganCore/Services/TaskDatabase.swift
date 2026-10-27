@@ -178,6 +178,10 @@ final class TaskDatabase: SyncOutboxStorage {
         exec("CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id) WHERE project_id IS NOT NULL;")
         exec("CREATE INDEX IF NOT EXISTS idx_tasks_deleted ON tasks(deleted_at) WHERE deleted_at IS NOT NULL;")
         exec("CREATE INDEX IF NOT EXISTS idx_tasks_origin ON tasks(origin_device);")
+        // category_id is the only task FK without an index: saveCategories'
+        // `id NOT IN (SELECT category_id FROM tasks)` guard and every FK check
+        // on a category delete/rename scanned the whole tasks table.
+        exec("CREATE INDEX IF NOT EXISTS idx_tasks_category ON tasks(category_id);")
 
         exec("""
         CREATE TABLE IF NOT EXISTS task_tags (
@@ -738,6 +742,21 @@ final class TaskDatabase: SyncOutboxStorage {
         }
     }
 
+    /// Hard-deletes the given tasks (tags and subtasks follow through ON DELETE
+    /// CASCADE). `saveTasks` never removes a live row that merely went missing
+    /// from the incoming set, so a caller that drops live tasks from memory —
+    /// Clear Completed, a remote delete — must say so here, or they come back
+    /// on the next launch.
+    func deleteTasks(_ ids: [UUID]) {
+        guard !ids.isEmpty else { return }
+        transaction {
+            for id in ids {
+                run("DELETE FROM tasks WHERE uuid=?;") { bindText($0, 1, id.uuidString) }
+            }
+            return true
+        }
+    }
+
     /// uuid → last-persisted content hash, for the changed-only save fast path.
     private func loadTaskHashes() -> [String: String] {
         var out: [String: String] = [:]
@@ -764,9 +783,10 @@ final class TaskDatabase: SyncOutboxStorage {
     private func writeTaskTags(_ taskID: Int64, _ tags: [String]) -> Bool {
         run("DELETE FROM task_tags WHERE task_id=?;") { sqlite3_bind_int64($0, 1, taskID) }
         for tag in tags {
-            var ok = false
-            run("INSERT OR IGNORE INTO task_tags (task_id, tag_id) SELECT ?, id FROM tags WHERE name=?;") {
-                sqlite3_bind_int64($0, 1, taskID); bindText($0, 2, tag); ok = true
+            // `run` reports the step result; the old flag was set inside the
+            // bind closure, so a failed insert still read as success.
+            let ok = run("INSERT OR IGNORE INTO task_tags (task_id, tag_id) SELECT ?, id FROM tags WHERE name=?;") {
+                sqlite3_bind_int64($0, 1, taskID); bindText($0, 2, tag)
             }
             if !ok { return false }
         }
@@ -1177,15 +1197,17 @@ final class TaskDatabase: SyncOutboxStorage {
     }
 
     /// Prepares `sql`, lets `binds` bind its parameters, steps once, finalizes.
-    private func run(_ sql: String, _ binds: (OpaquePointer?) -> Void) {
+    @discardableResult
+    private func run(_ sql: String, _ binds: (OpaquePointer?) -> Void) -> Bool {
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
-            logSQL("prepare", sql); return
+            logSQL("prepare", sql); return false
         }
         defer { sqlite3_finalize(stmt) }
         binds(stmt)
         let rc = sqlite3_step(stmt)
-        if rc != SQLITE_DONE && rc != SQLITE_ROW { logSQL("step", sql) }
+        guard rc == SQLITE_DONE || rc == SQLITE_ROW else { logSQL("step", sql); return false }
+        return true
     }
 
     /// Prepares `sql`, binds, and returns the first column of the first row.

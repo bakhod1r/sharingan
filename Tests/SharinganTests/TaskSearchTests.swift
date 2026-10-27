@@ -10,7 +10,7 @@ final class TaskSearchTests: XCTestCase {
                  subtasks: [Subtask(title: "Measure the ears")],
                  recurrence: .weekly,
                  project: "Sharingan",
-                 priority: .high,
+                 priority: .critical,
                  pomodoroKind: .big,
                  number: 42)
     }
@@ -33,7 +33,7 @@ final class TaskSearchTests: XCTestCase {
     func testMatchesChipsUserCanSee() {
         let t = task()
         XCTAssertTrue(t.matchesSearch("p1"))
-        XCTAssertTrue(t.matchesSearch("urgent"))
+        XCTAssertTrue(t.matchesSearch("critical"))
         XCTAssertTrue(t.matchesSearch("weekly"))
         XCTAssertTrue(t.matchesSearch("deep work"))   // the visible chip
         XCTAssertTrue(t.matchesSearch("big"))          // stable rawValue still matches
@@ -72,9 +72,9 @@ final class TaskSearchTests: XCTestCase {
 
     func testAllWordsMustMatchInAnyOrder() {
         let t = task()
-        XCTAssertTrue(t.matchesSearch("urgent notch"))
-        XCTAssertTrue(t.matchesSearch("notch urgent"))
-        XCTAssertFalse(t.matchesSearch("urgent kitchen"))
+        XCTAssertTrue(t.matchesSearch("critical notch"))
+        XCTAssertTrue(t.matchesSearch("notch critical"))
+        XCTAssertFalse(t.matchesSearch("critical kitchen"))
     }
 
     func testEmptyQueryMatchesEverything() {

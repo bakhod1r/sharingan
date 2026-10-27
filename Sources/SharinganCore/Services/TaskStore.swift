@@ -518,7 +518,9 @@ public final class TaskStore: ObservableObject {
             cancelDueNotifications(for: id)
             if activeTaskID == id { activeTaskID = nil; activeSubtaskID = nil }
         }
+        let doneIDs = tasks.filter(\.isDone).map(\.id)
         tasks.removeAll(where: \.isDone)
+        database?.deleteTasks(doneIDs)
         persist()
     }
 
@@ -1448,6 +1450,7 @@ public final class TaskStore: ObservableObject {
                 syncDueNotifications(for: applied)
             }
         }
+        database?.deleteTasks(deletedTaskIDs)
         for id in deletedTaskIDs {
             cancelDueNotifications(for: id)
             tasks.removeAll { $0.id == id }

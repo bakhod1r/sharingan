@@ -202,13 +202,11 @@ public enum TaskInputParser {
     // MARK: - Token helpers
 
     private static func priorityToken(_ w: String) -> TaskPriority? {
-        switch w {
-        case "p1": return .high
-        case "p2": return .medium
-        case "p3": return .low
-        case "p4": return TaskPriority.none
-        default:   return nil
-        }
+        // P-numbers follow the 5-level scale's labels: p1 = Critical … p5 =
+        // Lowest. The old 4-level mapping made "p1" land on High, shown as P2.
+        guard w.count == 2, w.hasPrefix("p"), let n = Int(w.dropFirst()),
+              (1...5).contains(n) else { return nil }
+        return TaskPriority(rawValue: 6 - n)
     }
 
     /// `12.08` / `12/08` — day.month, next occurrence (this year or next).

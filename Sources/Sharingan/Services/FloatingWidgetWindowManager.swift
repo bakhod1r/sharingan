@@ -201,4 +201,42 @@ final class FloatingWidgetWindowManager: FloatingWidgetController {
 private final class FloatingWidgetPanel: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
+
+    /// `isMovableByWindowBackground` only drags from points SwiftUI reports as
+    /// background — and the pill's `.onHover`/`.contextMenu`/buttons claim
+    /// nearly all of it, so the drag silently stopped working. Start the drag
+    /// here instead, from any left-button drag past a small threshold.
+    private var mouseDownEvent: NSEvent?
+
+    override func sendEvent(_ event: NSEvent) {
+        switch event.type {
+        case .leftMouseDown:
+            mouseDownEvent = event
+        case .leftMouseDragged:
+            if let down = mouseDownEvent {
+                let dx = event.locationInWindow.x - down.locationInWindow.x
+                let dy = event.locationInWindow.y - down.locationInWindow.y
+                if dx * dx + dy * dy > 9 {
+                    mouseDownEvent = nil
+                    performDrag(with: down)
+                    // The drag swallowed the mouse-up; hand SwiftUI one far
+                    // outside the pill so a pressed button cancels instead of
+                    // firing (the pointer moved with the window, still on it).
+                    if let up = NSEvent.mouseEvent(
+                        with: .leftMouseUp, location: NSPoint(x: -10_000, y: -10_000),
+                        modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                        windowNumber: windowNumber, context: nil,
+                        eventNumber: 0, clickCount: 1, pressure: 0) {
+                        super.sendEvent(up)
+                    }
+                    return
+                }
+            }
+        case .leftMouseUp:
+            mouseDownEvent = nil
+        default:
+            break
+        }
+        super.sendEvent(event)
+    }
 }
