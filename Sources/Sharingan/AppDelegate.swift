@@ -30,13 +30,17 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
     /// The state the current button image was drawn for — the bitmap is
     /// re-rendered only when this changes (integer percent / phase / idle),
     /// not on every 1 s tick.
-    private struct IconKey: Equatable {
+    private struct IconKey: Hashable {
         var percent: Int?
         var phase: PomodoroPhase
         var rotationStep: Int
         var style: SharinganStyle
     }
     private var lastIconKey: IconKey?
+    /// Pre-rasterized menu bar icons. The spinner cycles through the same
+    /// few frames, and a lazily drawn NSImage re-runs its CG drawing on every
+    /// status bar redraw — caching bitmaps keeps the spin nearly free.
+    private var iconCache: [IconKey: NSImage] = [:]
     private let spinner = IconSpinner()
     private var dockAnimator: DockIconAnimator?
 
@@ -71,9 +75,8 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         self.popover = popover
 
         dockAnimator = DockIconAnimator()
-        spinner.onFrame = { [weak self] angle, spinning in
+        spinner.onFrame = { [weak self] _, _ in
             self?.updateTitle()
-            self?.dockAnimator?.apply(angle: angle, spinning: spinning)
         }
         syncSpinner()
 
@@ -264,11 +267,20 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
                           style: style)
         if key != lastIconKey {
             lastIconKey = key
-            button.image = Self.menuBarIcon(
-                progress: key.percent.map { Double($0) / 100 },
-                phase: key.phase,
-                rotationDegrees: spinner.angle,
-                style: key.style)
+            if let cached = iconCache[key] {
+                button.image = cached
+            } else {
+                let icon = Self.menuBarIcon(
+                    progress: key.percent.map { Double($0) / 100 },
+                    phase: key.phase,
+                    rotationDegrees: Double(key.rotationStep * 5),
+                    style: key.style).map(Self.rasterized)
+                // Progress and style changes grow the key space; a cap keeps
+                // it bounded across a long-running session.
+                if iconCache.count >= 512 { iconCache.removeAll() }
+                iconCache[key] = icon
+                button.image = icon
+            }
         }
     }
 
@@ -313,6 +325,25 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         img.isTemplate = false
         if img.size.width > 0 { return img }
         return NSImage(systemSymbolName: "stopwatch", accessibilityDescription: "Sharingan")
+    }
+
+    /// Bakes a lazily drawn icon into a 2x bitmap so redraws just blit it.
+    private static func rasterized(_ image: NSImage) -> NSImage {
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: Int(image.size.width * 2), pixelsHigh: Int(image.size.height * 2),
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)
+        else { return image }
+        rep.size = image.size
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        image.draw(in: NSRect(origin: .zero, size: image.size))
+        NSGraphicsContext.restoreGraphicsState()
+        let out = NSImage(size: image.size)
+        out.addRepresentation(rep)
+        out.isTemplate = image.isTemplate
+        return out
     }
 
     /// Draw body extracted from `menuBarIcon`'s `NSImage` closure — as a single

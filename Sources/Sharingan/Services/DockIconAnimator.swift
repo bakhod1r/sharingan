@@ -2,11 +2,10 @@ import AppKit
 import SwiftUI
 import SharinganCore
 
-/// Spins the Dock icon in step with the menu bar mark. The bundled app icon
-/// IS the bare Sharingan disc (see IconRenderer), so rotating the whole
-/// bitmap is exact. Frames are drawn only while the app is a `.regular`
-/// activation-policy app — accessory mode has no Dock tile — and the base
-/// artwork is restored the moment the spinner idles or the tile disappears.
+/// Keeps the Dock icon on the user's Sharingan style. The Dock tile no
+/// longer spins with the menu bar mark: every spun frame set
+/// `applicationIconImage`, a Dock round-trip that cost tens of percent CPU
+/// at 12 fps. Only the menu bar animates now.
 ///
 /// The base artwork follows the user's Sharingan style (`syncStyle`):
 /// `.classic` is the shipped .icns; any other style re-renders the same
@@ -20,7 +19,6 @@ final class DockIconAnimator {
     /// What the Dock shows at rest — shipped art, or the styled re-render.
     private var base: NSImage?
     private var baseStyle: SharinganStyle = .classic
-    private var showingSpunFrame = false
 
     init() { base = shipped }
 
@@ -40,34 +38,6 @@ final class DockIconAnimator {
                 NSImage(cgImage: $0, size: NSSize(width: 512, height: 512))
             } ?? shipped
         }
-        // Swap the resting tile now; a running spinner overwrites it with
-        // rotated frames of the new base on its next tick anyway.
-        if !showingSpunFrame {
-            NSApp.applicationIconImage = style == .classic ? nil : base
-        }
-    }
-
-    func apply(angle: Double, spinning: Bool) {
-        guard let base else { return }
-        guard spinning, NSApp.activationPolicy() == .regular else {
-            if showingSpunFrame {
-                NSApp.applicationIconImage = base
-                showingSpunFrame = false
-            }
-            return
-        }
-        let side: CGFloat = 256
-        let frame = NSImage(size: NSSize(width: side, height: side),
-                            flipped: false) { rect in
-            guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
-            ctx.translateBy(x: rect.midX, y: rect.midY)
-            // Negative = visually clockwise in the y-up context, matching
-            // the menu bar's tomoe direction.
-            ctx.rotate(by: -angle * .pi / 180)
-            base.draw(in: CGRect(x: -side / 2, y: -side / 2, width: side, height: side))
-            return true
-        }
-        NSApp.applicationIconImage = frame
-        showingSpunFrame = true
+        NSApp.applicationIconImage = style == .classic ? nil : base
     }
 }
