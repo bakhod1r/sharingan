@@ -5,6 +5,13 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.12.1] - 2026-10-28
+
+### Changed
+- **The spinning menu bar icon costs far less CPU.** Its frames are now drawn
+  once and cached as bitmaps instead of being redrawn on every status bar
+  refresh.
+
 ## [1.12.0] - 2026-10-27
 
 ### Changed
