@@ -18,7 +18,8 @@ extension TaskItem: SyncableRecord {
             priority: priority.rawValue, completedAt: completedAt,
             pomodoroKind: pomodoroKind?.rawValue, jiraKey: jiraKey,
             jiraIssueID: jiraIssueID, jiraSiteHost: jiraSiteHost,
-            boardColumnID: boardColumnID, trashedAt: trashedAt))
+            boardColumnID: boardColumnID, trashedAt: trashedAt,
+            allowedApps: allowedApps.isEmpty ? nil : allowedApps))
     }
 
     // originDevice and number are deliberately NOT hashed: both are immutable
@@ -36,6 +37,9 @@ extension TaskItem: SyncableRecord {
         let project: String?, priority: Int, completedAt: Date?, pomodoroKind: String?
         let jiraKey: String?, jiraIssueID: String?, jiraSiteHost: String?
         let boardColumnID: String?, trashedAt: Date?
+        // nil when empty so tasks without an allow-list keep their existing hash
+        // (no fleet-wide re-upload on upgrade).
+        let allowedApps: [BlockedApp]?
     }
 }
 

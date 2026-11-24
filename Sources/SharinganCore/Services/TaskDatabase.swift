@@ -97,6 +97,7 @@ final class TaskDatabase: SyncOutboxStorage {
         addColumnIfMissing("tasks", "jira_site_host", "VARCHAR(255)")
         addColumnIfMissing("tasks", "jira_issue_type", "VARCHAR(64)")
         addColumnIfMissing("tasks", "board_column_id", "VARCHAR(64)")
+        addColumnIfMissing("tasks", "allowed_apps", "TEXT NOT NULL DEFAULT '[]'")
         let tables = ["tasks", "categories", "projects", "tags", "task_tags",
                       "templates", "focus_log", "eav_attributes", "eav_entities",
                       "eav_values", "sync_shadow", "sync_state", "sync_outbox"]
@@ -166,6 +167,7 @@ final class TaskDatabase: SyncOutboxStorage {
             jira_site_host VARCHAR(255),
             jira_issue_type VARCHAR(64),
             board_column_id VARCHAR(64),
+            allowed_apps TEXT NOT NULL DEFAULT '[]',
             created_at REAL NOT NULL,
             updated_at REAL NOT NULL,
             deleted_at REAL,
@@ -529,7 +531,7 @@ final class TaskDatabase: SyncOutboxStorage {
         SELECT t.id, t.uuid, t.title, c.name, p.name, t.is_done, t.pomodoros_done, t.created_at,\
         t.due_at, t.sort_order, t.estimated_pomodoros, t.planned_at, t.notes, t.recurrence,\
         t.priority, t.completed_at, t.pomodoro_kind, t.updated_at, t.deleted_at, t.origin_device,\
-        t.number, t.jira_key, t.jira_issue_id, t.jira_site_host, t.jira_issue_type, t.board_column_id
+        t.number, t.jira_key, t.jira_issue_id, t.jira_site_host, t.jira_issue_type, t.board_column_id, t.allowed_apps
         FROM tasks t
         JOIN categories c ON c.id = t.category_id
         LEFT JOIN projects p ON p.id = t.project_id
@@ -566,10 +568,24 @@ final class TaskDatabase: SyncOutboxStorage {
             t.jiraSiteHost = isNull(stmt, 23) ? nil : text(stmt, 23)
             t.jiraIssueType = isNull(stmt, 24) ? nil : text(stmt, 24)
             t.boardColumnID = isNull(stmt, 25) ? nil : text(stmt, 25)
+            t.allowedApps = Self.decodeAllowedApps(text(stmt, 26))
             t.subtasks = subtasksByTask[rowID] ?? []
             out.append(t)
         }
         return out
+    }
+
+    private static func decodeAllowedApps(_ json: String?) -> [BlockedApp] {
+        guard let data = json?.data(using: .utf8),
+              let apps = try? JSONDecoder().decode([BlockedApp].self, from: data) else { return [] }
+        return apps
+    }
+
+    private static func encodeAllowedApps(_ apps: [BlockedApp]) -> String {
+        let enc = JSONEncoder()
+        enc.outputFormatting = [.sortedKeys]
+        guard let data = try? enc.encode(apps), let s = String(data: data, encoding: .utf8) else { return "[]" }
+        return s
     }
 
     private func loadTaskTags() -> [Int64: [String]] {
@@ -670,11 +686,11 @@ final class TaskDatabase: SyncOutboxStorage {
                 (uuid,title,category_id,project_id,is_done,priority,recurrence,pomodoro_kind,\
                 pomodoros_done,estimated_pomodoros,notes,sort_order,due_at,planned_at,created_at,\
                 updated_at,completed_at,deleted_at,origin_device,content_hash,number,\
-                jira_key,jira_issue_id,jira_site_host,jira_issue_type,board_column_id)
+                jira_key,jira_issue_id,jira_site_host,jira_issue_type,board_column_id,allowed_apps)
                 VALUES (?,?,\
                 (SELECT id FROM categories WHERE name=?),\
                 (SELECT id FROM projects WHERE name=?),\
-                ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(uuid) DO UPDATE SET
                     title=excluded.title, category_id=excluded.category_id,
                     project_id=excluded.project_id, is_done=excluded.is_done,
@@ -688,6 +704,7 @@ final class TaskDatabase: SyncOutboxStorage {
                     jira_key=excluded.jira_key, jira_issue_id=excluded.jira_issue_id,
                     jira_site_host=excluded.jira_site_host, jira_issue_type=excluded.jira_issue_type,
                     board_column_id=excluded.board_column_id,
+                    allowed_apps=excluded.allowed_apps,
                     -- Write-once: an unnumbered row takes the number the store
                     -- backfilled, but a row that already has one keeps it, so no
                     -- later write (a remote merge, a bad caller) can renumber a
@@ -725,6 +742,7 @@ final class TaskDatabase: SyncOutboxStorage {
                 if let v = t.jiraSiteHost { bindText(stmt, 24, v) } else { sqlite3_bind_null(stmt, 24) }
                 if let v = t.jiraIssueType { bindText(stmt, 25, v) } else { sqlite3_bind_null(stmt, 25) }
                 if let v = t.boardColumnID { bindText(stmt, 26, v) } else { sqlite3_bind_null(stmt, 26) }
+                bindText(stmt, 27, Self.encodeAllowedApps(t.allowedApps))
                 let ok = sqlite3_step(stmt) == SQLITE_DONE
                 if !ok { logSQL("saveTasks/upsert \(t.title)", sql) }
                 sqlite3_finalize(stmt)

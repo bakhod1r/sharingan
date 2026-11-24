@@ -274,4 +274,74 @@ struct TaskDatabaseV3Tests {
         sqlite3_exec(db, ddl, nil, nil, nil)
         sqlite3_close(db)
     }
+
+    // MARK: - allowedApps (focus lock)
+
+    private func reloadTasks(_ path: String) throws -> [TaskItem] {
+        let db = try #require(TaskDatabase(path: path))
+        return db.loadTasks()
+    }
+
+    private let vsCode = BlockedApp(bundleID: "com.microsoft.VSCode", name: "VS Code")
+
+    @Test func allowedAppsRoundTrip() throws {
+        let path = try freshPath()
+        var task = TaskItem(title: "Focus", category: "Work")
+        task.allowedApps = [vsCode]
+        do {
+            let db = try #require(TaskDatabase(path: path))
+            db.saveCategories([TaskCategory(name: "Work", colorHex: "#4F8DFD")])
+            db.saveTasks([task])
+        }
+        let loaded = try #require(reloadTasks(path).first)
+        #expect(loaded.allowedApps == task.allowedApps)
+    }
+
+    @Test func allowedAppsEditPersists() throws {
+        let path = try freshPath()
+        var task = TaskItem(title: "Focus", category: "Work")
+        do {
+            let db = try #require(TaskDatabase(path: path))
+            db.saveCategories([TaskCategory(name: "Work", colorHex: "#4F8DFD")])
+            db.saveTasks([task])
+            task.allowedApps = [vsCode]
+            db.saveTasks([task])
+        }
+        let loaded = try #require(reloadTasks(path).first)
+        #expect(loaded.allowedApps == [vsCode])
+    }
+
+    @Test func allowedAppsColumnAddedToExistingV3DB() throws {
+        let path = try freshPath()
+        do {
+            let db = try #require(TaskDatabase(path: path))
+            db.saveCategories([TaskCategory(name: "Work", colorHex: "#4F8DFD")])
+            db.saveTasks([TaskItem(title: "Old", category: "Work")])
+        }
+        let raw = openRaw(path)
+        #expect(sqlite3_exec(raw, "ALTER TABLE tasks DROP COLUMN allowed_apps;", nil, nil, nil) == SQLITE_OK)
+        sqlite3_close(raw)
+        let db = try #require(TaskDatabase(path: path))
+        let raw2 = openRaw(path)
+        #expect(scalar(raw2, "SELECT COUNT(*) FROM pragma_table_info('tasks') WHERE name='allowed_apps'") == 1)
+        sqlite3_close(raw2)
+        let loaded = try #require(db.loadTasks().first)
+        #expect(loaded.allowedApps == [])
+    }
+
+    @Test func corruptAllowedAppsJSONLoadsEmpty() throws {
+        let path = try freshPath()
+        var task = TaskItem(title: "Focus", category: "Work")
+        task.allowedApps = [vsCode]
+        do {
+            let db = try #require(TaskDatabase(path: path))
+            db.saveCategories([TaskCategory(name: "Work", colorHex: "#4F8DFD")])
+            db.saveTasks([task])
+        }
+        let raw = openRaw(path)
+        sqlite3_exec(raw, "UPDATE tasks SET allowed_apps='{bad';", nil, nil, nil)
+        sqlite3_close(raw)
+        let loaded = try #require(reloadTasks(path).first)
+        #expect(loaded.allowedApps == [])
+    }
 }
