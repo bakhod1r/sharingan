@@ -7,9 +7,11 @@ final class FakeFocusLockPresenter: FocusLockPresenter {
     var showCount = 0
     var hideCount = 0
     var lastBackTarget: BlockedApp?
+    var lastShown: FocusLock?
     func showLock(_ lock: FocusLock, backTarget: BlockedApp?) {
         showCount += 1
         lastBackTarget = backTarget
+        lastShown = lock
     }
     func hideLock() { hideCount += 1 }
 }
@@ -25,7 +27,7 @@ struct FocusLockServiceTests {
         FocusLock(taskID: id ?? taskID, taskTitle: "Write", allowedApps: apps ?? [vscode])
     }
 
-    private final class Box { var date = Date(timeIntervalSince1970: 1_000_000); var front: String? }
+    private final class Box { var scheduled: [(TimeInterval, @MainActor () -> Void)] = []; var date = Date(timeIntervalSince1970: 1_000_000); var front: String? }
 
     private func make() -> (FocusLockService, FakeFocusLockPresenter, Box) {
         let box = Box()
@@ -36,6 +38,7 @@ struct FocusLockServiceTests {
         s.ownBundleID = "app.sharingan"
         s.canResolve = { _ in true }
         s.frontmostBundleID = { box.front }
+        s.schedule = { d, f in box.scheduled.append((d, f)) }
         withExtendedLifetime(p) {}
         return (s, p, box)
     }
@@ -155,5 +158,58 @@ struct FocusLockServiceTests {
         #expect(s.backTarget(for: lock) == xcode)
         s.canResolve = { _ in false }
         #expect(s.backTarget(for: lock) == nil)
+    }
+
+    @Test func lockChangeWhileShowingReshowsWithNewTitle() {
+        let (s, p, box) = make()
+        box.front = "com.google.Chrome"
+        s.engage(makeLock())
+        #expect(p.showCount == 1)
+        let b = FocusLock(taskID: UUID(), taskTitle: "Other", allowedApps: [xcode])
+        s.engage(b)
+        #expect(p.lastShown == b)
+        #expect(p.lastBackTarget == xcode)
+        #expect(s.isShowing)
+        #expect(p.hideCount == 1)
+        s.release()
+    }
+
+    @Test func snoozeExpiryRechecksFrontmost() {
+        let (s, p, box) = make()
+        box.front = "com.google.Chrome"
+        s.engage(makeLock())
+        s.snooze()
+        #expect(p.showCount == 1)
+        #expect(box.scheduled.count == 1)
+        #expect(box.scheduled[0].0 == FocusLockPolicy.snoozeDuration)
+        box.date.addTimeInterval(301)
+        box.scheduled[0].1()
+        #expect(p.showCount == 2)
+        #expect(s.isShowing)
+        s.release()
+    }
+
+    @Test func releaseCancelsSnoozeRecheck() {
+        let (s, p, box) = make()
+        box.front = "com.google.Chrome"
+        s.engage(makeLock())
+        s.snooze()
+        s.release()
+        box.date.addTimeInterval(301)
+        box.scheduled[0].1()
+        #expect(p.showCount == 1)
+    }
+
+    @Test func newSnoozeIgnoresOldRecheck() {
+        let (s, p, box) = make()
+        box.front = "com.google.Chrome"
+        s.engage(makeLock())
+        s.snooze()
+        box.date.addTimeInterval(200)
+        s.snooze()
+        box.date.addTimeInterval(101)
+        box.scheduled[0].1()
+        #expect(p.showCount == 1)
+        s.release()
     }
 }

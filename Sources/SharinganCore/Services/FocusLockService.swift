@@ -27,6 +27,14 @@ public final class FocusLockService: ObservableObject {
         NSWorkspace.shared.frontmostApplication?.bundleIdentifier
     }
 
+    /// One-shot scheduler for the post-snooze recheck. Injectable for tests.
+    public var schedule: (TimeInterval, @escaping @MainActor () -> Void) -> Void = { delay, work in
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            MainActor.assumeIsolated { work() }
+        }
+    }
+
+    private var snoozeGeneration = 0
     private var workspaceObserver: NSObjectProtocol?
 
     public init() {}
@@ -34,9 +42,10 @@ public final class FocusLockService: ObservableObject {
     public func engage(_ newLock: FocusLock) {
         if let current = lock {
             if current == newLock { return }
-            if current.taskID != newLock.taskID { snoozedUntil = nil }
+            if current.taskID != newLock.taskID { clearSnooze() }
+            hideIfShowing()
         } else {
-            snoozedUntil = nil
+            clearSnooze()
         }
         lock = newLock
         if workspaceObserver == nil { startWatching() }
@@ -47,12 +56,23 @@ public final class FocusLockService: ObservableObject {
         stopWatching()
         hideIfShowing()
         lock = nil
+        clearSnooze()
+    }
+
+    private func clearSnooze() {
         snoozedUntil = nil
+        snoozeGeneration += 1
     }
 
     public func snooze() {
         snoozedUntil = now().addingTimeInterval(FocusLockPolicy.snoozeDuration)
+        snoozeGeneration += 1
+        let generation = snoozeGeneration
         hideIfShowing()
+        schedule(FocusLockPolicy.snoozeDuration) { [weak self] in
+            guard let self, self.snoozeGeneration == generation else { return }
+            self.handleActivation(bundleID: self.frontmostBundleID())
+        }
     }
 
     public func handleActivation(bundleID: String?) {
