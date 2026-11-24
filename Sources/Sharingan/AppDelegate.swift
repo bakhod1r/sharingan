@@ -595,6 +595,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let timer = PomodoroTimer()
         let coord = SharinganCoordinator(timer: timer)
         coord.breakPresenter = BreakWindowManager.shared
+        FocusLockWindowManager.shared.onStopSession = { [weak timer] in timer?.stop() }
+        FocusLockService.shared.presenter = FocusLockWindowManager.shared
         coord.todayPanelController = TodayPanelWindowManager.shared
         coord.floatingWidgetController = FloatingWidgetWindowManager.shared
         coord.quickAddController = QuickAddWindowManager.shared

@@ -689,6 +689,13 @@ if let outDir = HeadlessRender.outputDirectory(for: "--render-dev-preview") {
                     to: "\(outDir)/block-app-picker.png",
                     size: NSSize(width: 460, height: 560),
                     settle: 1.0)
+        writeHosted(FocusLockView(lock: FocusLock(taskID: UUID(), taskTitle: String(repeating: "Long task title ", count: 8),
+                                                  allowedApps: []),
+                                  backTarget: BlockedApp(bundleID: "com.apple.dt.Xcode", name: "Xcode"),
+                                  onBack: {}, onSnooze: {}, onStop: {})
+                        .environment(\.colorScheme, .dark),
+                    to: "\(outDir)/focus-lock.png",
+                    size: NSSize(width: 1000, height: 600))
         // The Tasks & Planning page — where the import-template block lives
         // (segmented MD/JSON preview + copy button).
         writeHosted(SettingsView(timer: timer, settings: .constant(timer.settings),
