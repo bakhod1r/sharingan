@@ -69,23 +69,41 @@ enum InstalledAppsCatalog {
 
 /// The full installed-app list for the blocker: tap Block to add an app to
 /// the blocked list (enabled), tap again to take it back out. Search narrows.
-/// Opened from Settings → Focus → App blocking.
+/// Opened from Settings → Focus → App blocking, and from the task editor
+/// (`.allow` mode) to pick a task's allowed apps.
+enum AppPickerMode {
+    case block, allow
+
+    var title: String { self == .block ? "Block apps" : "Allowed apps" }
+    var addLabel: String { self == .block ? "Block" : "Allow" }
+    var doneLabel: String { self == .block ? "Blocked" : "Allowed" }
+    var footnote: String {
+        switch self {
+        case .block:
+            return "Blocked apps close on a break — and during focus sessions when “Block apps during focus” is on."
+        case .allow:
+            return "During a focus session on this task, any other app is covered by a reminder."
+        }
+    }
+}
+
 struct BlockAppPickerSheet: View {
-    @Binding var blocker: AppBlockerSettings
+    @Binding var apps: [BlockedApp]
+    let mode: AppPickerMode
     @Environment(\.dismiss) private var dismiss
-    @State private var apps: [InstalledApp] = []
+    @State private var installed: [InstalledApp] = []
     @State private var query = ""
 
     private var shown: [InstalledApp] {
         let q = query.trimmingCharacters(in: .whitespaces)
-        guard !q.isEmpty else { return apps }
-        return apps.filter { $0.name.localizedCaseInsensitiveContains(q) }
+        guard !q.isEmpty else { return installed }
+        return installed.filter { $0.name.localizedCaseInsensitiveContains(q) }
     }
 
     var body: some View {
         VStack(spacing: 10) {
             HStack {
-                Text("Block apps")
+                Text(mode.title)
                     .font(.system(.title3, design: .rounded).weight(.semibold))
                 Spacer()
                 Button("Done") { dismiss() }
@@ -101,7 +119,7 @@ struct BlockAppPickerSheet: View {
             .padding(.horizontal, 10).padding(.vertical, 7)
             .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.08)))
 
-            if apps.isEmpty {
+            if installed.isEmpty {
                 Spacer()
                 ProgressView().controlSize(.small)
                 Spacer()
@@ -121,18 +139,18 @@ struct BlockAppPickerSheet: View {
                 }
             }
 
-            Text("Blocked apps close on a break — and during focus sessions when “Block apps during focus” is on.")
+            Text(mode.footnote)
                 .font(.system(.caption2, design: .rounded))
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(16)
         .frame(width: 440, height: 540)
-        .task { apps = InstalledAppsCatalog.scan() }
+        .task { installed = InstalledAppsCatalog.scan() }
     }
 
     private func row(_ app: InstalledApp) -> some View {
-        let blocked = blocker.blockedApps.contains { $0.bundleID == app.bundleID }
+        let blocked = apps.contains { $0.bundleID.caseInsensitiveCompare(app.bundleID) == .orderedSame }
         return HStack(spacing: 10) {
             Image(nsImage: app.icon)
             Text(app.name)
@@ -141,21 +159,21 @@ struct BlockAppPickerSheet: View {
             Spacer()
             Button {
                 if blocked {
-                    blocker.blockedApps.removeAll { $0.bundleID == app.bundleID }
+                    apps.removeAll { $0.bundleID.caseInsensitiveCompare(app.bundleID) == .orderedSame }
                 } else {
-                    blocker.blockedApps.append(
-                        BlockedApp(bundleID: app.bundleID, name: app.name))
+                    apps.append(BlockedApp(bundleID: app.bundleID, name: app.name))
                 }
             } label: {
-                Label(blocked ? "Blocked" : "Block",
+                Label(blocked ? mode.doneLabel : mode.addLabel,
                       systemImage: blocked ? "checkmark.circle.fill" : "plus.circle")
                     .font(.system(.caption, design: .rounded).weight(.semibold))
                     .foregroundStyle(blocked ? Color.green : Color.secondary)
                     .frame(width: 84)
             }
             .buttonStyle(.pressableSubtle)
-            .help(blocked ? "Take \(app.name) off the blocked list"
-                          : "Block \(app.name)")
+            .help(mode == .block
+                  ? (blocked ? "Take \(app.name) off the blocked list" : "Block \(app.name)")
+                  : (blocked ? "Take \(app.name) off the allowed list" : "Allow \(app.name)"))
         }
         .padding(.horizontal, 8).padding(.vertical, 5)
         .background(

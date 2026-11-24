@@ -683,7 +683,7 @@ if let outDir = HeadlessRender.outputDirectory(for: "--render-dev-preview") {
         // The blocker's installed-app picker — scans this machine's real
         // /Applications, so the row set varies per machine; the shot checks
         // the layout (search field, Block/Blocked buttons), not the content.
-        writeHosted(BlockAppPickerSheet(blocker: .constant(AppBlockerSettings()))
+        writeHosted(BlockAppPickerSheet(apps: .constant([]), mode: .block)
                         .background(Color(white: 0.12))
                         .environment(\.colorScheme, .dark),
                     to: "\(outDir)/block-app-picker.png",

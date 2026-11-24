@@ -599,7 +599,7 @@ struct SettingsView: View {
                         .buttonStyle(.pressableSubtle)
                     }
                     .sheet(isPresented: $showBlockAppPicker) {
-                        BlockAppPickerSheet(blocker: $settings.appBlockerSettings)
+                        BlockAppPickerSheet(apps: $settings.appBlockerSettings.blockedApps, mode: .block)
                             .environment(\.colorScheme, .dark)
                     }
                 }

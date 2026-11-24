@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import SharinganCore
 
 /// Full-task editor presented as a sheet. Unlike the old inline title-only edit,
@@ -20,6 +21,7 @@ struct TaskEditorView: View {
     @State private var tagDraft = ""
     @State private var subtaskDraft = ""
     @State private var showCustomDue = false
+    @State private var showAllowedAppPicker = false
     @FocusState private var titleFocused: Bool
     /// Step narrowing for the Subtasks section. The editor deliberately has
     /// no step *sort* — rows stay in manual order because this sheet is where
@@ -60,6 +62,7 @@ struct TaskEditorView: View {
                     estimateRecurrenceRow
                     projectField
                     notesSection
+                    allowedAppsSection
                     subtasksSection
                     if !history.isEmpty { historySection }
                     if !taskAppTotals.isEmpty { appsUsedSection }
@@ -388,6 +391,69 @@ struct TaskEditorView: View {
                 .padding(8)
                 .background(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
                     .fill(Color.white.opacity(0.05)))
+        }
+    }
+
+    // MARK: - Allowed apps (focus lock)
+
+    private var allowedAppsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Allowed apps").dsSectionLabel()
+            if draft.allowedApps.isEmpty {
+                Text("No allowed apps — focus lock is off for this task.")
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(Color.dsTertiary)
+            } else {
+                FlowLayout(spacing: 6) {
+                    ForEach(draft.allowedApps, id: \.bundleID) { app in
+                        allowedAppChip(app)
+                    }
+                }
+            }
+            Button { showAllowedAppPicker = true } label: {
+                Label("Add app", systemImage: "plus")
+                    .font(.system(.caption, design: .rounded).weight(.semibold))
+                    .foregroundStyle(accent)
+                    .padding(.vertical, 5).padding(.horizontal, 10)
+                    .background(Capsule().fill(accent.opacity(0.14)))
+            }
+            .buttonStyle(.pressableSubtle)
+        }
+        .sheet(isPresented: $showAllowedAppPicker) {
+            BlockAppPickerSheet(apps: $draft.allowedApps, mode: .allow)
+                .environment(\.colorScheme, .dark)
+        }
+    }
+
+    private func allowedAppChip(_ app: BlockedApp) -> some View {
+        HStack(spacing: 6) {
+            allowedAppIcon(app.bundleID)
+                .frame(width: 16, height: 16)
+            Text(app.name)
+                .font(.system(.caption, design: .rounded).weight(.medium))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+            Button {
+                draft.allowedApps.removeAll { $0.bundleID == app.bundleID }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.6))
+            }
+            .buttonStyle(.plain)
+            .help("Remove \(app.name)")
+        }
+        .padding(.vertical, 4).padding(.horizontal, 9)
+        .background(Capsule().fill(Color.white.opacity(0.08)))
+    }
+
+    @ViewBuilder
+    private func allowedAppIcon(_ bundleID: String) -> some View {
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+            Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
+                .resizable().interpolation(.high)
+        } else {
+            Image(systemName: "app.dashed").foregroundStyle(Color.dsTertiary)
         }
     }
 
