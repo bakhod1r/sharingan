@@ -441,6 +441,7 @@ struct TaskEditorView: View {
                     .foregroundStyle(.white.opacity(0.6))
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Remove \(app.name)")
             .help("Remove \(app.name)")
         }
         .padding(.vertical, 4).padding(.horizontal, 9)

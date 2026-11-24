@@ -7,9 +7,13 @@ final class FocusLockWindowManager: FocusLockPresenter {
     static let shared = FocusLockWindowManager()
     var onStopSession: (() -> Void)?
     private var panels: [NSPanel] = []
+    private var screenObserver: NSObjectProtocol?
+    private var current: (lock: FocusLock, backTarget: BlockedApp?)?
 
-    func showLock(_ lock: FocusLock, backTarget: BlockedApp?) {
-        guard !BreakWindowManager.shared.isBlocking else { return }
+    @discardableResult
+    func showLock(_ lock: FocusLock, backTarget: BlockedApp?) -> Bool {
+        guard !BreakWindowManager.shared.isBlocking, !NSScreen.screens.isEmpty else { return false }
+        current = (lock, backTarget)
         let wasShowing = !panels.isEmpty
         tearDown(animated: false)
         for screen in NSScreen.screens {
@@ -29,7 +33,7 @@ final class FocusLockWindowManager: FocusLockPresenter {
                 onBack: { Self.open(backTarget) },
                 onSnooze: { FocusLockService.shared.snooze() },
                 onStop: { [weak self] in self?.onStopSession?() })
-            let hosting = NSHostingView(rootView: view)
+            let hosting = FocusLockHostingView(rootView: view)
             hosting.translatesAutoresizingMaskIntoConstraints = false
             panel.contentView = hosting
             panel.alphaValue = wasShowing ? 1 : 0
@@ -42,10 +46,27 @@ final class FocusLockWindowManager: FocusLockPresenter {
                 for p in panels { p.animator().alphaValue = 1 }
             }
         }
-        if !panels.isEmpty { NotchWindowManager.shared.setBreakOverlay(true) }
+        NotchWindowManager.shared.setBreakOverlay(true)
+        if screenObserver == nil {
+            screenObserver = NotificationCenter.default.addObserver(
+                forName: NSApplication.didChangeScreenParametersNotification,
+                object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, let c = self.current else { return }
+                    _ = self.showLock(c.lock, backTarget: c.backTarget)
+                }
+            }
+        }
+        return true
     }
 
     func hideLock() {
+        if let obs = screenObserver {
+            NotificationCenter.default.removeObserver(obs)
+            screenObserver = nil
+        }
+        current = nil
         guard !panels.isEmpty else { return }
         // A break overlay owns the notch now; don't stand it back up under it.
         if !BreakWindowManager.shared.isBlocking {
@@ -80,4 +101,9 @@ final class FocusLockWindowManager: FocusLockPresenter {
 private final class FocusLockPanel: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
+}
+
+private final class FocusLockHostingView<Content: View>: NSHostingView<Content> {
+    // The panel never becomes key; without this the first click is swallowed.
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }

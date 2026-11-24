@@ -20,7 +20,9 @@ public enum FocusLockPolicy {
         "com.apple.controlcenter", "com.apple.notificationcenterui",
         "com.apple.systemuiserver", "com.apple.SecurityAgent",
         "com.apple.UserNotificationCenter", "com.apple.finder",
-        "com.apple.screencaptureui",
+        "com.apple.screencaptureui", "com.apple.ScreenSaver.Engine",
+        "com.apple.LocalAuthentication.UIAgent", "com.apple.coreservices.uiagent",
+        "com.apple.systempreferences",
     ]
 
     public static let snoozeDuration: TimeInterval = 300

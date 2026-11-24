@@ -59,6 +59,15 @@ struct FocusLockPolicyTests {
         #expect(!FocusLockPolicy.shouldBlock(bundleID: nil, lock: l, ownBundleID: nil, snoozedUntil: nil, now: now))
     }
 
+    @Test func extraSystemUIAgentsNeverBlocked() {
+        let l = sampleLock()
+        let now = Date()
+        for id in ["com.apple.ScreenSaver.Engine", "com.apple.LocalAuthentication.UIAgent",
+                   "com.apple.coreservices.uiagent", "com.apple.systempreferences", "COM.APPLE.DOCK"] {
+            #expect(!FocusLockPolicy.shouldBlock(bundleID: id, lock: l, ownBundleID: nil, snoozedUntil: nil, now: now), "\(id)")
+        }
+    }
+
     @Test func snoozeSuppressesBlock() {
         let now = Date()
         #expect(!FocusLockPolicy.shouldBlock(bundleID: "com.google.Chrome", lock: sampleLock(),

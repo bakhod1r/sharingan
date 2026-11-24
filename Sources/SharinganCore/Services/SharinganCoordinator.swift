@@ -519,6 +519,7 @@ public final class SharinganCoordinator: ObservableObject {
                 self.refreshFocusLock()
                 self.refreshAppBlocker()
                 self.reconcileBreakSideEffects()
+                self.focusLock.recheck()
                 self.syncDND()
                 self.publishSnapshot()
                 // Start/pause/resume/stop all flip isRunning — the timer-sync
@@ -571,6 +572,7 @@ public final class SharinganCoordinator: ObservableObject {
                 // edge: a skip/complete jumps focus↔break with no
                 // `.phaseDidComplete`, so reconcile from here too (idempotent).
                 self?.reconcileBreakSideEffects()
+                self?.focusLock.recheck()
                 // Skip/complete change the phase without necessarily flipping
                 // isRunning (auto-start) — publish here too, deduped inside.
                 self?.publishTimerToSync()

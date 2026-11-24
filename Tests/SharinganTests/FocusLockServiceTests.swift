@@ -8,10 +8,12 @@ final class FakeFocusLockPresenter: FocusLockPresenter {
     var hideCount = 0
     var lastBackTarget: BlockedApp?
     var lastShown: FocusLock?
-    func showLock(_ lock: FocusLock, backTarget: BlockedApp?) {
+    var accepts = true
+    func showLock(_ lock: FocusLock, backTarget: BlockedApp?) -> Bool {
         showCount += 1
         lastBackTarget = backTarget
         lastShown = lock
+        return accepts
     }
     func hideLock() { hideCount += 1 }
 }
@@ -50,6 +52,31 @@ struct FocusLockServiceTests {
         #expect(p.showCount == 1)
         #expect(s.isShowing)
         #expect(p.lastBackTarget == vscode)
+        s.release()
+    }
+
+    @Test func refusedShowDoesNotStickIsShowing() {
+        let (s, p, _) = make()
+        p.accepts = false
+        s.engage(makeLock())
+        s.handleActivation(bundleID: "com.google.Chrome")
+        #expect(!s.isShowing)
+        p.accepts = true
+        s.handleActivation(bundleID: "com.google.Chrome")
+        #expect(s.isShowing)
+        #expect(p.showCount == 2)
+        s.release()
+    }
+
+    @Test func recheckShowsAfterRefusal() {
+        let (s, p, box) = make()
+        box.front = "com.google.Chrome"
+        p.accepts = false
+        s.engage(makeLock())
+        #expect(!s.isShowing)
+        p.accepts = true
+        s.recheck()
+        #expect(s.isShowing)
         s.release()
     }
 

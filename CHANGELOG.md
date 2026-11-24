@@ -17,6 +17,8 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 ### Known limitations
 - A Mac still running an older Sharingan build ignores allowed apps, and
   saving a task there can clear its list after sync.
+- The focus reminder covers the screen but does not capture the keyboard, so
+  typing still reaches the app underneath.
 
 ## [1.12.2] - 2026-11-24
 

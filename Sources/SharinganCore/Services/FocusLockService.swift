@@ -3,7 +3,8 @@ import AppKit
 
 @MainActor
 public protocol FocusLockPresenter: AnyObject {
-    func showLock(_ lock: FocusLock, backTarget: BlockedApp?)
+    /// Returns true when the overlay is actually on screen.
+    func showLock(_ lock: FocusLock, backTarget: BlockedApp?) -> Bool
     func hideLock()
 }
 
@@ -82,11 +83,17 @@ public final class FocusLockService: ObservableObject {
             snoozedUntil: snoozedUntil, now: now())
         if blocked {
             guard !isShowing else { return }
-            isShowing = true
-            presenter?.showLock(lock, backTarget: backTarget(for: lock))
+            isShowing = presenter?.showLock(lock, backTarget: backTarget(for: lock)) ?? false
         } else {
             hideIfShowing()
         }
+    }
+
+    /// Re-evaluate the frontmost app (e.g. after a break overlay dismissed and
+    /// an earlier show was refused).
+    public func recheck() {
+        guard lock != nil else { return }
+        handleActivation(bundleID: frontmostBundleID())
     }
 
     public func backTarget(for lock: FocusLock) -> BlockedApp? {
