@@ -5,6 +5,19 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+### Added
+- **Focus lock: allowed apps per task.** In the task editor, pick the apps a
+  task needs under "Allowed apps". While that task is active and a focus
+  session is running, switching to any other app covers the screen with a
+  reminder of the task — with *Back to {app}*, *Allow 5 min* and
+  *Stop session*. Pausing, a break, stopping or switching task lifts it.
+  Sharingan itself, Finder and system UI are always allowed. An app on the
+  global block list that a task allows is not hidden during that task.
+
+### Known limitations
+- A Mac still running an older Sharingan build ignores allowed apps, and
+  saving a task there can clear its list after sync.
+
 ## [1.12.2] - 2026-11-24
 
 ### Changed
