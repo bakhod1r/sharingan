@@ -291,6 +291,8 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
     /// Which Sharingan-board column this task sits in (`BoardColumn.id`).
     /// `nil` renders in the first column. Local + synced (CloudKit field).
     public var boardColumnID: String?
+    /// Apps allowed during a focus session on this task; others trigger the focus lock.
+    public var allowedApps: [BlockedApp] = []
     /// When the task was moved to Trash (nil = live). A trashed task stays in
     /// the store so it can be restored, but every normal query filters it out.
     public var trashedAt: Date?
@@ -333,7 +335,8 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
                 boardColumnID: String? = nil,
                 trashedAt: Date? = nil,
                 originDevice: String = DeviceIdentity.name,
-                number: Int = 0) {
+                number: Int = 0,
+                allowedApps: [BlockedApp] = []) {
         self.id = id
         self.title = title
         self.category = category
@@ -361,6 +364,7 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         self.trashedAt = trashedAt
         self.originDevice = originDevice
         self.number = number
+        self.allowedApps = allowedApps
     }
 
     // Defensive decoding: several fields (category, tags, pomodorosDone) were
@@ -394,6 +398,7 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         jiraSiteHost = try c.decodeIfPresent(String.self, forKey: .jiraSiteHost)
         jiraIssueType = try c.decodeIfPresent(String.self, forKey: .jiraIssueType)
         boardColumnID = try c.decodeIfPresent(String.self, forKey: .boardColumnID)
+        allowedApps = try c.decodeIfPresent([BlockedApp].self, forKey: .allowedApps) ?? []
         trashedAt = try c.decodeIfPresent(Date.self, forKey: .trashedAt)
         // Older records predate origin tracking — attribute them to this Mac.
         originDevice = try c.decodeIfPresent(String.self, forKey: .originDevice) ?? DeviceIdentity.name
