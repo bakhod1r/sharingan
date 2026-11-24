@@ -22,6 +22,25 @@ final class RecordMapperTests: XCTestCase {
         XCTAssertEqual(back, task)
     }
 
+    func testAllowedAppsRoundTrip() throws {
+        var task = TaskItem(title: "Focus", category: "Work")
+        task.allowedApps = [BlockedApp(bundleID: "com.apple.dt.Xcode", name: "Xcode"),
+                            BlockedApp(bundleID: "com.apple.Terminal", name: "Terminal", isEnabled: false)]
+        let record = RecordMapper.record(for: task, in: zone, systemFields: nil)
+        XCTAssertNotNil(record["allowedAppsJSON"] as? String)
+        XCTAssertEqual(try XCTUnwrap(RecordMapper.task(from: record)).allowedApps, task.allowedApps)
+    }
+
+    func testRecordWithoutAllowedAppsDecodesEmpty() throws {
+        var task = TaskItem(title: "Old", category: "Work")
+        task.allowedApps = [BlockedApp(bundleID: "com.apple.dt.Xcode", name: "Xcode")]
+        let record = RecordMapper.record(for: task, in: zone, systemFields: nil)
+        record["allowedAppsJSON"] = nil
+        XCTAssertEqual(try XCTUnwrap(RecordMapper.task(from: record)).allowedApps, [])
+        record["allowedAppsJSON"] = "not json" as CKRecordValue
+        XCTAssertEqual(try XCTUnwrap(RecordMapper.task(from: record)).allowedApps, [])
+    }
+
     func testFocusLogRoundTrips() throws {
         let entry = FocusLogEntry(day: Date(timeIntervalSince1970: 86_400), taskID: UUID(),
                                   subtaskID: UUID(), title: "Deep work", count: 3, seconds: 4500)

@@ -54,6 +54,7 @@ public enum RecordMapper {
         // JSON keeps them one field instead of a parallel record type whose
         // deletes would have to be tracked separately.
         record["subtasksJSON"] = json(task.subtasks) as CKRecordValue?
+        record["allowedAppsJSON"] = json(task.allowedApps) as CKRecordValue?
         record["schemaVersion"] = schemaVersion as CKRecordValue
         return record
     }
@@ -96,6 +97,8 @@ public enum RecordMapper {
         if let raw = record["subtasksJSON"] as? String {
             task.subtasks = decode([Subtask].self, from: raw) ?? []
         }
+        task.allowedApps = (record["allowedAppsJSON"] as? String)
+            .flatMap { decode([BlockedApp].self, from: $0) } ?? []
         // Keep the creator's device; a record from a peer that predates origin
         // tracking has none, so fall back to this Mac rather than crashing.
         task.originDevice = record["originDevice"] as? String ?? DeviceIdentity.name
