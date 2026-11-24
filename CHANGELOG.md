@@ -5,6 +5,8 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-11-24
+
 ### Added
 - **Focus lock: allowed apps per task.** In the task editor, pick the apps a
   task needs under "Allowed apps". While that task is active and a focus
@@ -19,6 +21,14 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
   saving a task there can clear its list after sync.
 - The focus reminder covers the screen but does not capture the keyboard, so
   typing still reaches the app underneath.
+
+### Changed
+- **A running session now costs about 1.5% CPU** (was 18–38%), and an idle
+  app about 0.1%. Views no longer redraw every second unless they show the
+  time, and the endless glow/pulse animations are gone: the countdown ring
+  and notch progress line step once a second, the menu bar icon only turns
+  while a session runs, and the notch iris and wallpaper eyes move in short
+  bursts instead of constantly.
 
 ## [1.12.2] - 2026-11-24
 
