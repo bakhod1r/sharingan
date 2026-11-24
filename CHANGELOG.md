@@ -5,6 +5,13 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.12.2] - 2026-11-24
+
+### Changed
+- **The menu bar icon no longer eats CPU.** Instead of spinning
+  continuously, the Sharingan rests and every few seconds *awakens* with one
+  smooth turn. CPU use drops from ~17–40% to about 3%.
+
 ## [1.12.1] - 2026-10-28
 
 ### Changed
