@@ -42,12 +42,15 @@ final class FocusLockWindowManager: FocusLockPresenter {
                 for p in panels { p.animator().alphaValue = 1 }
             }
         }
-        NotchWindowManager.shared.setBreakOverlay(true)
+        if !panels.isEmpty { NotchWindowManager.shared.setBreakOverlay(true) }
     }
 
     func hideLock() {
         guard !panels.isEmpty else { return }
-        NotchWindowManager.shared.setBreakOverlay(false)
+        // A break overlay owns the notch now; don't stand it back up under it.
+        if !BreakWindowManager.shared.isBlocking {
+            NotchWindowManager.shared.setBreakOverlay(false)
+        }
         tearDown(animated: true)
     }
 

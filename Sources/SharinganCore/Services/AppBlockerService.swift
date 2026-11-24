@@ -16,7 +16,22 @@ public final class AppBlockerService: ObservableObject {
     /// Apps we hid during the block, so they can be un-hidden when it ends.
     private var hiddenApps: [NSRunningApplication] = []
 
+    /// Lowercased bundle IDs the active focus lock allows. They stay usable even
+    /// when also on the blocklist.
+    public var exemptBundleIDs: Set<String> = [] {
+        didSet {
+            let lowered = Set(exemptBundleIDs.map { $0.lowercased() })
+            if lowered != exemptBundleIDs { exemptBundleIDs = lowered }
+        }
+    }
+
     public init() {}
+
+    /// Blocklist match, minus the focus-lock exemption.
+    public func shouldHide(bundleID: String) -> Bool {
+        guard settings.matches(bundleID: bundleID) else { return false }
+        return !exemptBundleIDs.contains(bundleID.lowercased())
+    }
 
     public func activate() {
         guard settings.enabled else { return }
@@ -69,7 +84,7 @@ public final class AppBlockerService: ObservableObject {
             return
         }
         let bid = app.bundleIdentifier ?? ""
-        if settings.matches(bundleID: bid) {
+        if shouldHide(bundleID: bid) {
             lastBlockedApp = app.localizedName ?? bid
             if settings.killOnFrontmost {
                 killApp(app)
@@ -96,7 +111,7 @@ public final class AppBlockerService: ObservableObject {
         guard settings.enabled else { return }
         for app in NSWorkspace.shared.runningApplications {
             guard let bid = app.bundleIdentifier else { continue }
-            if settings.matches(bundleID: bid) {
+            if shouldHide(bundleID: bid) {
                 lastBlockedApp = app.localizedName ?? bid
                 if settings.killOnFrontmost {
                     killApp(app)

@@ -1092,6 +1092,17 @@ testBrightnessSettings()
         } else {
             check(false, "legacy BlockedApp should decode")
         }
+
+        // Focus-lock exemption: an allowed app is skipped even when blocklisted.
+        // (Decision logic only; hiding real apps is not reachable headlessly.)
+        let blocker = AppBlockerService()
+        blocker.settings = on
+        check(blocker.shouldHide(bundleID: "com.google.Chrome") == true, "Chrome hidden without exemption")
+        blocker.exemptBundleIDs = ["com.Google.Chrome"]
+        check(blocker.exemptBundleIDs == ["com.google.chrome"], "exemptions stored lowercased")
+        check(blocker.shouldHide(bundleID: "com.google.Chrome") == false, "exempt Chrome not hidden")
+        blocker.exemptBundleIDs = []
+        check(blocker.shouldHide(bundleID: "com.google.Chrome") == true, "Chrome hidden again after release")
     }
 
     static func testBlockedAppPresets() {

@@ -38,6 +38,8 @@ public final class SharinganCoordinator: ObservableObject {
     public var quickAddController: QuickAddController?
     public var shortcuts: KeyboardShortcutsService = .shared
     private var cancellables: Set<AnyCancellable> = []
+    /// Source of the active task for the focus lock (injectable for tests).
+    private let taskStore: TaskStore
     private var cliObservers: [String: Any] = [:]
     private var snapshotCancellable: AnyCancellable?
 
@@ -55,8 +57,10 @@ public final class SharinganCoordinator: ObservableObject {
 
     /// `focusQueue`, when given (tests), backs the queue with an isolated
     /// UserDefaults suite; the app default persists to `.standard`.
-    public init(timer: PomodoroTimer, focusQueue: FocusQueue? = nil) {
+    public init(timer: PomodoroTimer, focusQueue: FocusQueue? = nil,
+                taskStore: TaskStore? = nil) {
         self.timer = timer
+        self.taskStore = taskStore ?? TaskStore.shared
         self.focusQueue = focusQueue ?? FocusQueue()
         // Prime the reward baseline from the already-earned streak so restarting
         // the app doesn't re-announce milestones the user passed days ago.
@@ -505,6 +509,8 @@ public final class SharinganCoordinator: ObservableObject {
                 if running && self.timer.phase == .focus { self.needsTaskPick = false }
                 // Blocking distracting apps follows the running state so pausing
                 // a focus session releases them, resuming re-blocks.
+                // Release the focus lock before a break overlay presents.
+                self.refreshFocusLock()
                 self.refreshAppBlocker()
                 self.reconcileBreakSideEffects()
                 self.syncDND()
@@ -526,10 +532,26 @@ public final class SharinganCoordinator: ObservableObject {
 
         // Picking any task — from the queue, the task list, or quick-add —
         // answers the "which task next?" question.
-        TaskStore.shared.$activeTaskID
+        taskStore.$activeTaskID
             .receive(on: DispatchQueue.main)
             .sink { [weak self] id in
                 if id != nil { self?.needsTaskPick = false }
+                self?.refreshFocusLock()
+                self?.refreshAppBlocker()
+            }
+            .store(in: &cancellables)
+
+        // Editing the active task's allowed apps re-evaluates the lock live.
+        // refreshFocusLock is cheap (engage is a no-op for an equal lock); the
+        // blocker is only touched when the exemption set really changed.
+        taskStore.$tasks
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                self.refreshFocusLock()
+                if self.currentExemptions() != AppBlockerService.shared.exemptBundleIDs {
+                    self.refreshAppBlocker()
+                }
             }
             .store(in: &cancellables)
 
@@ -537,6 +559,7 @@ public final class SharinganCoordinator: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.publishSnapshot()
+                self?.refreshFocusLock()
                 self?.refreshAppBlocker()
                 // The overlay follows break STATE, not just the applyRemoteTimer
                 // edge: a skip/complete jumps focus↔break with no
@@ -679,10 +702,28 @@ public final class SharinganCoordinator: ObservableObject {
         NightShiftService.shared.endBreakWarmth()
     }
 
+    /// Engage the focus lock for the running focus session's active task, or
+    /// release it. Call before `refreshAppBlocker` so the exemption is current.
+    func refreshFocusLock() {
+        if let lock = FocusLockPolicy.lock(activeTask: taskStore.activeTask,
+                                           phase: timer.phase,
+                                           isRunning: timer.isRunning) {
+            FocusLockService.shared.engage(lock)
+        } else {
+            FocusLockService.shared.release()
+        }
+    }
+
+    private func currentExemptions() -> Set<String> {
+        Set((FocusLockService.shared.lock?.allowedApps ?? [])
+            .filter(\.isEnabled).map { $0.bundleID.lowercased() })
+    }
+
     /// Drive the app blocker from the current phase + settings: block during a
     /// break (when "block screen" is on) and/or during a running focus session
     /// (when "block during focus" is on).
     func refreshAppBlocker() {
+        AppBlockerService.shared.exemptBundleIDs = currentExemptions()
         let s = timer.settings
         let blocker = s.appBlockerSettings
         guard blocker.enabled else {
