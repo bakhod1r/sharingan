@@ -16,6 +16,8 @@ struct FocusLockCoordinatorTests {
         let store: TaskStore
         let presenter: FakeFocusLockPresenter
         let box: Box
+        let focus: FocusLockService
+        let blocker: AppBlockerService
         let cleanup: () -> Void
     }
 
@@ -28,22 +30,18 @@ struct FocusLockCoordinatorTests {
         let store = TaskStore(fileURL: dir.appendingPathComponent("tasks.json"))
         let box = Box()
         let presenter = FakeFocusLockPresenter()
-        let svc = FocusLockService.shared
-        svc.release()
+        let svc = FocusLockService()
         svc.presenter = presenter
         svc.ownBundleID = "app.sharingan"
         svc.canResolve = { _ in true }
         svc.frontmostBundleID = { box.front }
+        let blocker = AppBlockerService()
         let c = SharinganCoordinator(timer: PomodoroTimer(),
                                      focusQueue: FocusQueue(defaults: defaults),
-                                     taskStore: store)
-        return Rig(c: c, store: store, presenter: presenter, box: box, cleanup: {
-            FocusLockService.shared.release()
-            FocusLockService.shared.presenter = nil
-            FocusLockService.shared.frontmostBundleID = {
-                NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-            }
-            AppBlockerService.shared.exemptBundleIDs = []
+                                     taskStore: store, focusLock: svc, appBlocker: blocker)
+        return Rig(c: c, store: store, presenter: presenter, box: box,
+                   focus: svc, blocker: blocker, cleanup: {
+            svc.release()
             defaults.removePersistentDomain(forName: name)
             try? FileManager.default.removeItem(at: dir)
         })
@@ -66,8 +64,8 @@ struct FocusLockCoordinatorTests {
         _ = addActiveTask(r, apps: [vscode])
         r.c.timer.start()
         await drain()
-        #expect(FocusLockService.shared.lock != nil)
-        #expect(AppBlockerService.shared.exemptBundleIDs == ["com.microsoft.vscode"])
+        #expect(r.focus.lock != nil)
+        #expect(r.blocker.exemptBundleIDs == ["com.microsoft.vscode"])
     }
 
     @Test func releasesOnPause() async {
@@ -75,8 +73,8 @@ struct FocusLockCoordinatorTests {
         _ = addActiveTask(r, apps: [vscode])
         r.c.timer.start(); await drain()
         r.c.timer.pause(); await drain()
-        #expect(FocusLockService.shared.lock == nil)
-        #expect(AppBlockerService.shared.exemptBundleIDs.isEmpty)
+        #expect(r.focus.lock == nil)
+        #expect(r.blocker.exemptBundleIDs.isEmpty)
     }
 
     @Test func releasesOnBreak() async {
@@ -85,16 +83,16 @@ struct FocusLockCoordinatorTests {
         r.c.timer.start(); await drain()
         r.c.timer.skip(); await drain()
         #expect(r.c.timer.phase.isBreak)
-        #expect(FocusLockService.shared.lock == nil)
+        #expect(r.focus.lock == nil)
     }
 
     @Test func releasesWhenActiveTaskCleared() async {
         let r = makeRig(); defer { r.cleanup() }
         _ = addActiveTask(r, apps: [vscode])
         r.c.timer.start(); await drain()
-        #expect(FocusLockService.shared.lock != nil)
+        #expect(r.focus.lock != nil)
         r.store.setActive(nil); await drain()
-        #expect(FocusLockService.shared.lock == nil)
+        #expect(r.focus.lock == nil)
     }
 
     @Test func editingAllowedAppsReevaluates() async {
@@ -102,11 +100,11 @@ struct FocusLockCoordinatorTests {
         let id = addActiveTask(r, apps: [vscode])
         r.box.front = "com.google.Chrome"
         r.c.timer.start(); await drain()
-        #expect(FocusLockService.shared.isShowing)
+        #expect(r.focus.isShowing)
         var t = r.store.tasks.first { $0.id == id }!
         t.allowedApps.append(chrome)
         r.store.update(t); await drain()
-        #expect(!FocusLockService.shared.isShowing)
-        #expect(AppBlockerService.shared.exemptBundleIDs.contains("com.google.chrome"))
+        #expect(!r.focus.isShowing)
+        #expect(r.blocker.exemptBundleIDs.contains("com.google.chrome"))
     }
 }

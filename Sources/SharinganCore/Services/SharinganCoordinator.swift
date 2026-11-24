@@ -40,6 +40,8 @@ public final class SharinganCoordinator: ObservableObject {
     private var cancellables: Set<AnyCancellable> = []
     /// Source of the active task for the focus lock (injectable for tests).
     private let taskStore: TaskStore
+    private let focusLock: FocusLockService
+    private let appBlocker: AppBlockerService
     private var cliObservers: [String: Any] = [:]
     private var snapshotCancellable: AnyCancellable?
 
@@ -58,9 +60,13 @@ public final class SharinganCoordinator: ObservableObject {
     /// `focusQueue`, when given (tests), backs the queue with an isolated
     /// UserDefaults suite; the app default persists to `.standard`.
     public init(timer: PomodoroTimer, focusQueue: FocusQueue? = nil,
-                taskStore: TaskStore? = nil) {
+                taskStore: TaskStore? = nil,
+                focusLock: FocusLockService? = nil,
+                appBlocker: AppBlockerService? = nil) {
         self.timer = timer
         self.taskStore = taskStore ?? TaskStore.shared
+        self.focusLock = focusLock ?? FocusLockService.shared
+        self.appBlocker = appBlocker ?? AppBlockerService.shared
         self.focusQueue = focusQueue ?? FocusQueue()
         // Prime the reward baseline from the already-earned streak so restarting
         // the app doesn't re-announce milestones the user passed days ago.
@@ -549,7 +555,7 @@ public final class SharinganCoordinator: ObservableObject {
             .sink { [weak self] _ in
                 guard let self else { return }
                 self.refreshFocusLock()
-                if self.currentExemptions() != AppBlockerService.shared.exemptBundleIDs {
+                if self.currentExemptions() != appBlocker.exemptBundleIDs {
                     self.refreshAppBlocker()
                 }
             }
@@ -708,14 +714,14 @@ public final class SharinganCoordinator: ObservableObject {
         if let lock = FocusLockPolicy.lock(activeTask: taskStore.activeTask,
                                            phase: timer.phase,
                                            isRunning: timer.isRunning) {
-            FocusLockService.shared.engage(lock)
+            focusLock.engage(lock)
         } else {
-            FocusLockService.shared.release()
+            focusLock.release()
         }
     }
 
     private func currentExemptions() -> Set<String> {
-        Set((FocusLockService.shared.lock?.allowedApps ?? [])
+        Set((focusLock.lock?.allowedApps ?? [])
             .filter(\.isEnabled).map { $0.bundleID.lowercased() })
     }
 
@@ -723,18 +729,18 @@ public final class SharinganCoordinator: ObservableObject {
     /// break (when "block screen" is on) and/or during a running focus session
     /// (when "block during focus" is on).
     func refreshAppBlocker() {
-        AppBlockerService.shared.exemptBundleIDs = currentExemptions()
+        appBlocker.exemptBundleIDs = currentExemptions()
         let s = timer.settings
         let blocker = s.appBlockerSettings
         guard blocker.enabled else {
-            AppBlockerService.shared.deactivate()
+            appBlocker.deactivate()
             return
         }
         // "Always block" mode (onlyDuringBreak == false): keep distracting apps
         // blocked the whole time the app runs, regardless of phase.
         if !blocker.onlyDuringBreak {
-            AppBlockerService.shared.update(blocker)
-            AppBlockerService.shared.activate()
+            appBlocker.update(blocker)
+            appBlocker.activate()
             return
         }
         // Otherwise blocking is phase-driven: during a break (when "block screen"
@@ -744,10 +750,10 @@ public final class SharinganCoordinator: ObservableObject {
         let shouldBlock = (isBreak && s.blockScreenDuringBreak)
             || (isFocus && s.blockAppsDuringFocus && timer.isRunning)
         if shouldBlock {
-            AppBlockerService.shared.update(blocker)
-            AppBlockerService.shared.activate()
+            appBlocker.update(blocker)
+            appBlocker.activate()
         } else {
-            AppBlockerService.shared.deactivate()
+            appBlocker.deactivate()
         }
     }
 
