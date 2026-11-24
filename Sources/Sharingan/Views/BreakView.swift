@@ -10,6 +10,10 @@ struct BreakView: View {
     /// Settings "Preview break screen" so the preview can always be closed).
     var forceExit: Bool = false
     var body: some View {
+        TimerTicking(timer.clock) { breakBody }
+    }
+
+    @ViewBuilder private var breakBody: some View {
         let remaining = max(0, timer.remainingSeconds)
 
         GeometryReader { geo in

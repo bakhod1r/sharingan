@@ -2,7 +2,7 @@ import AppKit
 import SharinganCore
 
 /// Drives the menu bar Sharingan's motion: still most of the time, then a
-/// short 12 fps *awakening* — one eased 120° turn (`IconSpinCadence`) — every
+/// short 8 fps *awakening* — one eased 120° turn (`IconSpinCadence`) — every
 /// few seconds. A continuous 12 fps spin cost 17–40% CPU, because each frame
 /// makes AppKit re-snapshot the status item into the menu bar replicants;
 /// bursts animate only a small slice of each cycle. Idles — timers gone,
@@ -25,7 +25,7 @@ final class IconSpinner {
     }
 
     private let cadence: IconSpinCadence
-    /// The 12 fps clock while a burst runs, or the one-shot rest timer
+    /// The frame clock while a burst runs, or the one-shot rest timer
     /// between bursts — never both.
     private var timer: Timer?
     private var burstBase: Double = 0

@@ -92,11 +92,11 @@ struct TodayPanelView: View {
                     .font(.system(size: 9, weight: .heavy, design: .rounded))
                     .tracking(1.1)
                     .foregroundStyle(.white.opacity(0.65))
-                Text(timer.settings.timeFormat.string(max(0, timer.remainingSeconds)))
-                    .font(.dsTimer(20))
-                    .foregroundStyle(.white)
-                    .contentTransition(.numericText())
-                    .animation(.snappy(duration: 0.3), value: timer.remainingSeconds)
+                TimerTicking(timer.clock) {
+                    Text(timer.settings.timeFormat.string(max(0, timer.remainingSeconds)))
+                        .font(.dsTimer(20))
+                        .foregroundStyle(.white)
+                }
             }
             Spacer(minLength: 4)
             Text("Today")

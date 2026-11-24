@@ -33,10 +33,16 @@ struct IconSpinCadenceTests {
         #expect(mid > steps.last!)
     }
 
-    @Test("bursts are rare: animated frames stay under 20% of a 12 fps continuous spin")
+    @Test("bursts are rare: under 1 animated frame per second on average")
     func cheapDutyCycle() {
         let cycle = cadence.restSeconds + Double(cadence.burstOffsets.count) * cadence.frameInterval
         let framesPerSecond = Double(cadence.burstOffsets.count) / cycle
-        #expect(framesPerSecond < 12 * 0.2)
+        #expect(framesPerSecond < 1)
+    }
+
+    @Test("a burst is cheap: at most 8 fps and 10 frames")
+    func cheapBurst() {
+        #expect(cadence.frameInterval >= 1.0 / 8.0)
+        #expect(cadence.burstOffsets.count <= 10)
     }
 }

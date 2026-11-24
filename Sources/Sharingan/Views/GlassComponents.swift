@@ -231,7 +231,7 @@ struct MatrixRainView: View {
     }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 14.0)) { timeline in
+        TimelineView(.animation(minimumInterval: 1.0 / 10.0)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
             Canvas { ctx, size in
                 let cols = max(1, Int(size.width / cell))

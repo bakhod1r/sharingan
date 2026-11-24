@@ -31,7 +31,6 @@ struct MenuBarView: View {
     /// Task queued for the irreversible "delete forever?" confirmation.
     @State private var pendingPurgeTask: TaskItem?
     @State private var confirmEmptyTrash = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private enum Tab: Hashable, CaseIterable {
         // Pomodoro and Tasks are one tab now: the full task view with the timer
@@ -1229,12 +1228,7 @@ struct MenuBarView: View {
                     help: startBlocked ? "Add or pick a task to start a focus session"
                                        : (timer.isRunning ? "Pause" : "Start"),
                     action: startTapped)
-            // Gentle breathing pulse while the timer runs.
-            .scaleEffect(timer.isRunning && !reduceMotion ? 1.03 : 1.0)
-            .animation(timer.isRunning && !reduceMotion
-                       ? .easeInOut(duration: 1.1).repeatForever(autoreverses: true)
-                       : .default,
-                       value: timer.isRunning)
+            // No breathing pulse: a repeatForever animation kept the retained popover host re-laying out every frame (~20% CPU).
             // When a task is required but none exists, Start would silently do
             // nothing — dim + disable it so the dead tap is visible.
             .opacity(startBlocked ? 0.45 : 1)

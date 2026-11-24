@@ -7,20 +7,19 @@ struct CircularRunButton: View {
     var colors: [Color]
     var action: () -> Void
 
-    @State private var pulse = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     private var glow: Color { colors.first ?? .cyan }
 
     var body: some View {
         Button(action: action) {
             ZStack {
-                // Outer pulsing glow ring
+                // Outer glow ring — brighter while running. Static on
+                // purpose: a breathing blur/shadow made SwiftUI re-layout the
+                // whole main window every frame (~20% CPU for the session).
                 Circle()
                     .stroke(glow, lineWidth: 3)
                     .frame(width: 104, height: 104)
-                    .blur(radius: pulse ? 7 : 3)
-                    .opacity(pulse ? 0.95 : 0.7)
+                    .blur(radius: isRunning ? 6 : 3)
+                    .opacity(isRunning ? 0.9 : 0.7)
 
                 // Crisp ring on top of the glow
                 Circle()
@@ -49,26 +48,11 @@ struct CircularRunButton: View {
                 }
                 .foregroundStyle(.white)
             }
-            .shadow(color: glow.opacity(0.55), radius: pulse ? 26 : 16)
+            .shadow(color: glow.opacity(0.55), radius: isRunning ? 22 : 16)
+            .animation(.easeOut(duration: 0.4), value: isRunning)
             .contentShape(Circle())
         }
         .buttonStyle(.pressable)
-        .onAppear { syncPulse() }
-        .onChange(of: isRunning) { syncPulse() }
-    }
-
-    /// The glow breathes only while the timer runs; at rest it sits still so the
-    /// screen stays calm.
-    private func syncPulse() {
-        // Breathe only while running AND when the user hasn't asked for reduced
-        // motion — otherwise the glow sits still.
-        if isRunning && !reduceMotion {
-            withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) {
-                pulse = true
-            }
-        } else {
-            withAnimation(.easeOut(duration: 0.4)) { pulse = false }
-        }
     }
 }
 

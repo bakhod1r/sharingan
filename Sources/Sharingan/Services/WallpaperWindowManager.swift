@@ -31,15 +31,17 @@ final class WallpaperTrackerNSView: NSView {
         super.viewDidMoveToWindow()
         timer?.invalidate()
         guard window != nil else { return }
-        let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
             self?.tick()
         }
+        timer.tolerance = 0.01
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
     }
 
     private func tick() {
-        guard let window, let state else { return }
+        // Desktop fully covered by other windows: nobody sees the eyes.
+        guard let window, window.occlusionState.contains(.visible), let state else { return }
         let inWindow = window.convertPoint(fromScreen: NSEvent.mouseLocation)
         let local = convert(inWindow, from: nil)
         if state.location != local {
@@ -97,7 +99,7 @@ struct WallpaperEyesView: View {
 
     @StateObject private var mouse = WallpaperMouseState()
     @State private var spinAngle: Double = 0
-    @State private var spinning = false
+    @State private var lastSpinAt: Date = .distantPast
     @State private var clickMonitor: Any?
     /// Eyelids (per eye — sometimes one winks): occasional blinks while the
     /// mouse is active, and a slow doze (lids fully closed) once it has been
@@ -161,13 +163,14 @@ struct WallpaperEyesView: View {
             guard config.spinTrigger.spinsOnIdle || config.spinTrigger.spinsAlways else { return }
             let idle = config.spinTrigger.spinsAlways
                 || Date().timeIntervalSince(mouse.lastMoved) > config.idleDelay
-            if idle && !spinning {
-                spinning = true
-                withAnimation(.linear(duration: config.spinDuration).repeatForever(autoreverses: false)) {
+            // One periodic turn instead of a forever animation: a repeatForever
+            // makes SwiftUI render every frame (display rate) = high CPU.
+            // A turn already in flight finishes on its own (short, no loop).
+            if idle, Date().timeIntervalSince(lastSpinAt) >= max(config.spinDuration + 8, 10) {
+                lastSpinAt = Date()
+                withAnimation(.easeInOut(duration: config.spinDuration)) {
                     spinAngle += 360
                 }
-            } else if !idle && spinning {
-                stopContinuousSpin()
             }
         }
         .onAppear {
@@ -262,29 +265,18 @@ struct WallpaperEyesView: View {
 
     private func reopen(after delay: TimeInterval) {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            guard !dozing, leftLid != 1 || rightLid != 1 else { return }
             withAnimation(.easeOut(duration: 0.16)) {
-                if !dozing {
-                    leftLid = 1
-                    rightLid = 1
-                }
+                leftLid = 1
+                rightLid = 1
             }
         }
     }
 
     /// One accelerate→decelerate whirl (two full turns) per click.
     private func clickBurst() {
-        if spinning { stopContinuousSpin() }
         withAnimation(.easeInOut(duration: max(0.6, config.spinDuration))) {
             spinAngle += 720
-        }
-    }
-
-    private func stopContinuousSpin() {
-        spinning = false
-        var t = Transaction()
-        t.disablesAnimations = true
-        withTransaction(t) {
-            spinAngle = spinAngle.truncatingRemainder(dividingBy: 360)
         }
     }
 

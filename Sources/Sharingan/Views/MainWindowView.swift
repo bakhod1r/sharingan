@@ -1459,6 +1459,10 @@ private struct TimerDetailView: View {
     @State private var showTaskPicker = false
 
     var body: some View {
+        TimerTicking(timer.clock) { detailBody }
+    }
+
+    @ViewBuilder private var detailBody: some View {
         let remaining = max(0, timer.remainingSeconds)
         let total = timer.totalSeconds
         let progress = total > 0 ? 1 - remaining / total : 0

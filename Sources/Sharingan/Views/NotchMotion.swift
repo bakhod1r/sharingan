@@ -216,21 +216,12 @@ enum NotchMotion {
 
     // MARK: - The progress line
 
-    /// The model's progress is written once a second, on the timer's tick. A
-    /// linear tween exactly one tick long lands on the next value as it arrives:
-    /// the line creeps continuously instead of stepping, and never wobbles the
-    /// way a spring would at a 1pt-per-second pace.
-    static let tick: Double = 1.0
     /// A phase flip changes the line's color. Cross-fade it rather than cut —
     /// and the fill's *width* is not interpolated across a flip at all (the fill
     /// carries the phase as its identity, so the new phase's bar fades in at its
     /// own width while the old one fades out at 100%, instead of sweeping
     /// backwards over a second).
     static let phaseCrossfade: Double = 0.45
-
-    static func progressFill(reduceMotion: Bool) -> Animation? {
-        reduceMotion ? nil : .linear(duration: tick)
-    }
 
     static func phaseFade(reduceMotion: Bool) -> Animation {
         .easeInOut(duration: reduceMotion ? reducedCrossfade : phaseCrossfade)

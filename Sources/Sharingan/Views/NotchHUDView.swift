@@ -530,65 +530,80 @@ struct NotchActivityView: View {
 /// mid-close the stem is genuinely between widths, and without the hold those
 /// frames would be black over `Window` and `Help` that the mask had already
 /// given back.
-/// A bare Sharingan iris for a notch ear (`MoveIrisView`, no lids), animated to
-/// feel premium: it turns slowly and ceaselessly, and every `awakenCycle`
-/// seconds it *awakens* — the tomoe collapse into the pupil, the iris whirls two
-/// fast turns and blooms back out, with a soft scale pulse riding the burst. Its
-/// own `TimelineView` clock drives all of it, so it lives whether or not a
-/// session is running. `reduce` freezes it still and fully formed for Reduce
-/// Motion.
+/// A bare Sharingan iris for a notch ear (`MoveIrisView`, no lids). It rests
+/// still and every `awakenCycle` seconds *awakens* — the tomoe collapse into
+/// the pupil, the iris whirls two fast turns and blooms back out, with a soft
+/// scale pulse riding the burst. Frames are produced only during the burst
+/// (`AwakenSchedule`, 30 fps): a continuous `TimelineView(.animation)` drove
+/// both irises at display rate for as long as the notch was up. `reduce`
+/// freezes it still and fully formed for Reduce Motion.
 private struct NotchShoulderIris: View {
     var style: SharinganStyle
     var diameter: CGFloat
     var reduce: Bool
 
-    /// Seconds per full turn of the ceaseless base rotation.
-    private let secondsPerTurn: Double = 16
     /// Seconds between awakenings, and how long each awakening runs.
-    private let awakenCycle: Double = 9
-    private let awakenDur: Double = 1.7
+    private static let awakenCycle: Double = 20
+    private static let awakenDur: Double = 1.7
 
     var body: some View {
         if reduce {
             MoveIrisView(diameter: diameter, style: style)
         } else {
-            TimelineView(.animation) { ctx in
-                let f = frame(at: ctx.date.timeIntervalSinceReferenceDate)
+            TimelineView(AwakenSchedule(cycle: Self.awakenCycle,
+                                        burst: Self.awakenDur,
+                                        fps: 30)) { ctx in
+                let f = Self.frame(at: ctx.date.timeIntervalSinceReferenceDate)
                 MoveIrisView(diameter: diameter, spin: f.spin, style: style,
                              emergence: f.emergence)
                     .scaleEffect(f.scale)
-                    // A faint bloom of the iris's own light on each awakening —
-                    // the premium glow, strongest as the tomoe whirl back out.
                     .shadow(color: (style == .rinnegan ? Color.purple : Color.red)
                         .opacity(f.glow), radius: 0.28 * diameter)
             }
         }
     }
 
-    /// The whole animation as pure math for time `t`: a continuous base spin,
-    /// plus a periodic eased awakening burst (collapse → whirl → bloom).
-    private func frame(at t: TimeInterval) -> (spin: Double, emergence: CGFloat,
-                                               scale: CGFloat, glow: Double) {
-        let base = t * 360 / secondsPerTurn
+    /// The burst as pure math for time `t` (collapse → whirl → bloom); still
+    /// and fully formed outside it. Two extra turns, a multiple of 360°, so
+    /// the end of a burst matches the resting pose with no snap.
+    private static func frame(at t: TimeInterval) -> (spin: Double, emergence: CGFloat,
+                                                      scale: CGFloat, glow: Double) {
         let ph = t.truncatingRemainder(dividingBy: awakenCycle)
-        guard ph < awakenDur else {
-            // Resting: gentle breathing only.
-            return (base, 1, 1 + CGFloat(sin(t * 0.7)) * 0.015, 0)
-        }
-        let u = ph / awakenDur                      // 0…1 through the burst
-        // Collapse to a near-bare iris in the first third, bloom back over the
-        // rest — the tomoe suck into the pupil and spiral out (MoveIrisView's
-        // `emergence` carries the whirl-out for free).
+        guard ph < awakenDur else { return (0, 1, 1, 0) }
+        let u = ph / awakenDur
         let e: CGFloat = u < 0.33
             ? 1 - CGFloat(u / 0.33) * 0.82
             : 0.18 + CGFloat((u - 0.33) / 0.67) * 0.82
-        // Two full extra turns, eased out — a multiple of 360° so it rejoins the
-        // base spin with no visible snap when the burst ends.
         let eased = 1 - pow(1 - u, 3)
-        let burstSpin = eased * 720
-        let pulse = sin(u * .pi)                    // 0→1→0 across the burst
-        return (base + burstSpin, e,
-                1 + CGFloat(pulse) * 0.09, pulse * 0.5)
+        let pulse = sin(u * .pi)
+        return (eased * 720, e, 1 + CGFloat(pulse) * 0.09, pulse * 0.5)
+    }
+}
+
+/// Timeline entries only while an awakening runs: `fps` frames across each
+/// `burst`, then nothing until the next `cycle` boundary — so a resting iris
+/// costs no frames at all.
+private struct AwakenSchedule: TimelineSchedule {
+    var cycle: Double
+    var burst: Double
+    var fps: Double
+
+    func entries(from startDate: Date, mode: TimelineScheduleMode) -> AnyIterator<Date> {
+        var t = startDate.timeIntervalSinceReferenceDate
+        let step = 1 / fps
+        var first = true
+        return AnyIterator {
+            if first { first = false; return Date(timeIntervalSinceReferenceDate: t) }
+            let ph = t.truncatingRemainder(dividingBy: cycle)
+            if ph + step < burst {
+                t += step
+            } else if ph < burst {
+                t += burst - ph          // the closing, fully-formed frame
+            } else {
+                t += cycle - ph          // sleep until the next awakening
+            }
+            return Date(timeIntervalSinceReferenceDate: t)
+        }
     }
 }
 

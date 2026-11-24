@@ -93,7 +93,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         coordinator.installCLIBridge()
 
         // Refresh title every second.
-        Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+        let tick = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             guard let self else { return }
             Task { @MainActor in
                 self.syncSpinner()
@@ -101,6 +101,8 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
                 self.updateTitle()
             }
         }
+        // Lets macOS coalesce this wake-up with others (energy).
+        tick.tolerance = 0.2
 
         // The button's window has a real menu-bar frame only after this
         // run-loop turn settles; check for the invisible-slot state then.
@@ -235,7 +237,10 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
 
     /// Pushes the settings switch into the spinner (1 s latency at most).
     private func syncSpinner() {
-        spinner.enabled = timer?.settings.animateIcon ?? false
+        // Only while a session runs: at rest the mark sits still and the
+        // status item costs nothing.
+        spinner.enabled = (timer?.settings.animateIcon ?? false)
+            && (timer?.isRunning ?? false)
     }
 
     private func updateTitle() {
@@ -277,7 +282,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
                     style: key.style).map(Self.rasterized)
                 // Progress and style changes grow the key space; a cap keeps
                 // it bounded across a long-running session.
-                if iconCache.count >= 512 { iconCache.removeAll() }
+                if iconCache.count >= 128 { iconCache.removeAll() }
                 iconCache[key] = icon
                 button.image = icon
             }

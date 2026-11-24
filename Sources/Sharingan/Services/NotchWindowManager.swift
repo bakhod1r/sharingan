@@ -59,7 +59,8 @@ final class NotchWindowManager {
         // default run-loop mode only, so the sink is starved while a menu is
         // tracking or a window is being live-dragged — and the island's
         // countdown would visibly freeze.
-        timer.objectWillChange
+        // The countdown ticks on `timer.clock`, state changes on the timer.
+        Publishers.Merge(timer.objectWillChange, timer.clock.objectWillChange)
             .receive(on: DispatchQueue.main)
             .sink { [weak self, weak timer] _ in
                 guard let self, let timer else { return }

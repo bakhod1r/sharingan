@@ -159,14 +159,14 @@ struct NotchExpandedPanel: View {
     private var timerRow: some View {
         HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 1) {
-                Text(clock(timer.remainingSeconds))
-                    // The app's one countdown face (`Font.dsTimer`), light and
-                    // rounded, so the island's clock is the same element as the
-                    // menu bar's and the Floating widget's.
-                    .font(.dsTimer(26))
-                    .foregroundStyle(Color.dsPrimary)
-                    .contentTransition(.numericText())
-                    .animation(DS.Motion.snappy, value: timer.remainingSeconds)
+                TimerTicking(timer.clock) {
+                    Text(clock(timer.remainingSeconds))
+                        // The app's one countdown face (`Font.dsTimer`), light and
+                        // rounded, so the island's clock is the same element as the
+                        // menu bar's and the Floating widget's.
+                        .font(.dsTimer(26))
+                        .foregroundStyle(Color.dsPrimary)
+                }
                 Text(timer.phase.label.uppercased())
                     .font(.system(size: 9, weight: .heavy, design: .rounded))
                     .tracking(1.2)

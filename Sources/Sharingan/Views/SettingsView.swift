@@ -1464,21 +1464,13 @@ struct DSStepper: View {
         .buttonStyle(.pressableSubtle)
     }
 }
-/// Small, slowly whirling iris shown next to the style pickers — every eye
-/// in the app breathes, even the 26 pt swatches.
+/// Small iris shown next to the style pickers. Static on purpose: a forever
+/// rotation means per-frame SwiftUI updates for as long as Settings is open.
 struct SpinningIrisSwatch: View {
     var style: SharinganStyle
-    @State private var angle = 0.0
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        MoveIrisView(diameter: 26, spin: angle, style: style)
-            .onAppear {
-                guard !reduceMotion else { return }
-                withAnimation(.linear(duration: 9).repeatForever(autoreverses: false)) {
-                    angle = 360
-                }
-            }
+        MoveIrisView(diameter: 26, style: style)
     }
 }
 

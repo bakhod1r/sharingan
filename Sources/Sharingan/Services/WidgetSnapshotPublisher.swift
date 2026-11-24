@@ -29,8 +29,9 @@ final class WidgetSnapshotPublisher {
 
     func install(timer: PomodoroTimer) {
         self.timer = timer
-        Publishers.Merge(timer.objectWillChange.map { _ in () },
-                         TaskStore.shared.objectWillChange.map { _ in () })
+        Publishers.Merge3(timer.objectWillChange.map { _ in () },
+                          timer.clock.objectWillChange.map { _ in () },
+                          TaskStore.shared.objectWillChange.map { _ in () })
             .debounce(for: .milliseconds(400), scheduler: DispatchQueue.main)
             .sink { [weak self] in self?.publish() }
             .store(in: &bag)

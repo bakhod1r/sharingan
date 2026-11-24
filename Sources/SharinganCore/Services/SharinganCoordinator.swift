@@ -581,7 +581,7 @@ public final class SharinganCoordinator: ObservableObject {
         // The CLI reconstructs a running countdown from `updatedAt`, so the
         // per-second tick needs no write — only publish when remaining jumps
         // in a way wall-clock can't explain (addTime, set, stop, …).
-        timer.$remainingSeconds
+        timer.clock.$remainingSeconds
             .receive(on: DispatchQueue.main)
             .dropFirst()
             .sink { [weak self] rem in

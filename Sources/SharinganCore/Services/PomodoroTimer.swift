@@ -5,8 +5,18 @@ import Combine
 @MainActor
 public final class PomodoroTimer: ObservableObject {
     @Published public private(set) var phase: PomodoroPhase = .focus
-    @Published public private(set) var remainingSeconds: TimeInterval = 0
-    @Published public private(set) var elapsedSeconds: TimeInterval = 0
+    /// The per-second countdown. Lives on `clock` (not `@Published` here) so
+    /// a tick doesn't invalidate every view observing the timer; views that
+    /// display the time observe `clock` (see `TimerTicking`).
+    public let clock = TimerClock()
+    public private(set) var remainingSeconds: TimeInterval {
+        get { clock.remainingSeconds }
+        set { clock.remainingSeconds = newValue }
+    }
+    public private(set) var elapsedSeconds: TimeInterval {
+        get { clock.elapsedSeconds }
+        set { clock.elapsedSeconds = newValue }
+    }
     @Published public private(set) var isRunning: Bool = false
     @Published public private(set) var cyclesCompletedInRound: Int = 0
     @Published public private(set) var repeatIndex: Int = 0
@@ -49,7 +59,7 @@ public final class PomodoroTimer: ObservableObject {
     private var lastTickDate: Date?
     private var repeatJob: Task<Void, Never>?
 
-    /// The loop ticks every 200 ms for accuracy, but writing the @Published
+    /// The loop wakes once per displayed second (`nextTickDelay`); writing the @Published
     /// values at that cadence re-renders every observing hierarchy 5×/second
     /// for the whole session (including retained-but-hidden windows). Time is
     /// accumulated here and published only when the whole second flips.
@@ -89,8 +99,8 @@ public final class PomodoroTimer: ObservableObject {
     public init() {
         let saved = Self.loadSettings()
         self.settings = saved
-        self.remainingSeconds = saved.focusSeconds
         self.stats = Self.loadStats()
+        self.remainingSeconds = saved.focusSeconds
         self.cyclesCompletedInRound = roundProgress()
     }
 
@@ -110,8 +120,8 @@ public final class PomodoroTimer: ObservableObject {
     /// nothing else.
     public init(settings: PomodoroSettings) {
         self.settings = settings
-        self.remainingSeconds = settings.focusSeconds
         self.stats = Self.loadStats()
+        self.remainingSeconds = settings.focusSeconds
         self.cyclesCompletedInRound = roundProgress()
     }
 
@@ -335,7 +345,9 @@ public final class PomodoroTimer: ObservableObject {
         syncPrecise()
         tickTask = Task { @MainActor [weak self] in
             while !Task.isCancelled, let s = self, s.isRunning {
-                try? await Task.sleep(for: .milliseconds(200))
+                let delay = Self.nextTickDelay(remaining: s.preciseRemaining,
+                                               elapsed: s.preciseElapsed, mode: s.mode)
+                try? await Task.sleep(for: .seconds(delay))
                 guard !Task.isCancelled else { return }
                 let now = Date.now
                 let dt = Self.effectiveTickDelta(
@@ -396,6 +408,24 @@ public final class PomodoroTimer: ObservableObject {
     /// sleep rests the eyes just as well, and freezing the countdown left the
     /// break overlay up long after the break should have ended, so the full
     /// gap counts and the break completes on wake.
+    /// How long the tick loop sleeps: until just past the moment the shown
+    /// second flips (remaining for a countdown, elapsed for count-up), so the
+    /// display stays exact with one wake-up per second instead of five. The
+    /// 20 ms margin lands the wake *after* the flip; the 50 ms floor stops a
+    /// wake that lands right on a boundary from spinning.
+    nonisolated public static func nextTickDelay(remaining: TimeInterval,
+                                                 elapsed: TimeInterval,
+                                                 mode: TimerMode) -> TimeInterval {
+        // floor(remaining) flips the instant remaining drops below a whole
+        // number; floor(elapsed) flips when elapsed reaches the next one.
+        let untilFlip: TimeInterval
+        switch mode {
+        case .countdown: untilFlip = remaining - floor(remaining)
+        case .countUp:   untilFlip = floor(elapsed) + 1 - elapsed
+        }
+        return min(1.02, max(0.05, untilFlip + 0.02))
+    }
+
     nonisolated public static func effectiveTickDelta(_ dt: TimeInterval,
                                                       phase: PomodoroPhase) -> TimeInterval {
         guard dt > 30 else { return dt }

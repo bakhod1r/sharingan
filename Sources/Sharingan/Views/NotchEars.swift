@@ -118,10 +118,9 @@ struct NotchEars: View {
 /// The one piece of the HUD that can never collide with anything: a hairline
 /// under the island filling with the session's progress.
 ///
-/// The fill moves once a second, when the timer's tick writes `model.progress`,
-/// and it is tweened linearly over exactly that second (`NotchMotion.tick`): it
-/// lands on the next value as the next value arrives, so the line creeps
-/// continuously instead of stepping. A spring would wobble at this pace.
+/// The fill steps once a second, when the timer's tick writes `model.progress`.
+/// Deliberately not tweened: a 1 s linear tween restarted every tick kept
+/// SwiftUI rendering frames for the whole session, for a sub-point move.
 struct NotchProgressBar: View {
     let progress: Double
     let phase: PomodoroPhase
@@ -147,7 +146,6 @@ struct NotchProgressBar: View {
                 .transition(.opacity)
         }
         .frame(width: width, height: height)
-        .animation(NotchMotion.progressFill(reduceMotion: reduceMotion), value: clamped)
         .animation(NotchMotion.phaseFade(reduceMotion: reduceMotion), value: phase)
     }
 }

@@ -102,16 +102,20 @@ struct FloatingWidgetView: View {
     }
 
     private var timeText: some View {
-        Text(timer.settings.timeFormat.string(max(0, timer.remainingSeconds)))
-            .font(.dsTimer(17 * k))
-            .foregroundStyle(.white)
-            .lineLimit(1)
-            .contentTransition(.numericText())
-            .animation(.snappy(duration: 0.3), value: timer.remainingSeconds)
+        TimerTicking(timer.clock) {
+            Text(timer.settings.timeFormat.string(max(0, timer.remainingSeconds)))
+                .font(.dsTimer(17 * k))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+        }
     }
 
     /// Mini progress ring stroked with the phase gradient; dimmed while idle.
     private var ring: some View {
+        TimerTicking(timer.clock) { ringBody }
+    }
+
+    private var ringBody: some View {
         ZStack {
             Circle().stroke(.white.opacity(0.15), lineWidth: 3.5 * k)
             Circle()
@@ -122,7 +126,6 @@ struct FloatingWidgetView: View {
         }
         .frame(width: 30 * k, height: 30 * k)
         .opacity(timer.isRunning ? 1 : 0.55)
-        .animation(.snappy(duration: 0.3), value: timer.progress)
     }
 
     /// Pomodoro dot row next to the time: the active task's estimate when it

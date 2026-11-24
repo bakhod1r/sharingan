@@ -773,7 +773,8 @@ struct MoveEyePair: View {
     private let spinTurns: Double = 3.0
 
     var body: some View {
-        TimelineView(.animation) { ctx in
+        // 30 fps cap: the break screen is full-screen and rendered at display rate.
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { ctx in
             let t = ctx.date.timeIntervalSinceReferenceDate
             let off = offset(at: t)
             let live = GazeDirection(dx: off.x, dy: off.y)

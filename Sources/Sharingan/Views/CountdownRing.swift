@@ -5,8 +5,6 @@ struct CountdownRing: View {
     var colors: [Color]
     var lineWidth: CGFloat = 18
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     var body: some View {
         GeometryReader { geo in
             let size = min(geo.size.width, geo.size.height)
@@ -24,11 +22,9 @@ struct CountdownRing: View {
                     .rotationEffect(.degrees(-90))
                     .shadow(color: colors.first?.opacity(0.55) ?? .clear,
                             radius: 16, x: 0, y: 0)
-                    // The timer ticks once a second; a 1s linear glide between
-                    // ticks turns the stepping arc into a continuous sweep.
-                    // Skips/resets ride the same glide, which reads as intent.
-                    .animation(reduceMotion ? nil : .linear(duration: 1),
-                               value: progress)
+                    // No per-tick glide: a 1 s linear animation restarted every
+                    // second kept SwiftUI rendering frames for the whole session
+                    // (~15% CPU). One step is 1/1500 of the ring — invisible.
             }
             .frame(width: size, height: size)
             .frame(width: geo.size.width, height: geo.size.height)
