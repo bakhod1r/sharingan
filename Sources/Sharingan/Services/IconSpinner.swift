@@ -1,14 +1,17 @@
 import AppKit
+import SharinganCore
 
-/// Drives the spinning Sharingan: one 12 fps clock advancing a clockwise
-/// angle, shared by the menu bar icon and the Dock icon so the two marks
-/// stay in phase. Idles — timer gone, angle back to 0 — whenever the user
-/// switched the animation off, macOS Reduce Motion is on, or the screens
-/// are asleep; an idle spinner costs nothing.
+/// Drives the menu bar Sharingan's motion: still most of the time, then a
+/// short 12 fps *awakening* — one eased 120° turn (`IconSpinCadence`) — every
+/// few seconds. A continuous 12 fps spin cost 17–40% CPU, because each frame
+/// makes AppKit re-snapshot the status item into the menu bar replicants;
+/// bursts animate only a small slice of each cycle. Idles — timers gone,
+/// angle back to 0 — whenever the user switched the animation off, macOS
+/// Reduce Motion is on, or the screens are asleep; an idle spinner costs
+/// nothing.
 @MainActor
 final class IconSpinner {
-    /// Degrees in [0, 360). 5°/frame at 12 fps = 60°/s: a full turn every
-    /// 6 s, one visible cycle every 2 s (the mark is 3-fold symmetric).
+    /// Degrees in [0, 360), always on the 5° grid.
     private(set) var angle: Double = 0
 
     /// Fires on every animation frame, and once more with (0, false) when
@@ -21,12 +24,18 @@ final class IconSpinner {
         didSet { if oldValue != enabled { sync() } }
     }
 
+    private let cadence: IconSpinCadence
+    /// The 12 fps clock while a burst runs, or the one-shot rest timer
+    /// between bursts — never both.
     private var timer: Timer?
+    private var burstBase: Double = 0
+    private var burstFrame = 0
     private var screensAsleep = false {
         didSet { if oldValue != screensAsleep { sync() } }
     }
 
-    init() {
+    init(cadence: IconSpinCadence = .standard) {
+        self.cadence = cadence
         let ws = NSWorkspace.shared.notificationCenter
         ws.addObserver(forName: NSWorkspace.screensDidSleepNotification,
                        object: nil, queue: .main) { [weak self] _ in
@@ -52,13 +61,7 @@ final class IconSpinner {
 
     private func sync() {
         if shouldSpin, timer == nil {
-            let t = Timer.scheduledTimer(withTimeInterval: 1.0 / 12.0,
-                                         repeats: true) { [weak self] _ in
-                guard let self else { return }
-                Task { @MainActor in self.tick() }
-            }
-            t.tolerance = 0.02
-            timer = t
+            scheduleRest()
         } else if !shouldSpin, let t = timer {
             t.invalidate()
             timer = nil
@@ -67,8 +70,38 @@ final class IconSpinner {
         }
     }
 
+    private func scheduleRest() {
+        let t = Timer.scheduledTimer(withTimeInterval: cadence.restSeconds,
+                                     repeats: false) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in self.startBurst() }
+        }
+        t.tolerance = 0.5
+        timer = t
+    }
+
+    private func startBurst() {
+        guard shouldSpin else { timer = nil; return }
+        burstBase = angle
+        burstFrame = 0
+        let t = Timer.scheduledTimer(withTimeInterval: cadence.frameInterval,
+                                     repeats: true) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in self.tick() }
+        }
+        t.tolerance = 0.02
+        timer = t
+    }
+
     private func tick() {
-        angle = (angle + 5).truncatingRemainder(dividingBy: 360)
+        guard burstFrame < cadence.burstOffsets.count else { return }
+        let offset = cadence.burstOffsets[burstFrame]
+        burstFrame += 1
+        angle = (burstBase + offset).truncatingRemainder(dividingBy: 360)
         onFrame?(angle, true)
+        if burstFrame == cadence.burstOffsets.count {
+            timer?.invalidate()
+            scheduleRest()
+        }
     }
 }
