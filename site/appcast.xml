@@ -6,6 +6,17 @@
     <description>Sharingan updates</description>
     <language>en</language>
     <item>
+      <title>Sharingan 1.14.0</title>
+      <pubDate>Wed, 25 Nov 2026 06:35:24 +0000</pubDate>
+      <sparkle:version>532</sparkle:version>
+      <sparkle:shortVersionString>1.14.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+
+      ]]></description>
+      <enclosure url="https://github.com/bakhod1r/sharingan/releases/download/v1.14.0/Sharingan.dmg" length="19370025" type="application/octet-stream" sparkle:edSignature="1lD+2JMjpGE3uGaNlxYrYkr/mkeB9QdNHBrc0L1e0Rln4XkdQ0xBwSEjdWmsXnJhC6Jxd3oITzKJVrM3T2P6Bw=="/>
+    </item>
+    <item>
       <title>Sharingan 1.13.0</title>
       <pubDate>Tue, 24 Nov 2026 09:42:14 +0000</pubDate>
       <sparkle:version>529</sparkle:version>
