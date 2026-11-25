@@ -641,6 +641,8 @@ struct MoveEyeView: View {
     var emergence: CGFloat = 1
     /// Fractional tomoe stage passed through to the iris (see MoveIrisView).
     var tomoeStage: CGFloat? = nil
+    /// `.original` swaps the Sharingan iris for a black pupil with a small white highlight.
+    var iris: BreakIrisStyle = .sharingan
 
     var body: some View {
         let h = size
@@ -676,21 +678,30 @@ struct MoveEyeView: View {
                     )
                 )
                 ZStack {
-                    Circle()
-                        .fill(
-                            RadialGradient(
-                                colors: [
-                                    Color(red: 0.95, green: 0.68, blue: 0.70).opacity(0.50),
-                                    Color(red: 0.95, green: 0.74, blue: 0.76).opacity(0.0),
-                                ],
-                                center: .center,
-                                startRadius: irisD * 0.44,
-                                endRadius: irisD * 0.88
+                    if iris == .original {
+                        // Black pupil as wide as the Sharingan iris, highlight towards the outer corner.
+                        Circle().fill(Color.black)
+                            .frame(width: irisD, height: irisD)
+                        Circle().fill(Color.white)
+                            .frame(width: irisD * 0.2, height: irisD * 0.2)
+                            .offset(x: (mirrored ? 1 : -1) * irisD * 0.22, y: -irisD * 0.06)
+                    } else {
+                        Circle()
+                            .fill(
+                                RadialGradient(
+                                    colors: [
+                                        Color(red: 0.95, green: 0.68, blue: 0.70).opacity(0.50),
+                                        Color(red: 0.95, green: 0.74, blue: 0.76).opacity(0.0),
+                                    ],
+                                    center: .center,
+                                    startRadius: irisD * 0.44,
+                                    endRadius: irisD * 0.88
+                                )
                             )
-                        )
-                        .frame(width: irisD * 1.6, height: irisD * 1.6)
-                    MoveIrisView(diameter: irisD, spin: spin, style: style,
-                                 emergence: emergence, tomoeStage: tomoeStage)
+                            .frame(width: irisD * 1.6, height: irisD * 1.6)
+                        MoveIrisView(diameter: irisD, spin: spin, style: style,
+                                     emergence: emergence, tomoeStage: tomoeStage)
+                    }
                 }
                 .offset(x: off.x, y: off.y)
             }
@@ -752,6 +763,8 @@ struct MoveEyePair: View {
     /// Continuous ambient rotation: seconds per full turn (0 = off). The
     /// activation whirls layer on top of it.
     var spinSeconds: Double = 0
+    /// Eye drawn inside the almond: the Sharingan iris or the original black pupil.
+    var iris: BreakIrisStyle = .sharingan
 
     private var isPath: Bool {
         direction == "circle_cw" || direction == "circle_ccw" || direction == "figure8"
@@ -784,10 +797,10 @@ struct MoveEyePair: View {
             HStack(spacing: eyeSize * 0.42) {
                 MoveEyeView(gaze: live, spin: s, size: eyeSize,
                             style: pf.left, openness: lid,
-                            emergence: pf.emergence, tomoeStage: pf.tomoeStage)
+                            emergence: pf.emergence, tomoeStage: pf.tomoeStage, iris: iris)
                 MoveEyeView(gaze: live, spin: s, size: eyeSize, mirrored: true,
                             style: pf.right, openness: lid,
-                            emergence: pf.emergence, tomoeStage: pf.tomoeStage)
+                            emergence: pf.emergence, tomoeStage: pf.tomoeStage, iris: iris)
             }
             .animation(isPath ? nil : .easeInOut(duration: 0.5), value: gaze)
         }

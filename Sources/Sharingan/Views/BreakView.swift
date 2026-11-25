@@ -9,6 +9,8 @@ struct BreakView: View {
     /// Force-show the Exit button regardless of the user setting (used by the
     /// Settings "Preview break screen" so the preview can always be closed).
     var forceExit: Bool = false
+    /// Random face/eye draw for this break (nil until the view appears).
+    @State private var randomLook: BreakLook?
     var body: some View {
         TimerTicking(timer.clock) { breakBody }
     }
@@ -38,16 +40,50 @@ struct BreakView: View {
 
                     Spacer()
 
-                    MoveEyePair(direction: validator.currentStep?.direction ?? "center",
-                                gaze: validator.currentStep?.targetGaze ?? .center,
-                                eyeSize: eyeH,
-                                style: timer.settings.sharinganStyle,
-                                rightStyle: timer.settings.sharinganStyleRight,
-                                holdSeconds: validator.currentStep?.holdSeconds ?? 0,
-                                transition: timer.settings.breakPatternTransition,
-                                endDate: Date().addingTimeInterval(remaining),
-                                evolves: timer.settings.breakPatternMixed,
-                                spinSeconds: timer.settings.breakPatternSpinSeconds)
+                    Group {
+                        switch activeLook.face {
+                        case .lookingFor:
+                            LookingForEyePair(direction: validator.currentStep?.direction ?? "center",
+                                              gaze: validator.currentStep?.targetGaze ?? .center,
+                                              eyeSize: eyeH,
+                                              style: activeLook.leftStyle,
+                                              rightStyle: activeLook.rightStyle,
+                                              holdSeconds: validator.currentStep?.holdSeconds ?? 0,
+                                              transition: timer.settings.breakPatternTransition,
+                                              endDate: Date().addingTimeInterval(remaining),
+                                              evolves: timer.settings.breakPatternMixed,
+                                              spinSeconds: timer.settings.breakPatternSpinSeconds,
+                                              iris: activeLook.iris)
+                        case .angry:
+                            AngryEyePair(direction: validator.currentStep?.direction ?? "center",
+                                         gaze: validator.currentStep?.targetGaze ?? .center,
+                                         eyeSize: eyeH,
+                                         style: activeLook.leftStyle,
+                                         rightStyle: activeLook.rightStyle,
+                                         holdSeconds: validator.currentStep?.holdSeconds ?? 0,
+                                         transition: timer.settings.breakPatternTransition,
+                                         endDate: Date().addingTimeInterval(remaining),
+                                         evolves: timer.settings.breakPatternMixed,
+                                         spinSeconds: timer.settings.breakPatternSpinSeconds,
+                                         iris: activeLook.iris)
+                        case .sharingan:
+                            MoveEyePair(direction: validator.currentStep?.direction ?? "center",
+                                        gaze: validator.currentStep?.targetGaze ?? .center,
+                                        eyeSize: eyeH,
+                                        style: activeLook.leftStyle,
+                                        rightStyle: activeLook.rightStyle,
+                                        holdSeconds: validator.currentStep?.holdSeconds ?? 0,
+                                        transition: timer.settings.breakPatternTransition,
+                                        endDate: Date().addingTimeInterval(remaining),
+                                        evolves: timer.settings.breakPatternMixed,
+                                        spinSeconds: timer.settings.breakPatternSpinSeconds,
+                                        iris: activeLook.iris)
+                        }
+                    }
+                    .onAppear { drawRandomLook() }
+                    .onChange(of: validator.currentStep) {
+                        if timer.settings.breakRandomChange == .eachStep { drawRandomEyes() }
+                    }
 
                     Spacer()
 
@@ -101,6 +137,27 @@ struct BreakView: View {
         .onReceive(eyeTracker.$state) { state in
             validator.ingest(gaze: state.gaze, isBlinking: state.isBlinking)
         }
+    }
+
+    /// Fixed mode: exactly the Settings values. Random: this break's draw.
+    private var activeLook: BreakLook {
+        let s = timer.settings
+        if s.breakFaceEyeMode == .random, let randomLook { return randomLook }
+        return BreakFaceEyeRandomizer.fixedLook(s)
+    }
+
+    private func drawRandomLook() {
+        guard timer.settings.breakFaceEyeMode == .random else { randomLook = nil; return }
+        var rng = SystemRandomNumberGenerator()
+        randomLook = BreakFaceEyeRandomizer.look(settings: timer.settings, previous: randomLook, using: &rng)
+    }
+
+    /// `.eachStep`: the face stays for the whole break, only the eyes change.
+    private func drawRandomEyes() {
+        guard timer.settings.breakFaceEyeMode == .random else { return }
+        guard let cur = randomLook else { drawRandomLook(); return }
+        var rng = SystemRandomNumberGenerator()
+        randomLook = BreakFaceEyeRandomizer.eyesOnly(settings: timer.settings, current: cur, using: &rng)
     }
 
     private var showExit: Bool { timer.settings.showExitBreakButton || forceExit }

@@ -202,6 +202,20 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     /// Break ekranida naqshning uzluksiz aylanishi: bir to'la aylanish
     /// davomiyligi soniyada (0 = aylanmaydi).
     public var breakPatternSpinSeconds: Double = 8
+    /// Break ekranidagi ko'z shakli (faqat break ekrani; wallpaper va ikonkalar Sharingan).
+    public var breakEyeShape: BreakEyeShape = .sharingan
+    /// "Looking-for" ko'zi ichidagi iris: Sharingan yoki videodagi original.
+    public var breakIrisStyle: BreakIrisStyle = .sharingan
+    /// Face/ko'z tanlovi: Fixed (yuqoridagi qiymatlar) yoki Random (pool'dan).
+    public var breakFaceEyeMode: BreakFaceEyeMode = .fixed
+    /// Random rejimda yuzlar pool'i.
+    public var breakRandomFaces: [BreakEyeShape] = BreakEyeShape.allCases
+    /// Random rejimda ko'zlar pool'i (Original yoki Sharingan uslubi).
+    public var breakRandomEyes: [BreakEyeChoice] = [.original, .sharingan(.classic), .sharingan(.mangekyou), .sharingan(.rinnegan)]
+    /// Random qachon qayta tanlanadi.
+    public var breakRandomChange: BreakRandomChange = .eachBreak
+    /// Ikkala ko'z bir xilmi yoki alohida.
+    public var breakRandomPairing: BreakRandomPairing = .same
     /// MoveEyes ko'zlarini ish stoli orqa foni (jonli wallpaper) sifatida ko'rsatish.
     public var eyesWallpaperEnabled: Bool = false
     /// Wallpaper rejimida Sharingan qachon aylanadi.
@@ -430,6 +444,19 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
         breakPatternTransition = try c.decodeIfPresent(PatternTransitionSpeed.self, forKey: .breakPatternTransition) ?? d.breakPatternTransition
         breakPatternMixed = try c.decodeIfPresent(Bool.self, forKey: .breakPatternMixed) ?? d.breakPatternMixed
         breakPatternSpinSeconds = try c.decodeIfPresent(Double.self, forKey: .breakPatternSpinSeconds) ?? d.breakPatternSpinSeconds
+        // Unknown raw values (written by a newer build) fall back to the default.
+        breakEyeShape = ((try? c.decodeIfPresent(BreakEyeShape.self, forKey: .breakEyeShape)) ?? nil) ?? d.breakEyeShape
+        breakIrisStyle = ((try? c.decodeIfPresent(BreakIrisStyle.self, forKey: .breakIrisStyle)) ?? nil) ?? d.breakIrisStyle
+        breakFaceEyeMode = ((try? c.decodeIfPresent(BreakFaceEyeMode.self, forKey: .breakFaceEyeMode)) ?? nil) ?? d.breakFaceEyeMode
+        // Pools drop entries this build does not know (written by a newer one).
+        if let raw = (try? c.decodeIfPresent([String].self, forKey: .breakRandomFaces)) ?? nil {
+            breakRandomFaces = raw.compactMap { BreakEyeShape(rawValue: $0) }
+        } else { breakRandomFaces = d.breakRandomFaces }
+        if let raw = (try? c.decodeIfPresent([String].self, forKey: .breakRandomEyes)) ?? nil {
+            breakRandomEyes = raw.compactMap { BreakEyeChoice(token: $0) }
+        } else { breakRandomEyes = d.breakRandomEyes }
+        breakRandomChange = ((try? c.decodeIfPresent(BreakRandomChange.self, forKey: .breakRandomChange)) ?? nil) ?? d.breakRandomChange
+        breakRandomPairing = ((try? c.decodeIfPresent(BreakRandomPairing.self, forKey: .breakRandomPairing)) ?? nil) ?? d.breakRandomPairing
         eyesWallpaperEnabled = try c.decodeIfPresent(Bool.self, forKey: .eyesWallpaperEnabled) ?? d.eyesWallpaperEnabled
         wallpaperSpinTrigger = try c.decodeIfPresent(WallpaperSpinTrigger.self, forKey: .wallpaperSpinTrigger) ?? d.wallpaperSpinTrigger
         wallpaperSpinDuration = try c.decodeIfPresent(Double.self, forKey: .wallpaperSpinDuration) ?? d.wallpaperSpinDuration

@@ -645,36 +645,8 @@ struct SettingsView: View {
                 }
 
         case .sharingan:
-                Section("Iris style") {
-                    HStack {
-                        Spacer()
-                        MoveEyePair(direction: "center", gaze: .center,
-                                    eyeSize: 54, style: settings.sharinganStyle,
-                                    rightStyle: settings.sharinganStyleRight,
-                                    evolves: false)
-                        Spacer()
-                    }
-                    .padding(.vertical, 6)
-
-                    HStack {
-                        Text(settings.sharinganStyleRight == nil ? "Sharingan eye"
-                                                                 : "Left eye")
-                            .font(.system(.body, design: .rounded))
-                        Spacer()
-                        SpinningIrisSwatch(style: settings.sharinganStyle)
-                        Picker("", selection: $settings.sharinganStyle) {
-                            ForEach(SharinganStyle.allCases) { s in
-                                Text(s.label).tag(s)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .glassMenu()
-                        .fixedSize()
-                    }
-                    Text("Used everywhere the mark appears: break screen, desktop wallpaper, the menu-bar icon and the Dock icon.")
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.65))
+                Section("Face and eye") {
+                    FaceEyeSettingsSection(settings: $settings)
                 }
 
                 Section("Break screen") {
