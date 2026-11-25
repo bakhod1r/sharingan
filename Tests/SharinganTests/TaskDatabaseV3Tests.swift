@@ -297,6 +297,18 @@ struct TaskDatabaseV3Tests {
         #expect(loaded.allowedApps == task.allowedApps)
     }
 
+    @Test func attentionGuardRoundTrip() throws {
+        let path = try freshPath()
+        var task = TaskItem(title: "Focus", category: "Work")
+        task.attentionGuard = true
+        do {
+            let db = try #require(TaskDatabase(path: path))
+            db.saveCategories([TaskCategory(name: "Work", colorHex: "#4F8DFD")])
+            db.saveTasks([task])
+        }
+        #expect(try #require(reloadTasks(path).first).attentionGuard)
+    }
+
     @Test func allowedAppsEditPersists() throws {
         let path = try freshPath()
         var task = TaskItem(title: "Focus", category: "Work")

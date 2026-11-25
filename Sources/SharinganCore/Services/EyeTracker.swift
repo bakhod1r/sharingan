@@ -53,10 +53,15 @@ public struct EyeState: Equatable, Sendable {
     public var blinkCountTotal: Int
     public var gaze: GazeDirection
     public var faceDetected: Bool
+    /// Head pose in degrees (0 = facing the camera). Zero when no face.
+    public var yaw: Double
+    public var pitch: Double
 
     public init(left: Double, right: Double, blinking: Bool, total: Int,
                 gaze: GazeDirection = .center, faceDetected: Bool = true,
-                blinkRate: Double = 0) {
+                blinkRate: Double = 0, yaw: Double = 0, pitch: Double = 0) {
+        self.yaw = yaw
+        self.pitch = pitch
         self.leftEyeOpenRatio = left
         self.rightEyeOpenRatio = right
         self.isBlinking = blinking
@@ -69,6 +74,12 @@ public struct EyeState: Equatable, Sendable {
     public var averageOpenRatio: Double { (leftEyeOpenRatio + rightEyeOpenRatio) / 2 }
     /// Blinks counted in the trailing 60 s window (== blinks/min).
     public var blinkRatePerMinute: Double
+}
+
+/// Who is holding the camera. The camera runs while at least one owner holds
+/// a lease, so a break ending can't kill focus tracking (and vice versa).
+public enum CameraOwner: Hashable, Sendable {
+    case breakExercise, focusAttention, calibration
 }
 
 @MainActor
@@ -84,6 +95,23 @@ public final class EyeTracker: ObservableObject {
     public var blinkThreshold: Double = 0.20
     public var underBlinkRateThreshold: Double = 8.0 // blinks/min
     public var gazeTolerance: Double = 0.35
+    /// Frames arriving sooner than this after the last analyzed one are skipped
+    /// (cheap check, before any Vision work). 0 = analyze every frame.
+    public var minFrameInterval: TimeInterval {
+        get { gate.interval }
+        set { gate.interval = newValue }
+    }
+    /// Lock-guarded copy of `minFrameInterval` the detached loop reads WITHOUT
+    /// hopping to the main actor — skipped frames used to cost two main-actor
+    /// round trips each (~30/s), just to be dropped.
+    private nonisolated let gate = FrameGate()
+    private var owners: Set<CameraOwner> = []
+    /// Analyze cadence while only the focus guard watches: one Vision pass
+    /// per second. Slightly under 1 s so capture jitter never skips a beat.
+    static let focusFrameInterval: TimeInterval = 0.9
+    /// Camera capture rate while only the focus guard watches (clamped up to
+    /// the device's minimum). "Looked away for 2 s" needs ~1 frame/s, not 30.
+    static let focusCaptureFPS: Double = 2
 
     /// Previous frame's blink state — a blink is counted once on the open→closed
     /// edge, not repeatedly while the eyes stay shut.
@@ -95,6 +123,36 @@ public final class EyeTracker: ObservableObject {
 
     public init() {}
 
+    /// Take a camera lease. The first owner starts the camera + detection.
+    public func acquire(_ owner: CameraOwner) {
+        owners.insert(owner)
+        updateFrameInterval()
+        if owners.count == 1 {
+            CameraService.shared.start()
+            start()
+        }
+    }
+
+    /// Drop a lease. The last owner out stops detection and the camera.
+    public func release(_ owner: CameraOwner) {
+        guard owners.remove(owner) != nil else { return }
+        updateFrameInterval()
+        if owners.isEmpty {
+            stop()
+            CameraService.shared.stop()
+        }
+    }
+
+    private func updateFrameInterval() {
+        // Break exercises and calibration need responsive gaze; the focus guard
+        // alone checks once per second (keeps CPU near idle).
+        let needsFast = owners.contains(.breakExercise) || owners.contains(.calibration)
+        minFrameInterval = needsFast ? 0 : Self.focusFrameInterval
+        // Capture fewer frames too: analyze-side skipping alone still paid
+        // for 30 fps capture + BGRA conversion (~40% CPU measured).
+        CameraService.shared.setMaxFrameRate(needsFast ? nil : Self.focusCaptureFPS)
+    }
+
     public func start() {
         guard !isDetecting else { return }
         isDetecting = true
@@ -105,11 +163,20 @@ public final class EyeTracker: ObservableObject {
         // core. Only the small Sendable per-frame summary hops back to main.
         trackingTask = Task.detached(priority: .utility) { [weak self] in
             let handler = VNSequenceRequestHandler()
+            var lastAnalyzed = Date.distantPast
+            guard let gate = self?.gate else { return }
             for await buffer in stream {
-                guard let self else { return }
-                guard await self.isDetecting else { return }
+                // stop() cancels this task; no main-actor hop needed to notice.
+                if Task.isCancelled { return }
+                let interval = gate.interval
+                if interval > 0 {
+                    let now = Date()
+                    if now.timeIntervalSince(lastAnalyzed) < interval { continue }
+                    lastAnalyzed = now
+                }
                 let sample = Self.analyze(buffer, handler: handler,
                                           orientation: orientation)
+                guard let self else { return }
                 await self.apply(sample)
             }
         }
@@ -133,13 +200,24 @@ public final class EyeTracker: ObservableObject {
         var right: Double = 0
         var gaze: GazeDirection = .center
         var bounds: CGRect = .null
+        var yaw: Double = 0
+        var pitch: Double = 0
     }
 
     private nonisolated static func analyze(_ buffer: CVImageBuffer,
                                             handler: VNSequenceRequestHandler,
                                             orientation: CGImagePropertyOrientation) -> FrameSample {
+        // Rectangles first (revision 3 carries head yaw/pitch), then landmarks
+        // on those same faces — one detection pass, not two.
+        let rects = VNDetectFaceRectanglesRequest()
+        rects.revision = VNDetectFaceRectanglesRequestRevision3
+        try? handler.perform([rects], on: buffer, orientation: orientation)
+        guard let face = rects.results?.first else {
+            return FrameSample(faceDetected: false)
+        }
         let request = VNDetectFaceLandmarksRequest()
         request.revision = VNDetectFaceLandmarksRequestRevision2
+        request.inputFaceObservations = [face]
         try? handler.perform([request], on: buffer, orientation: orientation)
         // `results` holds VNFaceObservation — the landmarks hang off it. (The
         // old code cast the observation itself to VNFaceLandmarks2D, which
@@ -147,11 +225,14 @@ public final class EyeTracker: ObservableObject {
         guard let lm = request.results?.first?.landmarks else {
             return FrameSample(faceDetected: false)
         }
+        let radToDeg = 180.0 / Double.pi
         return FrameSample(faceDetected: true,
                            left: openRatio(for: lm.leftEye),
                            right: openRatio(for: lm.rightEye),
                            gaze: gazeDirection(lm),
-                           bounds: boundsFromLandmarks(lm))
+                           bounds: boundsFromLandmarks(lm),
+                           yaw: (face.yaw?.doubleValue ?? 0) * radToDeg,
+                           pitch: (face.pitch?.doubleValue ?? 0) * radToDeg)
     }
 
     private func apply(_ sample: FrameSample) {
@@ -184,7 +265,7 @@ public final class EyeTracker: ObservableObject {
         lastGazeDirection = sample.gaze
         state = EyeState(left: sample.left, right: sample.right, blinking: blinking,
                          total: total, gaze: sample.gaze, faceDetected: true,
-                         blinkRate: rate)
+                         blinkRate: rate, yaw: sample.yaw, pitch: sample.pitch)
     }
 
     private nonisolated static func boundsFromLandmarks(_ lm: VNFaceLandmarks2D) -> CGRect {
@@ -269,5 +350,16 @@ public final class EyeTracker: ObservableObject {
     private func windowedBlinkRate(now: Date = Date()) -> Double {
         binksInWindow = binksInWindow.filter { now.timeIntervalSince($0) < 60 }
         return Double(binksInWindow.count)
+    }
+}
+
+/// Thread-safe holder for the analyze throttle, shared between the main actor
+/// (writer) and the detached Vision loop (reader).
+private final class FrameGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _interval: TimeInterval = 0
+    var interval: TimeInterval {
+        get { lock.lock(); defer { lock.unlock() }; return _interval }
+        set { lock.lock(); _interval = newValue; lock.unlock() }
     }
 }

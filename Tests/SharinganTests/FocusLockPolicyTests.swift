@@ -88,4 +88,16 @@ struct FocusLockPolicyTests {
         let decoded = try JSONDecoder().decode(TaskItem.self, from: stripped)
         #expect(decoded.allowedApps == [])
     }
+
+    @Test func attentionGuardDefaultsFalseAndDecodesLegacy() throws {
+        #expect(TaskItem(title: "x").attentionGuard == false)
+        let data = try JSONEncoder().encode(TaskItem(title: "x"))
+        var obj = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        obj.removeValue(forKey: "attentionGuard")
+        let decoded = try JSONDecoder().decode(TaskItem.self, from: try JSONSerialization.data(withJSONObject: obj))
+        #expect(decoded.attentionGuard == false)
+        var on = TaskItem(title: "y"); on.attentionGuard = true
+        let back = try JSONDecoder().decode(TaskItem.self, from: try JSONEncoder().encode(on))
+        #expect(back.attentionGuard)
+    }
 }

@@ -293,6 +293,9 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
     public var boardColumnID: String?
     /// Apps allowed during a focus session on this task; others trigger the focus lock.
     public var allowedApps: [BlockedApp] = []
+    /// Guard this task's focus sessions with the attention guard (camera), even
+    /// when the global "Always guard" setting is off. Local + synced.
+    public var attentionGuard: Bool = false
     /// Habit configuration (nil = ordinary task). Local only: not in the sync
     /// payload, and a remote merge preserves the local value.
     public var habit: TaskHabit?
@@ -340,6 +343,7 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
                 originDevice: String = DeviceIdentity.name,
                 number: Int = 0,
                 allowedApps: [BlockedApp] = [],
+                attentionGuard: Bool = false,
                 habit: TaskHabit? = nil) {
         self.id = id
         self.title = title
@@ -369,6 +373,7 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         self.originDevice = originDevice
         self.number = number
         self.allowedApps = allowedApps
+        self.attentionGuard = attentionGuard
         self.habit = habit
     }
 
@@ -404,6 +409,7 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         jiraIssueType = try c.decodeIfPresent(String.self, forKey: .jiraIssueType)
         boardColumnID = try c.decodeIfPresent(String.self, forKey: .boardColumnID)
         allowedApps = try c.decodeIfPresent([BlockedApp].self, forKey: .allowedApps) ?? []
+        attentionGuard = try c.decodeIfPresent(Bool.self, forKey: .attentionGuard) ?? false
         habit = try? c.decodeIfPresent(TaskHabit.self, forKey: .habit)
         trashedAt = try c.decodeIfPresent(Date.self, forKey: .trashedAt)
         // Older records predate origin tracking — attribute them to this Mac.

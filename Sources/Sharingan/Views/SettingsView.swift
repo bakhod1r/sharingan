@@ -20,6 +20,7 @@ struct SettingsView: View {
     }
 
     @ObservedObject private var dndService = DNDShortcutService.shared
+    @ObservedObject private var camera = CameraService.shared
     @ObservedObject private var router = AppRouter.shared
     @State private var editingInstructionDirection: String?
     @State private var openCategory: SettingsCategory?
@@ -46,6 +47,64 @@ struct SettingsView: View {
     @State private var showBlockAppPicker = false
     /// Brief "Copied!" feedback after the template copy button.
     @State private var templateCopied = false
+
+    /// Sensitivity / grace / sound / calibration for the focus attention guard.
+    @ViewBuilder private var attentionGuardOptions: some View {
+        HStack {
+            Text("Sensitivity")
+                .font(.system(.body, design: .rounded))
+            Spacer()
+            Picker("", selection: $settings.focusAttentionSensitivity) {
+                ForEach(AttentionSensitivity.allCases, id: \.self) { Text($0.label).tag($0) }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .glassMenu()
+            .fixedSize()
+        }
+        HStack {
+            Text("Look-away grace")
+                .font(.system(.body, design: .rounded))
+            Spacer()
+            Picker("", selection: $settings.focusAttentionGrace) {
+                ForEach([1.0, 2.0, 4.0, 8.0], id: \.self) { Text("\(Int($0)) s").tag($0) }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .glassMenu()
+            .fixedSize()
+        }
+        ToggleRow(title: "Alert sound", isOn: $settings.focusAttentionSound)
+        HStack {
+            Button("Calibrate…") {
+                let t = timer
+                AttentionCalibrationWindowManager.shared.run { cal in
+                    if let cal { t.settings.attentionCalibration = cal }
+                }
+            }
+            .buttonStyle(.bordered)
+            Text(settings.attentionCalibration.map {
+                "Calibrated \($0.createdAt.formatted(date: .abbreviated, time: .shortened))"
+            } ?? "Not calibrated")
+                .font(.system(.caption, design: .rounded))
+                .foregroundStyle(.white.opacity(0.65))
+        }
+        if camera.permissionStatus == .denied || camera.permissionStatus == .restricted {
+            HStack {
+                Label("Camera access is off — the guard can't watch.",
+                      systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(.orange)
+                Spacer()
+                Button("Open System Settings") {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+    }
 
     var body: some View {
         ZStack {
@@ -637,10 +696,18 @@ struct SettingsView: View {
                     ToggleRow(title: "Eye tracking via camera",
                               isOn: $settings.cameraEyeTrackingEnabled)
                     if settings.cameraEyeTrackingEnabled {
-                        Text("Works during breaks only. Alerts when blink rate is low.")
+                        Text("Break exercises: alerts when blink rate is low.")
                             .font(.system(.caption, design: .rounded))
                             .foregroundStyle(.white.opacity(0.65))
                     }
+
+                    ToggleRow(title: "Always guard",
+                              isOn: $settings.focusAttentionEnabled)
+                    Text("Every focus session. Off = only tasks with Attention guard on.")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.65))
+                    // Always visible: per-task guards use these options too.
+                    attentionGuardOptions
                 }
 
         case .sharingan:

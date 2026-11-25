@@ -37,6 +37,10 @@ public final class CameraService: NSObject, ObservableObject {
     private let sink = FrameSink()
     private var framePipe: AsyncStream<CVImageBuffer>?
     private var configured = false
+    private var device: AVCaptureDevice?
+    /// Capture-rate cap (fps); nil = device default (~30). Applied on the
+    /// session queue whenever the session (re)starts or the cap changes.
+    private var maxFrameRate: Double?
 
     /// The caller-intended state. `isRunning` only flips true via an async
     /// session-queue hop, so a stop() landing inside that window used to no-op
@@ -84,6 +88,9 @@ public final class CameraService: NSObject, ObservableObject {
                 self.isRunning = self.wantsRunning && session.isRunning
             }
         }
+        // startRunning can reset the device's frame duration — re-apply the
+        // cap behind it on the same serial queue.
+        applyFrameRate()
     }
 
     public func stop() {
@@ -100,6 +107,36 @@ public final class CameraService: NSObject, ObservableObject {
             DispatchQueue.main.async { [weak self] in
                 guard let self, !self.wantsRunning else { return }
                 self.isRunning = false
+            }
+        }
+    }
+
+    /// Cap the capture frame rate. Fewer captured frames = less ISP/BGRA work,
+    /// which the analyze-side throttle alone can't save (the focus guard only
+    /// needs a handful of frames per second). nil restores the default.
+    public func setMaxFrameRate(_ fps: Double?) {
+        guard maxFrameRate != fps else { return }
+        maxFrameRate = fps
+        applyFrameRate()
+    }
+
+    private func applyFrameRate() {
+        guard let device else { return }
+        let fps = maxFrameRate
+        sessionQueue.async {
+            guard (try? device.lockForConfiguration()) != nil else { return }
+            defer { device.unlockForConfiguration() }
+            if let fps,
+               let range = device.activeFormat.videoSupportedFrameRateRanges.first {
+                // Clamp into what the format supports instead of silently
+                // falling back to the full 30 fps default.
+                let clamped = min(max(fps, range.minFrameRate), range.maxFrameRate)
+                let d = CMTime(value: 1000, timescale: CMTimeScale((clamped * 1000).rounded()))
+                device.activeVideoMinFrameDuration = d
+                device.activeVideoMaxFrameDuration = d
+            } else {
+                device.activeVideoMinFrameDuration = .invalid
+                device.activeVideoMaxFrameDuration = .invalid
             }
         }
     }
@@ -130,13 +167,16 @@ public final class CameraService: NSObject, ObservableObject {
            let input = try? AVCaptureDeviceInput(device: device),
            session.canAddInput(input) {
             session.addInput(input)
+            self.device = device
         }
 
         videoOutput.setSampleBufferDelegate(self, queue: sessionQueue)
         videoOutput.alwaysDiscardsLateVideoFrames = true
         videoOutput.videoSettings = [
             kCVPixelBufferPixelFormatTypeKey as String:
-                kCVPixelFormatType_32BGRA
+                // Native bi-planar YUV: Vision reads it directly, so the
+                // per-frame BGRA conversion the old format forced is gone.
+                kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
         ]
         if session.canAddOutput(videoOutput) { session.addOutput(videoOutput) }
 

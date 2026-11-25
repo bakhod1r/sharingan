@@ -108,6 +108,10 @@ struct FloatingWidgetView: View {
                 .foregroundStyle(.white)
                 .lineLimit(1)
         }
+        // Overlay, not a sibling: the dot appearing/vanishing never reflows the pill.
+        .overlay(alignment: .topTrailing) {
+            AttentionDot(size: max(6, 7 * k)).offset(x: 6 * k, y: -2 * k)
+        }
     }
 
     /// Mini progress ring stroked with the phase gradient; dimmed while idle.

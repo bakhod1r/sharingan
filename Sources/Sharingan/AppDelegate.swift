@@ -602,6 +602,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         coord.breakPresenter = BreakWindowManager.shared
         FocusLockWindowManager.shared.onStopSession = { [weak timer] in timer?.stop() }
         FocusLockService.shared.presenter = FocusLockWindowManager.shared
+        FocusAttentionService.shared.presenter = AttentionAlertWindowManager.shared
         coord.todayPanelController = TodayPanelWindowManager.shared
         coord.floatingWidgetController = FloatingWidgetWindowManager.shared
         coord.quickAddController = QuickAddWindowManager.shared

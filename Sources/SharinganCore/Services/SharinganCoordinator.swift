@@ -42,6 +42,7 @@ public final class SharinganCoordinator: ObservableObject {
     private let taskStore: TaskStore
     private let focusLock: FocusLockService
     private let appBlocker: AppBlockerService
+    private let focusAttention: FocusAttentionService
     private var cliObservers: [String: Any] = [:]
     private var snapshotCancellable: AnyCancellable?
 
@@ -64,15 +65,24 @@ public final class SharinganCoordinator: ObservableObject {
     public init(timer: PomodoroTimer, focusQueue: FocusQueue? = nil,
                 taskStore: TaskStore? = nil,
                 focusLock: FocusLockService? = nil,
-                appBlocker: AppBlockerService? = nil) {
+                appBlocker: AppBlockerService? = nil,
+                focusAttention: FocusAttentionService? = nil) {
         self.timer = timer
         self.taskStore = taskStore ?? TaskStore.shared
         self.focusLock = focusLock ?? FocusLockService.shared
         self.appBlocker = appBlocker ?? AppBlockerService.shared
+        self.focusAttention = focusAttention ?? FocusAttentionService.shared
         self.focusQueue = focusQueue ?? FocusQueue()
         // Prime the reward baseline from the already-earned streak so restarting
         // the app doesn't re-announce milestones the user passed days ago.
         StreakRewardCenter.shared.prime(streak: timer.combinedStats.streak.currentStreak)
+        let store = self.taskStore
+        self.focusAttention.pauseTimer = { [weak timer] in timer?.pause() }
+        self.focusAttention.resumeTimer = { [weak timer] in
+            guard let timer, timer.phase == .paused, timer.effectivePhase == .focus else { return }
+            timer.start()
+        }
+        self.focusAttention.taskTitle = { store.activeTask?.title }
         observe()
         checkBurnout()
     }
@@ -178,12 +188,11 @@ public final class SharinganCoordinator: ObservableObject {
     }
 
     public func syncCamera() {
-        // The camera runs ONLY during a break (started/stopped by BreakView), never
-        // during focus. So we don't start anything here — we only tear it down if
-        // the feature was switched off while a break happens to be active.
+        // Break exercises lease the camera (BreakWindowManager); the focus
+        // attention guard holds its own lease. We only drop the BREAK lease if the
+        // feature was switched off mid-break — the guard's lease is untouched.
         guard !timer.settings.cameraEyeTrackingEnabled else { return }
-        EyeTracker.shared.stop()
-        CameraService.shared.stop()
+        EyeTracker.shared.release(.breakExercise)
     }
 
     /// Like the Floating widget, the today panel is not tied to a running
@@ -442,15 +451,6 @@ public final class SharinganCoordinator: ObservableObject {
         publishSnapshot()
     }
 
-    private func cliAdjust(payload: String?, negative: Bool) {
-        if let delta = Self.cliAdjustment(payload: payload, negative: negative) {
-            timer.addTime(delta)
-        }
-        publishSnapshot()
-    }
-
-    /// Signed seconds for `tired add|remove <payload>`; nil when unparseable.
-    /// `5m` (no sign) parses as `.setDuration` — the verb carries the direction.
     /// `tired start <input>` runs the timer for absolute inputs (duration or
     /// clock time); relative add/remove keep the current run state.
     public static func cliStartShouldRun(_ kind: ParsedTimerInput.Kind) -> Bool {
@@ -460,6 +460,15 @@ public final class SharinganCoordinator: ObservableObject {
         }
     }
 
+    private func cliAdjust(payload: String?, negative: Bool) {
+        if let delta = Self.cliAdjustment(payload: payload, negative: negative) {
+            timer.addTime(delta)
+        }
+        publishSnapshot()
+    }
+
+    /// Signed seconds for `tired add|remove <payload>`; nil when unparseable.
+    /// `5m` (no sign) parses as `.setDuration` — the verb carries the direction.
     static func cliAdjustment(payload: String?, negative: Bool) -> TimeInterval? {
         let p = payload ?? "5m"
         let parsed = NaturalLanguageParser.parse(p)
@@ -529,7 +538,15 @@ public final class SharinganCoordinator: ObservableObject {
                 else { return }
                 // Which Mac ran this session, so analytics can slice per machine.
                 record.deviceName = Host.current().localizedName
+                // Always drain, so a break/abandoned session can't leak stats
+                // into the next focus session.
+                let guardRan = self?.focusAttention.wasEngagedThisSession ?? false
+                let away = self?.focusAttention.takeSessionStats()
                 if record.phase == .focus {
+                    if guardRan, let away {
+                        record.attentionAwayEvents = away.events
+                        record.attentionAwaySeconds = away.seconds
+                    }
                     if let taskID = TaskStore.shared.activeTaskID {
                         record.taskID = taskID
                         record.subtaskID = TaskStore.shared.activeSubtaskID
@@ -588,6 +605,7 @@ public final class SharinganCoordinator: ObservableObject {
                 // a focus session releases them, resuming re-blocks.
                 // Release the focus lock before a break overlay presents.
                 self.refreshFocusLock()
+                self.refreshFocusAttention()
                 self.refreshAppBlocker()
                 self.reconcileBreakSideEffects()
                 self.focusLock.recheck()
@@ -615,6 +633,7 @@ public final class SharinganCoordinator: ObservableObject {
             .sink { [weak self] id in
                 if id != nil { self?.needsTaskPick = false }
                 self?.refreshFocusLock()
+                self?.refreshFocusAttention()
                 self?.refreshAppBlocker()
             }
             .store(in: &cancellables)
@@ -627,6 +646,9 @@ public final class SharinganCoordinator: ObservableObject {
             .sink { [weak self] _ in
                 guard let self else { return }
                 self.refreshFocusLock()
+                if (self.taskStore.activeTask?.attentionGuard == true) != self.lastTaskGuard {
+                    self.refreshFocusAttention()
+                }
                 if self.currentExemptions() != appBlocker.exemptBundleIDs {
                     self.refreshAppBlocker()
                 }
@@ -638,6 +660,7 @@ public final class SharinganCoordinator: ObservableObject {
             .sink { [weak self] _ in
                 self?.publishSnapshot()
                 self?.refreshFocusLock()
+                self?.refreshFocusAttention()
                 self?.refreshAppBlocker()
                 // The overlay follows break STATE, not just the applyRemoteTimer
                 // edge: a skip/complete jumps focus↔break with no
@@ -684,6 +707,11 @@ public final class SharinganCoordinator: ObservableObject {
         if old.globalShortcutsEnabled != new.globalShortcutsEnabled
             || old.shortcutBindings != new.shortcutBindings { installShortcuts() }
         if old.cameraEyeTrackingEnabled != new.cameraEyeTrackingEnabled { syncCamera() }
+        if old.focusAttentionEnabled != new.focusAttentionEnabled
+            || old.focusAttentionSensitivity != new.focusAttentionSensitivity
+            || old.focusAttentionGrace != new.focusAttentionGrace
+            || old.focusAttentionSound != new.focusAttentionSound
+            || old.attentionCalibration != new.attentionCalibration { refreshFocusAttention() }
         if old.showTodayPanel != new.showTodayPanel { syncTodayPanel() }
         if old.dockWidgetEnabled != new.dockWidgetEnabled
             || old.dockWidgetSize != new.dockWidgetSize
@@ -714,6 +742,7 @@ public final class SharinganCoordinator: ObservableObject {
         syncAlarm()
         installShortcuts()
         syncCamera()
+        refreshFocusAttention()
         syncTodayPanel()
         syncFloatingWidget()
         refreshAppBlocker()
@@ -790,6 +819,42 @@ public final class SharinganCoordinator: ObservableObject {
             focusLock.engage(lock)
         } else {
             focusLock.release()
+        }
+    }
+
+    /// Engage the attention guard while a focus session runs (or while the
+    /// guard itself holds the timer paused — otherwise its own pause would
+    /// release tracking and the timer could never resume), else release it.
+    /// Sinks read the FINAL timer state (`.receive(on: main)`): a stop (phase →
+    /// .focus, not running) or a skip (→ break) therefore releases, a guard
+    /// pause does not.
+    /// Last active-task guard flag seen by `refreshFocusAttention`, so the
+    /// `$tasks` sink only re-evaluates when that flag actually flips.
+    private var lastTaskGuard = false
+
+    func refreshFocusAttention() {
+        let s = timer.settings
+        let running = timer.isRunning && timer.phase == .focus
+        let guardPaused = focusAttention.pausedByGuard
+            && timer.phase == .paused && timer.effectivePhase == .focus
+        let guardWanted = s.focusAttentionEnabled || taskStore.activeTask?.attentionGuard == true
+        lastTaskGuard = taskStore.activeTask?.attentionGuard == true
+        if guardWanted && (running || guardPaused) {
+            // Running again while the guard thinks it paused = manual resume.
+            if timer.isRunning && focusAttention.pausedByGuard { focusAttention.userResumed() }
+            focusAttention.soundEnabled = s.focusAttentionSound
+            focusAttention.engage(policy: AttentionPolicy(
+                grace: s.focusAttentionGrace,
+                sensitivity: s.focusAttentionSensitivity,
+                calibration: s.attentionCalibration,
+                // The guard samples at 1 Hz (EyeTracker.focusFrameInterval).
+                smoothingWindow: 3))
+        } else {
+            // Switching the guard off while it holds the timer must not strand
+            // the session paused; stop/skip leave the timer alone.
+            let strandedByOff = !guardWanted && guardPaused
+            focusAttention.release()
+            if strandedByOff { focusAttention.resumeTimer() }
         }
     }
 
@@ -975,10 +1040,10 @@ public final class SharinganCoordinator: ObservableObject {
         BreakAmbienceService.shared.stop()
         restoreBrightness()
         refreshAppBlocker()
-        // Belt-and-suspenders: BreakView.onDisappear stops the camera, but make
-        // sure it's released even if the break was dismissed some other way.
-        EyeTracker.shared.stop()
-        CameraService.shared.stop()
+        // Belt-and-suspenders: the break window releases its camera lease, but
+        // make sure it's dropped even if the break was dismissed some other way.
+        // Only the break lease — focus attention may still own the camera.
+        EyeTracker.shared.release(.breakExercise)
         ReminderService.shared.resumeForFocus()
     }
 

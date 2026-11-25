@@ -99,8 +99,12 @@ public enum SettingsSync {
             ?? Set(syncedKeys)
         var changed = false
         for key in keys {
-            if let value = kv.object(forKey: key),
-               !(value as AnyObject).isEqual(defaults.object(forKey: key)) {
+            if var value = kv.object(forKey: key) {
+                if key == PomodoroSettings.defaultsKey, let remote = value as? Data {
+                    value = keepingLocalCalibration(remote: remote,
+                                                    local: defaults.data(forKey: key))
+                }
+                guard !(value as AnyObject).isEqual(defaults.object(forKey: key)) else { continue }
                 defaults.set(value, forKey: key)
                 changed = true
             }
@@ -116,6 +120,18 @@ public enum SettingsSync {
             NotificationCenter.default.post(name: didApplyRemoteNotification,
                                             object: nil)
         }
+    }
+
+    /// The attention calibration is per-Mac (it encodes where THIS camera sits
+    /// relative to the screen), so a remote settings blob never replaces it.
+    static func keepingLocalCalibration(remote: Data, local: Data?) -> Data {
+        let localCal = local
+            .flatMap { try? JSONDecoder().decode(PomodoroSettings.self, from: $0) }?
+            .attentionCalibration
+        guard var settings = try? JSONDecoder().decode(PomodoroSettings.self, from: remote),
+              settings.attentionCalibration != localCal else { return remote }
+        settings.attentionCalibration = localCal
+        return (try? JSONEncoder().encode(settings)) ?? remote
     }
 
     private static var observer: NSObjectProtocol?

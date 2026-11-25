@@ -257,6 +257,19 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     /// fall back to each shortcut's default combo.
     public var shortcutBindings: [String: ShortcutBinding] = [:]
     public var cameraEyeTrackingEnabled: Bool = false
+    /// Focus attention guard: while a focus session runs, the camera watches
+    /// head pose + gaze; looking away past `focusAttentionGrace` tints the
+    /// screen red and pauses the timer until the user looks back.
+    /// "Always guard": guard every focus session. Off = only tasks with
+    /// `attentionGuard` on. (JSON key kept for backward compatibility.)
+    public var focusAttentionEnabled: Bool = false
+    public var focusAttentionSensitivity: AttentionSensitivity = .medium
+    /// Seconds of continuous looking away before the alert (1/2/4/8 in the UI).
+    public var focusAttentionGrace: Double = 2
+    public var focusAttentionSound: Bool = false
+    /// The user's measured "looking at the screen" envelope. Per-Mac (camera
+    /// position) — SettingsSync keeps the local value when applying a remote blob.
+    public var attentionCalibration: AttentionCalibration? = nil
     /// Kamera harakatni tasdiqlamaguncha mashq keyingi qadamga o'tmaydi
     /// (grace-period avto-o'tish o'chadi). Faqat kamera kuzatuvi yoqilgan va
     /// ruxsat berilgan bo'lsa kuchga kiradi.
@@ -485,6 +498,11 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
         globalShortcutsEnabled = try c.decodeIfPresent(Bool.self, forKey: .globalShortcutsEnabled) ?? d.globalShortcutsEnabled
         shortcutBindings = try c.decodeIfPresent([String: ShortcutBinding].self, forKey: .shortcutBindings) ?? d.shortcutBindings
         cameraEyeTrackingEnabled = try c.decodeIfPresent(Bool.self, forKey: .cameraEyeTrackingEnabled) ?? d.cameraEyeTrackingEnabled
+        focusAttentionEnabled = try c.decodeIfPresent(Bool.self, forKey: .focusAttentionEnabled) ?? d.focusAttentionEnabled
+        focusAttentionSensitivity = ((try? c.decodeIfPresent(AttentionSensitivity.self, forKey: .focusAttentionSensitivity)) ?? nil) ?? d.focusAttentionSensitivity
+        focusAttentionGrace = try c.decodeIfPresent(Double.self, forKey: .focusAttentionGrace) ?? d.focusAttentionGrace
+        focusAttentionSound = try c.decodeIfPresent(Bool.self, forKey: .focusAttentionSound) ?? d.focusAttentionSound
+        attentionCalibration = try? c.decodeIfPresent(AttentionCalibration.self, forKey: .attentionCalibration)
         strictExerciseValidation = try c.decodeIfPresent(Bool.self, forKey: .strictExerciseValidation) ?? d.strictExerciseValidation
         alarmSound = try c.decodeIfPresent(String.self, forKey: .alarmSound) ?? d.alarmSound
         alarmSoundEnabled = try c.decodeIfPresent(Bool.self, forKey: .alarmSoundEnabled) ?? d.alarmSoundEnabled

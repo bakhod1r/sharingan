@@ -26,6 +26,10 @@ public struct SessionRecord: Codable, Equatable, Sendable, Identifiable {
     /// Stable per-install id (`DeviceIdentity.current`) of the Mac that ran this
     /// session. nil for records written before sync of the session log.
     public var deviceID: String?
+    /// Focus Attention Guard: times the user looked away (alert fired) and
+    /// total seconds spent alerting. nil when the guard wasn't used.
+    public var attentionAwayEvents: Int?
+    public var attentionAwaySeconds: Double?
 
     public var seconds: TimeInterval { end.timeIntervalSince(start) }
 
@@ -69,6 +73,8 @@ public struct SessionRecord: Codable, Equatable, Sendable, Identifiable {
         appUsage = try c.decodeIfPresent([String: TimeInterval].self, forKey: .appUsage) ?? [:]
         deviceName = try c.decodeIfPresent(String.self, forKey: .deviceName)
         deviceID = try c.decodeIfPresent(String.self, forKey: .deviceID)
+        attentionAwayEvents = try c.decodeIfPresent(Int.self, forKey: .attentionAwayEvents)
+        attentionAwaySeconds = try c.decodeIfPresent(Double.self, forKey: .attentionAwaySeconds)
     }
 
     /// Deterministic UUID (version-5 style, SHA-256 truncated) for a record

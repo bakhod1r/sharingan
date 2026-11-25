@@ -34,7 +34,7 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Sharingan uses the camera to check your eye exercises during breaks (break time only, private).</string>
+	<string>Sharingan uses the camera to check your eye exercises during breaks and, if you enable it, to notice when you look away during focus. Video never leaves your Mac.</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>

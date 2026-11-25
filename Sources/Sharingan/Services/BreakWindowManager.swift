@@ -116,15 +116,15 @@ extension BreakWindowManager {
         validator.strictValidation = false
         validator.reset()
         validator.start()
-        // Camera runs only for the duration of the break screen, never in focus.
+        // Camera is leased for the break screen; the focus attention guard may
+        // hold its own lease, so release/acquire never kills the other's feed.
         if timer.settings.cameraEyeTrackingEnabled {
             let strict = timer.settings.strictExerciseValidation
             Task { @MainActor in
                 let granted = await CameraService.shared.requestPermission()
                 validator.strictValidation = strict && granted
-                CameraService.shared.start()
                 EyeTracker.shared.resetBlinkWindow()
-                EyeTracker.shared.start()
+                EyeTracker.shared.acquire(.breakExercise)
             }
         }
     }
@@ -133,8 +133,7 @@ extension BreakWindowManager {
         TTSService.shared.stop()
         TTSKalibrator.shared.stop()
         ExerciseValidator.shared.stop()
-        EyeTracker.shared.stop()
-        CameraService.shared.stop()
+        EyeTracker.shared.release(.breakExercise)
     }
 }
 

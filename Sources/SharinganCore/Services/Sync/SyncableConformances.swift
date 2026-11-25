@@ -20,7 +20,8 @@ extension TaskItem: SyncableRecord {
             jiraIssueID: jiraIssueID, jiraSiteHost: jiraSiteHost,
             jiraIssueType: jiraIssueType,
             boardColumnID: boardColumnID, trashedAt: trashedAt,
-            allowedApps: allowedApps.isEmpty ? nil : allowedApps))
+            allowedApps: allowedApps.isEmpty ? nil : allowedApps,
+            attentionGuard: attentionGuard ? true : nil))
     }
 
     // originDevice and number are deliberately NOT hashed: both are immutable
@@ -43,6 +44,8 @@ extension TaskItem: SyncableRecord {
         // nil when empty so tasks without an allow-list keep their existing hash
         // (no fleet-wide re-upload on upgrade).
         let allowedApps: [BlockedApp]?
+        // nil when off, so existing hashes are unchanged.
+        let attentionGuard: Bool?
     }
 }
 

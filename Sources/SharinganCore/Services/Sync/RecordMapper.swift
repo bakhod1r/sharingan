@@ -60,6 +60,7 @@ public enum RecordMapper {
         // deletes would have to be tracked separately.
         record["subtasksJSON"] = json(task.subtasks) as CKRecordValue?
         record["allowedAppsJSON"] = json(task.allowedApps) as CKRecordValue?
+        record["attentionGuard"] = (task.attentionGuard ? 1 : 0) as CKRecordValue
         record["schemaVersion"] = schemaVersion as CKRecordValue
         return record
     }
@@ -105,6 +106,7 @@ public enum RecordMapper {
         }
         task.allowedApps = (record["allowedAppsJSON"] as? String)
             .flatMap { decode([BlockedApp].self, from: $0) } ?? []
+        task.attentionGuard = (record["attentionGuard"] as? Int ?? 0) == 1
         // Keep the creator's device; a record from a peer that predates origin
         // tracking has none, so fall back to this Mac rather than crashing.
         task.originDevice = record["originDevice"] as? String ?? DeviceIdentity.name
@@ -244,6 +246,8 @@ public enum RecordMapper {
         record["appUsageJSON"] = (session.appUsage.isEmpty ? nil : json(session.appUsage)) as CKRecordValue?
         record["deviceName"] = session.deviceName as CKRecordValue?
         record["deviceID"] = session.deviceID as CKRecordValue?
+        record["attentionAwayEvents"] = session.attentionAwayEvents as CKRecordValue?
+        record["attentionAwaySeconds"] = session.attentionAwaySeconds as CKRecordValue?
         record["schemaVersion"] = schemaVersion as CKRecordValue
         return record
     }
@@ -257,7 +261,7 @@ public enum RecordMapper {
               let rawPhase = record["phase"] as? String,
               let phase = PomodoroPhase(rawValue: rawPhase)
         else { return nil }
-        return SessionRecord(
+        var session = SessionRecord(
             id: id, start: start, end: end, phase: phase,
             completed: (record["completed"] as? Int ?? 1) == 1,
             taskID: (record["taskID"] as? String).flatMap(UUID.init(uuidString:)),
@@ -268,6 +272,9 @@ public enum RecordMapper {
                 .flatMap { decode([String: TimeInterval].self, from: $0) } ?? [:],
             deviceName: record["deviceName"] as? String,
             deviceID: record["deviceID"] as? String)
+        session.attentionAwayEvents = record["attentionAwayEvents"] as? Int
+        session.attentionAwaySeconds = record["attentionAwaySeconds"] as? Double
+        return session
     }
 
     // MARK: Device stats

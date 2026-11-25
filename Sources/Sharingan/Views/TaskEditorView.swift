@@ -64,6 +64,7 @@ struct TaskEditorView: View {
                     notesSection
                     HabitEditorSection(habit: $draft.habit, accent: accent)
                     allowedAppsSection
+                    attentionGuardSection
                     subtasksSection
                     if !history.isEmpty { historySection }
                     if !taskAppTotals.isEmpty { appsUsedSection }
@@ -423,6 +424,20 @@ struct TaskEditorView: View {
         .sheet(isPresented: $showAllowedAppPicker) {
             BlockAppPickerSheet(apps: $draft.allowedApps, mode: .allow)
                 .environment(\.colorScheme, .dark)
+        }
+    }
+
+    private var attentionGuardSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ToggleRow(title: "Attention guard", isOn: $draft.attentionGuard)
+            Text("Screen turns red and the timer pauses when you look away.")
+                .font(.system(.caption, design: .rounded))
+                .foregroundStyle(Color.dsTertiary)
+            if settings.focusAttentionEnabled {
+                Text("Always guard is on in Settings — every session is guarded.")
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(Color.dsTertiary)
+            }
         }
     }
 

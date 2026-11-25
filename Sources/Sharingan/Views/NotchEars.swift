@@ -89,6 +89,9 @@ struct NotchEars: View {
         Text(timer.settings.timeFormat.string(max(0, model.remaining)))
             .font(.dsTimer(13))
             .foregroundStyle(Color.dsPrimary)
+            .overlay(alignment: .leading) {
+                AttentionDot(size: 6).offset(x: -9)
+            }
             .padding(.trailing, 6)
             .frame(maxWidth: .infinity, alignment: .trailing)
     }

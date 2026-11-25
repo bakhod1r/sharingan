@@ -31,6 +31,15 @@ final class RecordMapperTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(RecordMapper.task(from: record)).allowedApps, task.allowedApps)
     }
 
+    func testAttentionGuardRoundTrip() throws {
+        var task = TaskItem(title: "Focus", category: "Work")
+        task.attentionGuard = true
+        let record = RecordMapper.record(for: task, in: zone, systemFields: nil)
+        XCTAssertTrue(try XCTUnwrap(RecordMapper.task(from: record)).attentionGuard)
+        record["attentionGuard"] = nil
+        XCTAssertFalse(try XCTUnwrap(RecordMapper.task(from: record)).attentionGuard)
+    }
+
     func testRecordWithoutAllowedAppsDecodesEmpty() throws {
         var task = TaskItem(title: "Old", category: "Work")
         task.allowedApps = [BlockedApp(bundleID: "com.apple.dt.Xcode", name: "Xcode")]

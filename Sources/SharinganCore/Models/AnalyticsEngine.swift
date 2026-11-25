@@ -203,4 +203,13 @@ public enum AnalyticsEngine {
         return totals.map { AppTotal(bundleID: $0.key, seconds: $0.value) }
             .sorted { $0.seconds > $1.seconds }
     }
+
+    /// Total look-aways over sessions the Focus Attention Guard covered.
+    /// nil when no session carries guard data (so the UI hides the stat).
+    public static func awayTotals(sessions: [SessionRecord]) -> (events: Int, seconds: TimeInterval)? {
+        let tracked = sessions.filter { $0.attentionAwayEvents != nil || $0.attentionAwaySeconds != nil }
+        guard !tracked.isEmpty else { return nil }
+        return (tracked.reduce(0) { $0 + ($1.attentionAwayEvents ?? 0) },
+                tracked.reduce(0) { $0 + ($1.attentionAwaySeconds ?? 0) })
+    }
 }

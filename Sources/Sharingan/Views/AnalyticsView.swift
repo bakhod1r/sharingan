@@ -623,6 +623,11 @@ struct AnalyticsView: View {
             kpiCard(icon: "calendar", value: Double(days),
                     format: { "\(Int($0))" }, label: "Active days",
                     tint: .green, index: 3)
+            if let away = AnalyticsEngine.awayTotals(sessions: sessions) {
+                kpiCard(icon: "eye.slash.fill", value: Double(away.events),
+                        format: { "\(Int($0)) · \(Int((away.seconds / 60).rounded()))m" },
+                        label: "Looked away", tint: .red, index: 4)
+            }
         }
     }
 
