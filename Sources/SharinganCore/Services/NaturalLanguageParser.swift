@@ -36,6 +36,11 @@ public enum NaturalLanguageParser {
             return ParsedTimerInput(kind: .setTargetTime(target))
         }
 
+        // Bare "H:MM" / "HH:MM" ("17:00"): the digit scan below would read it as
+        // 17 + 0 minutes. 24-hour clock time wins (matches "5pm" → until 5 PM);
+        // when it isn't a valid time ("25:00", "90:30") it is mm:ss.
+        if let colon = parseColonForm(text, now: now) { return colon }
+
         let (sign, rest) = parseOffset(text, now: now)
         let trimmedLow = rest.lowercased()
         let isOffset = sign != 0
@@ -94,6 +99,19 @@ public enum NaturalLanguageParser {
 
         let total = hours * 3600 + minutes * 60 + seconds
         return total > 0 ? total : nil
+    }
+
+    private static func parseColonForm(_ text: String, now: Date) -> ParsedTimerInput? {
+        guard text.range(of: #"^\d{1,3}:\d{2}$"#, options: .regularExpression) != nil else {
+            return nil
+        }
+        if let target = parseClockTarget(text, now: now) {
+            return ParsedTimerInput(kind: .setTargetTime(target))
+        }
+        let parts = text.split(separator: ":").compactMap { Double($0) }
+        guard parts.count == 2, parts[1] < 60 else { return nil }
+        let total = parts[0] * 60 + parts[1]
+        return total > 0 ? ParsedTimerInput(kind: .setDuration(total)) : nil
     }
 
     private static func parseClockTarget(_ s: String, now: Date) -> Date? {

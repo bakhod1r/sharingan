@@ -311,18 +311,6 @@ final class TaskDatabase: SyncOutboxStorage {
                 bindText($0, 1, a.name); bindText($0, 2, a.kind)
             }
         }
-        if !tableHasColumn("tasks", "jiraKey") {
-            exec("ALTER TABLE tasks ADD COLUMN jiraKey TEXT;")
-        }
-        if !tableHasColumn("tasks", "jiraIssueID") {
-            exec("ALTER TABLE tasks ADD COLUMN jiraIssueID TEXT;")
-        }
-        if !tableHasColumn("tasks", "jiraSiteHost") {
-            exec("ALTER TABLE tasks ADD COLUMN jiraSiteHost TEXT;")
-        }
-        if !tableHasColumn("tasks", "jiraIssueType") {
-            exec("ALTER TABLE tasks ADD COLUMN jiraIssueType TEXT;")
-        }
     }
 
     private func loadAttributeIDs() {

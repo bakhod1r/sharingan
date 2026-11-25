@@ -114,7 +114,7 @@ Scripts/install-cli.sh      # optional: put the `tired` CLI on your PATH
   configurable daily pomodoro goal.
 
 **Themes & interface**
-- Six themes — Liquid Glass, Frosted, Midnight, Cream, Neon, Mono — with
+- 20 themes — Liquid Glass, Frosted, Midnight, Cream, Neon, Mono, Forest, Sunset, Ocean and more — with
   searchable settings and a global menu bar.
 
 **Focus enforcement & integrations**

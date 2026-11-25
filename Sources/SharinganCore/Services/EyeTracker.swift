@@ -55,17 +55,20 @@ public struct EyeState: Equatable, Sendable {
     public var faceDetected: Bool
 
     public init(left: Double, right: Double, blinking: Bool, total: Int,
-                gaze: GazeDirection = .center, faceDetected: Bool = true) {
+                gaze: GazeDirection = .center, faceDetected: Bool = true,
+                blinkRate: Double = 0) {
         self.leftEyeOpenRatio = left
         self.rightEyeOpenRatio = right
         self.isBlinking = blinking
         self.blinkCountTotal = total
         self.gaze = gaze
         self.faceDetected = faceDetected
+        self.blinkRatePerMinute = blinkRate
     }
 
     public var averageOpenRatio: Double { (leftEyeOpenRatio + rightEyeOpenRatio) / 2 }
-    public var blinkRatePerMinute: Double { 0 }
+    /// Blinks counted in the trailing 60 s window (== blinks/min).
+    public var blinkRatePerMinute: Double
 }
 
 @MainActor
@@ -159,7 +162,8 @@ public final class EyeTracker: ObservableObject {
                              blinking: state.isBlinking,
                              total: state.blinkCountTotal,
                              gaze: state.gaze,
-                             faceDetected: false)
+                             faceDetected: false,
+                             blinkRate: windowedBlinkRate())
             return
         }
         faceBoundsCache = sample.bounds
@@ -175,11 +179,12 @@ public final class EyeTracker: ObservableObject {
         }
         wasBlinking = blinking
 
-        binksInWindow = binksInWindow.filter { Date().timeIntervalSince($0) < 60 }
+        let rate = windowedBlinkRate()
 
         lastGazeDirection = sample.gaze
         state = EyeState(left: sample.left, right: sample.right, blinking: blinking,
-                         total: total, gaze: sample.gaze, faceDetected: true)
+                         total: total, gaze: sample.gaze, faceDetected: true,
+                         blinkRate: rate)
     }
 
     private nonisolated static func boundsFromLandmarks(_ lm: VNFaceLandmarks2D) -> CGRect {
@@ -259,4 +264,10 @@ public final class EyeTracker: ObservableObject {
     }
 
     public var binksLastMinute: Int { binksInWindow.count }
+
+    /// Prunes the window to the last 60 s and returns its size (= blinks/min).
+    private func windowedBlinkRate(now: Date = Date()) -> Double {
+        binksInWindow = binksInWindow.filter { now.timeIntervalSince($0) < 60 }
+        return Double(binksInWindow.count)
+    }
 }

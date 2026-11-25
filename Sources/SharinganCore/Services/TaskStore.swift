@@ -370,7 +370,7 @@ public final class TaskStore: ObservableObject {
     /// neutral default.
     public var allProjects: [TaskCategory] {
         var result = customProjects
-        for name in tasks.compactMap(\.project) where !result.contains(where: { $0.name == name }) {
+        for name in tasks.filter({ $0.trashedAt == nil }).compactMap(\.project) where !result.contains(where: { $0.name == name }) {
             result.append(.init(name: name, colorHex: "#9AA3AF", icon: TaskCategory.defaultProjectIcon))
         }
         return result.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
@@ -514,12 +514,13 @@ public final class TaskStore: ObservableObject {
 
     /// Deletes every completed task (the Done view's "Clear" action).
     public func clearCompleted() {
-        for id in tasks.filter(\.isDone).map(\.id) {
+        // Trashed done tasks stay: the Trash owns them (restore must keep working).
+        let doneIDs = tasks.filter { $0.isDone && $0.trashedAt == nil }.map(\.id)
+        for id in doneIDs {
             cancelDueNotifications(for: id)
             if activeTaskID == id { activeTaskID = nil; activeSubtaskID = nil }
         }
-        let doneIDs = tasks.filter(\.isDone).map(\.id)
-        tasks.removeAll(where: \.isDone)
+        tasks.removeAll { $0.isDone && $0.trashedAt == nil }
         database?.deleteTasks(doneIDs)
         persist()
     }
@@ -590,7 +591,7 @@ public final class TaskStore: ObservableObject {
     /// Completed tasks don't block a title from coming back.
     public func partitionByDuplicateTitle(_ incoming: [TaskItem])
         -> (fresh: [TaskItem], duplicates: [TaskItem]) {
-        var seen = Set(tasks.filter { !$0.isDone }
+        var seen = Set(tasks.filter { !$0.isDone && $0.trashedAt == nil }
             .map { Self.normalizedTitle($0.title) })
         var fresh: [TaskItem] = []
         var duplicates: [TaskItem] = []
@@ -643,6 +644,9 @@ public final class TaskStore: ObservableObject {
         copy.pomodorosDone = 0
         copy.completedAt = nil
         copy.createdAt = Date()
+        if let done = BoardColumnStore.shared.doneColumnID, copy.boardColumnID == done {
+            copy.boardColumnID = nil   // an open copy must not sit in the Done column
+        }
         copy.number = 0        // a copy is a new task — persist() assigns it the next code, not the original's
         for k in copy.subtasks.indices {
             copy.subtasks[k].id = UUID()
@@ -666,7 +670,7 @@ public final class TaskStore: ObservableObject {
     public func move(_ id: UUID, up: Bool) {
         guard let task = tasks.first(where: { $0.id == id }) else { return }
         let siblings = tasks
-            .filter { $0.category == task.category && !$0.isDone }
+            .filter { $0.category == task.category && !$0.isDone && $0.trashedAt == nil }
             .sorted(by: Self.inListOrder)
         guard let idx = siblings.firstIndex(where: { $0.id == id }) else { return }
         let swapIdx = up ? idx - 1 : idx + 1
@@ -683,7 +687,7 @@ public final class TaskStore: ObservableObject {
     /// Applies a drag reorder (`onMove`) within one category's open tasks.
     public func reorder(category: String, from source: IndexSet, to destination: Int) {
         var items = tasks
-            .filter { $0.category == category && !$0.isDone }
+            .filter { $0.category == category && !$0.isDone && $0.trashedAt == nil }
             .sorted(by: Self.inListOrder)
         items.move(fromOffsets: source, toOffset: destination)
         // Reassign a compact, contiguous order block for this category.
@@ -702,9 +706,10 @@ public final class TaskStore: ObservableObject {
         guard id != targetID,
               let moving = tasks.first(where: { $0.id == id }),
               let target = tasks.first(where: { $0.id == targetID }),
-              moving.category == target.category, !moving.isDone, !target.isDone else { return }
+              moving.category == target.category, !moving.isDone, !target.isDone,
+              moving.trashedAt == nil, target.trashedAt == nil else { return }
         var items = tasks
-            .filter { $0.category == moving.category && !$0.isDone }
+            .filter { $0.category == moving.category && !$0.isDone && $0.trashedAt == nil }
             .sorted(by: Self.inListOrder)
         guard let from = items.firstIndex(where: { $0.id == id }) else { return }
         items.remove(at: from)
@@ -815,7 +820,11 @@ public final class TaskStore: ObservableObject {
         next.createdAt = Date()
         next.plannedDate = nil
         next.sortOrder = (tasks.map(\.sortOrder).max() ?? 0) + 1
+        if let done = BoardColumnStore.shared.doneColumnID, next.boardColumnID == done {
+            next.boardColumnID = nil   // an open copy must not sit in the Done column
+        }
         for k in next.subtasks.indices {
+            next.subtasks[k].id = UUID()   // eav_entities.uuid is UNIQUE: sharing ids steals the original's rows
             next.subtasks[k].isDone = false
             next.subtasks[k].pomodorosDone = 0   // keep estimates, reset progress
         }
@@ -835,17 +844,19 @@ public final class TaskStore: ObservableObject {
     // MARK: - Snooze / overdue
 
     /// Moves a task's due date to `newDay`'s day while keeping the original due
-    /// time-of-day (09:00 when the task had no due date). A set `plannedDate`
+    /// time-of-day (date-only, 00:00, when the task had no due date or a date-only one). A set `plannedDate`
     /// follows to the same day; a nil one stays nil. No-op on done tasks — they
     /// have nothing left to remind about. Reschedules notifications and persists.
     public func snooze(_ id: UUID, to newDay: Date) {
         guard let i = tasks.firstIndex(where: { $0.id == id }), !tasks[i].isDone else { return }
         let cal = Calendar.current
         let day = cal.startOfDay(for: newDay)
-        var hour = 9, minute = 0
+        // No due date, or a date-only one (00:00), stays date-only (00:00) so
+        // DueDate.isDateOnly keeps holding; a real time-of-day is kept.
+        var hour = 0, minute = 0
         if let due = tasks[i].dueDate {
             let time = cal.dateComponents([.hour, .minute], from: due)
-            hour = time.hour ?? 9
+            hour = time.hour ?? 0
             minute = time.minute ?? 0
         }
         tasks[i].dueDate = cal.date(bySettingHour: hour, minute: minute, second: 0, of: day) ?? day
@@ -981,7 +992,7 @@ public final class TaskStore: ObservableObject {
 
     /// Distinct project names currently in use, sorted.
     public var projects: [String] {
-        Array(Set(tasks.compactMap(\.project))).sorted()
+        Array(Set(tasks.filter { $0.trashedAt == nil }.compactMap(\.project))).sorted()
     }
 
     /// Removes a tag from every task — the sidebar's "delete label". Tags have
@@ -1002,7 +1013,7 @@ public final class TaskStore: ObservableObject {
     /// instead — never duplicated.
     public var allTags: [String] {
         var freq: [String: Int] = [:]
-        for t in tasks { for tag in t.tags { freq[tag, default: 0] += 1 } }
+        for t in tasks where t.trashedAt == nil { for tag in t.tags { freq[tag, default: 0] += 1 } }
         let used = freq.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }
             .map(\.key)
         let usedLower = Set(used.map { $0.lowercased() })
@@ -1585,7 +1596,7 @@ public final class TaskStore: ObservableObject {
     /// `dueDate` or completion state must route through here (deletes cancel).
     private func syncDueNotifications(for task: TaskItem) {
         cancelDueNotifications(for: task.id)
-        guard let due = task.dueDate, !task.isDone, due > Date() else { return }
+        guard let due = task.dueDate, !task.isDone, task.trashedAt == nil, due > Date() else { return }
         NotificationService.shared.schedule(
             title: "Task due",
             body: task.title,

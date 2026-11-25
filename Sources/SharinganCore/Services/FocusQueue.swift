@@ -60,7 +60,7 @@ public final class FocusQueue: ObservableObject {
     public func current(validatedAgainst store: TaskStore) -> UUID? {
         var dropped = false
         while let head = taskIDs.first {
-            if let task = store.tasks.first(where: { $0.id == head }), !task.isDone {
+            if let task = store.tasks.first(where: { $0.id == head }), !task.isDone, task.trashedAt == nil {
                 break
             }
             taskIDs.removeFirst()

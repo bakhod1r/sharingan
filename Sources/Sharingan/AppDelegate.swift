@@ -251,7 +251,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         // Todoist-style minimal menu bar: just the stopwatch icon at rest, and
         // the icon + countdown only while a session is actually engaged
         // (running or paused mid-way). A fresh/reset timer shows the icon alone.
-        let s = max(0, timer.remainingSeconds)
+        let s = max(0, timer.displaySeconds)
         let engaged = timer.isRunning
             || (timer.remainingSeconds > 0 && timer.remainingSeconds < timer.totalSeconds)
         let show = engaged && timer.settings.showMenuBarCountdown

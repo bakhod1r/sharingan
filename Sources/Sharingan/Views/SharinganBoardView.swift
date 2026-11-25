@@ -130,6 +130,8 @@ struct SharinganBoardView: View {
             .help(sortMode == .manual ? "Sort tasks" : "Sorted by \(sortMode.label)")
             .accessibilityLabel("Sort tasks")
 
+            columnsMenu
+
             Button { newColumnName = ""; addingColumn = true } label: {
                 Label("Add column", systemImage: "plus")
                     .font(.system(.callout, design: .rounded).weight(.semibold))
@@ -137,6 +139,40 @@ struct SharinganBoardView: View {
             .buttonStyle(.glass)
             .help("Add a board column")
         }
+    }
+
+    /// All columns with a visibility checkmark — the way back for a column
+    /// hidden through its "Hide column" item.
+    private var columnsMenu: some View {
+        let hidden = columns.columns.hiddenCount
+        return Menu {
+            ForEach(columns.columns.inDisplayOrder) { col in
+                Button {
+                    withAnimation(DS.Motion.standard) { columns.setEnabled(col.id, !col.isEnabled) }
+                } label: {
+                    if col.isEnabled {
+                        Label(col.name, systemImage: "checkmark")
+                    } else {
+                        Text(col.name)
+                    }
+                }
+            }
+            if hidden > 0 {
+                Divider()
+                Button {
+                    withAnimation(DS.Motion.standard) { columns.showAll() }
+                } label: {
+                    Label("Show All", systemImage: "eye")
+                }
+            }
+        } label: {
+            Label(hidden > 0 ? "Columns (\(hidden) hidden)" : "Columns",
+                  systemImage: "rectangle.split.3x1")
+                .font(.system(.callout, design: .rounded).weight(.semibold))
+        }
+        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+        .help("Show or hide board columns")
+        .accessibilityLabel("Columns")
     }
 
     private func circleIcon(_ name: String, active: Bool) -> some View {
@@ -316,7 +352,7 @@ struct SharinganBoardView: View {
         var documentResult: TaskStore.DocumentImport?
         withAnimation(DS.Motion.standard) {
             documentResult = store.importIfDocument(t)
-            if documentResult == nil { store.add(title: t) }
+            if documentResult == nil { store.addParsed(t) }
         }
         draft = ""
         if let documentResult { ImportDuplicatePrompt.resolve(documentResult, store: store) }

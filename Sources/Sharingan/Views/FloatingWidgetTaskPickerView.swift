@@ -24,8 +24,11 @@ struct FloatingWidgetTaskPickerView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            startWithoutTaskRow
-            Divider().overlay(Color.white.opacity(0.12)).padding(.vertical, 2)
+            // Hidden while "require a task" is on — it would bypass the rule.
+            if !timer.settings.requireTaskForFocus {
+                startWithoutTaskRow
+                Divider().overlay(Color.white.opacity(0.12)).padding(.vertical, 2)
+            }
             ForEach(Array(todayTasks.prefix(Self.maxRows))) { task in
                 row(task)
             }
@@ -97,7 +100,11 @@ struct FloatingWidgetTaskPickerView: View {
     private var startWithoutTaskRow: some View {
         Button {
             onDismiss()
-            timer.startFocusSession()
+            if let coord = AppServices.coordinator {
+                coord.startRespectingTaskGuard()
+            } else {
+                timer.startFocusSession()
+            }
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "play.circle")

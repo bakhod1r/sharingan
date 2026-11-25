@@ -173,7 +173,10 @@ extension AppDelegate {
 
     @MainActor @objc private func menuSyncNow() { syncEngine?.syncNow() }
 
-    @MainActor @objc private func menuToggleTimer() { timer?.toggle() }
+    @MainActor @objc private func menuToggleTimer() {
+        if let coord = AppServices.coordinator { coord.toggleRespectingTaskGuard() }
+        else { timer?.toggle() }
+    }
     @MainActor @objc private func menuSkipPhase() { timer?.skip() }
     @MainActor @objc private func menuAddFive() { timer?.addTime(5 * 60) }
     @MainActor @objc private func menuRemoveFive() { timer?.removeTime(5 * 60) }

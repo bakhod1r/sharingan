@@ -514,7 +514,8 @@ final class NotchWindowManager {
 
     private func syncTimer(_ timer: PomodoroTimer) {
         model.progress = timer.progress
-        model.remaining = timer.remainingSeconds
+        // Display value: elapsed in count-up mode (the island only prints it).
+        model.remaining = timer.displaySeconds
         model.phase = timer.phase
         model.state.engaged = timer.isRunning
             || (timer.remainingSeconds > 0 && timer.remainingSeconds < timer.totalSeconds)

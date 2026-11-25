@@ -47,8 +47,8 @@ struct QuickInputField: View {
         }
         error = nil
         timer.applyParsed(parsed)
-        if case .setDuration = parsed.kind {
-            if timer.isRunning == false { timer.start() }
+        if SharinganCoordinator.cliStartShouldRun(parsed.kind), !timer.isRunning {
+            timer.start()
         }
         text = ""
     }

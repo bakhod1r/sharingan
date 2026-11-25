@@ -17,6 +17,7 @@ struct BreakView: View {
 
     @ViewBuilder private var breakBody: some View {
         let remaining = max(0, timer.remainingSeconds)
+        let display = max(0, timer.displaySeconds)
 
         GeometryReader { geo in
             // Eyes scale with the screen, centred on one flat backdrop color —
@@ -29,7 +30,7 @@ struct BreakView: View {
                     .ignoresSafeArea()
 
                 VStack(spacing: 0) {
-                    titleRow(remaining: remaining)
+                    titleRow(display: display)
                         .padding(.horizontal, max(40, geo.size.width * 0.05))
                         .padding(.top, max(34, geo.size.height * 0.05))
 
@@ -162,7 +163,7 @@ struct BreakView: View {
 
     private var showExit: Bool { timer.settings.showExitBreakButton || forceExit }
 
-    private func titleRow(remaining: TimeInterval) -> some View {
+    private func titleRow(display: TimeInterval) -> some View {
         HStack(alignment: .center) {
             Text(validator.currentExercise?.name ?? "Sharingan exercises")
                 .font(.system(size: 34, weight: .bold, design: .rounded))
@@ -172,9 +173,9 @@ struct BreakView: View {
             Spacer(minLength: 12)
 
             HStack(spacing: 8) {
-                Text("Time Left:")
+                Text(timer.isCountUpMode ? "Elapsed:" : "Time Left:")
                     .foregroundStyle(.white.opacity(0.55))
-                Text(timer.settings.timeFormat.string(remaining))
+                Text(timer.settings.timeFormat.string(display))
                     .font(.dsTimer(20))
                     .foregroundStyle(.white)
             }
@@ -250,7 +251,7 @@ struct BreakView: View {
     private var nextQueuedTitle: String? {
         let store = TaskStore.shared
         return AppServices.focusQueue.taskIDs.lazy
-            .compactMap { id in store.tasks.first { $0.id == id && !$0.isDone } }
+            .compactMap { id in store.tasks.first { $0.id == id && !$0.isDone && $0.trashedAt == nil } }
             .first?.title
     }
 

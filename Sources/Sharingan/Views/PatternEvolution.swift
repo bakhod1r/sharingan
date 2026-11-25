@@ -29,12 +29,7 @@ struct PatternEvolution {
 
     /// The canonical awakening order: one tomoe → two → three, then the
     /// Mangekyō family, ending on the Rinnegan before wrapping around.
-    static let chain: [SharinganStyle] = [
-        .tomoe1, .tomoe2, .classic,
-        .mangekyou, .mangekyouEternal, .itachi, .mangekyouKamui,
-        .sixStar, .blade, .fourBlade, .madara, .shuriken, .swirl,
-        .triangleTomoe, .ringCrescents, .orbit, .crescent, .rinnegan,
-    ]
+    static let chain = SharinganEvolutionChain.chain
 
     struct Frame {
         var left: SharinganStyle
@@ -64,6 +59,30 @@ struct PatternEvolution {
         }
 
         let chain = Self.chain
+        let differ = SharinganEvolutionChain.eyesDiffer(left: baseLeft, right: baseRight)
+        if differ {
+            // Separate left/right styles: each eye walks the chain from its own
+            // base. The eyes can be at different stages, so there is no shared
+            // tomoe stage — every step collapses into the pupil and reopens.
+            func at(_ base: SharinganStyle, _ n: Int) -> SharinganStyle {
+                SharinganEvolutionChain.style(base: base, eyesDiffer: true, count: n)
+            }
+            let tp = t - phaseStart
+            if evolutionCount == 0 || tp >= transition.closeSeconds {
+                let u = evolutionCount == 0
+                    ? (t - appearStart - 1.0) / transition.openSeconds
+                    : (tp - transition.closeSeconds) / transition.openSeconds
+                return Frame(left: at(baseLeft, evolutionCount),
+                             right: at(baseRight, evolutionCount),
+                             emergence: CGFloat(min(Self.smooth(u), fade)),
+                             tomoeStage: nil, endFade: fade)
+            }
+            let em = 1 - Self.smooth(tp / transition.closeSeconds)
+            return Frame(left: at(baseLeft, evolutionCount - 1),
+                         right: at(baseRight, evolutionCount - 1),
+                         emergence: CGFloat(min(em, fade)),
+                         tomoeStage: nil, endFade: fade)
+        }
         let cur = chain[evolutionCount % chain.count]
 
         // Break start: the first stage whirls open after the lid awakening.

@@ -822,7 +822,7 @@ struct MainWindowView: View {
     /// destructive "Remove tag" — unlike "Delete label" (which strips the tag
     /// off every task), it only drops the precreated placeholder itself.
     private func tagEditorPopover(_ tag: String) -> some View {
-        let totalUses = tasks.tasks.reduce(0) { $0 + ($1.tags.contains(tag) ? 1 : 0) }
+        let totalUses = tasks.tasks.reduce(0) { $0 + ($1.trashedAt == nil && $1.tags.contains(tag) ? 1 : 0) }
         let isRemovableCustom = totalUses == 0
             && tasks.customTags.contains { $0.caseInsensitiveCompare(tag) == .orderedSame }
         return VStack(alignment: .leading, spacing: 10) {
@@ -1317,11 +1317,12 @@ struct MainWindowView: View {
     }
 
     /// Sidebar badge count per section: open tasks for Tasks, still-unscheduled
-    /// tasks for Week (the board's backlog). Zero hides the badge.
+    /// tasks with no due date for Week (the board's backlog). Zero hides the badge.
     private func badgeCount(for s: Section) -> Int {
         switch s {
-        case .tasks: return tasks.tasks.filter { !$0.isDone }.count
-        case .week:  return tasks.unscheduledTasks.count
+        case .tasks: return tasks.tasks.filter { !$0.isDone && $0.trashedAt == nil }.count
+        // Same set as the main-window WeeklyBoardView backlog (due-date based).
+        case .week:  return tasks.boardBacklogTasks.count
         default:     return 0
         }
     }
@@ -1476,7 +1477,7 @@ private struct TimerDetailView: View {
                               lineWidth: 20)
                     .frame(width: 300, height: 300)
                 VStack(spacing: 8) {
-                    Text(timer.settings.timeFormat.string(remaining))
+                    Text(timer.settings.timeFormat.string(max(0, timer.displaySeconds)))
                         .font(.dsTimer(76))
                         .foregroundStyle(.white)
                     if timer.isIdleAtFocus {

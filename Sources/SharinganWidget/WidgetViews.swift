@@ -81,9 +81,15 @@ private struct TimeText: View {
 
     var body: some View {
         if snapshot.isRunning, let end = snapshot.endDate, end > entryDate {
-            Text(timerInterval: entryDate...end, countsDown: true)
+            if snapshot.isCountUp == true {
+                // Elapsed face: counts up from (end - total) and stops at end.
+                let start = end.addingTimeInterval(-snapshot.totalSeconds)
+                Text(timerInterval: start...end, countsDown: false)
+            } else {
+                Text(timerInterval: entryDate...end, countsDown: true)
+            }
         } else {
-            Text(Self.clock(snapshot.remainingSeconds))
+            Text(Self.clock(snapshot.staticDisplaySeconds))
         }
     }
 

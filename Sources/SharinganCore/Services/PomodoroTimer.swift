@@ -92,6 +92,21 @@ public final class PomodoroTimer: ObservableObject {
 
     public var isCountUpMode: Bool { mode == .countUp }
 
+    /// The number a timer face should show: elapsed time in count-up mode,
+    /// remaining time in countdown mode. Applies to every phase (the tick loop
+    /// counts breaks up too, ending at `totalSeconds`). Reads `clock`, so
+    /// views that show it must observe `clock` like they do for `remainingSeconds`.
+    public var displaySeconds: TimeInterval {
+        Self.displaySeconds(countUp: isCountUpMode,
+                            elapsed: elapsedSeconds, remaining: remainingSeconds)
+    }
+
+    nonisolated public static func displaySeconds(countUp: Bool,
+                                                  elapsed: TimeInterval,
+                                                  remaining: TimeInterval) -> TimeInterval {
+        countUp ? elapsed : remaining
+    }
+
     private var previousPhase: PomodoroPhase = .focus
     private var fiveMinSent = false
     private var flashSent = false

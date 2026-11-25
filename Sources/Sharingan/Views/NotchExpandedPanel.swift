@@ -160,7 +160,7 @@ struct NotchExpandedPanel: View {
         HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 1) {
                 TimerTicking(timer.clock) {
-                    Text(clock(timer.remainingSeconds))
+                    Text(clock(timer.displaySeconds))
                         // The app's one countdown face (`Font.dsTimer`), light and
                         // rounded, so the island's clock is the same element as the
                         // menu bar's and the Floating widget's.

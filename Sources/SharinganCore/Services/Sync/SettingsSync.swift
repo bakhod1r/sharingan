@@ -106,6 +106,13 @@ public enum SettingsSync {
             }
         }
         if changed {
+            // Board columns live in an in-memory singleton; the defaults write
+            // above is invisible to it until it re-reads.
+            if Thread.isMainThread {
+                MainActor.assumeIsolated { BoardColumnStore.shared.reload() }
+            } else {
+                DispatchQueue.main.async { BoardColumnStore.shared.reload() }
+            }
             NotificationCenter.default.post(name: didApplyRemoteNotification,
                                             object: nil)
         }

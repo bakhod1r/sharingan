@@ -42,6 +42,11 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
     public var dailyGoal: Int
     public var streakDays: Int
     public var updatedAt: Date
+    /// Count-up mode: the face shows elapsed time, not remaining. Optional so
+    /// snapshots written by older builds still decode (nil = countdown).
+    public var isCountUp: Bool?
+    /// Elapsed seconds of the current phase at `updatedAt` (count-up face).
+    public var elapsedSeconds: TimeInterval?
 
     public static let currentSchemaVersion = 1
 
@@ -54,7 +59,9 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
                 todayPomodoros: Int = 0,
                 dailyGoal: Int = 0,
                 streakDays: Int = 0,
-                updatedAt: Date) {
+                updatedAt: Date,
+                isCountUp: Bool? = nil,
+                elapsedSeconds: TimeInterval? = nil) {
         self.schemaVersion = Self.currentSchemaVersion
         self.phase = phase
         self.isRunning = isRunning
@@ -66,6 +73,17 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
         self.dailyGoal = dailyGoal
         self.streakDays = streakDays
         self.updatedAt = updatedAt
+        self.isCountUp = isCountUp
+        self.elapsedSeconds = elapsedSeconds
+    }
+
+    /// Static number a paused/idle face shows: elapsed in count-up mode,
+    /// remaining otherwise.
+    public var staticDisplaySeconds: TimeInterval {
+        if isCountUp == true {
+            return max(0, elapsedSeconds ?? (totalSeconds - remainingSeconds))
+        }
+        return max(0, remainingSeconds)
     }
 
     // MARK: - Reading-side repair
@@ -89,6 +107,7 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
         s.isRunning = false
         s.endDate = nil
         s.remainingSeconds = s.totalSeconds
+        s.elapsedSeconds = 0
         return s
     }
 

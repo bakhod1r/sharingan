@@ -108,6 +108,12 @@ public enum TaskInputParser {
                 i += 1; continue
             }
 
+            // Hyphenated month dates: "5-mart" (Uzbek), "mart-5".
+            if let dc = hyphenDate(lower, now: now) {
+                datePart = dc
+                i += 1; continue
+            }
+
             // Month-name dates: "march 5" / "5 march" / "5-mart" (either order).
             if let m = lookups.monthName[lower], i + 1 < words.count,
                let d = dayNumber(words[i + 1]) {
@@ -123,13 +129,11 @@ public enum TaskInputParser {
             // Compositional: "every N days" (recurrence) and "in N hours"
             // (a due offset). Markers only fire with a valid number + unit
             // after them, so a bare "in"/"every" stays in the title.
-            if lookups.every.contains(lower),
-               let (rec, consumed) = matchEvery(words, at: i) {
+            if let (rec, consumed) = matchEvery(words, at: i) {
                 result.recurrence = rec
                 i += consumed; continue
             }
-            if lookups.within.contains(lower),
-               let (date, consumed) = matchWithin(words, at: i, now: now) {
+            if let (date, consumed) = matchWithin(words, at: i, now: now) {
                 offsetDue = date
                 i += consumed; continue
             }
@@ -265,15 +269,20 @@ public enum TaskInputParser {
     }
 
     /// `every [N] <unit>` → recurrence. `every day/week` and `every N days`.
+    /// The marker and the unit must come from the SAME language set, so Turkish
+    /// "her" + German "tag" ("call her tag team") never combine.
     private static func matchEvery(_ words: [String], at i: Int) -> (Recurrence, Int)? {
         guard i + 1 < words.count else { return nil }
+        let marker = words[i].lowercased()
         let next = words[i + 1].lowercased()
-        if lookups.dayUnit.contains(next)  { return (.daily, 2) }
-        if lookups.weekUnit.contains(next) { return (.weekly, 2) }
-        // "every 3 days" — number then a day unit.
-        if let n = Int(next), n > 0, i + 2 < words.count,
-           lookups.dayUnit.contains(words[i + 2].lowercased()) {
-            return (.everyNDays(n), 3)
+        for set in lookups.sets where set.every.contains(marker) {
+            if set.dayUnit.contains(next)  { return (.daily, 2) }
+            if set.weekUnit.contains(next) { return (.weekly, 2) }
+            // "every 3 days" — number then a day unit.
+            if let n = Int(next), n > 0, i + 2 < words.count,
+               set.dayUnit.contains(words[i + 2].lowercased()) {
+                return (.everyNDays(n), 3)
+            }
         }
         return nil
     }
@@ -281,27 +290,49 @@ public enum TaskInputParser {
     /// `in N <unit>` → an absolute due date `N` units from `now` (marker-led).
     private static func matchWithin(_ words: [String], at i: Int, now: Date) -> (Date, Int)? {
         guard i + 2 < words.count, let n = Int(words[i + 1]), n > 0 else { return nil }
-        return offsetDate(n: n, unit: words[i + 2].lowercased(), now: now).map { ($0, 3) }
+        let marker = words[i].lowercased()
+        let unit = words[i + 2].lowercased()
+        for set in lookups.sets where set.within.contains(marker) {
+            if let d = offsetDate(n: n, unit: unit, in: set, now: now) { return (d, 3) }
+        }
+        return nil
     }
 
     /// `N <unit> <marker>` → an absolute due date (postpositional languages:
     /// Uzbek "2 soatdan keyin", Turkish "2 saat sonra", Hindi "2 घंटे में").
     private static func matchPostpositionalOffset(_ words: [String], at i: Int, now: Date) -> (Date, Int)? {
-        guard let n = Int(words[i]), n > 0, i + 2 < words.count,
-              lookups.after.contains(words[i + 2].lowercased()) else { return nil }
-        return offsetDate(n: n, unit: words[i + 1].lowercased(), now: now).map { ($0, 3) }
+        guard let n = Int(words[i]), n > 0, i + 2 < words.count else { return nil }
+        let marker = words[i + 2].lowercased()
+        let unit = words[i + 1].lowercased()
+        for set in lookups.sets where set.after.contains(marker) {
+            if let d = offsetDate(n: n, unit: unit, in: set, now: now) { return (d, 3) }
+        }
+        return nil
     }
 
     /// `now` shifted by `n` of the given unit word, or nil if the word is not a
-    /// known time unit in any language.
-    private static func offsetDate(n: Int, unit: String, now: Date) -> Date? {
+    /// time unit of this language set.
+    private static func offsetDate(n: Int, unit: String, in set: UnitSet, now: Date) -> Date? {
         let cal = Calendar.current
-        if lookups.minuteUnit.contains(unit) { return cal.date(byAdding: .minute, value: n, to: now) }
-        if lookups.hourUnit.contains(unit)   { return cal.date(byAdding: .hour, value: n, to: now) }
-        if lookups.dayUnit.contains(unit)    { return cal.date(byAdding: .day, value: n, to: now) }
-        if lookups.weekUnit.contains(unit)   { return cal.date(byAdding: .day, value: n * 7, to: now) }
-        if lookups.monthUnit.contains(unit)  { return cal.date(byAdding: .month, value: n, to: now) }
-        if lookups.yearUnit.contains(unit)   { return cal.date(byAdding: .year, value: n, to: now) }
+        if set.minuteUnit.contains(unit) { return cal.date(byAdding: .minute, value: n, to: now) }
+        if set.hourUnit.contains(unit)   { return cal.date(byAdding: .hour, value: n, to: now) }
+        if set.dayUnit.contains(unit)    { return cal.date(byAdding: .day, value: n, to: now) }
+        if set.weekUnit.contains(unit)   { return cal.date(byAdding: .day, value: n * 7, to: now) }
+        if set.monthUnit.contains(unit)  { return cal.date(byAdding: .month, value: n, to: now) }
+        if set.yearUnit.contains(unit)   { return cal.date(byAdding: .year, value: n, to: now) }
+        return nil
+    }
+
+    /// `5-mart` / `mart-5` — day and month name joined by a hyphen.
+    private static func hyphenDate(_ w: String, now: Date) -> DateComponents? {
+        let parts = w.split(separator: "-", omittingEmptySubsequences: false).map(String.init)
+        guard parts.count == 2 else { return nil }
+        if let d = dayNumber(parts[0]), let m = lookups.monthName[parts[1]] {
+            return monthDay(day: d, month: m, now: now)
+        }
+        if let m = lookups.monthName[parts[0]], let d = dayNumber(parts[1]) {
+            return monthDay(day: d, month: m, now: now)
+        }
         return nil
     }
 
@@ -349,6 +380,25 @@ public enum TaskInputParser {
         s.unicodeScalars.contains(where: isSpacelessScript)
     }
 
+    private static func isHiragana(_ c: Character) -> Bool {
+        c.unicodeScalars.allSatisfy { (0x3040...0x309F).contains($0.value) }
+    }
+
+    /// Guards against eating keywords out of the middle of longer words
+    /// ("朝食" breakfast must not lose "朝"). A keyword needs a boundary (start,
+    /// space, or non-CJK char) on at least one side; one-character and
+    /// hiragana-only keywords need it on both (a following particle is allowed).
+    private static func cjkBoundaryOK(_ chars: [Character], start: Int, length: Int) -> Bool {
+        let prevB = start == 0 || !isSpacelessScript(chars[start - 1].unicodeScalars.first!)
+        let endIdx = start + length
+        let nextB = endIdx >= chars.count || !isSpacelessScript(chars[endIdx].unicodeScalars.first!)
+        let strict = length == 1 || chars[start..<endIdx].allSatisfy(isHiragana)
+        if !strict { return prevB || nextB }
+        if !prevB { return false }
+        if nextB { return true }
+        return length > 1 && "のにはでもを".contains(chars[endIdx])
+    }
+
     /// Lift every CJK keyword out of `text` (longest match wins), replacing each
     /// with a space so neighbours don't fuse and the leftover becomes the title.
     private static func scanCJK(_ text: inout String) -> [Concept] {
@@ -363,7 +413,8 @@ public enum TaskInputParser {
                 for entry in bucket {   // pre-sorted: longest surface first
                     let n = entry.surface.count
                     if idx + n <= chars.count,
-                       Array(chars[idx..<idx + n]) == entry.surface {
+                       Array(chars[idx..<idx + n]) == entry.surface,
+                       cjkBoundaryOK(chars, start: idx, length: n) {
                         concepts.append(entry.concept)
                         out.append(" ")
                         idx += n
@@ -447,6 +498,12 @@ public enum TaskInputParser {
         var phrases: [(tokens: [String], concept: Concept)] = []
         /// CJK surfaces bucketed by first character, each bucket longest-first.
         var cjkByFirst: [Character: [(surface: [Character], concept: Concept)]] = [:]
+        /// Compositional markers + units, one set per language (never unioned).
+        var sets: [UnitSet] = []
+    }
+
+    /// One language's `every`/`in`/`after` markers and time units.
+    struct UnitSet {
         var every: Set<String> = []
         var within: Set<String> = []   // prepositional marker: "in 2 days"
         var after: Set<String> = []    // postpositional marker: "2 soatdan keyin"
@@ -519,15 +576,14 @@ public enum TaskInputParser {
                 }
             }
 
-            lang.every.forEach      { L.every.insert($0.lowercased()) }
-            lang.within.forEach     { L.within.insert($0.lowercased()) }
-            lang.after.forEach      { L.after.insert($0.lowercased()) }
-            lang.dayUnit.forEach    { L.dayUnit.insert($0.lowercased()) }
-            lang.weekUnit.forEach   { L.weekUnit.insert($0.lowercased()) }
-            lang.monthUnit.forEach  { L.monthUnit.insert($0.lowercased()) }
-            lang.yearUnit.forEach   { L.yearUnit.insert($0.lowercased()) }
-            lang.hourUnit.forEach   { L.hourUnit.insert($0.lowercased()) }
-            lang.minuteUnit.forEach { L.minuteUnit.insert($0.lowercased()) }
+            func lowered(_ xs: [String]) -> Set<String> { Set(xs.map { $0.lowercased() }) }
+            var u = UnitSet()
+            u.every = lowered(lang.every);       u.within = lowered(lang.within)
+            u.after = lowered(lang.after);       u.dayUnit = lowered(lang.dayUnit)
+            u.weekUnit = lowered(lang.weekUnit); u.monthUnit = lowered(lang.monthUnit)
+            u.yearUnit = lowered(lang.yearUnit); u.hourUnit = lowered(lang.hourUnit)
+            u.minuteUnit = lowered(lang.minuteUnit)
+            if !(u.every.isEmpty && u.within.isEmpty && u.after.isEmpty) { L.sets.append(u) }
         }
 
         L.phrases.sort { $0.tokens.count > $1.tokens.count }

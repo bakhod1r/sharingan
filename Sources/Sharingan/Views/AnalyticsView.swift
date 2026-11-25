@@ -399,6 +399,8 @@ struct AnalyticsView: View {
     private var allowedTaskIDs: Set<UUID>? {
         guard filter.hasAttributionFilter else { return nil }
         let ids = tasks.tasks.filter { t in
+            // Trashed = deleted from the user's view; same as a hard delete here.
+            if t.trashedAt != nil { return false }
             if !filter.categories.isEmpty && !filter.categories.contains(t.category) {
                 return false
             }
@@ -504,7 +506,7 @@ struct AnalyticsView: View {
     private var plannedCounts: (Int, Int) {
         let open = tasks.count(.today)
         let doneToday = tasks.tasks.filter { t in
-            guard t.isDone, let at = t.completedAt else { return false }
+            guard t.isDone, t.trashedAt == nil, let at = t.completedAt else { return false }
             return Calendar.current.isDateInToday(at)
         }.count
         return (doneToday, open + doneToday)
@@ -538,10 +540,10 @@ struct AnalyticsView: View {
             }
             HStack(spacing: 16) {
                 scoreCard(title: "Focus Score", score: scores.focus,
-                          caption: "Diqqat sifati — hajm, yakunlash, tanaffuslar\(rangeSuffix)")
+                          caption: "Focus quality — volume, completion, breaks\(rangeSuffix)")
                     .staggeredAppear(5)
                 scoreCard(title: "Consistency", score: scores.consistency,
-                          caption: "Rejaga rioya — reja, ritm, streak\(rangeSuffix)")
+                          caption: "Sticking to the plan — planning, rhythm, streak\(rangeSuffix)")
                     .staggeredAppear(6)
             }
             if !suggestions.isEmpty { suggestionsCard(suggestions) }

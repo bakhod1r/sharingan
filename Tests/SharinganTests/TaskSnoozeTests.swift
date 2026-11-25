@@ -29,7 +29,7 @@ struct TaskSnoozeTests {
         #expect(due == date(2026, 7, 13, 15, 30))
     }
 
-    @Test func snoozeWithoutDueDateDefaultsToNine() throws {
+    @Test func snoozeWithoutDueDateStaysDateOnly() throws {
         let s = tempStore()
         s.add(title: "Someday")
         let id = s.tasks[0].id
@@ -37,7 +37,7 @@ struct TaskSnoozeTests {
         s.snooze(id, to: date(2026, 7, 20, 22, 45))
 
         let due = try #require(s.tasks.first { $0.id == id }?.dueDate)
-        #expect(due == date(2026, 7, 20, 9, 0))
+        #expect(due == date(2026, 7, 20, 0, 0))   // date-only (00:00), review 1.4
     }
 
     @Test func snoozeMovesPlannedDateWhenSet() throws {

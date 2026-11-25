@@ -77,7 +77,7 @@ jobs:
         run: security delete-keychain build.keychain 2>/dev/null || true
       - name: Extract release notes from CHANGELOG
         run: |
-          awk '/^## \[/{ if (found) exit; found=1; next } found' CHANGELOG.md > /tmp/notes.md
+          awk '/^## \[[0-9]/{ if (found) exit; found=1; next } found' CHANGELOG.md > /tmp/notes.md
           cat /tmp/notes.md
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

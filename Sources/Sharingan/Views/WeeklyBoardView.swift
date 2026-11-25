@@ -62,7 +62,7 @@ struct WeeklyBoardView: View {
     /// Count of open tasks planned within the visible week — filtered, so the
     /// header agrees with the cards actually on the board.
     private var plannedThisWeek: Int {
-        days.reduce(0) { $0 + boardItems(store.tasksDue(on: $1)).count }
+        days.reduce(0) { $0 + boardItems(store.tasksScheduled(on: $1)).count }
     }
 
     private var hasAnyOpenTask: Bool { store.tasks.contains { !$0.isDone && $0.trashedAt == nil } }
@@ -220,22 +220,22 @@ struct WeeklyBoardView: View {
     // MARK: - Columns
 
     private var backlogColumn: some View {
-        let items = boardItems(store.undatedTasks)
+        let items = boardItems(store.boardBacklogTasks)
         return columnContainer(
             id: "unscheduled", isToday: false, isWeekend: false,
             header: AnyView(backlogHeader(count: items.count)),
             items: items,
-            onDrop: { store.clearDueDate($0) })
+            onDrop: { store.unschedule($0) })
     }
 
     private func dayColumn(_ day: Date) -> some View {
-        let items = boardItems(store.tasksDue(on: day))
+        let items = boardItems(store.tasksScheduled(on: day))
         let isToday = cal.isDateInToday(day)
         return columnContainer(
             id: dayKey(day), isToday: isToday, isWeekend: cal.isDateInWeekend(day),
             header: AnyView(dayHeader(day, isToday: isToday, count: items.count)),
             items: items,
-            onDrop: { store.snooze($0, to: day) })
+            onDrop: { store.schedule($0, on: day) })
     }
 
     private func backlogHeader(count: Int) -> some View {
@@ -274,7 +274,7 @@ struct WeeklyBoardView: View {
         var documentResult: TaskStore.DocumentImport?
         withAnimation(DS.Motion.standard) {
             documentResult = store.importIfDocument(t)
-            if documentResult == nil { store.add(title: t) }
+            if documentResult == nil { store.addParsed(t) }
         }
         backlogDraft = ""
         if let documentResult { ImportDuplicatePrompt.resolve(documentResult, store: store) }
@@ -484,8 +484,8 @@ struct WeeklyBoardView: View {
                     }
                 }
             } label: { Label("Priority", systemImage: "flag.fill") }
-            Button { store.clearDueDate(task.id) } label: {
-                Label("Clear date", systemImage: "calendar.badge.minus")
+            Button { store.unschedule(task.id) } label: {
+                Label("Unschedule", systemImage: "calendar.badge.minus")
             }
             Divider()
             Button(role: .destructive) { store.delete(task.id) } label: {

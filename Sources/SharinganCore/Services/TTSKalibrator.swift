@@ -32,6 +32,7 @@ public final class TTSKalibrator: ObservableObject {
         stop()
         guard settings.enabled else { return }
         isActive = true
+        speechNotBefore = Date().addingTimeInterval(Self.leadInSeconds)
         stepCancellable = validator.$currentStepIndex
             .receive(on: RunLoop.main)
             .sink { [weak self, weak validator] _ in
@@ -51,11 +52,37 @@ public final class TTSKalibrator: ObservableObject {
         stepCancellable = nil
         kalibTask?.cancel()
         kalibTask = nil
+        pendingStepTask?.cancel()
+        pendingStepTask = nil
+        speechNotBefore = .distantPast
+    }
+
+    /// The coordinator announces "Break started…" right as the break screen
+    /// attaches this kalibrator; `TTSService.speak` interrupts in-progress
+    /// speech, so the first step cue used to cut that announcement off. Cues
+    /// are held back until `leadInSeconds` after `attach`.
+    public static let leadInSeconds: TimeInterval = 3.0
+    private var speechNotBefore: Date = .distantPast
+    private var pendingStepTask: Task<Void, Never>?
+
+    /// Seconds to wait before a cue may be spoken (0 when the lead-in passed).
+    nonisolated public static func speechDelay(now: Date, notBefore: Date) -> TimeInterval {
+        max(0, notBefore.timeIntervalSince(now))
     }
 
     private func speakStep(_ step: BreakExerciseStep) {
         let text = settings.instruction(forDirection: step.direction)?.text ?? step.instruction
-        TTSService.shared.speak(text, rate: ttsRate, pitch: ttsPitch)
+        pendingStepTask?.cancel()
+        let delay = Self.speechDelay(now: Date(), notBefore: speechNotBefore)
+        guard delay > 0 else {
+            TTSService.shared.speak(text, rate: ttsRate, pitch: ttsPitch)
+            return
+        }
+        pendingStepTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled, let self, self.isActive else { return }
+            TTSService.shared.speak(text, rate: self.ttsRate, pitch: self.ttsPitch)
+        }
     }
 
     private func restartKalib(for holdSeconds: TimeInterval, direction: String) {

@@ -16,8 +16,10 @@ public enum FloatingWidgetStartAction: Equatable, Sendable {
     /// "Start without task" row) decides how `startFocusSession` is called.
     case showPicker
 
-    public static func decide(isPaused: Bool, todayTaskCount: Int) -> FloatingWidgetStartAction {
-        guard !isPaused else { return .startImmediately }
+    /// `isBreak`: a break is pending or paused — ▶︎ continues it (never a picker).
+    public static func decide(isPaused: Bool, todayTaskCount: Int,
+                              isBreak: Bool = false) -> FloatingWidgetStartAction {
+        guard !isPaused, !isBreak else { return .startImmediately }
         return todayTaskCount > 0 ? .showPicker : .startImmediately
     }
 }

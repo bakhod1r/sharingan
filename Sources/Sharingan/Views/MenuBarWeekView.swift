@@ -164,22 +164,22 @@ struct MenuBarWeekView: View {
     // MARK: - Columns
 
     private var backlogColumn: some View {
-        let items = boardItems(store.unscheduledTasks)
+        let items = boardItems(store.boardBacklogTasks)
         return columnContainer(
             id: "unscheduled", isToday: false,
             header: AnyView(backlogHeader(count: items.count)),
             items: items,
-            onDrop: { store.setPlannedDate($0, nil) })
+            onDrop: { store.unschedule($0) })
     }
 
     private func dayColumn(_ day: Date) -> some View {
-        let items = boardItems(store.tasksPlanned(on: day))
+        let items = boardItems(store.tasksScheduled(on: day))
         let isToday = cal.isDateInToday(day)
         return columnContainer(
             id: dayKey(day), isToday: isToday,
             header: AnyView(dayHeader(day, isToday: isToday, count: items.count)),
             items: items,
-            onDrop: { store.setPlannedDate($0, day) })
+            onDrop: { store.schedule($0, on: day) })
     }
 
     private func backlogHeader(count: Int) -> some View {
@@ -218,7 +218,7 @@ struct MenuBarWeekView: View {
         var documentResult: TaskStore.DocumentImport?
         withAnimation(DS.Motion.standard) {
             documentResult = store.importIfDocument(t)
-            if documentResult == nil { store.add(title: t) }
+            if documentResult == nil { store.addParsed(t) }
         }
         backlogDraft = ""
         if let documentResult { ImportDuplicatePrompt.resolve(documentResult, store: store) }
@@ -378,9 +378,9 @@ struct MenuBarWeekView: View {
             Divider()
             ForEach(days, id: \.self) { d in
                 Button {
-                    store.setPlannedDate(task.id, d)
+                    store.schedule(task.id, on: d)
                 } label: {
-                    if let planned = task.plannedDate, cal.isDate(planned, inSameDayAs: d) {
+                    if let planned = task.plannedDate ?? task.dueDate, cal.isDate(planned, inSameDayAs: d) {
                         Label(fullDayLabel(d), systemImage: "checkmark")
                     } else {
                         Text(fullDayLabel(d))
@@ -388,7 +388,7 @@ struct MenuBarWeekView: View {
                 }
             }
             Divider()
-            Button("Unschedule") { store.setPlannedDate(task.id, nil) }
+            Button("Unschedule") { store.unschedule(task.id) }
         }
     }
 

@@ -332,17 +332,18 @@ struct TasksView: View {
     /// "Filtered by …" pill (category / project / tag / priority) with a clear button.
     @ViewBuilder
     private var narrowFilterChip: some View {
-        if categoryFilter != nil || projectFilter != nil
-            || tagFilter != nil || priorityFilter != nil {
-            let (symbol, label, tint): (String, String, Color) = {
-                if let c = categoryFilter { return ("#", c, Color(hex: store.color(for: c))) }
-                if let pr = projectFilter { return ("▤", pr, Color(hex: store.projectColor(pr))) }
-                if let t = tagFilter { return ("@", t, .accentColor) }
-                if let p = priorityFilter {
-                    return ("⚑", timer.settings.priorityName(p),
+        if let chip = narrowFilter.chip {
+            let symbol = chip.symbol
+            let (label, tint): (String, Color) = {
+                switch chip {
+                case .category(let c): return (c, Color(hex: store.color(for: c)))
+                case .project(let pr): return (pr, Color(hex: store.projectColor(pr)))
+                case .tag(let t): return (t, .accentColor)
+                case .priority(let p):
+                    return (timer.settings.priorityName(p),
                             timer.settings.priorityColorHex(p).map { Color(hex: $0) } ?? .secondary)
+                case .device(let d): return (d, .accentColor)
                 }
-                return ("", "", .secondary)
             }()
             HStack(spacing: 6) {
                 Text(symbol)
@@ -353,7 +354,7 @@ struct TasksView: View {
                 Button {
                     withAnimation(DS.Motion.gentle) {
                         categoryFilter = nil; projectFilter = nil
-                        tagFilter = nil; priorityFilter = nil
+                        tagFilter = nil; priorityFilter = nil; deviceFilter = nil
                     }
                 } label: {
                     Image(systemName: "xmark.circle.fill")
@@ -400,9 +401,7 @@ struct TasksView: View {
                         .id("load-more-\(shown)")
                         .padding(.top, 12)
                 }
-                // Trash lives in the full main window only — the menu-bar popover
-                // stays lean (it's the combined focus + task list now).
-                if embeddedInScroll { trashSection.padding(.top, 12) }
+                trashSection.padding(.top, 12)
             }
             // Both hooks matter: onChange for a reveal that arrives while the
             // list is on screen, onAppear for one consumed before it was (the
@@ -690,8 +689,11 @@ struct TasksView: View {
     }
 
     /// True while a sidebar/menu narrowing dimension is active.
-    private var isNarrowed: Bool {
-        categoryFilter != nil || tagFilter != nil || priorityFilter != nil
+    private var isNarrowed: Bool { narrowFilter.isActive }
+
+    private var narrowFilter: TaskNarrowFilter {
+        TaskNarrowFilter(category: categoryFilter, project: projectFilter, tag: tagFilter,
+                         priority: priorityFilter, device: deviceFilter)
     }
 
     /// Filter menu — the same category / tag / priority narrowing the sidebar

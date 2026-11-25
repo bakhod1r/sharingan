@@ -548,9 +548,21 @@ struct TaskEditorView: View {
         }
         .contextMenu {
             Button {
-                if store.promoteSubtask(draft.id, sub.wrappedValue.id) != nil {
-                    draft.subtasks.removeAll { $0.id == sub.wrappedValue.id }
+                let step = sub.wrappedValue
+                // Saved step: the store promotes it in place. A new/edited step
+                // only exists in `draft`, so build the task from that copy.
+                if store.promoteSubtask(draft.id, step.id) == nil {
+                    store.insert(TaskItem(title: step.title,
+                                          category: draft.category,
+                                          tags: draft.tags,
+                                          pomodorosDone: step.pomodorosDone,
+                                          estimatedPomodoros: step.estimatedPomodoros,
+                                          project: draft.project,
+                                          priority: step.priority != .none ? step.priority
+                                                                           : draft.priority,
+                                          pomodoroKind: step.pomodoroKind))
                 }
+                draft.subtasks.removeAll { $0.id == step.id }
             } label: {
                 Label("Make a task", systemImage: "arrow.up.right.square")
             }

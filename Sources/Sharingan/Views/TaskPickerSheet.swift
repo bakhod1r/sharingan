@@ -351,14 +351,19 @@ struct TaskPickerSheet: View {
             .padding(.horizontal, 14).padding(.vertical, 10)
             .glassRounded(12, material: .regular)
 
-            Button {
-                startWithoutTask()
-            } label: {
-                Text(onPick == nil ? "Start without a task" : "Skip — no task for now")
-                    .font(.system(.caption, design: .rounded).weight(.medium))
-                    .foregroundStyle(.white.opacity(0.6))
+            // Classic mode starts focus straight away, so with "require a task"
+            // on the no-task escape hatch would bypass the rule. (Pick mode only
+            // reports a choice to the host, so its skip stays.)
+            if onPick != nil || !timer.settings.requireTaskForFocus {
+                Button {
+                    startWithoutTask()
+                } label: {
+                    Text(onPick == nil ? "Start without a task" : "Skip — no task for now")
+                        .font(.system(.caption, design: .rounded).weight(.medium))
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+                .buttonStyle(.pressableSubtle)
             }
-            .buttonStyle(.pressableSubtle)
         }
         .padding(16)
     }
@@ -398,8 +403,17 @@ struct TaskPickerSheet: View {
             finish(with: first?.id)
             return
         }
-        store.add(title: title)
-        let added = store.tasks.last(where: { $0.title == title })
+        // Same smart parsing as every other quick-add field ("buy milk tmrw !1 #home").
+        let parsed = TaskInputParser.parse(title, now: Date())
+        let parsedTitle = parsed.title.isEmpty ? title : parsed.title
+        store.add(title: parsedTitle,
+                  tags: parsed.tags,
+                  dueDate: parsed.dueDate,
+                  estimatedPomodoros: parsed.estimatedPomodoros,
+                  recurrence: parsed.recurrence,
+                  project: parsed.project,
+                  priority: parsed.priority)
+        let added = store.tasks.last(where: { $0.title == parsedTitle })
         if let added { store.setActive(added.id) }
         newTitle = ""
         finish(with: added?.id)
@@ -416,7 +430,11 @@ struct TaskPickerSheet: View {
         if let onPick {
             onPick(id)
         } else {
-            timer.startFocusSession(kind: store.resolvedActiveKind)
+            if id == nil, let coord = AppServices.coordinator {
+                coord.startRespectingTaskGuard()
+            } else {
+                timer.startFocusSession(kind: store.resolvedActiveKind)
+            }
             dismiss()
         }
     }

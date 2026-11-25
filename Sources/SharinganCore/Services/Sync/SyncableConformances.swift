@@ -18,6 +18,7 @@ extension TaskItem: SyncableRecord {
             priority: priority.rawValue, completedAt: completedAt,
             pomodoroKind: pomodoroKind?.rawValue, jiraKey: jiraKey,
             jiraIssueID: jiraIssueID, jiraSiteHost: jiraSiteHost,
+            jiraIssueType: jiraIssueType,
             boardColumnID: boardColumnID, trashedAt: trashedAt,
             allowedApps: allowedApps.isEmpty ? nil : allowedApps))
     }
@@ -36,6 +37,8 @@ extension TaskItem: SyncableRecord {
         let notes: String, subtasks: [Subtask], recurrence: String
         let project: String?, priority: Int, completedAt: Date?, pomodoroKind: String?
         let jiraKey: String?, jiraIssueID: String?, jiraSiteHost: String?
+        // nil when absent, so existing hashes are unchanged.
+        let jiraIssueType: String?
         let boardColumnID: String?, trashedAt: Date?
         // nil when empty so tasks without an allow-list keep their existing hash
         // (no fleet-wide re-upload on upgrade).

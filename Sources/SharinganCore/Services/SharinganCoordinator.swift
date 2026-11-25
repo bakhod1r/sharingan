@@ -129,14 +129,42 @@ public final class SharinganCoordinator: ObservableObject {
     /// "require a task" rule is on and nothing is selected — pop the quick-add
     /// window instead so the user can capture one.
     public func toggleRespectingTaskGuard() {
-        if !timer.isRunning,
-           timer.phase == .focus,
-           timer.settings.requireTaskForFocus,
-           TaskStore.shared.activeTask == nil {
+        if Self.focusStartBlocked(isRunning: timer.isRunning, phase: timer.phase,
+                                  requireTask: timer.settings.requireTaskForFocus,
+                                  hasActiveTask: TaskStore.shared.activeTask != nil) {
             quickAddController?.showQuickAdd()
             return
         }
         timer.toggle()
+    }
+
+    /// True when starting now would begin a fresh focus session that the
+    /// "require a task" rule forbids (nothing selected). A paused session
+    /// (`phase == .paused`) and breaks are never blocked.
+    nonisolated public static func focusStartBlocked(isRunning: Bool,
+                                                     phase: PomodoroPhase,
+                                                     requireTask: Bool,
+                                                     hasActiveTask: Bool) -> Bool {
+        !isRunning && phase == .focus && requireTask && !hasActiveTask
+    }
+
+    /// The one non-toggling Start entry point (▶︎ buttons, menu). A break —
+    /// pending or paused mid-way — is started/resumed as a break instead of
+    /// being replaced by a focus session; a fresh focus honors the "require a
+    /// task" guard (quick-add pops instead of starting).
+    public func startRespectingTaskGuard(kind: PomodoroKind? = nil) {
+        guard !timer.isRunning else { return }
+        if timer.effectivePhase.isBreak {
+            timer.start()
+            return
+        }
+        if Self.focusStartBlocked(isRunning: false, phase: timer.phase,
+                                  requireTask: timer.settings.requireTaskForFocus,
+                                  hasActiveTask: TaskStore.shared.activeTask != nil) {
+            quickAddController?.showQuickAdd()
+            return
+        }
+        timer.startFocusSession(kind: kind)
     }
 
     public func syncAlarm() {
@@ -385,7 +413,7 @@ public final class SharinganCoordinator: ObservableObject {
             if !timer.isRunning { timer.start() }
         } else if let parsed = NaturalLanguageParser.parse(p) {
             timer.applyParsed(parsed)
-            if case .setDuration = parsed.kind, !timer.isRunning { timer.start() }
+            if Self.cliStartShouldRun(parsed.kind), !timer.isRunning { timer.start() }
         } else if let mins = Int(p) {
             timer.setCustomDuration(TimeInterval(mins) * 60)
             if !timer.isRunning { timer.start() }
@@ -394,17 +422,37 @@ public final class SharinganCoordinator: ObservableObject {
     }
 
     private func cliAdjust(payload: String?, negative: Bool) {
+        if let delta = Self.cliAdjustment(payload: payload, negative: negative) {
+            timer.addTime(delta)
+        }
+        publishSnapshot()
+    }
+
+    /// Signed seconds for `tired add|remove <payload>`; nil when unparseable.
+    /// `5m` (no sign) parses as `.setDuration` — the verb carries the direction.
+    /// `tired start <input>` runs the timer for absolute inputs (duration or
+    /// clock time); relative add/remove keep the current run state.
+    public static func cliStartShouldRun(_ kind: ParsedTimerInput.Kind) -> Bool {
+        switch kind {
+        case .setDuration, .setTargetTime: return true
+        case .addTime, .removeTime: return false
+        }
+    }
+
+    static func cliAdjustment(payload: String?, negative: Bool) -> TimeInterval? {
         let p = payload ?? "5m"
         let parsed = NaturalLanguageParser.parse(p)
         if case .addTime(let d) = parsed?.kind {
-            timer.addTime(negative ? -d : d)
+            return negative ? -d : d
         } else if case .removeTime(let d) = parsed?.kind {
-            timer.addTime(negative ? d : -d)
+            return negative ? d : -d
+        } else if case .setDuration(let d) = parsed?.kind, d > 0 {
+            return negative ? -d : d
         } else if let mins = Int(p.trimmingCharacters(in: .letters).trimmingCharacters(in: .whitespaces)),
                   mins > 0 {
-            timer.addTime(Double(negative ? -mins : mins) * 60)
+            return Double(negative ? -mins : mins) * 60
         }
-        publishSnapshot()
+        return nil
     }
 
     private func cliSetDuration(_ p: String?) {
@@ -429,7 +477,9 @@ public final class SharinganCoordinator: ObservableObject {
             isRunning: timer.isRunning,
             cyclesCompletedToday: timer.stats.completedTodayCount(),
             streak: timer.stats.streak.currentStreak,
-            updatedAt: Date()
+            updatedAt: Date(),
+            isCountUp: timer.isCountUpMode,
+            elapsedSeconds: timer.elapsedSeconds
         )
         lastSnapshotRef = (timer.remainingSeconds, Date())
         CLIBridge.writeSnapshot(snap)

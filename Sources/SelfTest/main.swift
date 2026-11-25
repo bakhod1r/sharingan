@@ -4,6 +4,7 @@ import SharinganCore
 @MainActor
 struct SelfTest {
     static var failures: Int = 0
+    static var exitCode: Int32 = 0
     static var passed: Int = 0
 
     static func check(_ condition: Bool, _ msg: String,
@@ -17,7 +18,30 @@ struct SelfTest {
         }
     }
 
+    /// UserDefaults keys the tests can write through `PomodoroTimer`, `CLIBridge`
+    /// and the stores (all constructed against `UserDefaults.standard`).
+    static let guardedDefaultsKeys = [
+        PomodoroSettings.defaultsKey, "com.sharingan.stats", CLIBridge.snapshotKey,
+        FocusQueue.defaultsKey, BoardColumnStore.defaultsKey, "board.columns.seedVersion",
+        TaskStore.legacyNotificationSweepDefaultsKey,
+    ]
+
     static func main() {
+        // Snapshot real user defaults; restore on exit (remove keys that were
+        // absent) so a run never leaves factory settings/stats behind.
+        let defaults = UserDefaults.standard
+        var saved: [String: Any] = [:]
+        for k in guardedDefaultsKeys { if let v = defaults.object(forKey: k) { saved[k] = v } }
+        defer {
+            for k in guardedDefaultsKeys {
+                if let v = saved[k] { defaults.set(v, forKey: k) } else { defaults.removeObject(forKey: k) }
+            }
+        }
+        runAll()
+    }
+
+
+    static func runAll() {
         print("Sharingan self-tests")
         testModels()
         testPomodoroKinds()
@@ -62,7 +86,7 @@ testBrightnessSettings()
         print("\nPassed: \(passed)  Failed: \(failures)")
         if failures > 0 {
             print("SELF-TEST FAILED")
-            exit(1)
+            exitCode = 1
         }
         print("SELF-TEST PASSED")
     }
@@ -1124,6 +1148,7 @@ testBrightnessSettings()
 }
 Task { @MainActor in
     SelfTest.main()
+    exit(SelfTest.exitCode)
 }
 
 // Keep the process alive until the main-actor task completes.

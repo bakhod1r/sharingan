@@ -93,7 +93,7 @@ struct TodayPanelView: View {
                     .tracking(1.1)
                     .foregroundStyle(.white.opacity(0.65))
                 TimerTicking(timer.clock) {
-                    Text(timer.settings.timeFormat.string(max(0, timer.remainingSeconds)))
+                    Text(timer.settings.timeFormat.string(max(0, timer.displaySeconds)))
                         .font(.dsTimer(20))
                         .foregroundStyle(.white)
                 }

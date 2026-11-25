@@ -103,7 +103,7 @@ struct FloatingWidgetView: View {
 
     private var timeText: some View {
         TimerTicking(timer.clock) {
-            Text(timer.settings.timeFormat.string(max(0, timer.remainingSeconds)))
+            Text(timer.settings.timeFormat.string(max(0, timer.displaySeconds)))
                 .font(.dsTimer(17 * k))
                 .foregroundStyle(.white)
                 .lineLimit(1)
@@ -230,9 +230,17 @@ struct FloatingWidgetView: View {
     /// live timer/store.
     private func handleStart() {
         switch FloatingWidgetStartAction.decide(isPaused: timer.phase == .paused,
-                                            todayTaskCount: todayTasks.count) {
+                                            todayTaskCount: todayTasks.count,
+                                            isBreak: timer.effectivePhase.isBreak) {
         case .startImmediately:
-            timer.startFocusSession()
+            // Break → resume it; fresh focus → honors "require a task".
+            if let coord = AppServices.coordinator {
+                coord.startRespectingTaskGuard()
+            } else if timer.effectivePhase.isBreak {
+                timer.start()
+            } else {
+                timer.startFocusSession()
+            }
         case .showPicker:
             showTaskPicker = true
         }

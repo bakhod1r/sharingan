@@ -200,8 +200,14 @@ struct TiredCLI {
             remaining = max(0, s.remainingSeconds - age)
         }
         let symbol = s.isRunning ? "●" : "⏸"
-        let m = Int(remaining) / 60
-        let sec = Int(remaining) % 60
+        // Count-up mode shows elapsed time (total - remaining holds in both modes,
+        // so older snapshots without `elapsedSeconds` still work).
+        var shown = remaining
+        if s.isCountUp == true {
+            shown = min(s.totalSeconds, max(0, s.totalSeconds - remaining))
+        }
+        let m = Int(shown) / 60
+        let sec = Int(shown) % 60
         let time = String(format: "%02d:%02d", m, sec)
         let pct = s.totalSeconds > 0
             ? Int((1 - remaining / s.totalSeconds) * 100)

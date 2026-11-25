@@ -201,9 +201,9 @@ struct TaskInputParserTests {
 
     @Test func todayAcrossLanguages() throws {
         // English, Spanish, French, German, Russian, Turkish, Korean, Arabic,
-        // Hindi, Indonesian (phrase), Swahili.
+        // Hindi, Indonesian (phrase).
         for word in ["today", "hoy", "aujourd'hui", "heute", "сегодня",
-                     "bugün", "오늘", "اليوم", "आज", "hari ini", "leo"] {
+                     "bugün", "오늘", "اليوم", "आज", "hari ini"] {
             let p = parse("thing \(word)")
             let due = try #require(p.dueDate, "no due for \(word)")
             #expect(Calendar.current.isDate(due, inSameDayAs: Self.now),
@@ -337,7 +337,10 @@ struct TaskInputParserTests {
 
     @Test func everyLanguageDefinesCoreConcepts() {
         for (idx, lang) in LocalizedKeywords.all.enumerated() {
-            #expect(!lang.today.isEmpty, "language #\(idx) missing today")
+            // Swahili's only "today" word ("leo") is also a common given name
+            // ("Call Leo"), so it intentionally defines none.
+            let isSwahili = lang.tomorrow == ["kesho"]
+            #expect(isSwahili || !lang.today.isEmpty, "language #\(idx) missing today")
             #expect(!lang.tomorrow.isEmpty, "language #\(idx) missing tomorrow")
             #expect(!lang.yesterday.isEmpty, "language #\(idx) missing yesterday")
             #expect(lang.weekdays.count == 7, "language #\(idx) needs 7 weekdays")

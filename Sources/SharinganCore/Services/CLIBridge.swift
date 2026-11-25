@@ -34,11 +34,18 @@ public enum CLIBridge {
         /// ran out long ago exposes a crashed/quit app instead of a phantom
         /// "Focus 12:34 ●" forever. Optional so pre-field snapshots still decode.
         public var updatedAt: Date?
+        /// True when the app is in count-up mode, so `tired status` shows
+        /// elapsed time instead of remaining. Optional: older snapshots lack it.
+        public var isCountUp: Bool?
+        /// Elapsed seconds of the current phase at `updatedAt` (count-up display).
+        public var elapsedSeconds: TimeInterval?
 
         public init(phase: PomodoroPhase, remainingSeconds: TimeInterval,
                     totalSeconds: TimeInterval, isRunning: Bool,
                     cyclesCompletedToday: Int, streak: Int,
-                    updatedAt: Date? = nil) {
+                    updatedAt: Date? = nil,
+                    isCountUp: Bool? = nil,
+                    elapsedSeconds: TimeInterval? = nil) {
             self.phase = phase
             self.remainingSeconds = remainingSeconds
             self.totalSeconds = totalSeconds
@@ -46,6 +53,8 @@ public enum CLIBridge {
             self.cyclesCompletedToday = cyclesCompletedToday
             self.streak = streak
             self.updatedAt = updatedAt
+            self.isCountUp = isCountUp
+            self.elapsedSeconds = elapsedSeconds
         }
     }
 
@@ -124,7 +133,7 @@ public enum CLIBridge {
     /// of `TaskStore.inListOrder`). The entry index +1 is the number the CLI
     /// prints and accepts.
     public static func taskSnapshotEntries(from tasks: [TaskItem]) -> [TaskSnapshotEntry] {
-        tasks.filter { !$0.isDone }
+        tasks.filter { !$0.isDone && $0.trashedAt == nil }
             .sorted {
                 $0.sortOrder != $1.sortOrder
                     ? $0.sortOrder < $1.sortOrder

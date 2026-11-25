@@ -98,7 +98,9 @@ final class WidgetSnapshotPublisher {
             todayPomodoros: timer.stats.completedTodayCount(now: now),
             dailyGoal: timer.settings.dailyPomodoroGoal,
             streakDays: timer.stats.streakDays,
-            updatedAt: now)
+            updatedAt: now,
+            isCountUp: timer.isCountUpMode,
+            elapsedSeconds: timer.elapsedSeconds)
     }
 
     private func fingerprint(_ s: WidgetSnapshot) -> String {
@@ -109,6 +111,6 @@ final class WidgetSnapshotPublisher {
             : "r\(Int(s.remainingSeconds.rounded()))"
         return [s.phase.rawValue, "\(s.isRunning)", time, "\(Int(s.totalSeconds))",
                 s.taskTitle ?? "", "\(s.todayPomodoros)", "\(s.dailyGoal)",
-                "\(s.streakDays)"].joined(separator: "|")
+                "\(s.streakDays)", "\(s.isCountUp == true)"].joined(separator: "|")
     }
 }
