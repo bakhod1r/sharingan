@@ -5,6 +5,28 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-11-25
+
+### Added
+- **Break faces.** Settings → Sharingan → *Face and eye* now offers three
+  faces for the break screen: the classic Sharingan eyes, *Looking-for*
+  (brows and a squint; the break opens with a short animation and ends with
+  a spark, fire and the eyes closing) and *Angry* (glowing eyes that fade in,
+  look around and fade out at the end of the break). During the exercises
+  the eyes follow every step, blink and close as before.
+- **Eye choice for every face.** Pick *Sharingan* (your chosen pattern,
+  spin and evolution) or *Original* (a black pupil with a highlight); every
+  face works with both. The Sharingan pattern is always shown whole, never
+  cut by the eyelid.
+- **Random mode.** Choose which faces and which eyes to mix, then let each
+  break draw a new combination, or change the eyes at every exercise step.
+  Left and right eyes can match or differ.
+  Wallpaper, menu bar and Dock icons keep the Sharingan eye.
+
+### Known limitations
+- With *Each step*, only the eyes change; the face stays for the whole
+  break so its opening and closing animations are not replayed.
+
 ## [1.13.0] - 2026-11-24
 
 ### Added
