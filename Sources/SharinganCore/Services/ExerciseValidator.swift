@@ -11,6 +11,8 @@ public final class ExerciseValidator: ObservableObject {
     @Published public private(set) var stepsCompletedInExercise: Int = 0
     @Published public private(set) var exercisesCompleted: Int = 0
     @Published public private(set) var needsRetry: Bool = false
+    /// Set alongside `needsRetry`: what exactly the camera sees wrong.
+    @Published public private(set) var mistake: ExerciseMistake?
     @Published public private(set) var isHolding: Bool = false
     @Published public private(set) var heldSeconds: Double = 0
     @Published public private(set) var lastValidatedAt: Date?
@@ -29,6 +31,15 @@ public final class ExerciseValidator: ObservableObject {
     /// tracking is enabled AND permission is granted, so it can't wedge a break
     /// that has no camera to confirm with.
     public var strictValidation: Bool = false
+    /// Forced break: a wrong move on a camera-validated step wipes that step's
+    /// hold progress, so it must be redone from zero.
+    public var forcedMode: Bool = false
+    /// Fires once, when the last exercise of the sequence is completed.
+    public var onSequenceComplete: (() -> Void)?
+
+    /// One full pass of the configured sequence has been completed.
+    public var isSequenceComplete: Bool { exercisesCompleted >= exercises.count }
+    public var remainingExercises: Int { max(0, exercises.count - exercisesCompleted) }
 
     private var cancellable: AnyCancellable?
     private var ticker: Timer?
@@ -60,6 +71,7 @@ public final class ExerciseValidator: ObservableObject {
         stepsCompletedInExercise = 0
         exercisesCompleted = 0
         needsRetry = false
+        mistake = nil
         beginStep()
         startTicker()
     }
@@ -68,6 +80,7 @@ public final class ExerciseValidator: ObservableObject {
         ticker?.invalidate()
         ticker = nil
         isHolding = false
+        mistake = nil
     }
 
     public func reset() {
@@ -77,13 +90,14 @@ public final class ExerciseValidator: ObservableObject {
         stepsCompletedInExercise = 0
         exercisesCompleted = 0
         needsRetry = false
+        mistake = nil
         heldSeconds = 0
     }
 
     // MARK: - Per-frame update
 
     /// Called by EyeTracker publisher with latest gaze sample.
-    public func ingest(gaze: GazeDirection, isBlinking: Bool) {
+    public func ingest(gaze: GazeDirection, isBlinking: Bool, faceDetected: Bool = true) {
         guard isHolding, let step = currentStep else { return }
         let target = step.targetGaze
 
@@ -103,15 +117,25 @@ public final class ExerciseValidator: ObservableObject {
         // same as the on-screen eye: the detected gaze must point the same way the
         // Sharingan iris does. Comparing distance to the unit target was too strict
         // — a real gaze rarely reaches full magnitude, so steps never completed.
-        default: matched = gaze.label == target.label
+        default: matched = ExerciseMistake.gazeMatches(gaze, target)
         }
 
         if matched {
             needsRetry = false
+            mistake = nil
             matchedInStep = true
         } else if heldSeconds > minHoldSeconds {
             // After a grace period, if not matching, mark retry.
             needsRetry = true
+            mistake = Self.cameraValidated(step.direction) && step.direction.lowercased() != "blink"
+                ? ExerciseMistake.evaluate(gaze: gaze, faceDetected: faceDetected,
+                                           target: target, tolerance: gazeTolerance)
+                : nil
+            if forcedMode && Self.cameraValidated(step.direction) {
+                // Wrong move in a forced break: the hold starts over.
+                heldSeconds = 0
+                matchedInStep = false
+            }
         }
     }
 
@@ -173,6 +197,7 @@ public final class ExerciseValidator: ObservableObject {
         stepHoldStart = .now
         heldSeconds = 0
         needsRetry = false
+        mistake = nil
         blinkSeenInStep = false
         matchedInStep = false
         isHolding = true
@@ -191,6 +216,7 @@ public final class ExerciseValidator: ObservableObject {
 
     private func advanceExercise() {
         exercisesCompleted += 1
+        defer { if exercisesCompleted == exercises.count { onSequenceComplete?() } }
         if currentExerciseIndex + 1 >= exercises.count {
             // Loop the library for long breaks.
             currentExerciseIndex = 0

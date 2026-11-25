@@ -9,6 +9,8 @@ struct BreakView: View {
     /// Force-show the Exit button regardless of the user setting (used by the
     /// Settings "Preview break screen" so the preview can always be closed).
     var forceExit: Bool = false
+    /// Forced break: set while the break must be earned by doing the exercises.
+    var forcedGate: ForcedBreakGate?
     /// Random face/eye draw for this break (nil until the view appears).
     @State private var randomLook: BreakLook?
     var body: some View {
@@ -88,6 +90,12 @@ struct BreakView: View {
 
                     Spacer()
 
+                    if let forcedGate {
+                        ForcedBreakStatusView(gate: forcedGate, validator: validator,
+                                              clock: timer.clock)
+                            .padding(.bottom, 12)
+                    }
+
                     caption
                         .padding(.bottom, 18)
 
@@ -122,6 +130,8 @@ struct BreakView: View {
 
                 if timer.settings.cameraEyeTrackingEnabled,
                    CameraService.shared.isAuthorized {
+                    ExerciseMistakeOverlay(mistake: validator.mistake,
+                                           target: validator.currentStep?.targetGaze ?? .center)
                     VStack {
                         Spacer()
                         HStack { Spacer()
@@ -136,7 +146,8 @@ struct BreakView: View {
         // BreakWindowManager — one view is created PER SCREEN, so doing it
         // here ran everything once per monitor.
         .onReceive(eyeTracker.$state) { state in
-            validator.ingest(gaze: state.gaze, isBlinking: state.isBlinking)
+            validator.ingest(gaze: state.gaze, isBlinking: state.isBlinking,
+                             faceDetected: state.faceDetected)
         }
     }
 
@@ -161,7 +172,10 @@ struct BreakView: View {
         randomLook = BreakFaceEyeRandomizer.eyesOnly(settings: timer.settings, current: cur, using: &rng)
     }
 
-    private var showExit: Bool { timer.settings.showExitBreakButton || forceExit }
+    private var showExit: Bool {
+        if forcedGate?.isEngaged == true { return false }   // forced: Esc-hold only
+        return timer.settings.showExitBreakButton || forceExit
+    }
 
     private func titleRow(display: TimeInterval) -> some View {
         HStack(alignment: .center) {

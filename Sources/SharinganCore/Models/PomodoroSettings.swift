@@ -274,6 +274,10 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
     /// (grace-period avto-o'tish o'chadi). Faqat kamera kuzatuvi yoqilgan va
     /// ruxsat berilgan bo'lsa kuchga kiradi.
     public var strictExerciseValidation: Bool = true
+    /// Forced break: the break doesn't end until the eye exercises are done and
+    /// wrong moves are redone. Effective only with camera tracking on AND the
+    /// camera authorized; implies strict validation.
+    public var forcedBreakEnabled: Bool = false
     public var alarmSound: String = AlarmSoundService.Sound.glass.rawValue
     public var alarmSoundEnabled: Bool = true
     public var ttsSettings: TTSAnnouncementsSettings = .init()
@@ -504,6 +508,7 @@ public struct PomodoroSettings: Codable, Equatable, Sendable {
         focusAttentionSound = try c.decodeIfPresent(Bool.self, forKey: .focusAttentionSound) ?? d.focusAttentionSound
         attentionCalibration = try? c.decodeIfPresent(AttentionCalibration.self, forKey: .attentionCalibration)
         strictExerciseValidation = try c.decodeIfPresent(Bool.self, forKey: .strictExerciseValidation) ?? d.strictExerciseValidation
+        forcedBreakEnabled = try c.decodeIfPresent(Bool.self, forKey: .forcedBreakEnabled) ?? d.forcedBreakEnabled
         alarmSound = try c.decodeIfPresent(String.self, forKey: .alarmSound) ?? d.alarmSound
         alarmSoundEnabled = try c.decodeIfPresent(Bool.self, forKey: .alarmSoundEnabled) ?? d.alarmSoundEnabled
         ttsSettings = try c.decodeIfPresent(TTSAnnouncementsSettings.self, forKey: .ttsSettings) ?? d.ttsSettings

@@ -64,6 +64,30 @@ public final class PomodoroTimer: ObservableObject {
         }
     }
 
+    /// Forced break: consulted when a BREAK reaches its end; returning false
+    /// holds the break in overtime (overlay stays up, +time counts up) until it
+    /// returns true or the user skips/stops. Never consulted for focus.
+    public var breakCompletionGate: (() -> Bool)?
+    public var isOvertime: Bool { clock.isOvertime }
+    /// A break is on and the gate is currently holding it.
+    public var isBreakGateClosed: Bool {
+        guard effectivePhase.isBreak, let gate = breakCompletionGate else { return false }
+        return !gate()
+    }
+
+    /// Re-check the gate now (e.g. the validator just reported completion) and
+    /// finish a break that is waiting in overtime.
+    public func releaseBreakGate() {
+        guard isOvertime, phase.isBreak, let gate = breakCompletionGate, gate() else { return }
+        clearOvertime()
+        phaseComplete()
+    }
+
+    private func clearOvertime() {
+        if clock.isOvertime { clock.isOvertime = false }
+        if clock.overtimeSeconds != 0 { clock.overtimeSeconds = 0 }
+    }
+
     private var tickTask: Task<Void, Never>?
     private var lastTickDate: Date?
     private var repeatJob: Task<Void, Never>?
@@ -189,6 +213,7 @@ public final class PomodoroTimer: ObservableObject {
         isRunning = false
         cancelLoop()
         cancelRepeatJob()
+        clearOvertime()
         durationOverride = nil
         remainingSeconds = settings.duration(for: .focus)
         elapsedSeconds = 0
@@ -369,14 +394,27 @@ public final class PomodoroTimer: ObservableObject {
         syncPrecise()
         tickTask = Task { @MainActor [weak self] in
             while !Task.isCancelled, let s = self, s.isRunning {
-                let delay = Self.nextTickDelay(remaining: s.preciseRemaining,
-                                               elapsed: s.preciseElapsed, mode: s.mode)
+                let delay = s.isOvertime
+                    ? 0.5
+                    : Self.nextTickDelay(remaining: s.preciseRemaining,
+                                         elapsed: s.preciseElapsed, mode: s.mode)
                 try? await Task.sleep(for: .seconds(delay))
                 guard !Task.isCancelled else { return }
                 let now = Date.now
                 let dt = Self.effectiveTickDelta(
                     now.timeIntervalSince(s.lastTickDate ?? now), phase: s.phase)
                 s.lastTickDate = now
+                if s.isOvertime {
+                    // Held break: only the +time runs; the gate is re-checked
+                    // every wake so camera fail-safes can release it.
+                    if let gate = s.breakCompletionGate, !gate() {
+                        s.clock.overtimeSeconds += dt
+                        continue
+                    }
+                    s.clearOvertime()
+                    s.phaseComplete()
+                    return
+                }
                 switch s.mode {
                 case .countdown:
                     s.preciseRemaining -= dt
@@ -394,16 +432,25 @@ public final class PomodoroTimer: ObservableObject {
                 if s.preciseRemaining <= 0 && !s.isCountUpMode {
                     s.preciseRemaining = 0
                     s.remainingSeconds = 0
+                    if s.holdsBreak() { continue }
                     s.phaseComplete()
                     return
                 }
                 if s.isCountUpMode && s.preciseElapsed >= s.totalSeconds {
                     s.elapsedSeconds = s.preciseElapsed
+                    if s.holdsBreak() { continue }
                     s.phaseComplete()
                     return
                 }
             }
         }
+    }
+
+    /// Break reached its end: if the gate says hold, enter overtime.
+    private func holdsBreak() -> Bool {
+        guard phase.isBreak, let gate = breakCompletionGate, !gate() else { return false }
+        clock.isOvertime = true
+        return true
     }
 
     private func cancelLoop() {
@@ -584,6 +631,7 @@ public final class PomodoroTimer: ObservableObject {
     private func transitionToNext(auto: Bool = false, focusCompleted: Bool = false) {
         // A new phase always uses its own settings duration.
         durationOverride = nil
+        clearOvertime()
         switch phase {
         case .focus:
             // Guard the divisor: a user-entered `longBreakEvery` of 0 would trap

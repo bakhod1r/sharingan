@@ -110,6 +110,14 @@ public final class SharinganCoordinator: ObservableObject {
             identifier: "sharingan.burnout")
     }
 
+    /// Skip requested from outside the break screen (global shortcut, URL,
+    /// CLI). A forced break that is still holding ignores it; the break
+    /// screen's own emergency Esc-hold calls `timer.skip()` directly.
+    public func requestSkip() {
+        guard !timer.isBreakGateClosed else { return }
+        timer.skip()
+    }
+
     public func installShortcuts() {
         guard timer.settings.globalShortcutsEnabled else {
             shortcuts.unregister()
@@ -117,7 +125,7 @@ public final class SharinganCoordinator: ObservableObject {
         }
         let actions: [GlobalShortcut: () -> Void] = [
             .toggle:        { [weak self] in self?.toggleRespectingTaskGuard() },
-            .skip:         { [weak self] in self?.timer.skip() },
+            .skip:         { [weak self] in self?.requestSkip() },
             .reset:        { [weak self] in self?.timer.stop() },
             .addFive:      { [weak self] in self?.timer.addTime(300) },
             // Compat (Task 11): the floating timer this shortcut used to show/hide
@@ -220,7 +228,7 @@ public final class SharinganCoordinator: ObservableObject {
         cliObservers["start"]    = CLIBridge.observe(CLIBridge.darwinCommandStart)    { [weak self] p in self?.cliStart(payload: p) }
         cliObservers["pause"]    = CLIBridge.observe(CLIBridge.darwinCommandPause)   { [weak self] _ in self?.timer.pause() }
         cliObservers["resume"]   = CLIBridge.observe(CLIBridge.darwinCommandResume)  { [weak self] _ in self?.timer.start() }
-        cliObservers["skip"]     = CLIBridge.observe(CLIBridge.darwinCommandSkip)    { [weak self] _ in self?.timer.skip() }
+        cliObservers["skip"]     = CLIBridge.observe(CLIBridge.darwinCommandSkip)    { [weak self] _ in self?.requestSkip() }
         cliObservers["stop"]     = CLIBridge.observe(CLIBridge.darwinCommandStop)    { [weak self] _ in self?.timer.stop() }
         cliObservers["add"]      = CLIBridge.observe(CLIBridge.darwinCommandAdd)     { [weak self] p in self?.cliAdjust(payload: p, negative: false) }
         cliObservers["remove"]   = CLIBridge.observe(CLIBridge.darwinCommandRemove)  { [weak self] p in self?.cliAdjust(payload: p, negative: true) }
@@ -380,7 +388,7 @@ public final class SharinganCoordinator: ObservableObject {
         case .resume:
             timer.start()
         case .skip:
-            timer.skip()
+            requestSkip()
         case .reset:
             timer.stop()
         case .addTask(let text):

@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import Combine
 import SharinganCore
 
 @MainActor
@@ -7,6 +8,12 @@ final class BreakWindowManager: BreakPresenter {
     static let shared = BreakWindowManager()
     private var panels: [NSPanel] = []
     private(set) var isBlocking = false
+    /// Forced-break state for the current break (nil = not forced).
+    private var forcedGate: ForcedBreakGate?
+    private weak var gatedTimer: PomodoroTimer?
+    private var forcedCancellables: Set<AnyCancellable> = []
+    private var escMonitor: Any?
+    private var escHoldTask: Task<Void, Never>?
 
     func presentBreak(timer: PomodoroTimer,
                       onTapSkip: @escaping () -> Void) {
@@ -28,7 +35,10 @@ final class BreakWindowManager: BreakPresenter {
         // Session side effects live HERE, not in BreakView.onAppear — a view
         // is created per screen, so on multi-display setups the validator was
         // reset and the camera started once per monitor.
-        beginBreakSession(timer: timer)
+        beginBreakSession(timer: timer, forced: !forceExit, onEmergencyExit: { [weak self] in
+            self?.dismissAll()
+            onTapSkip()
+        })
         NSApp.activate(ignoringOtherApps: true)
 
         for screen in NSScreen.screens {
@@ -50,7 +60,8 @@ final class BreakWindowManager: BreakPresenter {
                                      self?.dismissAll()
                                      onTapSkip()
                                  },
-                                 forceExit: forceExit)
+                                 forceExit: forceExit,
+                                 forcedGate: forcedGate)
                 .environmentObject(timer)
             let hosting = NSHostingView(rootView: view)
             hosting.translatesAutoresizingMaskIntoConstraints = false
@@ -103,7 +114,8 @@ final class BreakWindowManager: BreakPresenter {
 extension BreakWindowManager {
     /// Runs once per break (the TTS announcement itself comes from
     /// SharinganCoordinator on real breaks; the preview stays silent).
-    private func beginBreakSession(timer: PomodoroTimer) {
+    private func beginBreakSession(timer: PomodoroTimer, forced: Bool,
+                                   onEmergencyExit: @escaping () -> Void) {
         TTSKalibrator.shared.update(settings: timer.settings.ttsSettings,
                                     rate: timer.settings.ttsRate,
                                     pitch: timer.settings.ttsPitch)
@@ -118,18 +130,75 @@ extension BreakWindowManager {
         validator.start()
         // Camera is leased for the break screen; the focus attention guard may
         // hold its own lease, so release/acquire never kills the other's feed.
+        validator.forcedMode = false
+        validator.onSequenceComplete = nil
+        let wantsForced = forced && timer.settings.forcedBreakEnabled
+            && timer.settings.cameraEyeTrackingEnabled
+        if wantsForced { armForcedBreak(timer: timer, onEmergencyExit: onEmergencyExit) }
         if timer.settings.cameraEyeTrackingEnabled {
             let strict = timer.settings.strictExerciseValidation
             Task { @MainActor in
                 let granted = await CameraService.shared.requestPermission()
-                validator.strictValidation = strict && granted
+                validator.strictValidation = (strict || wantsForced) && granted
+                if wantsForced, self.forcedGate != nil {
+                    validator.forcedMode = granted
+                    self.forcedGate?.setCamera(granted ? .usable : .unavailable)
+                }
                 EyeTracker.shared.resetBlinkWindow()
                 EyeTracker.shared.acquire(.breakExercise)
             }
         }
     }
 
+    /// Wires the gate on the timer, the validator completion release, the
+    /// camera face feed (30 s no-face fail-safe) and the Esc-hold emergency exit.
+    private func armForcedBreak(timer: PomodoroTimer, onEmergencyExit: @escaping () -> Void) {
+        let validator = ExerciseValidator.shared
+        let gate = ForcedBreakGate(validator: validator)
+        forcedGate = gate
+        gatedTimer = timer
+        timer.breakCompletionGate = { [weak gate] in gate?.isOpen ?? true }
+        validator.onSequenceComplete = { [weak timer] in timer?.releaseBreakGate() }
+        EyeTracker.shared.$state
+            .sink { [weak gate] st in gate?.noteFace(st.faceDetected) }
+            .store(in: &forcedCancellables)
+        // Hold Esc 3 s = emergency exit. A local monitor (not SwiftUI focus)
+        // so it works whatever has key focus on the overlay.
+        escMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { [weak self] event in
+            guard event.keyCode == 53 else { return event }
+            if event.type == .keyDown {
+                if !event.isARepeat, self?.escHoldTask == nil {
+                    self?.escHoldTask = Task { @MainActor [weak self] in
+                        try? await Task.sleep(for: .seconds(3))
+                        guard !Task.isCancelled else { return }
+                        self?.escHoldTask = nil
+                        onEmergencyExit()
+                    }
+                }
+            } else {
+                self?.escHoldTask?.cancel()
+                self?.escHoldTask = nil
+            }
+            return nil
+        }
+    }
+
+    private func disarmForcedBreak() {
+        gatedTimer?.breakCompletionGate = nil
+        gatedTimer = nil
+        forcedGate = nil
+        forcedCancellables.removeAll()
+        escHoldTask?.cancel()
+        escHoldTask = nil
+        if let m = escMonitor { NSEvent.removeMonitor(m) }
+        escMonitor = nil
+        let v = ExerciseValidator.shared
+        v.forcedMode = false
+        v.onSequenceComplete = nil
+    }
+
     private func endBreakSession() {
+        disarmForcedBreak()
         TTSService.shared.stop()
         TTSKalibrator.shared.stop()
         ExerciseValidator.shared.stop()

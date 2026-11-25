@@ -1170,6 +1170,11 @@ struct SettingsView: View {
                         Text("A step won't advance until the camera confirms the movement (gaze directions and blinks). Off = auto-advance after a grace period.")
                             .font(.system(.caption, design: .rounded))
                             .foregroundStyle(.white.opacity(0.65))
+                        ToggleRow(title: "Forced break",
+                                  isOn: $settings.forcedBreakEnabled)
+                        Text("The break doesn't end until you've done the eye exercises. Wrong moves must be redone.")
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.65))
                     } else {
                         Text("Enable camera eye tracking to configure validation.")
                             .font(.system(.caption2, design: .rounded))

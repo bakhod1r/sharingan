@@ -11,6 +11,10 @@ import Combine
 public final class TimerClock: ObservableObject {
     @Published public internal(set) var remainingSeconds: TimeInterval = 0
     @Published public internal(set) var elapsedSeconds: TimeInterval = 0
+    /// Forced break: seconds the break has run past its end, waiting for the
+    /// exercises to finish. Zero outside overtime.
+    @Published public internal(set) var overtimeSeconds: TimeInterval = 0
+    @Published public internal(set) var isOvertime: Bool = false
 
     nonisolated public init() {}
 }
