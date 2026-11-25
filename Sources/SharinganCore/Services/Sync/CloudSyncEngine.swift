@@ -37,6 +37,9 @@ public final class CloudSyncEngine: ObservableObject {
     /// safe — TemplateStore does the same). TaskDatabase is internal to
     /// SharinganCore, so the app target could not pass one in anyway.
     private let database: TaskDatabase?
+    /// The append-only session log (a JSON file, not part of the SQLite store).
+    /// Nil in tests that exercise only the pure helpers.
+    private let sessionLog: FocusSessionLog?
     /// The durable push queue. Its rows outlive a shadow reset, so a delete the
     /// user made while offline still ships after an account/zone reset wipes the
     /// shadow — see SyncOutbox. The shadow diff still decides WHAT changed; the
@@ -74,9 +77,11 @@ public final class CloudSyncEngine: ObservableObject {
     /// the app default is the same `blink.sqlite` TaskStore persists to.
     public init(store: TaskStore,
                 templates: TemplateStore? = nil,
+                sessionLog: FocusSessionLog? = nil,
                 databaseURL: URL? = nil) {
         self.store = store
         self.templates = templates
+        self.sessionLog = sessionLog
         let dbURL: URL
         if let databaseURL {
             dbURL = databaseURL
@@ -145,6 +150,8 @@ public final class CloudSyncEngine: ObservableObject {
 
         store.didPersist = { [weak self] in self?.scheduleEnqueue() }
         templates?.didPersist = { [weak self] in self?.scheduleEnqueue() }
+        sessionLog?.didAppend = { [weak self] in self?.scheduleEnqueue() }
+        loadRemoteDeviceStats()
 
         status = .idle(lastSynced: lastSyncedDate())
         Task { [weak self] in
@@ -190,6 +197,7 @@ public final class CloudSyncEngine: ObservableObject {
     public func stop() {
         store.didPersist = nil
         templates?.didPersist = nil
+        sessionLog?.didAppend = nil
         fallbackTimer?.invalidate()
         fallbackTimer = nil
         // Dropping a debounced diff on the floor loses nothing: the pending set
@@ -268,6 +276,26 @@ public final class CloudSyncEngine: ObservableObject {
                                                lastSyncedHash: String?) -> Bool {
         guard let localHash else { return true }   // nothing local to protect
         return localHash == lastSyncedHash
+    }
+
+    /// What to do about the session log after a local change. SAVES only: the
+    /// log's sole removal is the 400-day retention trim, which every Mac runs
+    /// on its own clock, so a missing local record is never a user delete. A
+    /// trim that propagated would let one Mac's housekeeping erase history the
+    /// other Mac still shows (and a Mac with a wrong clock would wipe the
+    /// fleet), so trimmed ids are only forgotten from the LOCAL shadow and the
+    /// cloud copy stays. New/edited-in-place records are pushed.
+    nonisolated public static func sessionLogChanges(
+        local: [SessionRecord], shadow: [String: ShadowEntry]
+    ) -> (saves: [SessionRecord], shadowNamesToForget: [String]) {
+        let diff = SyncShadow.diff(local: local, shadow: shadow)
+        return (diff.created + diff.changed, diff.deletedRecordNames)
+    }
+
+    /// A DeviceStats record fetched from the cloud is another Mac's counts
+    /// unless it carries our own id (the echo of our own push).
+    nonisolated public static func shouldKeepRemoteDeviceStats(deviceID: String) -> Bool {
+        deviceID != DeviceIdentity.current
     }
 
     // MARK: - Local diff → pending changes
@@ -351,9 +379,89 @@ public final class CloudSyncEngine: ObservableObject {
         collect(.category, store.customCategories)
         collect(.tag, store.customTags.map(SyncableTag.init))
         collect(.focusLog, store.focusLog)
+        collect(.project, store.customProjects.map(SyncableProject.init))
         if let templates { collect(.template, templates.templates) }
+        if let sessionLog { collectSessionLog(sessionLog.records, database: database, now: now) }
+        collectDeviceStats(database: database, now: now)
 
         submitReadyOutbox(to: engine, at: now)
+    }
+
+    /// Session log: saves only, never deletes (see `sessionLogChanges`).
+    private func collectSessionLog(_ records: [SessionRecord], database: TaskDatabase, now: Date) {
+        let type = SyncRecordType.session
+        let plan = Self.sessionLogChanges(local: records,
+                                          shadow: database.loadShadow(recordType: type.rawValue))
+        var dirty = Set<String>()
+        for record in plan.saves {
+            dirty.insert(record.recordName)
+            outbox.enqueue(recordType: type.rawValue, recordName: record.recordName,
+                           kind: .save, now: now)
+        }
+        for name in plan.shadowNamesToForget {
+            database.deleteShadow(recordType: type.rawValue, recordName: name)
+        }
+        for op in outbox.ready(at: now)
+        where op.recordType == type.rawValue && op.kind == .save && !dirty.contains(op.recordName) {
+            outbox.markSent(op.key)
+        }
+    }
+
+    /// Only THIS Mac's own DeviceStats record is ever pushed. The shadow also
+    /// holds the other Macs' records (fetched, not owned), so the generic
+    /// collect() — which treats a shadow row with no local twin as a delete —
+    /// would tombstone them; this path never deletes.
+    private func collectDeviceStats(database: TaskDatabase, now: Date) {
+        guard let own = localDeviceStats else { return }
+        let type = SyncRecordType.deviceStats
+        let known = database.loadShadow(recordType: type.rawValue)[own.recordName]
+        if known?.contentHash != own.contentHash {
+            outbox.enqueue(recordType: type.rawValue, recordName: own.recordName,
+                           kind: .save, now: now)
+        } else {
+            outbox.markSent(SyncOutbox.Key(recordType: type.rawValue, recordName: own.recordName))
+        }
+    }
+
+    // MARK: - Device stats (cross-Mac pomodoro totals)
+
+    /// This Mac's own counts, handed over by the coordinator whenever the local
+    /// stats change.
+    private var localDeviceStats: DeviceDailyStats?
+
+    /// The other Macs' published counts, for the combined display accessors.
+    @Published public private(set) var remoteDeviceStats: [DeviceDailyStats] = []
+
+    private static let remoteDeviceStatsKey = "remoteDeviceStats"
+
+    public func publishLocalStats(_ stats: DeviceDailyStats) {
+        guard stats != localDeviceStats else { return }
+        localDeviceStats = stats
+        guard engine != nil else { return }
+        scheduleEnqueue()
+    }
+
+    private func loadRemoteDeviceStats() {
+        guard let data = database?.syncStateValue(Self.remoteDeviceStatsKey),
+              let stored = try? JSONDecoder().decode([DeviceDailyStats].self, from: data)
+        else { return }
+        remoteDeviceStats = stored.filter { Self.shouldKeepRemoteDeviceStats(deviceID: $0.deviceID) }
+    }
+
+    private func applyRemoteDeviceStats(_ incoming: [DeviceDailyStats]) {
+        var merged = Dictionary(uniqueKeysWithValues: remoteDeviceStats.map { ($0.deviceID, $0) })
+        for stats in incoming where Self.shouldKeepRemoteDeviceStats(deviceID: stats.deviceID) {
+            merged[stats.deviceID] = stats
+        }
+        let sorted = merged.values.sorted { $0.deviceID < $1.deviceID }
+        guard sorted != remoteDeviceStats else { return }
+        remoteDeviceStats = sorted
+        // Persisted so a relaunch shows combined totals before the next fetch
+        // (the sync engine only delivers CHANGES, not records we already saw).
+        // Lives in sync_state, which an account change wipes.
+        if let data = try? JSONEncoder().encode(sorted) {
+            database?.setSyncStateValue(Self.remoteDeviceStatsKey, data)
+        }
     }
 
     /// Hands the engine every outbox op whose backoff has elapsed. CKSyncEngine
@@ -400,6 +508,21 @@ public final class CloudSyncEngine: ObservableObject {
             return RecordMapper.record(for: template, in: zoneID,
                                        systemFields: shadowFields(.template, name))
         }
+        if let project = store.customProjects.first(where: {
+            SyncableProject.recordName(forName: $0.name) == name
+        }) {
+            return RecordMapper.record(for: SyncableProject(project), in: zoneID,
+                                       systemFields: shadowFields(.project, name))
+        }
+        if let own = localDeviceStats, own.recordName == name {
+            return RecordMapper.record(for: own, in: zoneID,
+                                       systemFields: shadowFields(.deviceStats, name))
+        }
+        if name.hasPrefix("session|"),
+           let session = sessionLog?.records.first(where: { $0.recordName == name }) {
+            return RecordMapper.record(for: session, in: zoneID,
+                                       systemFields: shadowFields(.session, name))
+        }
         return nil
     }
 
@@ -416,6 +539,9 @@ public final class CloudSyncEngine: ObservableObject {
         var tags: [String] = []
         var focus: [FocusLogEntry] = []
         var fetchedTemplates: [TaskTemplate] = []
+        var projects: [TaskCategory] = []
+        var sessions: [SessionRecord] = []
+        var deviceStats: [DeviceDailyStats] = []
 
         for record in modifications {
             guard let type = SyncRecordType(rawValue: record.recordType) else { continue }
@@ -442,12 +568,25 @@ public final class CloudSyncEngine: ObservableObject {
                 confirmShadow(type, record, hash: template.contentHash)
             case .activeTimer:
                 applyFetchedTimer(record)
+            case .project:
+                guard let project = RecordMapper.project(from: record) else { continue }
+                projects.append(project)
+                confirmShadow(type, record, hash: SyncableProject(project).contentHash)
+            case .session:
+                guard let session = RecordMapper.sessionRecord(from: record) else { continue }
+                sessions.append(session)
+                confirmShadow(type, record, hash: session.contentHash)
+            case .deviceStats:
+                guard let stats = RecordMapper.deviceStats(from: record) else { continue }
+                deviceStats.append(stats)
+                confirmShadow(type, record, hash: stats.contentHash)
             }
         }
 
         var deletedTaskIDs: [UUID] = []
         var deletedCategoryNames: [String] = []
         var deletedTagNames: [String] = []
+        var deletedProjectNames: [String] = []
         var deletedFocusNames: [String] = []
         var deletedTemplateIDs: [UUID] = []
 
@@ -476,6 +615,14 @@ public final class CloudSyncEngine: ObservableObject {
                 if let id = UUID(uuidString: name) { deletedTemplateIDs.append(id) }
             case .activeTimer:
                 remoteTimer = nil
+            case .project:
+                deletedProjectNames.append(
+                    String(name.dropFirst(SyncableProject.recordName(forName: "").count)))
+            case .session, .deviceStats:
+                // Never applied: the session log has no user-facing delete (a
+                // tombstone can only be retention housekeeping on the other
+                // Mac), and a Mac's counts are replaced, not removed.
+                break
             }
             database?.deleteShadow(recordType: type.rawValue, recordName: name)
             // The server already removed this record; any local .delete op for
@@ -484,17 +631,22 @@ public final class CloudSyncEngine: ObservableObject {
         }
 
         if !tasks.isEmpty || !categories.isEmpty || !tags.isEmpty || !focus.isEmpty
+            || !projects.isEmpty || !deletedProjectNames.isEmpty
             || !deletedTaskIDs.isEmpty || !deletedCategoryNames.isEmpty
             || !deletedTagNames.isEmpty || !deletedFocusNames.isEmpty {
             store.mergeRemote(tasks: tasks,
                               categories: categories,
                               tags: tags,
+                              projects: projects,
                               focusEntries: focus,
                               deletedTaskIDs: deletedTaskIDs,
                               deletedCategoryNames: deletedCategoryNames,
                               deletedTagNames: deletedTagNames,
+                              deletedProjectNames: deletedProjectNames,
                               deletedFocusRecordNames: deletedFocusNames)
         }
+        if !sessions.isEmpty { sessionLog?.mergeRemote(sessions) }
+        if !deviceStats.isEmpty { applyRemoteDeviceStats(deviceStats) }
         if !fetchedTemplates.isEmpty || !deletedTemplateIDs.isEmpty {
             templates?.mergeRemote(templates: fetchedTemplates,
                                    deletedIDs: deletedTemplateIDs)
@@ -518,6 +670,14 @@ public final class CloudSyncEngine: ObservableObject {
             return store.focusLog.first { $0.recordName == name }?.contentHash
         case .template:
             return templates?.templates.first { $0.recordName == name }?.contentHash
+        case .project:
+            return store.customProjects.first {
+                SyncableProject.recordName(forName: $0.name) == name
+            }.map { SyncableProject($0).contentHash }
+        case .session:
+            return sessionLog?.records.first { $0.recordName == name }?.contentHash
+        case .deviceStats:
+            return localDeviceStats?.recordName == name ? localDeviceStats?.contentHash : nil
         case .activeTimer:
             return nil
         }
@@ -554,6 +714,10 @@ public final class CloudSyncEngine: ObservableObject {
             case .focusLog:   hash = RecordMapper.focusLog(from: record)?.contentHash
             case .template:   hash = RecordMapper.template(from: record)?.contentHash
             case .activeTimer: hash = sentTimerHash(record)
+            case .project:
+                hash = RecordMapper.project(from: record).map { SyncableProject($0).contentHash }
+            case .session:    hash = RecordMapper.sessionRecord(from: record)?.contentHash
+            case .deviceStats: hash = RecordMapper.deviceStats(from: record)?.contentHash
             }
             if let hash { confirmShadow(type, record, hash: hash) }
         }

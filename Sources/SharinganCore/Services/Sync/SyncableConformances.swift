@@ -73,3 +73,40 @@ public struct SyncableTag: SyncableRecord, Equatable, Sendable {
     public var recordName: String { name }
     public var contentHash: String { name }
 }
+
+/// A custom project. Same payload as a category, but its own record type AND a
+/// prefixed record name: CloudKit record names are unique per zone regardless
+/// of type, so a project "Work" and a category "Work" would otherwise be the
+/// same record. Rename = delete old + create new, exactly like categories.
+public struct SyncableProject: SyncableRecord, Equatable, Sendable {
+    public let category: TaskCategory
+    public init(_ category: TaskCategory) { self.category = category }
+    public static func recordName(forName name: String) -> String { "project|\(name)" }
+    public var recordName: String { Self.recordName(forName: category.name) }
+    public var contentHash: String { SyncShadow.hash(category) }
+}
+
+/// Session records are immutable and keyed by their own unique id, so the same
+/// session from two Macs is one record and merging is a plain union.
+extension SessionRecord: SyncableRecord {
+    public var recordName: String { "session|\(id.uuidString)" }
+
+    /// Timestamps are hashed at millisecond precision: CloudKit stores dates to
+    /// the millisecond, so hashing the raw Double would make the record the
+    /// server hands back differ from the local one forever (a push loop).
+    public var contentHash: String {
+        SyncShadow.hash(SyncPayload(
+            id: id, startMS: Int((start.timeIntervalSince1970 * 1000).rounded()),
+            endMS: Int((end.timeIntervalSince1970 * 1000).rounded()),
+            phase: phase.rawValue, completed: completed, taskID: taskID,
+            subtaskID: subtaskID, taskTitle: taskTitle, plannedSeconds: plannedSeconds,
+            appUsage: appUsage, deviceName: deviceName, deviceID: deviceID))
+    }
+
+    private struct SyncPayload: Encodable {
+        let id: UUID, startMS: Int, endMS: Int, phase: String, completed: Bool
+        let taskID: UUID?, subtaskID: UUID?, taskTitle: String?
+        let plannedSeconds: Double, appUsage: [String: Double]
+        let deviceName: String?, deviceID: String?
+    }
+}

@@ -95,9 +95,9 @@ final class WidgetSnapshotPublisher {
             remainingSeconds: remaining,
             totalSeconds: total,
             taskTitle: TaskStore.shared.activeTask?.title,
-            todayPomodoros: timer.stats.completedTodayCount(now: now),
+            todayPomodoros: timer.combinedStats.completedTodayCount(now: now),
             dailyGoal: timer.settings.dailyPomodoroGoal,
-            streakDays: timer.stats.streakDays,
+            streakDays: timer.combinedStats.streakDays,
             updatedAt: now,
             isCountUp: timer.isCountUpMode,
             elapsedSeconds: timer.elapsedSeconds)

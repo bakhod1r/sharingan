@@ -620,7 +620,7 @@ if let outDir = HeadlessRender.outputDirectory(for: "--render-dev-preview") {
                 .environment(\.colorScheme, .dark),
               to: "\(outDir)/report.png",
               size: NSSize(width: 600, height: 560))
-        write(StatsExtrasView(stats: timer.stats)
+        write(StatsExtrasView(stats: timer.combinedStats)
                 .frame(width: 640)
                 .padding(20)
                 .background(Color(white: 0.12))

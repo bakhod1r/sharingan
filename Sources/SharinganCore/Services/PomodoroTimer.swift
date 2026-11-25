@@ -45,6 +45,15 @@ public final class PomodoroTimer: ObservableObject {
     public func applyRemoteStats(_ value: PomodoroStats) {
         stats = value
     }
+
+    /// The other Macs' published per-device counts (empty with sync off).
+    @Published public var remoteDeviceStats: [DeviceDailyStats] = []
+
+    /// This Mac's stats folded together with the other Macs' counts — what
+    /// DISPLAY surfaces (menu bar, analytics, widget, streak badge) show. The
+    /// local `stats` stays the source for crediting, long-break cadence and
+    /// goal detection, so those never change behaviour with sync on or off.
+    public var combinedStats: PomodoroStats { stats.combined(with: remoteDeviceStats) }
     @Published public private(set) var isFlashing: Bool = false
 
     @Published public var settings: PomodoroSettings {
@@ -453,7 +462,12 @@ public final class PomodoroTimer: ObservableObject {
         // Log the finished session before any transition wipes durationOverride.
         postSessionEnd(completed: true, elapsed: totalSeconds,
                        mirrored: isMirroredSession)
-        if phase == .focus {
+        // Credit only a session THIS Mac owns. A mirrored focus (the other Mac's
+        // session, applied here by the active-timer sync) completes on both
+        // Macs; if both credited it, the per-device counts that sync across
+        // Macs would sum to two pomodoros for one. The owner credits it and
+        // publishes it; this Mac sees it through `combinedStats`.
+        if phase == .focus && !isMirroredSession {
             stats.registerFocusCompletion()
             persist(stats)
             // Long-break cadence keys off the *day's* total completions, not a

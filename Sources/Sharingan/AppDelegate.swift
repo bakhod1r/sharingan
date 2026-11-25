@@ -642,7 +642,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // but only start()s while the opt-in toggle is on. Everything
         // degrades to a calm status string without an account/entitlement.
         let sync = CloudSyncEngine(store: TaskStore.shared,
-                                   templates: TemplateStore.shared)
+                                   templates: TemplateStore.shared,
+                                   sessionLog: FocusSessionLog.shared)
         self.syncEngine = sync
         AppServices.syncEngine = sync
         coord.installSync(engine: sync)

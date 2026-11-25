@@ -48,6 +48,8 @@ public final class SharinganCoordinator: ObservableObject {
     /// iCloud sync, when the user has turned it on (owned by the AppDelegate).
     private weak var syncEngine: CloudSyncEngine?
     private var syncCancellable: AnyCancellable?
+    private var statsPublishCancellable: AnyCancellable?
+    private var remoteStatsCancellable: AnyCancellable?
     /// The last timer state pushed to sync — publish only when the session
     /// payload really changed (the phase/isRunning sinks fire on every
     /// assignment, including no-op rewrites).
@@ -70,7 +72,7 @@ public final class SharinganCoordinator: ObservableObject {
         self.focusQueue = focusQueue ?? FocusQueue()
         // Prime the reward baseline from the already-earned streak so restarting
         // the app doesn't re-announce milestones the user passed days ago.
-        StreakRewardCenter.shared.prime(streak: timer.stats.streak.currentStreak)
+        StreakRewardCenter.shared.prime(streak: timer.combinedStats.streak.currentStreak)
         observe()
         checkBurnout()
     }
@@ -250,11 +252,30 @@ public final class SharinganCoordinator: ObservableObject {
             .receive(on: DispatchQueue.main)
             .compactMap { $0 }
             .sink { [weak self] state in self?.applyRemoteTimer(state) }
+
+        // Per-device pomodoro counts: publish ours, show the sum with theirs.
+        let publishLocalStats = { [weak engine, weak timer] in
+            guard let engine, let timer else { return }
+            engine.publishLocalStats(DeviceDailyStats(
+                from: timer.stats, deviceID: DeviceIdentity.current,
+                deviceName: DeviceIdentity.name))
+        }
+        publishLocalStats()
+        statsPublishCancellable = timer.$stats
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { _ in publishLocalStats() }
+        remoteStatsCancellable = engine.$remoteDeviceStats
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] remote in self?.timer.remoteDeviceStats = remote }
     }
 
     public func uninstallSync() {
         syncEngine = nil
         syncCancellable = nil
+        statsPublishCancellable = nil
+        remoteStatsCancellable = nil
+        timer.remoteDeviceStats = []
     }
 
     /// This Mac's session as an ActiveTimerState snapshot (see that type for
@@ -475,8 +496,8 @@ public final class SharinganCoordinator: ObservableObject {
             remainingSeconds: timer.remainingSeconds,
             totalSeconds: timer.totalSeconds,
             isRunning: timer.isRunning,
-            cyclesCompletedToday: timer.stats.completedTodayCount(),
-            streak: timer.stats.streak.currentStreak,
+            cyclesCompletedToday: timer.combinedStats.completedTodayCount(),
+            streak: timer.combinedStats.streak.currentStreak,
             updatedAt: Date(),
             isCountUp: timer.isCountUpMode,
             elapsedSeconds: timer.elapsedSeconds

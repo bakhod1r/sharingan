@@ -35,10 +35,38 @@ public final class FocusSessionLog: ObservableObject {
         load()
     }
 
+    /// Fires after a LOCAL append only — never after `mergeRemote`, so an
+    /// applied fetch cannot echo straight back to iCloud.
+    public var didAppend: (() -> Void)?
+
     public func append(_ r: SessionRecord) {
+        var r = r
+        // Stamp the originating Mac so a synced log can be sliced per device.
+        if r.deviceID == nil { r.deviceID = DeviceIdentity.current }
         records.append(r)
         trim()
         save()
+        didAppend?()
+    }
+
+    /// Union by id with sessions fetched from another Mac. Sessions are
+    /// immutable, so an id we already hold is left alone. Records older than
+    /// the retention window are ignored — same cutoff `trim()` uses, so a
+    /// re-fetched ancient session can never resurrect what retention dropped.
+    /// Returns whether anything was added.
+    @discardableResult
+    public func mergeRemote(_ remote: [SessionRecord]) -> Bool {
+        let cutoff = Self.retentionCutoff()
+        var known = Set(records.map(\.id))
+        var added = false
+        for r in remote where r.start >= cutoff && known.insert(r.id).inserted {
+            records.append(r)
+            added = true
+        }
+        guard added else { return false }
+        records.sort { $0.start < $1.start }
+        save()
+        return true
     }
 
     /// Sessions whose START falls on `day` — a midnight-spanning session
@@ -75,10 +103,14 @@ public final class FocusSessionLog: ObservableObject {
         }
     }
 
-    private func trim() {
-        let cutoff = Calendar.current.date(
-            byAdding: .day, value: -Self.retentionDays,
+    private static func retentionCutoff() -> Date {
+        Calendar.current.date(
+            byAdding: .day, value: -retentionDays,
             to: Calendar.current.startOfDay(for: Date())) ?? .distantPast
+    }
+
+    private func trim() {
+        let cutoff = Self.retentionCutoff()
         records.removeAll { $0.start < cutoff }
     }
 

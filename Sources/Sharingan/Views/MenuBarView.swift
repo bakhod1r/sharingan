@@ -331,14 +331,14 @@ struct MenuBarView: View {
     /// combined into a single row so the footer no longer takes two.
     private var footer: some View {
         HStack(spacing: 14) {
-            stat(value: "\(timer.stats.completedTodayCount())", label: "Today")
+            stat(value: "\(timer.combinedStats.completedTodayCount())", label: "Today")
             stat(value: "\(timer.cyclesCompletedInRound)/\(timer.settings.longBreakEvery)",
                  label: "Cycle")
             if timer.settings.repeatConfig.enabled {
                 stat(value: "\(timer.repeatIndex + 1)/\(timer.settings.repeatConfig.count)",
                      label: "Repeat")
             }
-            stat(value: "\(timer.stats.streak.currentStreak)", label: "Streak")
+            stat(value: "\(timer.combinedStats.streak.currentStreak)", label: "Streak")
 
             Spacer(minLength: 12)
 

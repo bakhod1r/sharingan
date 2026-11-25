@@ -1088,8 +1088,8 @@ struct MainWindowView: View {
     /// instead of empty space (the way Todoist parks account/karma at the foot).
     @ViewBuilder
     private var sidebarFooter: some View {
-        let today = timer.stats.completedTodayCount()
-        let streak = timer.stats.streak.currentStreak
+        let today = timer.combinedStats.completedTodayCount()
+        let streak = timer.combinedStats.streak.currentStreak
         // The rail stacks the two stats and drops their captions — the icon
         // already says which is which at that width.
         let layout = sidebarCollapsed

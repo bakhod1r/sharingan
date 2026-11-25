@@ -8,6 +8,9 @@ public enum SyncRecordType: String, CaseIterable, Sendable {
     case template = "Template"
     case focusLog = "FocusLog"
     case activeTimer = "ActiveTimer"
+    case project = "Project"
+    case session = "FocusSession"
+    case deviceStats = "DeviceStats"
 }
 
 /// Row ⇄ CKRecord. Kept pure and separate from the engine so the wire format
@@ -197,6 +200,106 @@ public enum RecordMapper {
         guard record.recordType == SyncRecordType.template.rawValue,
               let raw = record["json"] as? String else { return nil }
         return decode(TaskTemplate.self, from: raw)
+    }
+
+    // MARK: Project
+
+    public static func record(for project: SyncableProject,
+                              in zoneID: CKRecordZone.ID,
+                              systemFields: Data?) -> CKRecord {
+        let record = base(recordType: .project, name: project.recordName,
+                          zoneID: zoneID, systemFields: systemFields)
+        record["name"] = project.category.name as CKRecordValue
+        record["colorHex"] = project.category.colorHex as CKRecordValue
+        record["icon"] = project.category.icon as CKRecordValue
+        record["schemaVersion"] = schemaVersion as CKRecordValue
+        return record
+    }
+
+    public static func project(from record: CKRecord) -> TaskCategory? {
+        guard record.recordType == SyncRecordType.project.rawValue,
+              let name = record["name"] as? String,
+              let colorHex = record["colorHex"] as? String,
+              let icon = record["icon"] as? String
+        else { return nil }
+        return TaskCategory(name: name, colorHex: colorHex, icon: icon)
+    }
+
+    // MARK: Focus session
+
+    public static func record(for session: SessionRecord,
+                              in zoneID: CKRecordZone.ID,
+                              systemFields: Data?) -> CKRecord {
+        let record = base(recordType: .session, name: session.recordName,
+                          zoneID: zoneID, systemFields: systemFields)
+        record["sessionID"] = session.id.uuidString as CKRecordValue
+        record["start"] = session.start as CKRecordValue
+        record["end"] = session.end as CKRecordValue
+        record["phase"] = session.phase.rawValue as CKRecordValue
+        record["completed"] = (session.completed ? 1 : 0) as CKRecordValue
+        record["taskID"] = session.taskID?.uuidString as CKRecordValue?
+        record["subtaskID"] = session.subtaskID?.uuidString as CKRecordValue?
+        record["taskTitle"] = session.taskTitle as CKRecordValue?
+        record["plannedSeconds"] = session.plannedSeconds as CKRecordValue
+        record["appUsageJSON"] = (session.appUsage.isEmpty ? nil : json(session.appUsage)) as CKRecordValue?
+        record["deviceName"] = session.deviceName as CKRecordValue?
+        record["deviceID"] = session.deviceID as CKRecordValue?
+        record["schemaVersion"] = schemaVersion as CKRecordValue
+        return record
+    }
+
+    public static func sessionRecord(from record: CKRecord) -> SessionRecord? {
+        guard record.recordType == SyncRecordType.session.rawValue,
+              let rawID = record["sessionID"] as? String,
+              let id = UUID(uuidString: rawID),
+              let start = record["start"] as? Date,
+              let end = record["end"] as? Date,
+              let rawPhase = record["phase"] as? String,
+              let phase = PomodoroPhase(rawValue: rawPhase)
+        else { return nil }
+        return SessionRecord(
+            id: id, start: start, end: end, phase: phase,
+            completed: (record["completed"] as? Int ?? 1) == 1,
+            taskID: (record["taskID"] as? String).flatMap(UUID.init(uuidString:)),
+            subtaskID: (record["subtaskID"] as? String).flatMap(UUID.init(uuidString:)),
+            taskTitle: record["taskTitle"] as? String,
+            plannedSeconds: record["plannedSeconds"] as? Double ?? end.timeIntervalSince(start),
+            appUsage: (record["appUsageJSON"] as? String)
+                .flatMap { decode([String: TimeInterval].self, from: $0) } ?? [:],
+            deviceName: record["deviceName"] as? String,
+            deviceID: record["deviceID"] as? String)
+    }
+
+    // MARK: Device stats
+
+    public static func record(for stats: DeviceDailyStats,
+                              in zoneID: CKRecordZone.ID,
+                              systemFields: Data?) -> CKRecord {
+        let record = base(recordType: .deviceStats, name: stats.recordName,
+                          zoneID: zoneID, systemFields: systemFields)
+        record["deviceID"] = stats.deviceID as CKRecordValue
+        record["deviceName"] = stats.deviceName as CKRecordValue
+        record["dayStamps"] = stats.days.map { Int($0.day.timeIntervalSince1970) } as CKRecordValue
+        record["dayCounts"] = stats.days.map(\.count) as CKRecordValue
+        record["hourCounts"] = stats.hourCounts as CKRecordValue
+        record["schemaVersion"] = schemaVersion as CKRecordValue
+        return record
+    }
+
+    public static func deviceStats(from record: CKRecord) -> DeviceDailyStats? {
+        guard record.recordType == SyncRecordType.deviceStats.rawValue,
+              let deviceID = record["deviceID"] as? String,
+              let stamps = record["dayStamps"] as? [Int],
+              let counts = record["dayCounts"] as? [Int],
+              stamps.count == counts.count
+        else { return nil }
+        let days = zip(stamps, counts).map {
+            DailyCount(day: Date(timeIntervalSince1970: TimeInterval($0)), count: $1)
+        }
+        return DeviceDailyStats(deviceID: deviceID,
+                                deviceName: record["deviceName"] as? String ?? "Mac",
+                                days: days,
+                                hourCounts: record["hourCounts"] as? [Int] ?? [])
     }
 
     // MARK: Active timer

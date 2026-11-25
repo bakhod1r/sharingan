@@ -52,7 +52,7 @@ struct AnalyticsView: View {
                     progress
                 case .heatmap:
                     AnalyticsHeatmapView(
-                        stats: timer.stats, accent: accent,
+                        stats: timer.combinedStats, accent: accent,
                         // A narrowed view can't read the aggregate history, so feed
                         // the heatmap a session-derived series instead.
                         override: filter.narrowsSessions || filter.isCustomRange
@@ -85,16 +85,16 @@ struct AnalyticsView: View {
 
     private var progress: some View {
         VStack(spacing: 20) {
-            StatsSummaryView(stats: timer.stats,
+            StatsSummaryView(stats: timer.combinedStats,
                              focusMinutes: timer.settings.focusMinutes,
                              accent: accent,
                              dailyGoal: timer.settings.dailyPomodoroGoal)
                 .staggeredAppear(0)
-            StreakBadgeView(streak: timer.stats.streak)
+            StreakBadgeView(streak: timer.combinedStats.streak)
                 .staggeredAppear(1)
-            StatsChartView(stats: timer.stats, accent: accent)
+            StatsChartView(stats: timer.combinedStats, accent: accent)
                 .staggeredAppear(2)
-            StatsExtrasView(stats: timer.stats, accent: accent)
+            StatsExtrasView(stats: timer.combinedStats, accent: accent)
                 .staggeredAppear(3)
         }
     }
@@ -528,7 +528,7 @@ struct AnalyticsView: View {
     private var overview: some View {
         let scores = overviewScores
         let burnout = BurnoutDetector.evaluate(sessions: recentSessions)
-        let suggestions = SmartSuggestions.insights(stats: timer.stats,
+        let suggestions = SmartSuggestions.insights(stats: timer.combinedStats,
                                                     sessions: recentSessions)
         return VStack(alignment: .leading, spacing: 16) {
             if burnout.isWarning { burnoutBanner(burnout) }
@@ -613,7 +613,7 @@ struct AnalyticsView: View {
             kpiCard(icon: "checkmark.seal.fill", value: Double(sessions.count),
                     format: { "\(Int($0))" }, label: "Sessions",
                     tint: accent, index: 1)
-            kpiCard(icon: "flame.fill", value: Double(timer.stats.streak.currentStreak),
+            kpiCard(icon: "flame.fill", value: Double(timer.combinedStats.streak.currentStreak),
                     format: { "\(Int($0))" }, label: "Day streak",
                     tint: .orange, index: 2)
             kpiCard(icon: "calendar", value: Double(days),

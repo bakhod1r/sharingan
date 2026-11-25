@@ -1428,10 +1428,12 @@ public final class TaskStore: ObservableObject {
     public func mergeRemote(tasks remoteTasks: [TaskItem] = [],
                             categories remoteCategories: [TaskCategory] = [],
                             tags remoteTags: [String] = [],
+                            projects remoteProjects: [TaskCategory] = [],
                             focusEntries remoteFocus: [FocusLogEntry] = [],
                             deletedTaskIDs: [UUID] = [],
                             deletedCategoryNames: [String] = [],
                             deletedTagNames: [String] = [],
+                            deletedProjectNames: [String] = [],
                             deletedFocusRecordNames: [String] = []) {
         isApplyingRemoteMerge = true
         defer { isApplyingRemoteMerge = false }
@@ -1480,6 +1482,15 @@ public final class TaskStore: ObservableObject {
         }
         customCategories.removeAll { deletedCategoryNames.contains($0.name) }
 
+        for remote in remoteProjects {
+            if let i = customProjects.firstIndex(where: { $0.name == remote.name }) {
+                customProjects[i] = remote
+            } else {
+                customProjects.append(remote)
+            }
+        }
+        customProjects.removeAll { deletedProjectNames.contains($0.name) }
+
         for tag in remoteTags where !customTags.contains(where: {
             $0.caseInsensitiveCompare(tag) == .orderedSame
         }) {
@@ -1505,6 +1516,7 @@ public final class TaskStore: ObservableObject {
             tasks.map { ($0.id, $0.contentHash) })
         persist()
         persistCategories()
+        persistProjects()
         persistTags()
         persistFocusLog()
     }

@@ -476,13 +476,13 @@ struct NotchExpandedPanel: View {
                     .foregroundStyle(.orange.opacity(0.9))
             }
             Spacer(minLength: 0)
-            Label("\(timer.stats.streak.currentStreak)", systemImage: "flame.fill")
+            Label("\(timer.combinedStats.streak.currentStreak)", systemImage: "flame.fill")
                 .font(.system(size: 9, weight: .medium, design: .rounded))
                 // The streak is the app's own achievement, not a phase reading —
                 // so the flame burns in the theme accent (warm amber on Cream,
                 // magenta on Neon, near-white on Mono), one interactive color.
                 .foregroundStyle(timer.settings.theme.accent)
-                .help("\(timer.stats.streak.currentStreak)-day streak")
+                .help("\(timer.combinedStats.streak.currentStreak)-day streak")
         }
     }
 }
