@@ -240,6 +240,7 @@ struct MainWindowView: View {
                     navRow(.timer)
                     navRow(.tasks)
                     navRow(.week)
+                    navRow(.habits)
                     navRow(.dashboard)
                     sidebarDivider
                     categoriesSection
@@ -1323,6 +1324,7 @@ struct MainWindowView: View {
         case .tasks: return tasks.tasks.filter { !$0.isDone && $0.trashedAt == nil }.count
         // Same set as the main-window WeeklyBoardView backlog (due-date based).
         case .week:  return tasks.boardBacklogTasks.count
+        case .habits: return tasks.pendingHabitCount()
         default:     return 0
         }
     }
@@ -1405,6 +1407,14 @@ struct MainWindowView: View {
                 .padding(.horizontal, 28)
                 .padding(.top, 32)
                 .padding(.bottom, 24)
+        case .habits:
+            ScrollView {
+                HabitsView(timer: timer)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 40)
+                    .padding(.top, 40)
+                    .padding(.bottom, 32)
+            }
         case .dashboard:
             // Full-width like Week — the heatmap, charts and progress grid need
             // the whole window, not the 640pt-capped scaffold. Owns its scroll.

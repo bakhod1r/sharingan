@@ -62,6 +62,7 @@ struct TaskEditorView: View {
                     estimateRecurrenceRow
                     projectField
                     notesSection
+                    HabitEditorSection(habit: $draft.habit, accent: accent)
                     allowedAppsSection
                     subtasksSection
                     if !history.isEmpty { historySection }

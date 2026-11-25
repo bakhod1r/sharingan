@@ -570,8 +570,7 @@ struct SettingsView: View {
                             .help("Remove from list")
                             // Pause/resume blocking without losing the entry.
                             Toggle("", isOn: $app.isEnabled)
-                                .tint(.green)
-
+                                .toggleStyle(.glassSwitch(tint: .green))
                                 .labelsHidden()
                         }
                         .padding(.vertical, 4)
@@ -1147,13 +1146,8 @@ struct SettingsView: View {
                         Text("Pattern animation")
                             .font(.system(.body, design: .rounded))
                         Spacer()
-                        Picker("", selection: $settings.breakPatternTransition) {
-                            ForEach(PatternTransitionSpeed.allCases) { s in
-                                Text(s.label).tag(s)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.segmented)
+                        GlassSegmentedPicker(selection: $settings.breakPatternTransition,
+                                             cases: PatternTransitionSpeed.allCases, label: \.label)
                         .frame(width: 260)
                     }
                     Text("The pattern whirls open at break start and whirls shut as the break ends.")
@@ -1172,14 +1166,9 @@ struct SettingsView: View {
                         Text("Pattern spin")
                             .font(.system(.body, design: .rounded))
                         Spacer()
-                        Picker("", selection: $settings.breakPatternSpinSeconds) {
-                            Text("Off").tag(0.0)
-                            Text("Slow").tag(12.0)
-                            Text("Normal").tag(8.0)
-                            Text("Fast").tag(4.0)
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.segmented)
+                        GlassSegmentedPicker(selection: $settings.breakPatternSpinSeconds,
+                                             options: [(0.0, "Off"), (12.0, "Slow"),
+                                                       (8.0, "Normal"), (4.0, "Fast")])
                         .frame(width: 260)
                     }
                     Text("Continuous rotation of the iris pattern while the break runs.")
@@ -1208,13 +1197,8 @@ struct SettingsView: View {
                             Text("Spin speed")
                                 .font(.system(.body, design: .rounded))
                             Spacer()
-                            Picker("", selection: $settings.wallpaperSpinDuration) {
-                                Text("Slow").tag(2.8)
-                                Text("Normal").tag(1.6)
-                                Text("Fast").tag(0.9)
-                            }
-                            .labelsHidden()
-                            .pickerStyle(.segmented)
+                            GlassSegmentedPicker(selection: $settings.wallpaperSpinDuration,
+                                                 options: [(2.8, "Slow"), (1.6, "Normal"), (0.9, "Fast")])
                             .frame(width: 210)
                         }
                     }

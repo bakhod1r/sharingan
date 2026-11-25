@@ -11,10 +11,8 @@ struct ToggleRow: View {
                 .foregroundStyle(.white)
             Spacer(minLength: 8)
             Toggle("", isOn: $isOn)
-                .toggleStyle(.switch)
-                .tint(.green)
+                .toggleStyle(.glassSwitch(tint: .green))
                 .labelsHidden()
-                .controlSize(.small)
         }
         .frame(minHeight: 24)
     }

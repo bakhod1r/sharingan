@@ -213,6 +213,8 @@ public final class TaskStore: ObservableObject {
     /// Per-day focus attribution rows (see FocusLogEntry). Grows at credit
     /// time only; task deletion leaves history untouched.
     @Published public private(set) var focusLog: [FocusLogEntry] = []
+    /// Manual habit ticks (local only; see `HabitCheck`).
+    @Published public private(set) var habitChecks: [HabitCheck] = []
 
     private let database: TaskDatabase?
 
@@ -270,6 +272,7 @@ public final class TaskStore: ObservableObject {
         loadProjects()
         loadTags()
         loadFocusLog()
+        habitChecks = database?.loadHabitChecks() ?? []
         migrateLegacyJSONIfNeeded(dbDir: dbURL.deletingLastPathComponent())
     }
 
@@ -523,6 +526,53 @@ public final class TaskStore: ObservableObject {
         tasks.removeAll { $0.isDone && $0.trashedAt == nil }
         database?.deleteTasks(doneIDs)
         persist()
+    }
+
+    // MARK: - Habits
+
+    /// Live (non-trashed) tasks with Habit switched on.
+    public var habitTasks: [TaskItem] {
+        tasks.filter { $0.habit != nil && $0.trashedAt == nil }
+    }
+
+    /// Switches Habit on/off for a task. Local only: no `modifiedAt` stamp, no sync.
+    public func setHabit(_ habit: TaskHabit?, for taskID: UUID) {
+        guard let i = tasks.firstIndex(where: { $0.id == taskID }) else { return }
+        tasks[i].habit = habit
+        persist()
+    }
+
+    /// Ticks / unticks a manual-mode habit day. Pomodoro habits derive from the
+    /// focus log, so toggling them is a no-op.
+    public func toggleHabitCheck(taskID: UUID, day: Date, calendar: Calendar = .current) {
+        guard let habit = tasks.first(where: { $0.id == taskID })?.habit,
+              habit.mode == .manual else { return }
+        let d = calendar.startOfDay(for: day)
+        let check = HabitCheck(day: d, taskID: taskID)
+        if let i = habitChecks.firstIndex(of: check) {
+            habitChecks.remove(at: i)
+            database?.setHabitCheck(day: d, taskID: taskID, checked: false)
+        } else {
+            habitChecks.append(check)
+            database?.setHabitCheck(day: d, taskID: taskID, checked: true)
+        }
+    }
+
+    public func habitInputs() -> [HabitInput] {
+        habitTasks.compactMap { t in t.habit.map { HabitInput(taskID: t.id, title: t.title, habit: $0) } }
+    }
+
+    public func habitReport(days: Int, today: Date = Date(), calendar: Calendar = .current) -> HabitReport {
+        HabitReport.make(habits: habitInputs(), focusLog: focusLog, checks: habitChecks,
+                         days: days, today: today, calendar: calendar)
+    }
+
+    /// Habits still to do today (sidebar badge).
+    public func pendingHabitCount(today: Date = Date(), calendar: Calendar = .current) -> Int {
+        habitInputs().filter {
+            HabitEngine.isPendingToday(habit: $0.habit, taskID: $0.taskID, focusLog: focusLog,
+                                       checks: habitChecks, today: today, calendar: calendar)
+        }.count
     }
 
     // MARK: - Mutations
@@ -814,6 +864,7 @@ public final class TaskStore: ObservableObject {
         // A new task, so a new issue number: copying the parent's would put two
         // live tasks behind the same "T-42" everywhere a task is named.
         next.number = 0                      // 0 = unnumbered; persist() backfills
+        next.habit = nil                     // the habit stays on the original
         next.isDone = false
         next.completedAt = nil
         next.pomodorosDone = 0

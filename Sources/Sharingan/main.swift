@@ -665,6 +665,45 @@ if let outDir = HeadlessRender.outputDirectory(for: "--render-dev-preview") {
                         .environment(\.colorScheme, .dark),
                     to: "\(outDir)/editor.png",
                     size: NSSize(width: 460, height: 980))
+        // Habits: three habit tasks (two manual with ~5 weeks of ticks, one
+        // pomodoro-mode credited today) so the eyes, strips, KPIs and charts
+        // all have data. Throwaway store, like every sample above.
+        do {
+            let cal = Calendar.current
+            let today = cal.startOfDay(for: Date())
+            let start = cal.date(byAdding: .day, value: -40, to: today)!
+            store.add(title: "Read a book", category: "Personal")
+            store.add(title: "Drink water", category: "Personal")
+            store.add(title: "Meditate", category: "Personal")
+            let read = store.tasks.first { $0.title == "Read a book" }!.id
+            let water = store.tasks.first { $0.title == "Drink water" }!.id
+            let med = store.tasks.first { $0.title == "Meditate" }!.id
+            store.setHabit(TaskHabit(schedule: .daily, mode: .pomodoro(target: 2), startDay: start), for: read)
+            store.setHabit(TaskHabit(schedule: .daily, mode: .manual, startDay: start), for: water)
+            store.setHabit(TaskHabit(schedule: .weekdays([2, 4, 6]), mode: .manual, startDay: start), for: med)
+            for back in 1...40 {
+                let day = cal.date(byAdding: .day, value: -back, to: today)!
+                if back <= 16 || back % 3 != 0 { store.toggleHabitCheck(taskID: water, day: day) }
+                if back % 4 != 1 { store.toggleHabitCheck(taskID: med, day: day) }
+            }
+            store.incrementPomodoro(read)
+            writeHosted(HabitsView(timer: timer, initialExpanded: water)
+                            .padding(24)
+                            .background(Color(white: 0.10))
+                            .environment(\.colorScheme, .dark),
+                        to: "\(outDir)/habits.png",
+                        size: NSSize(width: 980, height: 1300), settle: 0.8)
+            writeHosted(AnalyticsHabitsView()
+                            .padding(24)
+                            .background(Color(white: 0.10))
+                            .environment(\.colorScheme, .dark),
+                        to: "\(outDir)/habits-dashboard.png",
+                        size: NSSize(width: 980, height: 1100), settle: 0.8)
+            writeHosted(TaskEditorView(task: store.tasks.first { $0.id == med }!, settings: timer.settings)
+                            .environment(\.colorScheme, .dark),
+                        to: "\(outDir)/habit-editor.png",
+                        size: NSSize(width: 460, height: 1100))
+        }
         // The Notch HUD page, Advanced accordion down: the whole category, and
         // on a Mac with no camera housing its disabled state — the one part of
         // the HUD that is visible without a notch, so the one part that can be
@@ -704,6 +743,16 @@ if let outDir = HeadlessRender.outputDirectory(for: "--render-dev-preview") {
                         .environment(\.colorScheme, .dark),
                     to: "\(outDir)/settings-tasks.png",
                     size: NSSize(width: 640, height: 1100))
+        // Breaks and Sharingan Eyes pages — where the glass segmented pickers
+        // (face/eye, pattern animation, spin speed) and glass switches live.
+        for category in [SettingsCategory.breaks, .sharingan] {
+            writeHosted(SettingsView(timer: timer, settings: .constant(timer.settings),
+                                     initialCategory: category)
+                            .background(Color(white: 0.12))
+                            .environment(\.colorScheme, .dark),
+                        to: "\(outDir)/settings-\(category.rawValue).png",
+                        size: NSSize(width: 640, height: 2400))
+        }
         // The Tasks tab with the seeded list — hosted, because its list is a
         // ScrollView. The view bar (search / matrix / import / queue) is here.
         writeHosted(TasksView(timer: timer)

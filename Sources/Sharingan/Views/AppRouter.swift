@@ -4,13 +4,14 @@ import SharinganCore
 /// The main window's navigation sections. Top-level so both the window and the
 /// menu-bar popover can drive selection through `AppRouter`.
 enum AppSection: String, CaseIterable, Identifiable, Hashable {
-    case timer, tasks, week, dashboard, settings
+    case timer, tasks, week, habits, dashboard, settings
     var id: String { rawValue }
     var title: String {
         switch self {
         case .timer:     return "Pomodoro"
         case .tasks:     return "Tasks"
         case .week:      return "Board"
+        case .habits:    return "Habits"
         case .dashboard: return "Dashboard"
         case .settings:  return "Settings"
         }
@@ -20,6 +21,7 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
         case .timer:     return "timer"
         case .tasks:     return "checklist"
         case .week:      return "square.grid.3x2"
+        case .habits:    return "flame"
         case .dashboard: return "chart.bar.xaxis.ascending"
         case .settings:  return "gearshape"
         }

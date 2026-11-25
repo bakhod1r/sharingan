@@ -21,6 +21,7 @@ struct AnalyticsView: View {
         case load     = "Focus load"
         case timeline = "Timeline"
         case apps     = "Apps"
+        case habits   = "Habits"
         case report   = "Report"
         case export   = "Export"
         var id: String { rawValue }
@@ -32,6 +33,7 @@ struct AnalyticsView: View {
             case .load:     return "chart.bar.fill"
             case .timeline: return "clock.fill"
             case .apps:     return "app.badge.fill"
+            case .habits:   return "flame.fill"
             case .report:   return "list.bullet.rectangle"
             case .export:   return "square.and.arrow.up"
             }
@@ -43,7 +45,7 @@ struct AnalyticsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             tabPicker
-            filterBar
+            if tab != .habits { filterBar }
             Group {
                 switch tab {
                 case .overview:
@@ -69,6 +71,8 @@ struct AnalyticsView: View {
                     AnalyticsAppsView(totals: AnalyticsEngine.appTotals(sessions: rangeSessions),
                                       accent: accent, range: filter.range,
                                       trackingMode: timer.settings.appTrackingMode)
+                case .habits:
+                    AnalyticsHabitsView()
                 case .report:
                     ReportView(timer: timer)
                 case .export:

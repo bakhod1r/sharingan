@@ -98,9 +98,11 @@ final class TaskDatabase: SyncOutboxStorage {
         addColumnIfMissing("tasks", "jira_issue_type", "VARCHAR(64)")
         addColumnIfMissing("tasks", "board_column_id", "VARCHAR(64)")
         addColumnIfMissing("tasks", "allowed_apps", "TEXT NOT NULL DEFAULT '[]'")
+        // Habit config (JSON; NULL = ordinary task). Local only, never synced.
+        addColumnIfMissing("tasks", "habit", "TEXT")
         let tables = ["tasks", "categories", "projects", "tags", "task_tags",
                       "templates", "focus_log", "eav_attributes", "eav_entities",
-                      "eav_values", "sync_shadow", "sync_state", "sync_outbox"]
+                      "eav_values", "sync_shadow", "sync_state", "sync_outbox", "habit_checks"]
         for t in tables {
             // NOT NULL adds need a *constant* default (unixepoch() is rejected by
             // ALTER); 0 is a harmless sentinel for pre-existing audit rows.
@@ -168,6 +170,7 @@ final class TaskDatabase: SyncOutboxStorage {
             jira_issue_type VARCHAR(64),
             board_column_id VARCHAR(64),
             allowed_apps TEXT NOT NULL DEFAULT '[]',
+            habit TEXT,
             created_at REAL NOT NULL,
             updated_at REAL NOT NULL,
             deleted_at REAL,
@@ -219,6 +222,16 @@ final class TaskDatabase: SyncOutboxStorage {
         );
         """)
         exec("CREATE INDEX IF NOT EXISTS idx_focus_log_day ON focus_log(day);")
+        // Manual habit ticks (local only).
+        exec("""
+        CREATE TABLE IF NOT EXISTS habit_checks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            day REAL NOT NULL,
+            task_uuid VARCHAR(36) NOT NULL,
+            \(Self.auditColumns),
+            UNIQUE (day, task_uuid)
+        );
+        """)
 
         // EAV store for subtasks.
         exec("""
@@ -519,7 +532,7 @@ final class TaskDatabase: SyncOutboxStorage {
         SELECT t.id, t.uuid, t.title, c.name, p.name, t.is_done, t.pomodoros_done, t.created_at,\
         t.due_at, t.sort_order, t.estimated_pomodoros, t.planned_at, t.notes, t.recurrence,\
         t.priority, t.completed_at, t.pomodoro_kind, t.updated_at, t.deleted_at, t.origin_device,\
-        t.number, t.jira_key, t.jira_issue_id, t.jira_site_host, t.jira_issue_type, t.board_column_id, t.allowed_apps
+        t.number, t.jira_key, t.jira_issue_id, t.jira_site_host, t.jira_issue_type, t.board_column_id, t.allowed_apps, t.habit
         FROM tasks t
         JOIN categories c ON c.id = t.category_id
         LEFT JOIN projects p ON p.id = t.project_id
@@ -557,6 +570,7 @@ final class TaskDatabase: SyncOutboxStorage {
             t.jiraIssueType = isNull(stmt, 24) ? nil : text(stmt, 24)
             t.boardColumnID = isNull(stmt, 25) ? nil : text(stmt, 25)
             t.allowedApps = Self.decodeAllowedApps(text(stmt, 26))
+            t.habit = Self.decodeHabit(text(stmt, 27))
             t.subtasks = subtasksByTask[rowID] ?? []
             out.append(t)
         }
@@ -567,6 +581,26 @@ final class TaskDatabase: SyncOutboxStorage {
         guard let data = json?.data(using: .utf8),
               let apps = try? JSONDecoder().decode([BlockedApp].self, from: data) else { return [] }
         return apps
+    }
+
+    private static func decodeHabit(_ json: String?) -> TaskHabit? {
+        guard let data = json?.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(TaskHabit.self, from: data)
+    }
+
+    private static func encodeHabit(_ habit: TaskHabit?) -> String? {
+        guard let habit else { return nil }
+        let enc = JSONEncoder()
+        enc.outputFormatting = [.sortedKeys]
+        return (try? enc.encode(habit)).flatMap { String(data: $0, encoding: .utf8) }
+    }
+
+    /// Hash the DB diffs saves against. `habit` is local-only (outside the sync
+    /// `contentHash`), so it is folded in here; habit-less tasks keep their
+    /// existing stored hash.
+    fileprivate static func storageHash(_ t: TaskItem) -> String {
+        guard let h = t.habit else { return t.contentHash }
+        return t.contentHash + "|" + h.stringValue
     }
 
     private static func encodeAllowedApps(_ apps: [BlockedApp]) -> String {
@@ -660,7 +694,7 @@ final class TaskDatabase: SyncOutboxStorage {
     func saveTasks(_ tasks: [TaskItem]) {
         let stored = loadTaskHashes()
         // Nothing changed and nothing to sweep → don't even open a transaction.
-        let changed = tasks.filter { stored[$0.id.uuidString] != $0.contentHash }
+        let changed = tasks.filter { stored[$0.id.uuidString] != Self.storageHash($0) }
         guard !changed.isEmpty || tasks.count != stored.count else { return }
 
         transaction {
@@ -674,11 +708,11 @@ final class TaskDatabase: SyncOutboxStorage {
                 (uuid,title,category_id,project_id,is_done,priority,recurrence,pomodoro_kind,\
                 pomodoros_done,estimated_pomodoros,notes,sort_order,due_at,planned_at,created_at,\
                 updated_at,completed_at,deleted_at,origin_device,content_hash,number,\
-                jira_key,jira_issue_id,jira_site_host,jira_issue_type,board_column_id,allowed_apps)
+                jira_key,jira_issue_id,jira_site_host,jira_issue_type,board_column_id,allowed_apps,habit)
                 VALUES (?,?,\
                 (SELECT id FROM categories WHERE name=?),\
                 (SELECT id FROM projects WHERE name=?),\
-                ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(uuid) DO UPDATE SET
                     title=excluded.title, category_id=excluded.category_id,
                     project_id=excluded.project_id, is_done=excluded.is_done,
@@ -693,6 +727,7 @@ final class TaskDatabase: SyncOutboxStorage {
                     jira_site_host=excluded.jira_site_host, jira_issue_type=excluded.jira_issue_type,
                     board_column_id=excluded.board_column_id,
                     allowed_apps=excluded.allowed_apps,
+                    habit=excluded.habit,
                     -- Write-once: an unnumbered row takes the number the store
                     -- backfilled, but a row that already has one keeps it, so no
                     -- later write (a remote merge, a bad caller) can renumber a
@@ -723,7 +758,7 @@ final class TaskDatabase: SyncOutboxStorage {
                 bindDate(stmt, 17, t.completedAt)
                 bindDate(stmt, 18, t.trashedAt)                                     // deleted_at
                 bindText(stmt, 19, t.originDevice)
-                bindText(stmt, 20, t.contentHash)
+                bindText(stmt, 20, Self.storageHash(t))
                 sqlite3_bind_int64(stmt, 21, Int64(t.number))
                 if let v = t.jiraKey { bindText(stmt, 22, v) } else { sqlite3_bind_null(stmt, 22) }
                 if let v = t.jiraIssueID { bindText(stmt, 23, v) } else { sqlite3_bind_null(stmt, 23) }
@@ -731,6 +766,7 @@ final class TaskDatabase: SyncOutboxStorage {
                 if let v = t.jiraIssueType { bindText(stmt, 25, v) } else { sqlite3_bind_null(stmt, 25) }
                 if let v = t.boardColumnID { bindText(stmt, 26, v) } else { sqlite3_bind_null(stmt, 26) }
                 bindText(stmt, 27, Self.encodeAllowedApps(t.allowedApps))
+                if let h = Self.encodeHabit(t.habit) { bindText(stmt, 28, h) } else { sqlite3_bind_null(stmt, 28) }
                 let ok = sqlite3_step(stmt) == SQLITE_DONE
                 if !ok { logSQL("saveTasks/upsert \(t.title)", sql) }
                 sqlite3_finalize(stmt)
@@ -1022,6 +1058,31 @@ final class TaskDatabase: SyncOutboxStorage {
                 }
             }
             return true
+        }
+    }
+
+    // MARK: - Habit checks
+
+    func loadHabitChecks() -> [HabitCheck] {
+        var out: [HabitCheck] = []
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, "SELECT day, task_uuid FROM habit_checks ORDER BY day;", -1, &stmt, nil) == SQLITE_OK
+        else { return out }
+        defer { sqlite3_finalize(stmt) }
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            guard let id = UUID(uuidString: text(stmt, 1) ?? "") else { continue }
+            out.append(HabitCheck(day: Date(timeIntervalSince1970: double(stmt, 0)), taskID: id))
+        }
+        return out
+    }
+
+    func setHabitCheck(day: Date, taskID: UUID, checked: Bool) {
+        let sql = checked
+            ? "INSERT OR IGNORE INTO habit_checks (day, task_uuid) VALUES (?,?);"
+            : "DELETE FROM habit_checks WHERE day=? AND task_uuid=?;"
+        _ = run(sql) {
+            sqlite3_bind_double($0, 1, day.timeIntervalSince1970)
+            bindText($0, 2, taskID.uuidString)
         }
     }
 

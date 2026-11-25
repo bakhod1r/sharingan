@@ -16,7 +16,7 @@ struct ReminderRow: View {
                 }
                 .pickerStyle(.menu).tint(.white)
                 Spacer()
-                Toggle("", isOn: $item.enabled).tint(.green).labelsHidden()
+                Toggle("", isOn: $item.enabled).toggleStyle(.glassSwitch(tint: .green)).labelsHidden()
             }
             HStack {
                 Text("Every \(item.intervalMinutes) min").foregroundStyle(.white.opacity(0.8))

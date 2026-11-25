@@ -88,10 +88,9 @@ struct FaceEyeSettingsSection: View {
             }
 
             row("Mode") {
-                Picker("", selection: $settings.breakFaceEyeMode) {
-                    ForEach(BreakFaceEyeMode.allCases) { Text($0.label).tag($0) }
-                }
-                .labelsHidden().pickerStyle(.segmented).frame(width: 260)
+                GlassSegmentedPicker(selection: $settings.breakFaceEyeMode,
+                                     cases: BreakFaceEyeMode.allCases, label: \.label)
+                    .frame(width: 260)
             }
 
             if isRandom { randomRows } else { fixedRows }
@@ -113,16 +112,14 @@ struct FaceEyeSettingsSection: View {
 
     @ViewBuilder private var fixedRows: some View {
         row("Face") {
-            Picker("", selection: $settings.breakEyeShape) {
-                ForEach(BreakEyeShape.allCases) { Text($0.label).tag($0) }
-            }
-            .labelsHidden().pickerStyle(.segmented).frame(width: 260)
+            GlassSegmentedPicker(selection: $settings.breakEyeShape,
+                                 cases: BreakEyeShape.allCases, label: \.label)
+                .frame(width: 260)
         }
         row("Eye") {
-            Picker("", selection: $settings.breakIrisStyle) {
-                ForEach(BreakIrisStyle.allCases) { Text($0.label).tag($0) }
-            }
-            .labelsHidden().pickerStyle(.segmented).frame(width: 260)
+            GlassSegmentedPicker(selection: $settings.breakIrisStyle,
+                                 cases: BreakIrisStyle.allCases, label: \.label)
+                .frame(width: 260)
         }
         if settings.breakEyeShape != .sharingan || settings.breakIrisStyle != .sharingan {
             caption(faceCaption)
@@ -170,16 +167,14 @@ struct FaceEyeSettingsSection: View {
             }
         }
         row("Change") {
-            Picker("", selection: $settings.breakRandomChange) {
-                ForEach(BreakRandomChange.allCases) { Text($0.label).tag($0) }
-            }
-            .labelsHidden().pickerStyle(.segmented).frame(width: 260)
+            GlassSegmentedPicker(selection: $settings.breakRandomChange,
+                                 cases: BreakRandomChange.allCases, label: \.label)
+                .frame(width: 260)
         }
         row("Left / right") {
-            Picker("", selection: $settings.breakRandomPairing) {
-                ForEach(BreakRandomPairing.allCases) { Text($0.label).tag($0) }
-            }
-            .labelsHidden().pickerStyle(.segmented).frame(width: 260)
+            GlassSegmentedPicker(selection: $settings.breakRandomPairing,
+                                 cases: BreakRandomPairing.allCases, label: \.label)
+                .frame(width: 260)
         }
         randomCaption
     }

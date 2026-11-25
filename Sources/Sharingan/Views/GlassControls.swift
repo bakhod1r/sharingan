@@ -49,6 +49,43 @@ extension GlassSegmentedPicker {
     }
 }
 
+/// Liquid-glass switch — replaces `.toggleStyle(.switch)`, whose AppKit track
+/// renders as an opaque system-blue/grey block on the dark-glass panels.
+/// A frosted capsule track that fills with `tint` when on, and a glossy knob
+/// that slides with `DS.Motion.snappy`.
+struct GlassSwitchStyle: ToggleStyle {
+    var tint: Color = .accentColor
+
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 12) {
+            configuration.label
+            ZStack(alignment: configuration.isOn ? .trailing : .leading) {
+                Capsule()
+                    .fill(configuration.isOn ? tint.opacity(0.85) : .white.opacity(0.08))
+                    .glassCapsule(strokeOpacity: configuration.isOn ? 0.35 : 0.18)
+                    .shadow(color: configuration.isOn ? tint.opacity(0.45) : .clear, radius: 6)
+                Circle()
+                    .fill(LinearGradient(colors: [.white, .white.opacity(0.78)],
+                                         startPoint: .top, endPoint: .bottom))
+                    .overlay(Circle().stroke(.white.opacity(0.6), lineWidth: 0.5))
+                    .shadow(color: .black.opacity(0.35), radius: 2, y: 1)
+                    .padding(2.5)
+            }
+            .frame(width: 42, height: 24)
+            .contentShape(Capsule())
+            .onTapGesture {
+                withAnimation(DS.Motion.snappy) { configuration.isOn.toggle() }
+            }
+            .accessibilityAddTraits(.isButton)
+            .accessibilityValue(configuration.isOn ? "On" : "Off")
+        }
+    }
+}
+
+extension ToggleStyle where Self == GlassSwitchStyle {
+    static func glassSwitch(tint: Color) -> GlassSwitchStyle { GlassSwitchStyle(tint: tint) }
+}
+
 /// Liquid-glass pill button — for the plain-text Settings action buttons
 /// (Preview, Stop, Check Now…) that previously rendered as unstyled system
 /// buttons floating on the glass panels.

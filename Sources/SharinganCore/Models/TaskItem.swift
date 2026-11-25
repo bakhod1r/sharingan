@@ -293,6 +293,9 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
     public var boardColumnID: String?
     /// Apps allowed during a focus session on this task; others trigger the focus lock.
     public var allowedApps: [BlockedApp] = []
+    /// Habit configuration (nil = ordinary task). Local only: not in the sync
+    /// payload, and a remote merge preserves the local value.
+    public var habit: TaskHabit?
     /// When the task was moved to Trash (nil = live). A trashed task stays in
     /// the store so it can be restored, but every normal query filters it out.
     public var trashedAt: Date?
@@ -336,7 +339,8 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
                 trashedAt: Date? = nil,
                 originDevice: String = DeviceIdentity.name,
                 number: Int = 0,
-                allowedApps: [BlockedApp] = []) {
+                allowedApps: [BlockedApp] = [],
+                habit: TaskHabit? = nil) {
         self.id = id
         self.title = title
         self.category = category
@@ -365,6 +369,7 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         self.originDevice = originDevice
         self.number = number
         self.allowedApps = allowedApps
+        self.habit = habit
     }
 
     // Defensive decoding: several fields (category, tags, pomodorosDone) were
@@ -399,6 +404,7 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         jiraIssueType = try c.decodeIfPresent(String.self, forKey: .jiraIssueType)
         boardColumnID = try c.decodeIfPresent(String.self, forKey: .boardColumnID)
         allowedApps = try c.decodeIfPresent([BlockedApp].self, forKey: .allowedApps) ?? []
+        habit = try? c.decodeIfPresent(TaskHabit.self, forKey: .habit)
         trashedAt = try c.decodeIfPresent(Date.self, forKey: .trashedAt)
         // Older records predate origin tracking — attribute them to this Mac.
         originDevice = try c.decodeIfPresent(String.self, forKey: .originDevice) ?? DeviceIdentity.name

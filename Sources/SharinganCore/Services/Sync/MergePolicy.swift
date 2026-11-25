@@ -16,6 +16,9 @@ public enum MergePolicy {
         // the stored one and flip back on the next launch.
         var merged = remote
         if local.number > 0 { merged.number = local.number }
+        // Habit config is local-only (not in the CKRecord): never let a remote
+        // record wipe it.
+        merged.habit = local.habit
         return merged
     }
 
