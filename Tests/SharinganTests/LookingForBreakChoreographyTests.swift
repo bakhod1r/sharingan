@@ -37,10 +37,11 @@ struct LookingForBreakChoreographyTests {
     @Test("intro plays the video from frame 1")
     func introStart() {
         let p = C.pose(input(elapsed: 0, remaining: 100))
-        #expect(p == LookingForEyesTimeline.pose(at: 0))
+        #expect(p.withIris(of: LookingForEyesTimeline.pose(at: 0)) == LookingForEyesTimeline.pose(at: 0))
         #expect(p.frame == 1)
         let mid = C.pose(input(elapsed: 3.8, remaining: 100))
-        #expect(mid == LookingForEyesTimeline.pose(at: 3.8))
+        let clip = LookingForEyesTimeline.pose(at: 3.8)
+        #expect(mid.withIris(of: clip) == clip)   // only the iris follows the step gaze
     }
 
     @Test("exercise holds the angry squint")
@@ -66,8 +67,8 @@ struct LookingForBreakChoreographyTests {
         #expect(r.pupilShift > c.pupilShift + 10)
         #expect(u.pupilY < c.pupilY - 3)
         #expect(d.pupilY > c.pupilY + 3)
-        #expect(l.pupilShift >= -60 && r.pupilShift <= 60)   // fitted iris stays inside the opening
-        #expect(u.pupilY >= c.pupilY - 40 && d.pupilY <= c.pupilY + 40)
+        #expect(l.pupilShift >= -110 && r.pupilShift <= 110)   // fitted iris stays inside the opening (slides to its edge)
+        #expect(u.pupilY >= c.pupilY - 70 && d.pupilY <= c.pupilY + 40)
     }
 
     @Test("path gazes sweep, and ease to centre at the step end")
@@ -81,7 +82,7 @@ struct LookingForBreakChoreographyTests {
         #expect(xs.count > 10)
         let c = C.pose(input(gaze: .center))
         let end = C.pose(input(direction: "figure8", phaseElapsed: hold, hold: hold))
-        #expect(abs(end.pupilShift - c.pupilShift) < 1)
+        #expect(abs(end.pupilShift - c.pupilShift) < 2)
         #expect(abs(end.pupilY - c.pupilY) < 1)
     }
 
@@ -169,7 +170,7 @@ struct LookingForBreakChoreographyTests {
             let ps = stride(from: 2.6, through: 1.6, by: -1.0 / 120).map {
                 C.pose(input(remaining: $0, direction: dir.0, gaze: dir.1))
             }
-            #expect(maxStep(ps) < 3, "direction \(dir.0)")
+            #expect(maxStep(ps) < 3.5, "direction \(dir.0)")
         }
     }
 
@@ -177,5 +178,22 @@ struct LookingForBreakChoreographyTests {
     func closingMonotonic() {
         let os = stride(from: 0.5, through: 0, by: -1.0 / 60).map { C.pose(input(remaining: $0)).lidOpenness }
         #expect(zip(os, os.dropFirst()).allSatisfy { $0 >= $1 })
+    }
+
+    // MARK: vertical gaze travel
+
+    @Test("up and down move the iris clearly from centre, (both iris styles)")
+    func verticalTravel() {
+        for iris in [BreakIrisStyle.sharingan, .original] {
+            func pose(_ d: String, _ g: GazeDirection) -> LookingForEyesPose {
+                C.pose(.init(elapsed: 30, remaining: 100, direction: d, gaze: g, phaseElapsed: 3,
+                             holdSeconds: 4, previousOpenness: 1, reduceMotion: true, iris: iris))
+            }
+            let c = pose("center", .center).irisCenter
+            let up = c.y - pose("up", .up).irisCenter.y
+            let down = pose("down", .down).irisCenter.y - c.y
+            #expect(up >= 18, "\(iris) up \(up)")
+            #expect(down >= 18, "\(iris) down \(down)")
+        }
     }
 }

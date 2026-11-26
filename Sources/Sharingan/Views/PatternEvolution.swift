@@ -26,6 +26,9 @@ struct PatternEvolution {
     /// the opening whirl and the closing bookend — used by previews that
     /// must show the user's selection.
     var evolves = true
+    /// Tracks base-style changes (random eye mode, each step) so a non-evolving
+    /// surface crossfades the old pattern into the new one instead of swapping.
+    var crossfade = StyleCrossfade()
 
     /// The canonical awakening order: one tomoe → two → three, then the
     /// Mangekyō family, ending on the Rinnegan before wrapping around.
@@ -41,6 +44,11 @@ struct PatternEvolution {
         /// 1 while the break runs → 0 over the final moments; multiply into
         /// the lids so the eyes close together with the pattern.
         var endFade: Double
+        /// Outgoing pattern drawn under `left`/`right` while crossfading (nil = none).
+        var previousLeft: SharinganStyle? = nil
+        var previousRight: SharinganStyle? = nil
+        /// 0 = previous only, 1 = current only. Previous layers are dropped at 1.
+        var blend: CGFloat = 1
     }
 
     func frame(at t: TimeInterval) -> Frame {
@@ -53,9 +61,14 @@ struct PatternEvolution {
         // shut, but never walk the chain.
         if !evolves {
             let em = Self.smooth((t - appearStart - 1.0) / transition.openSeconds)
+            let b = crossfade.blend(at: t, transition: transition)
+            let fading = b < 1
             return Frame(left: baseLeft, right: baseRight,
                          emergence: CGFloat(min(em, fade)),
-                         tomoeStage: nil, endFade: fade)
+                         tomoeStage: nil, endFade: fade,
+                         previousLeft: fading ? crossfade.previousLeft : nil,
+                         previousRight: fading ? crossfade.previousRight : nil,
+                         blend: CGFloat(b))
         }
 
         let chain = Self.chain
@@ -68,20 +81,21 @@ struct PatternEvolution {
                 SharinganEvolutionChain.style(base: base, eyesDiffer: true, count: n)
             }
             let tp = t - phaseStart
-            if evolutionCount == 0 || tp >= transition.closeSeconds {
-                let u = evolutionCount == 0
-                    ? (t - appearStart - 1.0) / transition.openSeconds
-                    : (tp - transition.closeSeconds) / transition.openSeconds
-                return Frame(left: at(baseLeft, evolutionCount),
-                             right: at(baseRight, evolutionCount),
+            if evolutionCount == 0 {
+                let u = (t - appearStart - 1.0) / transition.openSeconds
+                return Frame(left: at(baseLeft, 0), right: at(baseRight, 0),
                              emergence: CGFloat(min(Self.smooth(u), fade)),
                              tomoeStage: nil, endFade: fade)
             }
-            let em = 1 - Self.smooth(tp / transition.closeSeconds)
-            return Frame(left: at(baseLeft, evolutionCount - 1),
-                         right: at(baseRight, evolutionCount - 1),
-                         emergence: CGFloat(min(em, fade)),
-                         tomoeStage: nil, endFade: fade)
+            // Each step crossfades the previous pattern into the next.
+            let b = StyleCrossfade.smooth(tp / StyleCrossfade.duration(for: transition))
+            return Frame(left: at(baseLeft, evolutionCount),
+                         right: at(baseRight, evolutionCount),
+                         emergence: CGFloat(min(1, fade)),
+                         tomoeStage: nil, endFade: fade,
+                         previousLeft: b < 1 ? at(baseLeft, evolutionCount - 1) : nil,
+                         previousRight: b < 1 ? at(baseRight, evolutionCount - 1) : nil,
+                         blend: CGFloat(b))
         }
         let cur = chain[evolutionCount % chain.count]
 
@@ -108,17 +122,15 @@ struct PatternEvolution {
                          endFade: fade)
         }
 
-        // Cross-family change: collapse into the pupil, then whirl out anew.
-        if tp < transition.closeSeconds {
-            let em = 1 - Self.smooth(tp / transition.closeSeconds)
-            return Frame(left: prev, right: prev,
-                         emergence: CGFloat(min(em, fade)),
-                         tomoeStage: nil, endFade: fade)
-        }
-        let em = Self.smooth((tp - transition.closeSeconds) / transition.openSeconds)
+        // Cross-family change: the old pattern fades out while the new one
+        // fades in on top — the iris is never patternless.
+        let b = StyleCrossfade.smooth(tp / StyleCrossfade.duration(for: transition))
         return Frame(left: cur, right: cur,
-                     emergence: CGFloat(min(em, fade)),
-                     tomoeStage: nil, endFade: fade)
+                     emergence: CGFloat(min(1, fade)),
+                     tomoeStage: nil, endFade: fade,
+                     previousLeft: b < 1 ? prev : nil,
+                     previousRight: b < 1 ? prev : nil,
+                     blend: CGFloat(b))
     }
 
     /// 1 while the break runs, easing to 0 over the final moments.
@@ -141,9 +153,7 @@ struct PatternEvolution {
     /// (smootherstep). Shared by the app and the headless renderer.
     static func activationSpin(at t: TimeInterval, since start: TimeInterval,
                                duration: Double = 1.6, turns: Double = 3) -> Double {
-        let u = min(max((t - start) / duration, 0), 1)
-        let eased = u * u * u * (u * (u * 6 - 15) + 10)
-        return turns * 360 * eased
+        ActivationSpin.burst(at: t, since: start, duration: duration, turns: turns)
     }
 
     /// Break-start awakening: lids hold shut, then sweep open once.

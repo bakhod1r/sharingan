@@ -22,10 +22,15 @@ struct LookingForEyePair: View {
 
     @State private var appearStart: TimeInterval = 0
     @State private var phaseStart: TimeInterval = 0
-    @State private var spinStart: TimeInterval = 0
+    @State private var activation = ActivationSpin()
     @State private var transitionFrom: Double = 1
     @State private var lastDirection: String = ""
+    /// Step gaze target of the previous step, to rebuild the old step's live offset on a change.
+    @State private var lastGaze: GazeDirection = .center
+    /// Iris offset at the moment the step changed: it glides from here back to center, then out.
+    @State private var previousGaze: GazeDirection = .center
     @State private var evolutionCount: Int = 0
+    @State private var crossfade = StyleCrossfade()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Face-space window around the eyes (eyes, brows, flames; no mouth).
@@ -33,7 +38,7 @@ struct LookingForEyePair: View {
 
     var body: some View {
         // The clip is 30 fps; no need to render faster.
-        TimelineView(.periodic(from: .now, by: 1.0 / LookingForEyesTimeline.fps)) { ctx in
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { ctx in
             let t = ctx.date.timeIntervalSinceReferenceDate
             let input = choreographyInput(at: t)
             let pose = LookingForBreakChoreography.pose(input)
@@ -41,9 +46,11 @@ struct LookingForEyePair: View {
             LookingForFaceCanvas(
                 pose: pose, iris: iris,
                 left: LookingForIrisSpec(style: pf.left, spin: spin(at: t),
-                                         emergence: pf.emergence, tomoeStage: pf.tomoeStage),
+                                         emergence: pf.emergence, tomoeStage: pf.tomoeStage,
+                                         previousStyle: pf.previousLeft, blend: pf.blend),
                 right: LookingForIrisSpec(style: pf.right, spin: spin(at: t),
-                                          emergence: pf.emergence, tomoeStage: pf.tomoeStage),
+                                          emergence: pf.emergence, tomoeStage: pf.tomoeStage,
+                                          previousStyle: pf.previousRight, blend: pf.blend),
                 placement: .crop(Self.crop))
                 .frame(width: eyeSize * 2 * Self.crop.width / Self.crop.height,
                        height: eyeSize * 2)
@@ -52,17 +59,38 @@ struct LookingForEyePair: View {
             let now = Date().timeIntervalSinceReferenceDate
             appearStart = now
             phaseStart = now
-            spinStart = now + 1.1
+            activation.reset(start: now + 1.1)
             transitionFrom = 1
             lastDirection = direction
+            lastGaze = gaze
+            previousGaze = .center
+        }
+        .onChange(of: style) { old, new in
+            crossfade.change(oldLeft: old, oldRight: rightStyle ?? old,
+                             newLeft: new, newRight: rightStyle ?? new,
+                             at: Date().timeIntervalSinceReferenceDate,
+                             transition: transition, reduceMotion: reduceMotion)
+        }
+        .onChange(of: rightStyle) { old, new in
+            crossfade.change(oldLeft: style, oldRight: old ?? style,
+                             newLeft: style, newRight: new ?? style,
+                             at: Date().timeIntervalSinceReferenceDate,
+                             transition: transition, reduceMotion: reduceMotion)
         }
         .onChange(of: direction) { _, newDirection in
             let now = Date().timeIntervalSinceReferenceDate
             transitionFrom = LookingForBreakChoreography.steadyOpenness(
                 direction: lastDirection, phaseElapsed: now - phaseStart)
+            // Live iris offset under the OLD step, no sway: the glide starts exactly where the iris is.
+            var old = choreographyInput(at: now)
+            old.direction = lastDirection
+            old.gaze = lastGaze
+            let live = BreakGazePath.gazeOffset(old, sway: false)
+            previousGaze = GazeDirection(dx: live.x, dy: live.y)
             lastDirection = newDirection
+            lastGaze = gaze
             phaseStart = now
-            spinStart = now
+            activation.restart(at: now, now: now)
             evolutionCount += 1
         }
     }
@@ -74,7 +102,8 @@ struct LookingForEyePair: View {
             remaining: skipIntro ? nil : endDate.map { $0.timeIntervalSinceReferenceDate - t },
             direction: direction, gaze: gaze,
             phaseElapsed: max(0, t - phaseStart), holdSeconds: holdSeconds,
-            previousOpenness: transitionFrom, reduceMotion: reduceMotion, iris: iris)
+            previousOpenness: transitionFrom, reduceMotion: reduceMotion, iris: iris,
+            previousGaze: previousGaze)
     }
 
     private var evolution: PatternEvolution {
@@ -86,12 +115,13 @@ struct LookingForEyePair: View {
                          reduceMotion: reduceMotion,
                          baseLeft: style,
                          baseRight: rightStyle ?? style,
-                         evolves: evolves)
+                         evolves: evolves,
+                         crossfade: crossfade)
     }
 
     private func spin(at t: TimeInterval) -> Double {
         if reduceMotion { return 0 }
-        var s = PatternEvolution.activationSpin(at: t, since: spinStart)
+        var s = activation.angle(at: t)
         if spinSeconds > 0 { s += max(0, t - appearStart) * 360 / spinSeconds }
         return s
     }

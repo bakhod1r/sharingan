@@ -50,8 +50,9 @@ public enum LookingForBreakChoreography {
     /// Video frame whose face shapes (lids, brows, mouth) form the squint.
     private static let squintFrame = 32.0
     private static let squintBaseT = (squintFrame - 1) / LookingForEyesTimeline.fps
-    /// Measured pupil scan range of frames 43...93.
+    /// Measured pupil scan range of frames 43...93 (the raw video pupil the outro eases from).
     private static let shiftLeft = 32.0, shiftRight = 26.0
+    /// Raw video-pupil travel for up / down (face-space px); the fitted iris travels to the opening's edge instead.
     private static let verticalRange = 30.0
 
     // MARK: Exercise iris fit
@@ -59,8 +60,10 @@ public enum LookingForBreakChoreography {
     /// The exercise squint raises the lids by this much (face-space px) so the opening is deep
     /// enough for a large iris; the slant, brows and crease stay as in the video.
     public static let squintLift = 62.0
-    /// Iris diameter as a fraction of the biggest circle that fits (rest is room to look around).
-    public static let irisFill = 0.92
+    /// Extra lid lift (face-space px) at a full up gaze: the upper lid follows the eyes upward so the iris has room to rise.
+    private static let upLidLift = 24.0
+    /// Idle gaze sway (|dy| < 0.05) leaves the lids untouched.
+    private static let gazeDeadZone = 0.05
     private static let lidMargin = 2.0
 
     /// The lid-fold crease follows the raised lid (its y values move up by `squintLift * k`).
@@ -78,9 +81,17 @@ public enum LookingForBreakChoreography {
     }()
     /// Largest circle that fits the open squint: where the iris rests, and its size limit.
     private static let restCircle = openSquint.eyeOpening(lidMargin: lidMargin).largestCircle(centeredAtX: openSquint.whiteCX)
-    private static let fullOpening = openSquint.eyeOpening(lidMargin: lidMargin)
+    private static let openSquintOpening = openSquint.eyeOpening(lidMargin: lidMargin)
+    /// The open opening with the lid raised by `extra` (the up gaze).
+    private static func opening(extraLift extra: Double) -> BreakEyeOpening {
+        var q = openSquint
+        q.lid = q.lid.map { $0 - extra }
+        return q.eyeOpening(lidMargin: lidMargin)
+    }
     /// Radius of the exercise iris.
-    public static let exerciseIrisRadius = restCircle.radius * irisFill
+    public static let exerciseIrisRadius = irisRadius(of: openSquint)
+    /// Iris radius for a pose: `irisWidthFraction` of the eye-white width (capped by what fits).
+    private static func irisRadius(of p: LookingForEyesPose) -> Double { BreakEyeOpening.irisWidthFraction * p.whiteRX }
 
     // MARK: Phase
 
@@ -96,16 +107,34 @@ public enum LookingForBreakChoreography {
         let sharingan = i.iris == .sharingan
         switch phase(i) {
         case .intro:
-            return sharingan ? sharinganVideo(at: i.elapsed) : LookingForEyesTimeline.pose(at: i.elapsed)
+            return introPose(i, at: i.elapsed)
         case .exercise:
             if sharingan { return sharinganExercise(i) }
             let target = exercisePose(i, gazeWeight: 1, openness: exerciseOpenness(i))
             if i.reduceMotion || i.elapsed >= introDuration + blendDuration { return target }
-            let from = LookingForEyesTimeline.pose(at: introDuration - 1e-9)
+            let from = introPose(i, at: introDuration - 1e-9)
             return from.blended(to: target, smooth((i.elapsed - introDuration) / blendDuration))
         case .outro:
             return outroPose(i)
         }
+    }
+
+    // MARK: Intro
+
+    /// The clip's iris hands over to the step gaze within this many seconds of the intro start.
+    public static let introGazeRamp: TimeInterval = 0.5
+
+    /// The clip at `t` (lids, brows, fire) with the iris following the step's gaze.
+    private static func introPose(_ i: Input, at t: TimeInterval) -> LookingForEyesPose {
+        let w = BreakGazePath.introFollow(t, start: 0, ramp: introGazeRamp)
+        if i.iris == .sharingan { return sharinganVideo(i, at: t, follow: w) }
+        var p = LookingForEyesTimeline.pose(at: t)
+        p.irisRadius = irisRadius(of: p)                    // the clip's pupil, at the common size
+        guard w > 0 else { return p }
+        let raw = exerciseShape(i, gazeWeight: 1, fit: 0)
+        p.pupilShift += (raw.pupilShift - p.pupilShift) * w
+        p.pupilY += (raw.pupilY - p.pupilY) * w
+        return p
     }
 
     // MARK: Sharingan iris in the intro, blend and outro
@@ -117,21 +146,34 @@ public enum LookingForBreakChoreography {
     /// The video with the exercise's lid lift applied in proportion to how far the face has
     /// squinted (0 = wide-eyed start, 1 = the squint the exercise is built from), and the iris
     /// fitted fully inside the visible opening at the video's gaze position.
-    private static func sharinganVideo(at t: TimeInterval) -> LookingForEyesPose {
+    private static func sharinganVideo(_ i: Input, at t: TimeInterval, follow w: Double) -> LookingForEyesPose {
         let v = LookingForEyesTimeline.pose(at: t)
         let s = max(0, min(1, (mean(v.lid) - wideLidMean) / (squintLidMean - wideLidMean)))
         var p = v
         p.lid = v.lid.map { $0 - squintLift * s }
         p.crease = liftedCrease(v.crease, s)
-        return fitIris(p, toward: v.irisCenter)
+        guard w > 0 else { return fitIris(p, toward: v.irisCenter) }
+        return fitIris(p, toward: v.irisCenter, gaze: (offset: gazeOffset(i), weight: w))
     }
 
     /// Places the round iris in the visible opening of `p` as close as it fits to `desired`.
-    private static func fitIris(_ p: LookingForEyesPose, toward desired: (x: Double, y: Double)) -> LookingForEyesPose {
+    /// With `gaze` (step offset, weight) the iris moves from `desired` toward where the exercise
+    /// would put it in this opening: vertical fit, then a slide along the opening to that side.
+    private static func fitIris(_ p: LookingForEyesPose, toward desired: (x: Double, y: Double),
+                                gaze: (offset: (x: Double, y: Double), weight: Double)? = nil) -> LookingForEyesPose {
         let o = p.eyeOpening(lidMargin: lidMargin)
         let a = o.largestCircle(centeredAtX: p.whiteCX)
-        let c = o.fit(radius: exerciseIrisRadius, fill: 1,
+        let ir = irisRadius(of: p)
+        var c = o.fit(radius: ir, fill: 1,
                       offset: (desired.x - a.x, desired.y - a.y), anchor: a)
+        if let g = gaze {
+            let dx = max(-1, min(1, g.offset.x)), dy = max(-1, min(1, g.offset.y))
+            let level = o.rise(o.fit(radius: ir, fill: 1, anchor: a), look: dy)
+            let t = o.slide(level, look: dx)
+            c.x += (t.x - c.x) * g.weight
+            c.y += (t.y - c.y) * g.weight
+            c.radius += (t.radius - c.radius) * g.weight
+        }
         var r = p
         r.pupilShift = c.x - (p.ringLeft + 185.5)
         r.pupilY = c.y + 85.7 - 84
@@ -146,7 +188,7 @@ public enum LookingForBreakChoreography {
         let target = exerciseShape(i, gazeWeight: 1, fit: 1)
         if i.reduceMotion || i.elapsed >= introDuration + blendDuration { return closing(target, openness: open) }
         let k = smooth((i.elapsed - introDuration) / blendDuration)
-        let from = sharinganVideo(at: introDuration - 1e-9)
+        let from = introPose(i, at: introDuration - 1e-9)
         let shape = from.blended(to: target, k)
         let desired = (x: from.irisCenter.x + (target.irisCenter.x - from.irisCenter.x) * k,
                        y: from.irisCenter.y + (target.irisCenter.y - from.irisCenter.y) * k)
@@ -185,21 +227,26 @@ public enum LookingForBreakChoreography {
     private static func exerciseShape(_ i: Input, gazeWeight: Double, fit: Double) -> LookingForEyesPose {
         let video = LookingForEyesTimeline.pose(at: squintBaseT)
         var p = openSquint
-        p.lid = zip(video.lid, openSquint.lid).map { $0 + ($1 - $0) * fit }
-        p.crease = liftedCrease(video.crease, fit)
         let g = gazeOffset(i)
         let dx = max(-1, min(1, g.x * gazeWeight)), dy = max(-1, min(1, g.y * gazeWeight))
+        let extra = upLidLift * max(0, -dy - gazeDeadZone) / (1 - gazeDeadZone)
+        p.lid = zip(video.lid, openSquint.lid).map { $0 + ($1 - $0) * fit - extra * fit }
+        p.crease = liftedCrease(video.crease, fit).enumerated().map { $1 - ($0 % 3 == 0 ? 0 : extra * fit) }
         let offset = (x: dx >= 0 ? dx * shiftRight : dx * shiftLeft, y: dy * verticalRange)
 
         // video pupil: the raw gaze shift
         let rawShift = offset.x, rawY = video.pupilY + offset.y
         // fitted iris: whole circle inside the opening
-        let c = fullOpening.fit(radius: exerciseIrisRadius, fill: 1,
-                                                       offset: offset, anchor: restCircle)
+        // Vertical first (a diagonal keeps its full up/down travel), then the iris slides sideways
+        // all the way to the edge of the opening at that height (dx = ±1 touches the corner).
+        let op = opening(extraLift: extra)
+        let level = op.rise(openSquintOpening.fit(radius: exerciseIrisRadius, fill: 1, anchor: restCircle), look: dy)
+        let c = op.slide(level, look: dx)
         let fitShift = c.x - (p.ringLeft + 185.5), fitY = c.y + 85.7 - 84
         p.pupilShift = rawShift + (fitShift - rawShift) * fit
         p.pupilY = rawY + (fitY - rawY) * fit
-        p.irisRadius = 85.7 + (c.radius - 85.7) * fit
+        let videoRadius = irisRadius(of: video)
+        p.irisRadius = videoRadius + (c.radius - videoRadius) * fit
         p.pupilRadiusX = video.pupilRadiusX + (85.7 - video.pupilRadiusX) * fit
         return p
     }

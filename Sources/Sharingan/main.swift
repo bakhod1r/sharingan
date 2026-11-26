@@ -283,6 +283,52 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-anim-previews"),
     exit(0)
 }
 
+// Headless crossfade check: `Sharingan --render-crossfade <png>` writes a strip of
+// 8 frames (classic -> mangekyou over the transition) through the SAME
+// PatternEvolution/StyleCrossfade math the break screen runs.
+if let i = CommandLine.arguments.firstIndex(of: "--render-crossfade"),
+   i + 1 < CommandLine.arguments.count {
+    let out = CommandLine.arguments[i + 1]
+    MainActor.assumeIsolated {
+        var xf = StyleCrossfade()
+        xf.change(oldLeft: .classic, oldRight: .classic, newLeft: .mangekyou, newRight: .mangekyou,
+                  at: 0, transition: .normal, reduceMotion: false)
+        let d = StyleCrossfade.duration(for: .normal)
+        let pe = PatternEvolution(transition: .normal, appearStart: -10, baseLeft: .mangekyou,
+                                  baseRight: .mangekyou, evolves: false, crossfade: xf)
+        struct Strip: View {
+            var pe: PatternEvolution
+            var d: Double
+            var body: some View {
+                HStack(spacing: 6) {
+                    ForEach(0..<8, id: \.self) { k in
+                        let t = d * Double(k) / 7
+                        let pf = pe.frame(at: t)
+                        ZStack {
+                            Color(red: 0.067, green: 0.075, blue: 0.078)
+                            MoveEyeView(gaze: .center, spin: t * 120, size: 90,
+                                        style: pf.left, openness: 1,
+                                        emergence: pf.emergence, tomoeStage: pf.tomoeStage,
+                                        previousStyle: pf.previousLeft, blend: pf.blend)
+                        }
+                        .frame(width: 200, height: 140)
+                    }
+                }
+                .padding(6)
+                .background(Color.gray)
+            }
+        }
+        let renderer = ImageRenderer(content: Strip(pe: pe, d: d))
+        renderer.scale = 1
+        if let cg = renderer.cgImage {
+            let rep = NSBitmapImageRep(cgImage: cg)
+            try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: out))
+            print("wrote \(out)")
+        }
+    }
+    exit(0)
+}
+
 // Headless preview of the full break screen (debug utility):
 // `Sharingan --render-break-preview <path> [styleRawValue]`.
 if let i = CommandLine.arguments.firstIndex(of: "--render-break-preview"),
@@ -304,6 +350,125 @@ if let i = CommandLine.arguments.firstIndex(of: "--render-break-preview"),
         let preview = BreakView(timer: timer, onTapSkip: {}, forceExit: true)
             .frame(width: 1440, height: 900)
         let renderer = ImageRenderer(content: preview)
+        renderer.scale = 1
+        if let cg = renderer.cgImage {
+            let rep = NSBitmapImageRep(cgImage: cg)
+            try? rep.representation(using: .png, properties: [:])?
+                .write(to: URL(fileURLWithPath: out))
+        }
+    }
+    exit(0)
+}
+
+// Headless preview of exercise gaze on every break face (debug utility):
+// `Sharingan --render-face-gaze-grid <path> [sharingan|original]`. One row per
+// gaze; columns: Sharingan (MoveEyes), Looking-for, Angry — exercise-phase poses
+// from the same choreography the break screen runs.
+if let i = CommandLine.arguments.firstIndex(of: "--render-face-gaze-grid"),
+   i + 1 < CommandLine.arguments.count {
+    let out = CommandLine.arguments[i + 1]
+    let iris: BreakIrisStyle = (i + 2 < CommandLine.arguments.count
+        && CommandLine.arguments[i + 2] == "original") ? .original : .sharingan
+    MainActor.assumeIsolated {
+        let gazes: [(String, GazeDirection)] = [
+            ("center", .center), ("up", .up), ("down", .down),
+            ("left", .left), ("right", .right),
+            ("up_left", .upLeft), ("down_right", .downRight),
+        ]
+        func input(_ d: String, _ g: GazeDirection) -> BreakFaceInput {
+            BreakFaceInput(elapsed: 30, remaining: 100, direction: d, gaze: g,
+                           phaseElapsed: 3, holdSeconds: 4, previousOpenness: 1,
+                           reduceMotion: true, iris: iris)
+        }
+        let h: CGFloat = 130
+        let grid = VStack(alignment: .leading, spacing: 10) {
+            ForEach(gazes, id: \.0) { name, gaze in
+                HStack(spacing: 24) {
+                    Text(name)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.8))
+                        .frame(width: 90, alignment: .trailing)
+                    HStack(spacing: 20) {
+                        MoveEyeView(gaze: gaze, size: 56, iris: iris)
+                        MoveEyeView(gaze: gaze, size: 56, mirrored: true, iris: iris)
+                    }
+                    .frame(width: 300, height: h)
+                    LookingForFaceCanvas(pose: LookingForBreakChoreography.pose(input(name, gaze)),
+                                         iris: iris,
+                                         left: LookingForIrisSpec(),
+                                         right: LookingForIrisSpec(),
+                                         placement: .crop(LookingForEyePair.crop))
+                        .frame(width: h * LookingForEyePair.crop.width / LookingForEyePair.crop.height,
+                               height: h)
+                    AngryFaceCanvas(pose: AngryBreakChoreography.pose(input(name, gaze)),
+                                    iris: iris,
+                                    left: LookingForIrisSpec(),
+                                    right: LookingForIrisSpec(),
+                                    placement: .crop(AngryEyePair.crop))
+                        .frame(width: h * AngryEyePair.crop.width / AngryEyePair.crop.height,
+                               height: h)
+                }
+            }
+        }
+        .padding(20)
+        .background(Color.black)
+        let renderer = ImageRenderer(content: grid)
+        renderer.scale = 1
+        if let cg = renderer.cgImage {
+            let rep = NSBitmapImageRep(cgImage: cg)
+            try? rep.representation(using: .png, properties: [:])?
+                .write(to: URL(fileURLWithPath: out))
+        }
+    }
+    exit(0)
+}
+
+// Headless check that the break faces look where the step says during the intro clip:
+// `Sharingan --render-intro-gaze <path> [direction] [original]`. Rows: Looking-for, Angry;
+// columns: elapsed 0.5, 1.5, 3, 5, 8 s with the step "direction" active since the start.
+if let i = CommandLine.arguments.firstIndex(of: "--render-intro-gaze"),
+   i + 1 < CommandLine.arguments.count {
+    let out = CommandLine.arguments[i + 1]
+    let args = Array(CommandLine.arguments.dropFirst(i + 2))
+    let dirs: [String: GazeDirection] = ["right": .right, "left": .left, "up": .up, "down": .down, "center": .center]
+    let dir = args.first(where: { dirs[$0] != nil }) ?? "right"
+    let iris: BreakIrisStyle = args.contains("original") ? .original : .sharingan
+    MainActor.assumeIsolated {
+        let times: [Double] = [0.5, 1.5, 3, 5, 8]
+        func input(_ t: Double) -> BreakFaceInput {
+            BreakFaceInput(elapsed: t, remaining: 100, direction: dir, gaze: dirs[dir] ?? .center,
+                           phaseElapsed: t, holdSeconds: 30, previousOpenness: 1, iris: iris)
+        }
+        let h: CGFloat = 110
+        let grid = VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 16) {
+                ForEach(times, id: \.self) { t in
+                    Text("\(dir) @ \(t, specifier: "%.1f") s")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.8))
+                        .frame(width: h * LookingForEyePair.crop.width / LookingForEyePair.crop.height)
+                }
+            }
+            HStack(spacing: 16) {
+                ForEach(times, id: \.self) { t in
+                    LookingForFaceCanvas(pose: LookingForBreakChoreography.pose(input(t)),
+                                         iris: iris, left: LookingForIrisSpec(), right: LookingForIrisSpec(),
+                                         placement: .crop(LookingForEyePair.crop))
+                        .frame(width: h * LookingForEyePair.crop.width / LookingForEyePair.crop.height, height: h)
+                }
+            }
+            HStack(spacing: 16) {
+                ForEach(times, id: \.self) { t in
+                    AngryFaceCanvas(pose: AngryBreakChoreography.pose(input(t)),
+                                    iris: iris, left: LookingForIrisSpec(), right: LookingForIrisSpec(),
+                                    placement: .crop(AngryEyePair.crop))
+                        .frame(width: h * AngryEyePair.crop.width / AngryEyePair.crop.height, height: h)
+                }
+            }
+        }
+        .padding(20)
+        .background(Color.black)
+        let renderer = ImageRenderer(content: grid)
         renderer.scale = 1
         if let cg = renderer.cgImage {
             let rep = NSBitmapImageRep(cgImage: cg)

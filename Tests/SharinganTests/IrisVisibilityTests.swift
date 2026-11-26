@@ -59,13 +59,11 @@ struct IrisVisibilityTests {
         }
     }
 
-    @Test("Looking-for exercise: iris is large and fills the opening")
+    @Test("Looking-for exercise: iris is a fixed fraction of the eye-white width")
     func lookingForSize() {
         let p = LookingForBreakChoreography.pose(lfInput("center", .center, 3))
-        let o = p.eyeOpening()
-        let h = o.height(atX: p.irisCenter.x)
-        #expect(p.irisRadius >= 55)
-        #expect(2 * p.irisRadius >= 0.85 * h, "diameter \(2 * p.irisRadius) vs opening \(h)")
+        let ratio = 2 * p.irisRadius / (2 * p.whiteRX)
+        #expect(ratio >= 0.25 && ratio <= 0.31, "iris/white width \(ratio)")
         #expect(abs(p.pupilRadiusX - 85.7) < 1e-9)       // round iris
         // still the angry slanted look: inner lid corner lower than the outer one
         #expect(p.lid[8] > p.lid[0] + 20)
@@ -75,8 +73,7 @@ struct IrisVisibilityTests {
     @Test("Looking-for intro and outro start keep the video iris")
     func lookingForVideoPhases() {
         let intro = LookingForBreakChoreography.pose(lfInput("center", .center, 0).with(elapsed: 2))
-        #expect(intro.irisRadius == 85.7)
-        #expect(intro == LookingForEyesTimeline.pose(at: 2))
+        #expect(intro.withIris(of: LookingForEyesTimeline.pose(at: 2)) == LookingForEyesTimeline.pose(at: 2))
     }
 
     // MARK: Angry
@@ -108,15 +105,12 @@ struct IrisVisibilityTests {
         }
     }
 
-    @Test("Angry exercise: iris is large and fills the opening")
+    @Test("Angry exercise: iris is a fixed fraction of the eye-white width")
     func angrySize() {
         let p = AngryBreakChoreography.pose(anInput("center", .center, 3))
         for e in [p.left, p.right] {
-            let u = (e.pupilX - e.cx) / e.radius
-            _ = u
-            let h = e.cy + (e.radius * e.radius - (e.pupilX - e.cx) * (e.pupilX - e.cx)).squareRoot() - e.lidY(atU: (e.pupilX - e.cx) / e.radius)
-            #expect(e.pupilRadius >= 80)
-            #expect(2 * e.pupilRadius >= 0.85 * h, "diameter \(2 * e.pupilRadius) vs opening \(h)")
+            let ratio = 2 * e.pupilRadius / (2 * e.radius)
+            #expect(ratio >= 0.25 && ratio <= 0.31, "iris/white width \(ratio)")
             // still slanted
             #expect(abs(e.lidSlope) > 40)
         }
@@ -126,7 +120,7 @@ struct IrisVisibilityTests {
     @Test("Angry intro keeps the video pupil")
     func angryVideoPhases() {
         let p = AngryBreakChoreography.pose(anInput("center", .center, 0).with(elapsed: 1.5))
-        #expect(p == AngryEyesTimeline.pose(at: 1.5))
+        #expect(p.withPupils(of: AngryEyesTimeline.pose(at: 1.5)) == AngryEyesTimeline.pose(at: 1.5))
     }
 }
 
@@ -239,6 +233,40 @@ struct IrisVisibilityIntroOutroTests {
         #expect(Double(open) / Double(total) > 0.6)
     }
 
+    @Test("Iris width is 0.25-0.31 of the eye-white width in every open phase, both faces, both styles")
+    func irisWidthRatioAllPhases() {
+        let lfI = LookingForBreakChoreography.introDuration, anI = AngryBreakChoreography.introDuration
+        for iris in [BreakIrisStyle.sharingan, .original] {
+            for d in Self.dirs.prefix(5) {
+                var lf: [(String, LookingForBreakChoreography.Input)] = []
+                var an: [(String, AngryBreakChoreography.Input)] = []
+                for f in [0.2, 0.4, 0.6, 0.8, 0.99] {
+                    lf.append(("intro\(f)", Self.lf(elapsed: lfI * f, d, phase: 0, iris: iris)))
+                    an.append(("intro\(f)", Self.an(elapsed: anI * f, d, phase: 0, iris: iris)))
+                }
+                lf.append(("blend", Self.lf(elapsed: lfI + 0.17, d, phase: 0, iris: iris)))
+                an.append(("blend", Self.an(elapsed: anI + 0.17, d, phase: 0, iris: iris)))
+                lf.append(("exercise", Self.lf(elapsed: 30, d, phase: 3, iris: iris)))
+                an.append(("exercise", Self.an(elapsed: 30, d, phase: 3, iris: iris)))
+                let lo = LookingForBreakChoreography.outroDuration, ao = AngryBreakChoreography.outroDuration
+                lf.append(("outro", Self.lf(elapsed: 30, remaining: lo - 0.05, d, iris: iris)))
+                an.append(("outro", Self.an(elapsed: 30, remaining: ao - 0.05, d, iris: iris)))
+                for (n, i) in lf {
+                    let p = LookingForBreakChoreography.pose(i)
+                    let r = 2 * p.irisRadius / (2 * p.whiteRX)
+                    #expect(r >= 0.25 && r <= 0.31, "LF \(iris) \(d.0) \(n) ratio \(r)")
+                }
+                for (n, i) in an {
+                    let p = AngryBreakChoreography.pose(i)
+                    for e in [p.left, p.right] {
+                        let r = e.pupilRadius / e.radius
+                        #expect(r >= 0.25 && r <= 0.31, "AN \(iris) \(d.0) \(n) ratio \(r)")
+                    }
+                }
+            }
+        }
+    }
+
     @Test("Angry fade-in and the final shut count as closing (lid may cover the iris)")
     func angryClosingExists() {
         let first = AngryBreakChoreography.pose(Self.an(elapsed: 0.1))
@@ -252,7 +280,7 @@ struct IrisVisibilityIntroOutroTests {
     @Test("Closing keeps the iris size: no shrink to a dot while the lid closes (Angry fade-in, LF final close)")
     func closingKeepsIris() {
         let fade = AngryBreakChoreography.pose(Self.an(elapsed: 0.6))
-        #expect(fade.left.pupilRadius > 60)
+        #expect(fade.left.pupilRadius / fade.left.radius > 0.25)
         let near = LookingForBreakChoreography.pose(Self.lf(elapsed: 30, remaining: 0.1))
         let before = LookingForBreakChoreography.pose(Self.lf(elapsed: 30, remaining: 0.45))
         #expect(near.lidOpenness < BreakEyeOpening.openThreshold)
@@ -318,12 +346,12 @@ struct IrisVisibilityIntroOutroTests {
     func originalIntroIsVideo() {
         var t = 0.0
         while t < LookingForBreakChoreography.introDuration {
-            #expect(LookingForBreakChoreography.pose(Self.lf(elapsed: t, iris: .original)) == LookingForEyesTimeline.pose(at: t))
+            #expect(LookingForBreakChoreography.pose(Self.lf(elapsed: t, iris: .original)).withIris(of: LookingForEyesTimeline.pose(at: t)) == LookingForEyesTimeline.pose(at: t))
             t += Self.step
         }
         t = 0
         while t < AngryBreakChoreography.introDuration {
-            #expect(AngryBreakChoreography.pose(Self.an(elapsed: t, iris: .original)) == AngryEyesTimeline.pose(at: t))
+            #expect(AngryBreakChoreography.pose(Self.an(elapsed: t, iris: .original)).withPupils(of: AngryEyesTimeline.pose(at: t)) == AngryEyesTimeline.pose(at: t))
             t += Self.step
         }
     }
@@ -334,13 +362,13 @@ struct IrisVisibilityIntroOutroTests {
         var u = 0.5
         while u < o - 0.3 {
             let p = AngryBreakChoreography.pose(Self.an(elapsed: 30, remaining: o - u, iris: .original))
-            #expect(p.left == AngryEyesTimeline.pose(at: AngryBreakChoreography.outroVideoStart + u).left, "AN outro u=\(u)")
+            let v = AngryEyesTimeline.pose(at: AngryBreakChoreography.outroVideoStart + u)
+            #expect(p.withPupils(of: v).left == v.left, "AN outro u=\(u)")
             u += 0.25
         }
         let lo = LookingForBreakChoreography.outroDuration
         let p = LookingForBreakChoreography.pose(Self.lf(elapsed: 30, remaining: lo - 1.0, iris: .original))
         let v = LookingForEyesTimeline.pose(at: (86 + 1.0 * LookingForEyesTimeline.fps - 1) / LookingForEyesTimeline.fps)
-        #expect(p.irisRadius == 85.7)
         #expect(abs(p.pupilRadiusX - v.pupilRadiusX) < 1e-9)
     }
 

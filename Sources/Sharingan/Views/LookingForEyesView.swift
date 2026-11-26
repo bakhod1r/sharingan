@@ -49,6 +49,8 @@ struct LookingForIrisSpec: Equatable {
     var spin: Double = 0
     var emergence: CGFloat = 1
     var tomoeStage: CGFloat? = nil
+    var previousStyle: SharinganStyle? = nil
+    var blend: CGFloat = 1
 }
 
 /// Where the face is drawn inside the canvas.
@@ -107,7 +109,8 @@ struct LookingForFaceCanvas: View {
 
     private func irisView(_ spec: LookingForIrisSpec) -> some View {
         MoveIrisView(diameter: irisDiameter, spin: spec.spin, style: spec.style,
-                     emergence: spec.emergence, tomoeStage: spec.tomoeStage)
+                     emergence: spec.emergence, tomoeStage: spec.tomoeStage,
+                     previousStyle: spec.previousStyle, blend: spec.blend)
     }
 }
 

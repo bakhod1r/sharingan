@@ -23,15 +23,18 @@ public enum AngryBreakChoreography {
     /// The last moments fade the remaining glow to exactly zero.
     private static let finalFade: TimeInterval = 0.15
 
-    /// Pupil travel for up / down gazes (px of eye space, the clip never looks vertically).
-    private static let upRange = 45.0, downRange = 38.0
-    /// Clip frames of the extreme left and right looks (parallax and pupil range come from them).
     // MARK: Exercise iris fit
 
     /// The exercise squint raises the lids by this much (eye-space px); the slant is unchanged.
     public static let squintLift = 14.0
-    /// Iris diameter as a fraction of the biggest circle that fits (rest is room to look around).
-    public static let irisFill = 0.95
+    /// Iris radius of an eye: `irisWidthFraction` of the resting eye-white width (capped by what fits).
+    /// Taken from the resting eyeball, not the gaze-shifted one, so it is the same in every direction.
+    private static func irisRadius(eye: Int) -> Double { BreakEyeOpening.irisWidthFraction * baseEye(eye).radius }
+    /// Extra lid lift (eye-space px) at a full up gaze: the upper lid follows the eyes upward.
+    private static let upLidLift = 30.0
+    /// Idle gaze sway (|dy| < 0.05) leaves the lids untouched.
+    private static let gazeDeadZone = 0.05
+    private static func extraLift(_ lookY: Double) -> Double { upLidLift * min(1, max(0, -lookY - gazeDeadZone) / (1 - gazeDeadZone)) }
     private static let lidMargin = 4.0
 
     private static func opening(_ g: AngryEyeGeometry) -> BreakEyeOpening {
@@ -46,28 +49,78 @@ public enum AngryBreakChoreography {
         return r
     }
 
-    /// Resting iris of each eye on the base squint (centre relative to the eyeball, radius).
-    private static let rest: [(dx: Double, dy: Double, radius: Double)] = {
-        let b = AngryEyesTimeline.pose(at: outroVideoStart)
-        return [b.left, b.right].map { e in
-            let g = lifted(e, 1)
-            let c = opening(g).largestCircle(centeredAtX: g.cx)
-            return (c.x - g.cx, c.y - g.cy, opening(g).clearance(x: c.x, y: c.y) * irisFill)
-        }
-    }()
-
     /// Lifts the lid and fits the iris of `g` so the whole circle is visible (`k` 1 = fitted,
     /// 0 = untouched video values; the outro eases between them).
-    private static func fitted(_ g: AngryEyeGeometry, eye: Int, offset: (x: Double, y: Double), _ k: Double) -> AngryEyeGeometry {
+    private static func fitted(_ g: AngryEyeGeometry, eye: Int, look: (x: Double, y: Double), _ k: Double,
+                               cap: (x: Double, y: Double) = (.infinity, .infinity)) -> AngryEyeGeometry {
+        var g = g
+        g.pupilRadius = irisRadius(eye: eye)                // the clip's pupil, at the common size
         guard k > 0 else { return g }
+        let extra = extraLift(look.y)
         var r = lifted(g, k)
-        let o = opening(lifted(g, 1))
-        let a = o.largestCircle(centeredAtX: g.cx)
-        let c = o.fit(radius: rest[eye].radius, fill: 1, offset: offset, anchor: a)
+        r.lidY0 -= extra * k
+        let c = place(liftedFull(g, lookY: 0), liftedFull(g, lookY: look.y), eye: eye, look: look, cap: cap)
         r.pupilX += (c.x - g.pupilX) * k
         r.pupilY += (c.y - g.pupilY) * k
         r.pupilRadius += (c.radius - g.pupilRadius) * k
         return r
+    }
+
+    /// The open state of `g` on the exercise squint (lid lifted by the squint and the up gaze).
+    private static func liftedFull(_ g: AngryEyeGeometry, lookY: Double) -> AngryEyeGeometry {
+        var full = lifted(g, 1)
+        full.lidY0 -= extraLift(lookY)
+        return full
+    }
+
+    /// The iris at its resting spot (largest circle of the gaze-free opening `rest`), then carried
+    /// vertically by `lookY` (-1...1) of its travel to the edge of the gaze's opening `full`
+    /// (lid lifted for an up gaze), at most `cap.y`.
+    private static func level(rest: AngryEyeGeometry, full: AngryEyeGeometry, eye: Int, lookY: Double,
+                              cap: Double) -> (opening: BreakEyeOpening, circle: BreakEyeOpening.Circle) {
+        let o0 = opening(rest)
+        let a = o0.largestCircle(centeredAtX: rest.cx)
+        let start = o0.fit(radius: irisRadius(eye: eye), fill: 1, anchor: a)
+        let o = opening(full)
+        return (o, o.rise(start, look: lookY, cap: cap))
+    }
+
+    /// Iris of `full` for a gaze: first the vertical move (so diagonals keep their up/down travel),
+    /// then a horizontal slide by `look.x` (-1...1) of the travel to the opening's edge, at most `cap.x`.
+    private static func place(_ rest: AngryEyeGeometry, _ full: AngryEyeGeometry, eye: Int,
+                              look: (x: Double, y: Double), cap: (x: Double, y: Double)) -> BreakEyeOpening.Circle {
+        let l = level(rest: rest, full: full, eye: eye, lookY: look.y, cap: cap.y)
+        return l.opening.slide(l.circle, look: look.x, cap: cap.x)
+    }
+
+    /// Vertical travel of the iris of `full` toward the side of `lookY` (0 = no vertical look).
+    private static func verticalReach(_ rest: AngryEyeGeometry, _ full: AngryEyeGeometry, eye: Int, lookY: Double) -> Double {
+        guard lookY != 0 else { return .infinity }
+        let l = level(rest: rest, full: full, eye: eye, lookY: 0, cap: .infinity)
+        return l.opening.verticalTravel(from: l.circle, toward: lookY)
+    }
+
+    /// Horizontal travel of the iris of `full` (already carried vertically) toward the side of `look.x`.
+    private static func horizontalReach(_ rest: AngryEyeGeometry, _ full: AngryEyeGeometry, eye: Int,
+                                        look: (x: Double, y: Double), vcap: Double) -> Double {
+        guard look.x != 0 else { return .infinity }
+        let l = level(rest: rest, full: full, eye: eye, lookY: look.y, cap: vcap)
+        return l.opening.horizontalTravel(from: l.circle, toward: look.x)
+    }
+
+    /// The smaller of the two eyes' reach: both irises move by the same distance, vertically and sideways.
+    private static func commonReach(_ l: AngryEyeGeometry, _ r: AngryEyeGeometry, _ d: (left: EyeDelta, right: EyeDelta),
+                                    open: Bool) -> (x: Double, y: Double) {
+        func geoms(_ g: AngryEyeGeometry, _ e: Int, _ lookY: Double) -> (AngryEyeGeometry, AngryEyeGeometry) {
+            open ? (openFull(g, eye: e, lookY: 0), openFull(g, eye: e, lookY: lookY))
+                 : (liftedFull(g, lookY: 0), liftedFull(g, lookY: lookY))
+        }
+        let (rl, fl) = geoms(l, 0, d.left.lookY), (rr, fr) = geoms(r, 1, d.right.lookY)
+        let vcap = min(verticalReach(rl, fl, eye: 0, lookY: d.left.lookY),
+                       verticalReach(rr, fr, eye: 1, lookY: d.right.lookY))
+        let hcap = min(horizontalReach(rl, fl, eye: 0, look: (d.left.lookX, d.left.lookY), vcap: vcap),
+                       horizontalReach(rr, fr, eye: 1, look: (d.right.lookX, d.right.lookY), vcap: vcap))
+        return (hcap, vcap)
     }
 
     private static let leftLookTime = 150.0 / AngryEyesTimeline.fps
@@ -86,12 +139,12 @@ public enum AngryBreakChoreography {
     public static func pose(_ i: Input) -> AngryEyesPose {
         switch phase(i) {
         case .intro:
-            return i.iris == .sharingan ? sharinganPose(sharinganVideo(at: i.elapsed)) : AngryEyesTimeline.pose(at: i.elapsed)
+            return introPose(i, at: i.elapsed)
         case .exercise:
             if i.iris == .sharingan { return sharinganExercise(i) }
             let target = exercisePose(i, openness: BreakGazePath.exerciseOpenness(i))
             if i.reduceMotion || i.elapsed >= introDuration + blendDuration { return target }
-            let from = AngryEyesTimeline.pose(at: introDuration - 1e-9)
+            let from = introPose(i, at: introDuration - 1e-9)
             return from.blended(to: target, BreakGazePath.smooth((i.elapsed - introDuration) / blendDuration))
         case .outro:
             return i.iris == .sharingan ? sharinganOutro(i) : outroPose(i)
@@ -104,8 +157,10 @@ public enum AngryBreakChoreography {
     private static func exercisePose(_ i: Input, openness: Double) -> AngryEyesPose {
         let b = base
         let d = gazeDelta(i)
-        var p = AngryEyesPose(left: fitted(shifted(b.left, d.left), eye: 0, offset: (d.left.offX, d.left.offY), 1),
-                              right: fitted(shifted(b.right, d.right), eye: 1, offset: (d.right.offX, d.right.offY), 1))
+        let gl = shifted(b.left, d.left), gr = shifted(b.right, d.right)
+        let cap = commonReach(gl, gr, d, open: false)
+        var p = AngryEyesPose(left: fitted(gl, eye: 0, look: (d.left.lookX, d.left.lookY), 1, cap: cap),
+                              right: fitted(gr, eye: 1, look: (d.right.lookX, d.right.lookY), 1, cap: cap))
         applyLids(&p, openness: openness)
         return p
     }
@@ -118,9 +173,11 @@ public enum AngryBreakChoreography {
         let d = gazeDelta(i)
         let v = AngryEyesTimeline.pose(at: outroVideoStart + u)
         let dl = d.left.scaled(w), dr = d.right.scaled(w)
+        let gl = shifted(v.left, dl), gr = shifted(v.right, dr)
+        let cap = commonReach(gl, gr, (dl, dr), open: false)
         var p = AngryEyesPose(
-            left: fitted(shifted(v.left, dl), eye: 0, offset: (dl.offX, dl.offY), w),
-            right: fitted(shifted(v.right, dr), eye: 1, offset: (dr.offX, dr.offY), w))
+            left: fitted(gl, eye: 0, look: (dl.lookX, dl.lookY), w, cap: cap),
+            right: fitted(gr, eye: 1, look: (dr.lookX, dr.lookY), w, cap: cap))
         let ex = BreakGazePath.exerciseOpenness(i)
         applyLids(&p, openness: ex + (1 - ex) * settle)
         let fin = BreakGazePath.smooth(remaining / finalFade)
@@ -137,15 +194,16 @@ public enum AngryBreakChoreography {
     // MARK: Gaze
 
     private struct EyeDelta {
-        var cx = 0.0, cy = 0.0, radius = 0.0, pupilRadius = 0.0, offX = 0.0, offY = 0.0
+        var cx = 0.0, cy = 0.0, radius = 0.0, pupilRadius = 0.0, lookX = 0.0, lookY = 0.0
         func scaled(_ k: Double) -> EyeDelta {
             EyeDelta(cx: cx * k, cy: cy * k, radius: radius * k, pupilRadius: pupilRadius * k,
-                     offX: offX * k, offY: offY * k)
+                     lookX: lookX * k, lookY: lookY * k)
         }
     }
 
-    /// Gaze offsets of both eyes relative to the base pose. Horizontal pupil travel, eyeball
-    /// shift and size change are interpolated towards the measured extreme looks of the clip.
+    /// Gaze of both eyes relative to the base pose. Eyeball shift and size change are interpolated
+    /// towards the measured extreme looks of the clip; the iris moves by `lookY` / `lookX` (-1...1)
+    /// of the way to the edge of the opening (up / down / sideways).
     private static func gazeDelta(_ i: Input) -> (left: EyeDelta, right: EyeDelta) {
         let g = BreakGazePath.gazeOffset(i)
         let dx = max(-1, min(1, g.x)), dy = max(-1, min(1, g.y))
@@ -155,8 +213,7 @@ public enum AngryBreakChoreography {
         func delta(_ b: AngryEyeGeometry, _ e: AngryEyeGeometry) -> EyeDelta {
             EyeDelta(cx: (e.cx - b.cx) * k, cy: (e.cy - b.cy) * k, radius: (e.radius - b.radius) * k,
                      pupilRadius: (e.pupilRadius - b.pupilRadius) * k,
-                     offX: (e.pupilOffsetX - b.pupilOffsetX) * k,
-                     offY: dy >= 0 ? dy * downRange : dy * upRange)
+                     lookX: dx, lookY: dy)
         }
         return (delta(b.left, e.left), delta(b.right, e.right))
     }
@@ -167,9 +224,34 @@ public enum AngryBreakChoreography {
         r.cy += d.cy
         r.radius += d.radius
         r.pupilRadius += d.pupilRadius
-        r.pupilX += d.cx + d.offX
-        r.pupilY += d.cy + d.offY
+        r.pupilX += d.cx
+        r.pupilY += d.cy
         return r
+    }
+
+    // MARK: Intro
+
+    /// The clip fades in over its first second; the pupils hand over to the step gaze while it
+    /// brightens (start) and are fully on it `introGazeStart + introGazeRamp` seconds in.
+    public static let introGazeStart: TimeInterval = 0.5
+    public static let introGazeRamp: TimeInterval = 0.5
+
+    /// The clip at `t` (fade, lids, brows) with the pupils following the step's gaze.
+    private static func introPose(_ i: Input, at t: TimeInterval) -> AngryEyesPose {
+        let w = BreakGazePath.introFollow(t, start: introGazeStart, ramp: introGazeRamp)
+        if i.iris == .sharingan { return sharinganPose(sharinganVideo(i, at: t, follow: w)) }
+        var p = AngryEyesTimeline.pose(at: t)
+        p.left.pupilRadius = irisRadius(eye: 0)             // the clip's pupil, at the common size
+        p.right.pupilRadius = irisRadius(eye: 1)
+        guard w > 0 else { return p }
+        let target = exercisePose(i, openness: 1)
+        func follow(_ e: inout AngryEyeGeometry, _ g: AngryEyeGeometry) {
+            e.pupilX += (e.cx + (g.pupilX - g.cx) - e.pupilX) * w
+            e.pupilY += (e.cy + (g.pupilY - g.cy) - e.pupilY) * w
+        }
+        follow(&p.left, target.left)
+        follow(&p.right, target.right)
+        return p
     }
 
     // MARK: Sharingan iris in the intro, blend and outro
@@ -204,18 +286,34 @@ public enum AngryBreakChoreography {
     /// squint), then the iris placed as close as it fits to `desired` (or the gaze `offset` from the
     /// biggest circle).
     private static func openEye(_ g: AngryEyeGeometry, eye: Int, desired: (x: Double, y: Double)?,
-                                offset: (x: Double, y: Double) = (0, 0)) -> AngryEyeGeometry {
-        var r = g
-        r.lidY0 = min(g.lidY0, baseEye(eye).lidY0) - squintLift
-        return fitIris(r, eye: eye, desired: desired, offset: offset)
+                                offset: (x: Double, y: Double) = (0, 0),
+                                cap: (x: Double, y: Double) = (.infinity, .infinity)) -> AngryEyeGeometry {
+        let r = openFull(g, eye: eye, lookY: desired == nil ? offset.y : 0, lifted: desired == nil)
+        let rest = openFull(g, eye: eye, lookY: 0, lifted: desired == nil)
+        return fitIris(r, eye: eye, desired: desired, offset: offset, cap: cap, rest: rest)
     }
 
+    /// `g` with the lid at the exercise's open state (never lower than the squint's), plus the up-gaze lift.
+    private static func openFull(_ g: AngryEyeGeometry, eye: Int, lookY: Double, lifted up: Bool = true) -> AngryEyeGeometry {
+        var r = g
+        r.lidY0 = min(g.lidY0, baseEye(eye).lidY0) - squintLift - (up ? extraLift(lookY) : 0)
+        return r
+    }
+
+    /// `offset.x` is the sideways look (-1...1) when `desired` is nil; `desired` is a target centre.
     private static func fitIris(_ r: AngryEyeGeometry, eye: Int, desired: (x: Double, y: Double)?,
-                                offset: (x: Double, y: Double) = (0, 0)) -> AngryEyeGeometry {
+                                offset: (x: Double, y: Double) = (0, 0),
+                                cap: (x: Double, y: Double) = (.infinity, .infinity),
+                                rest: AngryEyeGeometry? = nil) -> AngryEyeGeometry {
         let o = opening(r)
         let a = o.largestCircle(centeredAtX: r.cx)
-        let off = desired.map { (x: $0.x - a.x, y: $0.y - a.y) } ?? offset
-        let c = o.fit(radius: rest[eye].radius, fill: 1, offset: off, anchor: a)
+        let c: BreakEyeOpening.Circle
+        if let d = desired {
+            c = o.fit(radius: irisRadius(eye: eye), fill: 1, offset: (d.x - a.x, d.y - a.y), anchor: a)
+        } else {
+            let l = level(rest: rest ?? r, full: r, eye: eye, lookY: offset.y, cap: cap.y)
+            c = l.opening.slide(l.circle, look: offset.x, cap: cap.x)
+        }
         var e = r
         e.pupilX = c.x
         e.pupilY = c.y
@@ -223,20 +321,28 @@ public enum AngryBreakChoreography {
         return e
     }
 
-    private static func sharinganVideo(at t: TimeInterval) -> SharinganEyes {
+    private static func sharinganVideo(_ i: Input, at t: TimeInterval, follow w: Double) -> SharinganEyes {
         let v = AngryEyesTimeline.pose(at: t)
+        let tg = w > 0 ? sharinganExerciseEyes(i) : nil
+        func desired(_ e: AngryEyeGeometry, _ g: AngryEyeGeometry?) -> (x: Double, y: Double) {
+            guard let g else { return (e.pupilX, e.pupilY) }
+            return (e.pupilX + (e.cx + (g.pupilX - g.cx) - e.pupilX) * w,
+                    e.pupilY + (e.cy + (g.pupilY - g.cy) - e.pupilY) * w)
+        }
         return SharinganEyes(
-            left: openEye(v.left, eye: 0, desired: (v.left.pupilX, v.left.pupilY)),
-            right: openEye(v.right, eye: 1, desired: (v.right.pupilX, v.right.pupilY)),
+            left: openEye(v.left, eye: 0, desired: desired(v.left, tg?.left)),
+            right: openEye(v.right, eye: 1, desired: desired(v.right, tg?.right)),
             leftOpen: videoOpenness(v.left, eye: 0), rightOpen: videoOpenness(v.right, eye: 1))
     }
 
     private static func sharinganExerciseEyes(_ i: Input) -> SharinganEyes {
         let b = base
         let d = gazeDelta(i)
+        let gl = shifted(b.left, d.left), gr = shifted(b.right, d.right)
+        let cap = commonReach(gl, gr, d, open: true)
         return SharinganEyes(
-            left: openEye(shifted(b.left, d.left), eye: 0, desired: nil, offset: (d.left.offX, d.left.offY)),
-            right: openEye(shifted(b.right, d.right), eye: 1, desired: nil, offset: (d.right.offX, d.right.offY)))
+            left: openEye(gl, eye: 0, desired: nil, offset: (d.left.lookX, d.left.lookY), cap: cap),
+            right: openEye(gr, eye: 1, desired: nil, offset: (d.right.lookX, d.right.lookY), cap: cap))
     }
 
     /// Closes each lid by its own openness (the iris is untouched).
@@ -260,7 +366,7 @@ public enum AngryBreakChoreography {
             p = sharinganPose(target, extraOpen: open)
         } else {
             let k = BreakGazePath.smooth((i.elapsed - introDuration) / blendDuration)
-            var s = sharinganVideo(at: introDuration - 1e-9).blended(to: target, k)
+            var s = sharinganVideo(i, at: introDuration - 1e-9, follow: 1).blended(to: target, k)
             // refit the iris on the blended lids so it never pokes through while they ease
             s.left = fitIris(s.left, eye: 0, desired: (s.left.pupilX, s.left.pupilY))
             s.right = fitIris(s.right, eye: 1, desired: (s.right.pupilX, s.right.pupilY))
@@ -279,9 +385,10 @@ public enum AngryBreakChoreography {
         let v = AngryEyesTimeline.pose(at: outroVideoStart + u)
         let dl = d.left.scaled(w), dr = d.right.scaled(w)
         let gl = shifted(v.left, dl), gr = shifted(v.right, dr)
+        let cap = commonReach(gl, gr, (dl, dr), open: true)
         let s = SharinganEyes(
-            left: openEye(gl, eye: 0, desired: nil, offset: (dl.offX, dl.offY)),
-            right: openEye(gr, eye: 1, desired: nil, offset: (dr.offX, dr.offY)),
+            left: openEye(gl, eye: 0, desired: nil, offset: (dl.lookX, dl.lookY), cap: cap),
+            right: openEye(gr, eye: 1, desired: nil, offset: (dr.lookX, dr.lookY), cap: cap),
             leftOpen: videoOpenness(gl, eye: 0), rightOpen: videoOpenness(gr, eye: 1))
         let ex = BreakGazePath.exerciseOpenness(i)
         var p = sharinganPose(s, extraOpen: ex + (1 - ex) * settle)

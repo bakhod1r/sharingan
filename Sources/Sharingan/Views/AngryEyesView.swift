@@ -83,7 +83,8 @@ struct AngryFaceCanvas: View {
 
     private func irisView(_ spec: LookingForIrisSpec) -> some View {
         MoveIrisView(diameter: Self.irisSymbolDiameter, spin: spec.spin, style: spec.style,
-                     emergence: spec.emergence, tomoeStage: spec.tomoeStage)
+                     emergence: spec.emergence, tomoeStage: spec.tomoeStage,
+                     previousStyle: spec.previousStyle, blend: spec.blend)
     }
 }
 

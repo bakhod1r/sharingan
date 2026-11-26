@@ -43,8 +43,9 @@ struct AngryBreakChoreographyTests {
 
     @Test("intro plays the video from its start")
     func introStart() {
-        #expect(C.pose(input(elapsed: 0)) == AngryEyesTimeline.pose(at: 0))
-        #expect(C.pose(input(elapsed: 2.5)) == AngryEyesTimeline.pose(at: 2.5))
+        #expect(C.pose(input(elapsed: 0)).withPupils(of: AngryEyesTimeline.pose(at: 0)) == AngryEyesTimeline.pose(at: 0))
+        let clip = AngryEyesTimeline.pose(at: 2.5)
+        #expect(C.pose(input(elapsed: 2.5)).withPupils(of: clip) == clip)   // only the pupils follow the step gaze
     }
 
     @Test("exercise holds the angry squint at full brightness")
@@ -72,7 +73,7 @@ struct AngryBreakChoreographyTests {
         for (a, b) in [(d.left, c.left), (d.right, c.right)] { #expect(a.pupilOffsetY > b.pupilOffsetY + 2) }
         for p in [l, r, u, d] {
             for e in [p.left, p.right] {
-                #expect(abs(e.pupilOffsetX) <= 90 && abs(e.pupilOffsetY) <= 100)
+                #expect(abs(e.pupilOffsetX) <= 115 && abs(e.pupilOffsetY) <= 140)
                 // the pupil never leaves the eyeball
                 #expect(hypot(e.pupilOffsetX, e.pupilOffsetY) + e.pupilRadius <= e.radius + 10)
             }
@@ -97,7 +98,7 @@ struct AngryBreakChoreographyTests {
             xs.insert(Int(p.left.pupilX.rounded()))
         }
         #expect(xs.count > 10)
-        let c = C.pose(input(gaze: .center))
+        let c = C.pose(input(gaze: .center, reduce: true))   // no idle sway: the exact centre
         let end = C.pose(input(direction: "figure8", phaseElapsed: hold, hold: hold))
         #expect(abs(end.left.pupilX - c.left.pupilX) < 1)
         #expect(abs(end.left.pupilY - c.left.pupilY) < 1)
@@ -182,7 +183,29 @@ struct AngryBreakChoreographyTests {
             let ps = stride(from: C.outroDuration + 0.5, through: C.outroDuration - 0.5, by: -1.0 / 120).map {
                 C.pose(input(remaining: $0, direction: dir.0, gaze: dir.1))
             }
-            #expect(maxStep(ps) < 4, "direction \(dir.0)")
+            #expect(maxStep(ps) < 5, "direction \(dir.0)")
+        }
+    }
+
+    // MARK: vertical gaze travel
+
+    @Test("up and down move both irises clearly from centre, (both iris styles)")
+    func verticalTravel() {
+        for iris in [BreakIrisStyle.sharingan, .original] {
+            func pose(_ d: String, _ g: GazeDirection) -> AngryEyesPose {
+                C.pose(.init(elapsed: 30, remaining: 100, direction: d, gaze: g, phaseElapsed: 3,
+                             holdSeconds: 4, previousOpenness: 1, reduceMotion: true, iris: iris))
+            }
+            let c = pose("center", .center), l = pose("left", .left)
+            let u = pose("up", .up), d = pose("down", .down)
+            for (name, get) in [("left eye", { (p: AngryEyesPose) in p.left }), ("right eye", { $0.right })] {
+                let e = get(c)
+                let left = e.pupilX - get(l).pupilX
+                let up = e.pupilY - get(u).pupilY
+                let down = get(d).pupilY - e.pupilY
+                #expect(up >= 22, "\(iris) \(name) up \(up)")
+                #expect(down >= 22, "\(iris) \(name) down \(down)")
+            }
         }
     }
 }

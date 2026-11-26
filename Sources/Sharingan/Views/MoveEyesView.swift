@@ -321,30 +321,42 @@ struct MoveIrisView: View {
     /// value is mid-awakening: existing tomoe glide to their new slots while
     /// the newest grows out of the ring. nil = whole stages from the style.
     var tomoeStage: CGFloat? = nil
+    /// Outgoing pattern while crossfading into `style` (nil = none).
+    var previousStyle: SharinganStyle? = nil
+    /// 0 = `previousStyle` only, 1 = `style` only.
+    var blend: CGFloat = 1
 
     var body: some View {
         let r = diameter / 2
         let e = min(max(emergence, 0), 1)
+        let b = Double(min(max(blend, 0), 1))
+        let prev: SharinganStyle? = b < 1 ? previousStyle : nil
         ZStack {
-            Circle()
-                .fill(
-                    RadialGradient(
-                        stops: baseStops,
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: r
-                    )
-                )
+            // Red/purple base: if the crossfade changes family, fade the base too.
+            if let prev, (prev == .rinnegan) != (style == .rinnegan) {
+                irisBase(rinnegan: prev == .rinnegan, r: r)
+                irisBase(rinnegan: style == .rinnegan, r: r).opacity(b)
+            } else {
+                irisBase(rinnegan: style == .rinnegan, r: r)
+            }
             Circle()
                 .stroke(rimColor.opacity(0.9), lineWidth: 0.05 * r)
                 .padding(0.02 * r)
 
+            // Outgoing pattern: fades out, shrinks a touch and swirls away.
+            if let prev {
+                pattern(r: r, style: prev, stage: nil)
+                    .scaleEffect(max((0.08 + 0.92 * e) * (1 - 0.12 * b), 0.001))
+                    .opacity(Double(min(1, e * 2.4)) * (1 - b))
+                    .rotationEffect(.degrees(spin - Double(1 - e) * 260 + 40 * b))
+            }
+
             // Always in the tree (no structural if) so withAnimation-driven
             // emergence changes animate the whirl instead of a removal fade.
-            pattern(r: r)
-                .scaleEffect(max(0.08 + 0.92 * e, 0.001))
-                .opacity(Double(min(1, e * 2.4)))
-                .rotationEffect(.degrees(spin - Double(1 - e) * 260))
+            pattern(r: r, style: style, stage: tomoeStage)
+                .scaleEffect(max((0.08 + 0.92 * e) * (prev == nil ? 1 : 0.85 + 0.15 * b), 0.001))
+                .opacity(Double(min(1, e * 2.4)) * (prev == nil ? 1 : b))
+                .rotationEffect(.degrees(spin - Double(1 - e) * 260 - (prev == nil ? 0 : 40 * (1 - b))))
 
             Circle()
                 .fill(Color.black)
@@ -353,9 +365,15 @@ struct MoveIrisView: View {
         .frame(width: diameter, height: diameter)
     }
 
+    private func irisBase(rinnegan: Bool, r: CGFloat) -> some View {
+        Circle()
+            .fill(RadialGradient(stops: Self.baseStops(rinnegan: rinnegan),
+                                 center: .center, startRadius: 0, endRadius: r))
+    }
+
     /// Iris base: Sharingan red for every style except the purple Rinnegan.
-    private var baseStops: [Gradient.Stop] {
-        if style == .rinnegan {
+    private static func baseStops(rinnegan: Bool) -> [Gradient.Stop] {
+        if rinnegan {
             return [
                 .init(color: Color(red: 0.80, green: 0.72, blue: 0.93), location: 0.0),
                 .init(color: Color(red: 0.66, green: 0.53, blue: 0.85), location: 0.45),
@@ -381,7 +399,7 @@ struct MoveIrisView: View {
 
     /// The spinning black pattern for each style.
     @ViewBuilder
-    private func pattern(r: CGFloat) -> some View {
+    private func pattern(r: CGFloat, style: SharinganStyle, stage tomoeStage: CGFloat?) -> some View {
         let ringR = 0.52 * r
         switch style {
         case .classic:
@@ -641,6 +659,9 @@ struct MoveEyeView: View {
     var emergence: CGFloat = 1
     /// Fractional tomoe stage passed through to the iris (see MoveIrisView).
     var tomoeStage: CGFloat? = nil
+    /// Outgoing pattern + blend, passed through to the iris (crossfade).
+    var previousStyle: SharinganStyle? = nil
+    var blend: CGFloat = 1
     /// `.original` swaps the Sharingan iris for a black pupil with a small white highlight.
     var iris: BreakIrisStyle = .sharingan
 
@@ -700,7 +721,8 @@ struct MoveEyeView: View {
                             )
                             .frame(width: irisD * 1.6, height: irisD * 1.6)
                         MoveIrisView(diameter: irisD, spin: spin, style: style,
-                                     emergence: emergence, tomoeStage: tomoeStage)
+                                     emergence: emergence, tomoeStage: tomoeStage,
+                                     previousStyle: previousStyle, blend: blend)
                     }
                 }
                 .offset(x: off.x, y: off.y)
@@ -717,20 +739,35 @@ struct MoveEyeView: View {
     /// vertically it stays level for left/right gazes but is clamped into the
     /// slanted aperture band so it never vanishes into a corner.
     private func irisOffset(sw: CGFloat, sh: CGFloat, irisD: CGFloat) -> CGPoint {
-        // Horizontal position across the eye, in screen terms. ±0.20 keeps the
-        // iris out of the slanted corner zones, so a left/right gaze reads at
-        // the same height in both (mirrored) eyes instead of diverging.
-        let uScreen = min(max(0.5 + CGFloat(gaze.dx) * 0.20, 0.12), 0.88)
-        // The aperture table describes the unmirrored shape.
-        let uShape = mirrored ? 1 - uScreen : uScreen
-        let ap = EyeAperture.sample(at: uShape)
         let irisUnitR = irisD / 2 / sh
+        // Horizontal position across the eye, in screen terms: dx = ±1 slides the iris out to where
+        // the almond (the smaller of the two mirrored eyes) still shows most of it. Both eyes use
+        // the same screen position, so a left/right gaze reads the same in both.
+        func apertureAt(_ uScreen: CGFloat, mirrored m: Bool) -> (midY: CGFloat, halfH: CGFloat) {
+            EyeAperture.sample(at: m ? 1 - uScreen : uScreen)
+        }
+        let uScreen = CGFloat(MoveEyeTravel.uScreen(dx: gaze.dx, irisUnitR: Double(irisUnitR)) { u in
+            Double(min(apertureAt(CGFloat(u), mirrored: false).halfH, apertureAt(CGFloat(u), mirrored: true).halfH))
+        })
+        let ap = apertureAt(uScreen, mirrored: mirrored)
         // Vertical slack inside the opening at this x; lets up/down gazes tuck
         // the iris well under the lids without losing it entirely.
-        let slack = max(0, ap.halfH - irisUnitR * 0.28)
+        func slack(_ a: (midY: CGFloat, halfH: CGFloat)) -> CGFloat { max(0, a.halfH - irisUnitR * 0.28) }
         let baseY = EyeAperture.sample(at: 0.5).midY
-        let y = min(max(baseY + CGFloat(gaze.dy) * slack, ap.midY - slack),
-                    ap.midY + slack)
+        let s = slack(ap)
+        let own = min(max(baseY + CGFloat(gaze.dy) * s, ap.midY - s), ap.midY + s)
+        // The almond is slanted, so near the tips the two mirrored eyes' openings sit at different
+        // heights. For a (near) level gaze put both irises at one common height inside both openings
+        // when such a height exists; up/down gazes keep their own travel.
+        let a0 = apertureAt(uScreen, mirrored: false), a1 = apertureAt(uScreen, mirrored: true)
+        let lo = max(a0.midY - slack(a0), a1.midY - slack(a1))
+        let hi = min(a0.midY + slack(a0), a1.midY + slack(a1))
+        var y = own
+        if lo <= hi {
+            let common = min(max(baseY, lo), hi)
+            let k = min(1, abs(CGFloat(gaze.dy)) / 0.1)        // 0 = level gaze, 1 = vertical gaze
+            y = common + (own - common) * k
+        }
         return CGPoint(x: (uScreen - 0.5) * sw, y: (y - 0.5) * sh)
     }
 }
@@ -766,11 +803,7 @@ struct MoveEyePair: View {
     /// Eye drawn inside the almond: the Sharingan iris or the original black pupil.
     var iris: BreakIrisStyle = .sharingan
 
-    private var isPath: Bool {
-        direction == "circle_cw" || direction == "circle_ccw" || direction == "figure8"
-    }
-
-    @State private var spinStart: TimeInterval = 0
+    @State private var activation = ActivationSpin()
     /// When the pair appeared — drives the closed→open "awakening" reveal.
     @State private var appearStart: TimeInterval = 0
     /// When the current step began — clock for blink cycles and lid eases.
@@ -779,15 +812,21 @@ struct MoveEyePair: View {
     @State private var transitionFrom: Double = 1
     /// Previous step direction, so the blend can start from its lid value.
     @State private var lastDirection: String = ""
+    /// Step gaze target of the previous step, to rebuild the old step's live offset on a change.
+    @State private var lastGaze: GazeDirection = .center
+    /// Iris offset at the moment the step changed: it glides from here back to center, then out.
+    @State private var previousGaze: GazeDirection = .center
     /// How many steps the pattern has evolved past the configured base style.
     @State private var evolutionCount: Int = 0
+    /// Base-style change tracking: the old pattern crossfades into the new one.
+    @State private var crossfade = StyleCrossfade()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let spinDuration: Double = 1.6
     private let spinTurns: Double = 3.0
 
     var body: some View {
-        // 30 fps cap: the break screen is full-screen and rendered at display rate.
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { ctx in
+        // 60 fps cap: the break screen is full-screen and rendered at display rate.
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { ctx in
             let t = ctx.date.timeIntervalSinceReferenceDate
             let off = offset(at: t)
             let live = GazeDirection(dx: off.x, dy: off.y)
@@ -797,30 +836,50 @@ struct MoveEyePair: View {
             HStack(spacing: eyeSize * 0.42) {
                 MoveEyeView(gaze: live, spin: s, size: eyeSize,
                             style: pf.left, openness: lid,
-                            emergence: pf.emergence, tomoeStage: pf.tomoeStage, iris: iris)
+                            emergence: pf.emergence, tomoeStage: pf.tomoeStage,
+                            previousStyle: pf.previousLeft, blend: pf.blend, iris: iris)
                 MoveEyeView(gaze: live, spin: s, size: eyeSize, mirrored: true,
                             style: pf.right, openness: lid,
-                            emergence: pf.emergence, tomoeStage: pf.tomoeStage, iris: iris)
+                            emergence: pf.emergence, tomoeStage: pf.tomoeStage,
+                            previousStyle: pf.previousRight, blend: pf.blend, iris: iris)
             }
-            .animation(isPath ? nil : .easeInOut(duration: 0.5), value: gaze)
         }
         .onAppear {
             let now = Date().timeIntervalSinceReferenceDate
             appearStart = now
             phaseStart = now
             // Delay the tomoe whirl so it plays just as the lids finish opening.
-            spinStart = now + 1.1
+            activation.reset(start: now + 1.1)
             transitionFrom = 1
             lastDirection = direction
+            lastGaze = gaze
+            previousGaze = .center
+        }
+        .onChange(of: style) { old, new in
+            registerStyleChange(oldLeft: old, newLeft: new, oldRight: rightStyle ?? old, newRight: rightStyle ?? new)
+        }
+        .onChange(of: rightStyle) { old, new in
+            registerStyleChange(oldLeft: style, newLeft: style, oldRight: old ?? style, newRight: new ?? style)
         }
         .onChange(of: direction) { _, newDirection in
             let now = Date().timeIntervalSinceReferenceDate
             transitionFrom = steadyOpenness(of: lastDirection, at: now)
+            // Live iris offset under the OLD step, no sway: the glide starts exactly where the iris is.
+            let live = BreakGazePath.gazeOffset(gazeInput(at: now, direction: lastDirection, gaze: lastGaze), sway: false)
+            previousGaze = GazeDirection(dx: live.x, dy: live.y)
             lastDirection = newDirection
+            lastGaze = gaze
             phaseStart = now
-            spinStart = now
+            activation.restart(at: now, now: now)
             evolutionCount += 1
         }
+    }
+
+    private func registerStyleChange(oldLeft: SharinganStyle, newLeft: SharinganStyle,
+                                     oldRight: SharinganStyle, newRight: SharinganStyle) {
+        crossfade.change(oldLeft: oldLeft, oldRight: oldRight, newLeft: newLeft, newRight: newRight,
+                         at: Date().timeIntervalSinceReferenceDate,
+                         transition: transition, reduceMotion: reduceMotion)
     }
 
     /// The evolution timeline for the current state — pure math shared with
@@ -834,16 +893,15 @@ struct MoveEyePair: View {
                          reduceMotion: reduceMotion,
                          baseLeft: style,
                          baseRight: rightStyle ?? style,
-                         evolves: evolves)
+                         evolves: evolves,
+                         crossfade: crossfade)
     }
 
     /// Activation burst (tomoe accelerate, whirl and settle) layered on the
     /// optional continuous ambient rotation.
     private func activationSpin(at t: TimeInterval) -> Double {
         if reduceMotion { return 0 }
-        var s = PatternEvolution.activationSpin(at: t, since: spinStart,
-                                                duration: spinDuration,
-                                                turns: spinTurns)
+        var s = activation.angle(at: t)
         if spinSeconds > 0 {
             s += max(0, t - appearStart) * 360 / spinSeconds
         }
@@ -890,38 +948,13 @@ struct MoveEyePair: View {
     }
 
     private func offset(at t: TimeInterval) -> (x: Double, y: Double) {
-        let tp = max(0, t - phaseStart)
-        switch direction {
-        case "circle_cw":
-            let a = tp * 1.7, r = pathEnvelope(tp)
-            return (cos(a) * r, sin(a) * r)
-        case "circle_ccw":
-            let a = -tp * 1.7, r = pathEnvelope(tp)
-            return (cos(a) * r, sin(a) * r)
-        case "figure8":
-            let a = tp * 1.7, r = pathEnvelope(tp)
-            return (sin(a) * r, sin(2 * a) / 2 * r)
-        default:
-            // A barely-there slow drift keeps the eyes alive during long
-            // fixed holds (e.g. the 20 s far gaze) without moving the target.
-            if reduceMotion { return (gaze.dx, gaze.dy) }
-            let sway = 0.018
-            return (gaze.dx + sin(t * 0.7) * sway,
-                    gaze.dy + sin(t * 0.53 + 1.3) * sway)
-        }
+        BreakGazePath.gazeOffset(gazeInput(at: t, direction: direction, gaze: gaze))
     }
 
-    /// Radius envelope for path sweeps: the iris eases out from center when
-    /// the step starts and eases back to center as the hold runs out, so the
-    /// animation always completes instead of cutting off mid-sweep.
-    private func pathEnvelope(_ tp: Double) -> Double {
-        func smooth(_ u: Double) -> Double {
-            let c = min(max(u, 0), 1)
-            return c * c * (3 - 2 * c)
-        }
-        let rampIn = smooth(tp / 0.6)
-        guard holdSeconds > 1.4 else { return rampIn }
-        let rampOut = smooth((holdSeconds - tp) / 0.6)
-        return min(rampIn, rampOut)
+    /// Same gaze path as the Looking-for and Angry faces: glide back to center, then out to the target.
+    private func gazeInput(at t: TimeInterval, direction: String, gaze: GazeDirection) -> BreakFaceInput {
+        BreakFaceInput(elapsed: max(0, t - appearStart), remaining: nil, direction: direction, gaze: gaze,
+                       phaseElapsed: max(0, t - phaseStart), holdSeconds: holdSeconds,
+                       reduceMotion: reduceMotion, previousGaze: previousGaze)
     }
 }

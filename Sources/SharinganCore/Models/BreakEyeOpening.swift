@@ -24,6 +24,10 @@ public struct BreakEyeOpening {
     /// size and position meanwhile.
     public static let openThreshold = 0.99
 
+    /// Iris diameter as a fraction of the eye-white width, the same in every phase and for both
+    /// faces (the Sharingan face draws it at about 0.25). Applied as a cap on the fitted radius.
+    public static let irisWidthFraction = 0.28
+
     /// A circle placed in the opening.
     public struct Circle: Equatable, Sendable {
         public var x: Double, y: Double, radius: Double
@@ -130,5 +134,51 @@ public struct BreakEyeOpening {
             if contains(x: a.x + offset.x * m, y: a.y + offset.y * m, radius: r) { lo = m } else { hi = m }
         }
         return Circle(x: a.x + offset.x * lo, y: a.y + offset.y * lo, radius: r)
+    }
+
+    // MARK: Sliding
+
+    /// How far a circle at `c` can slide horizontally (toward `sign` < 0 = left, otherwise right)
+    /// before it would touch the eyeball edge or the lid. 0 when `c` itself does not fit.
+    public func horizontalTravel(from c: Circle, toward sign: Double) -> Double {
+        guard contains(x: c.x, y: c.y, radius: c.radius) else { return 0 }
+        let s = sign < 0 ? -1.0 : 1.0
+        var lo = 0.0, hi = 2 * rx
+        for _ in 0..<24 {
+            let m = (lo + hi) / 2
+            if contains(x: c.x + s * m, y: c.y, radius: c.radius) { lo = m } else { hi = m }
+        }
+        return lo
+    }
+
+    /// Slides `c` horizontally by `look` (-1...1) of its full travel toward that side, at constant y.
+    /// `cap` limits the travel (the smaller of two eyes' reach keeps them moving equally).
+    public func slide(_ c: Circle, look: Double, cap: Double = .infinity) -> Circle {
+        let l = max(-1, min(1, look))
+        guard l != 0 else { return c }
+        let t = min(horizontalTravel(from: c, toward: l), cap)
+        return Circle(x: c.x + l * t, y: c.y, radius: c.radius)
+    }
+
+    /// How far a circle at `c` can move vertically (toward `sign` < 0 = up, otherwise down) before it
+    /// would touch the lid (+ margin) or the eyeball edge. 0 when `c` itself does not fit.
+    public func verticalTravel(from c: Circle, toward sign: Double) -> Double {
+        guard contains(x: c.x, y: c.y, radius: c.radius) else { return 0 }
+        let s = sign < 0 ? -1.0 : 1.0
+        var lo = 0.0, hi = 2 * ry
+        for _ in 0..<24 {
+            let m = (lo + hi) / 2
+            if contains(x: c.x, y: c.y + s * m, radius: c.radius) { lo = m } else { hi = m }
+        }
+        return lo
+    }
+
+    /// Moves `c` vertically by `look` (-1...1, negative = up) of its full travel toward that side, at constant x.
+    /// `cap` limits the travel (the smaller of two eyes' reach keeps them moving equally).
+    public func rise(_ c: Circle, look: Double, cap: Double = .infinity) -> Circle {
+        let l = max(-1, min(1, look))
+        guard l != 0 else { return c }
+        let t = min(verticalTravel(from: c, toward: l), cap)
+        return Circle(x: c.x, y: c.y + l * t, radius: c.radius)
     }
 }
