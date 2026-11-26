@@ -6,6 +6,24 @@
     <description>Sharingan updates</description>
     <language>en</language>
     <item>
+      <title>Sharingan 1.16.1</title>
+      <pubDate>Thu, 26 Nov 2026 18:46:32 +0000</pubDate>
+      <sparkle:version>547</sparkle:version>
+      <sparkle:shortVersionString>1.16.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+
+### Changed
+- **Pomodoro habits can be checked by hand too.** A day counts as done when
+  its pomodoro target is reached *or* it is checked manually — tap the ring in
+  the menu bar Habits tab or in the Habits section.
+- **A done habit shows its Sharingan eye** inside the ring instead of a
+  checkmark, matching the habit's streak stage.
+
+      ]]></description>
+      <enclosure url="https://github.com/bakhod1r/sharingan/releases/download/v1.16.1/Sharingan.dmg" length="20457692" type="application/octet-stream" sparkle:edSignature="bm8qupvV48P7qu3ODD9POCb1giVj5pN3qn3170VNLVP0hHyrSTaMZYx9S6ymqhAOTwrblDfuaUUfMCbCyCQSDA=="/>
+    </item>
+    <item>
       <title>Sharingan 1.16.0</title>
       <pubDate>Thu, 26 Nov 2026 12:36:02 +0000</pubDate>
       <sparkle:version>545</sparkle:version>
