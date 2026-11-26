@@ -6,6 +6,23 @@
     <description>Sharingan updates</description>
     <language>en</language>
     <item>
+      <title>Sharingan 1.16.0</title>
+      <pubDate>Thu, 26 Nov 2026 12:36:02 +0000</pubDate>
+      <sparkle:version>545</sparkle:version>
+      <sparkle:shortVersionString>1.16.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+
+### Added
+- **Habits in the menu bar.** The menu bar popover has a new *Habits* tab:
+  today's habits with their progress ring, streak and pomodoro count — check a
+  manual habit or start a focus session on a pomodoro one without opening the
+  main window. Habits not due today are listed below, dimmed.
+
+      ]]></description>
+      <enclosure url="https://github.com/bakhod1r/sharingan/releases/download/v1.16.0/Sharingan.dmg" length="20455881" type="application/octet-stream" sparkle:edSignature="Nqfy1/YI4OXi6ZBPbvtgTL3pAE4ual6vDX/Hfq2TzGtZ2Jqhc62SPG8DFnAS8iLP73PTcpT0jr+Hfs15qYvHAQ=="/>
+    </item>
+    <item>
       <title>Sharingan 1.15.1</title>
       <pubDate>Thu, 26 Nov 2026 08:36:42 +0000</pubDate>
       <sparkle:version>543</sparkle:version>
