@@ -128,18 +128,19 @@ struct BreakView: View {
                     .padding(.bottom, 40)
                 }
 
-                if timer.settings.cameraEyeTrackingEnabled,
-                   CameraService.shared.isAuthorized {
-                    ExerciseMistakeOverlay(mistake: validator.mistake,
-                                           target: validator.currentStep?.targetGaze ?? .center)
-                    VStack {
-                        Spacer()
-                        HStack { Spacer()
-                            CameraIndicatorBadge(camera: CameraService.shared)
-                                .padding(20)
-                        }
-                    }
-                }
+                // TEMP DISABLED with break camera detection (BreakWindowManager).
+                // if timer.settings.cameraEyeTrackingEnabled,
+                //    CameraService.shared.isAuthorized {
+                //     ExerciseMistakeOverlay(mistake: validator.mistake,
+                //                            target: validator.currentStep?.targetGaze ?? .center)
+                //     VStack {
+                //         Spacer()
+                //         HStack { Spacer()
+                //             CameraIndicatorBadge(camera: CameraService.shared)
+                //                 .padding(20)
+                //         }
+                //     }
+                // }
             }
         }
         // Break session start/stop (TTS, validator, camera) lives in

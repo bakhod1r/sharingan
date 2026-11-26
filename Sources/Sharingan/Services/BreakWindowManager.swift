@@ -132,22 +132,27 @@ extension BreakWindowManager {
         // hold its own lease, so release/acquire never kills the other's feed.
         validator.forcedMode = false
         validator.onSequenceComplete = nil
-        let wantsForced = forced && timer.settings.forcedBreakEnabled
-            && timer.settings.cameraEyeTrackingEnabled
-        if wantsForced { armForcedBreak(timer: timer, onEmergencyExit: onEmergencyExit) }
-        if timer.settings.cameraEyeTrackingEnabled {
-            let strict = timer.settings.strictExerciseValidation
-            Task { @MainActor in
-                let granted = await CameraService.shared.requestPermission()
-                validator.strictValidation = (strict || wantsForced) && granted
-                if wantsForced, self.forcedGate != nil {
-                    validator.forcedMode = granted
-                    self.forcedGate?.setCamera(granted ? .usable : .unavailable)
-                }
-                EyeTracker.shared.resetBlinkWindow()
-                EyeTracker.shared.acquire(.breakExercise)
-            }
-        }
+        // TEMP DISABLED: camera eye-movement detection during breaks is off until
+        // gaze detection is reliable (looking right/left was not recognised).
+        // Forced break depends on the camera, so it is off too. Uncomment to restore.
+        _ = forced
+        _ = onEmergencyExit
+        // let wantsForced = forced && timer.settings.forcedBreakEnabled
+        //     && timer.settings.cameraEyeTrackingEnabled
+        // if wantsForced { armForcedBreak(timer: timer, onEmergencyExit: onEmergencyExit) }
+        // if timer.settings.cameraEyeTrackingEnabled {
+        //     let strict = timer.settings.strictExerciseValidation
+        //     Task { @MainActor in
+        //         let granted = await CameraService.shared.requestPermission()
+        //         validator.strictValidation = (strict || wantsForced) && granted
+        //         if wantsForced, self.forcedGate != nil {
+        //             validator.forcedMode = granted
+        //             self.forcedGate?.setCamera(granted ? .usable : .unavailable)
+        //         }
+        //         EyeTracker.shared.resetBlinkWindow()
+        //         EyeTracker.shared.acquire(.breakExercise)
+        //     }
+        // }
     }
 
     /// Wires the gate on the timer, the validator completion release, the

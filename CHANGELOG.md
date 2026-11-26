@@ -5,6 +5,14 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.15.1] - 2026-11-26
+
+### Changed
+- **Break exercises no longer use the camera.** Eye-movement detection during
+  breaks wasn't reliable (left/right looks were missed), so it is turned off
+  for now: steps advance on the timer, the wrong-move warning and forced break
+  are paused. The focus attention guard is unaffected.
+
 ## [1.15.0] - 2026-11-26
 
 ### Added
