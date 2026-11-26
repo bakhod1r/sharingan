@@ -6,6 +6,23 @@
     <description>Sharingan updates</description>
     <language>en</language>
     <item>
+      <title>Sharingan 1.15.1</title>
+      <pubDate>Thu, 26 Nov 2026 08:36:42 +0000</pubDate>
+      <sparkle:version>543</sparkle:version>
+      <sparkle:shortVersionString>1.15.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+
+### Changed
+- **Break exercises no longer use the camera.** Eye-movement detection during
+  breaks wasn't reliable (left/right looks were missed), so it is turned off
+  for now: steps advance on the timer, the wrong-move warning and forced break
+  are paused. The focus attention guard is unaffected.
+
+      ]]></description>
+      <enclosure url="https://github.com/bakhod1r/sharingan/releases/download/v1.15.1/Sharingan.dmg" length="20399525" type="application/octet-stream" sparkle:edSignature="Ew1UoZ1HOEJHEaEg1RVPYtWX0GEOY3I3GEBi1a9pHtWtJq+Io2WGFeNoyw8fAKuNMQXW8ejr+Y10IOuOXrjxBQ=="/>
+    </item>
+    <item>
       <title>Sharingan 1.15.0</title>
       <pubDate>Thu, 26 Nov 2026 08:15:22 +0000</pubDate>
       <sparkle:version>541</sparkle:version>
