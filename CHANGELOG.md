@@ -5,6 +5,14 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.16.0] - 2026-11-26
+
+### Added
+- **Habits in the menu bar.** The menu bar popover has a new *Habits* tab:
+  today's habits with their progress ring, streak and pomodoro count — check a
+  manual habit or start a focus session on a pomodoro one without opening the
+  main window. Habits not due today are listed below, dimmed.
+
 ## [1.15.1] - 2026-11-26
 
 ### Changed

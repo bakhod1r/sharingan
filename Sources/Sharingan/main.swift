@@ -852,6 +852,12 @@ if let outDir = HeadlessRender.outputDirectory(for: "--render-dev-preview") {
                 if back % 4 != 1 { store.toggleHabitCheck(taskID: med, day: day) }
             }
             store.incrementPomodoro(read)
+            store.toggleHabitCheck(taskID: water, day: today)
+            writeHosted(MenuBarView(timer: timer, initialTab: .habits)
+                            .background(Color.black.opacity(0.85))
+                            .environment(\.colorScheme, .dark),
+                        to: "\(outDir)/menubar-habits.png",
+                        size: NSSize(width: 420, height: 820), settle: 0.8)
             writeHosted(HabitsView(timer: timer, initialExpanded: water)
                             .padding(24)
                             .background(Color(white: 0.10))

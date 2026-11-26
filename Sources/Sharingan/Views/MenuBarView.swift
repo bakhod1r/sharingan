@@ -5,19 +5,26 @@ import SharinganCore
 struct MenuBarView: View {
     @ObservedObject var timer: PomodoroTimer
     @ObservedObject private var tasks = TaskStore.shared
-    @State private var tab: Tab = .timer
+    @State private var tab: Tab
     /// Drives the gentle running-state pulse on the Start button.
     @State private var heartbeat = false
 
-    private enum Tab: Hashable, CaseIterable {
+    /// `initialTab` lets the headless dev-preview photograph a non-default tab.
+    init(timer: PomodoroTimer, initialTab: Tab = .timer) {
+        self.timer = timer
+        _tab = State(initialValue: initialTab)
+    }
+
+    enum Tab: Hashable, CaseIterable {
         // Pomodoro and Tasks are one tab now: the full task view with the timer
         // controls pinned below it.
-        case timer, week, report
+        case timer, week, habits, report
 
         var title: String {
             switch self {
             case .timer: return "Tasks"
             case .week: return "Week"
+            case .habits: return "Habits"
             case .report: return "Report"
             }
         }
@@ -25,6 +32,7 @@ struct MenuBarView: View {
             switch self {
             case .timer: return "checklist"
             case .week: return "calendar"
+            case .habits: return "flame"
             case .report: return "list.bullet.rectangle"
             }
         }
@@ -78,6 +86,7 @@ struct MenuBarView: View {
                         switch tab {
                         case .timer:  TasksView(timer: timer)
                         case .week:   MenuBarWeekView(timer: timer)
+                        case .habits: MenuBarHabitsView(timer: timer)
                         case .report: ReportView(timer: timer)
                         }
                     }

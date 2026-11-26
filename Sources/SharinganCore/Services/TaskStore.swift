@@ -575,6 +575,12 @@ public final class TaskStore: ObservableObject {
         }.count
     }
 
+    /// Habits due or done today for compact strips (menu bar popover).
+    public func todayHabitItems(today: Date = Date(), calendar: Calendar = .current) -> [HabitTodayItem] {
+        HabitEngine.todayItems(habits: habitInputs(), focusLog: focusLog, checks: habitChecks,
+                               today: today, calendar: calendar)
+    }
+
     // MARK: - Mutations
 
     public func add(title: String,
