@@ -8,6 +8,8 @@ public struct HabitTodayItem: Equatable, Sendable, Identifiable {
     public let isManual: Bool
     public let progress: Double
     public let isDone: Bool
+    /// A manual check exists today (any mode).
+    public let isChecked: Bool
     public let pomodoroCount: Int
     public let pomodoroTarget: Int?
 }
@@ -34,6 +36,7 @@ extension HabitEngine {
                 progress: progress(on: t, habit: h.habit, taskID: h.taskID, focusLog: focusLog,
                                    checks: checks, calendar: calendar),
                 isDone: s == .done,
+                isChecked: checks.contains { $0.taskID == h.taskID && calendar.startOfDay(for: $0.day) == t },
                 pomodoroCount: target == nil ? 0 : pomodoroCount(taskID: h.taskID, on: t, focusLog: focusLog, calendar: calendar),
                 pomodoroTarget: target)
         }

@@ -5,6 +5,15 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.16.1] - 2026-11-26
+
+### Changed
+- **Pomodoro habits can be checked by hand too.** A day counts as done when
+  its pomodoro target is reached *or* it is checked manually — tap the ring in
+  the menu bar Habits tab or in the Habits section.
+- **A done habit shows its Sharingan eye** inside the ring instead of a
+  checkmark, matching the habit's streak stage.
+
 ## [1.16.0] - 2026-11-26
 
 ### Added

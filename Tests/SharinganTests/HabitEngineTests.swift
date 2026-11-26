@@ -39,6 +39,21 @@ final class HabitEngineTests: XCTestCase {
         XCTAssertEqual(st(10, h, log: [entry(10, count: 1)]), .pending)
     }
 
+    func testPomodoroHabitDoneByManualCheck() {
+        let h = habit(.daily, .pomodoro(target: 2))
+        XCTAssertEqual(st(5, h), .missed)
+        XCTAssertEqual(st(5, h, checks: checks([5])), .done)
+        XCTAssertEqual(HabitEngine.progress(on: day(5), habit: h, taskID: id, focusLog: [], checks: checks([5]), calendar: cal), 1)
+        XCTAssertEqual(HabitEngine.progress(on: day(5), habit: h, taskID: id, focusLog: [entry(5, count: 1)], checks: [], calendar: cal), 0.5)
+        XCTAssertEqual(HabitEngine.progress(on: day(5), habit: h, taskID: id, focusLog: [], checks: [], calendar: cal), 0)
+    }
+
+    func testPomodoroStreakCountsCheckedDays() {
+        let h = habit(.daily, .pomodoro(target: 2), start: 6)
+        XCTAssertEqual(cur(h, log: [entry(6, count: 2)], checks([7, 8, 9])), 4)
+        XCTAssertEqual(cur(h, log: [], checks([7, 8, 9])), 3)
+    }
+
     func testManualChecksAndStatuses() {
         let h = habit(start: 3)
         XCTAssertEqual(st(2, h), .beforeStart)

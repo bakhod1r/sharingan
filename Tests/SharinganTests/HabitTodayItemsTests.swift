@@ -28,6 +28,16 @@ final class HabitTodayItemsTests: XCTestCase {
         XCTAssertTrue(r[1].isDone); XCTAssertEqual(r[1].progress, 1); XCTAssertEqual(r[1].title, "B")
     }
 
+    func testPomodoroHabitCheckedTodayIsDone() {
+        let a = UUID()
+        let r = items([input(a, .daily, .pomodoro(target: 2))], checks: [HabitCheck(day: today, taskID: a)])
+        XCTAssertEqual(r.count, 1)
+        XCTAssertTrue(r[0].isDone); XCTAssertTrue(r[0].isChecked); XCTAssertFalse(r[0].isManual)
+        XCTAssertEqual(r[0].progress, 1)
+        let m = items([input(a)])
+        XCTAssertFalse(m[0].isChecked)
+    }
+
     func testNotScheduledAndBeforeStartExcluded() {
         let a = UUID(), b = UUID()
         XCTAssertTrue(items([input(a, .weekdays([2, 3])), input(b, start: 12)]).isEmpty)

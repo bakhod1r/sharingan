@@ -853,6 +853,7 @@ if let outDir = HeadlessRender.outputDirectory(for: "--render-dev-preview") {
             }
             store.incrementPomodoro(read)
             store.toggleHabitCheck(taskID: water, day: today)
+            store.toggleHabitCheck(taskID: read, day: today)
             writeHosted(MenuBarView(timer: timer, initialTab: .habits)
                             .background(Color.black.opacity(0.85))
                             .environment(\.colorScheme, .dark),

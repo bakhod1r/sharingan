@@ -95,12 +95,11 @@ struct HabitRowView: View {
     var body: some View {
         let stage = eye()
         let current = streak()
-        let isManual = input.habit.mode == .manual
         let progress = HabitEngine.progress(on: today, habit: input.habit, taskID: input.taskID,
                                             focusLog: store.focusLog, checks: store.habitChecks, calendar: calendar)
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: DS.Space.md) {
-                ring(stage: stage, progress: progress, isManual: isManual)
+                ring(stage: stage, progress: progress)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(input.title).font(.dsCallout).foregroundStyle(Color.dsPrimary).lineLimit(1)
                     Text("\(input.habit.schedule.label) · \(HabitFormat.modeLabel(input.habit))")
@@ -142,31 +141,26 @@ struct HabitRowView: View {
         }
     }
 
-    // Leading eye wrapped in today's progress ring; manual = tap to check today.
-    @ViewBuilder private func ring(stage: HabitEyeStage, progress: Double, isManual: Bool) -> some View {
+    // Leading eye wrapped in today's progress ring; tap to check today (any mode).
+    @ViewBuilder private func ring(stage: HabitEyeStage, progress: Double) -> some View {
         let r = HabitRing(progress: progress, size: 46) {
             HabitEyeView(stage: stage, diameter: 34)
                 .scaleEffect(pulse ? 1.3 : 1)
                 .shadow(color: Color.habitRed.opacity(pulse ? 0.9 : 0), radius: 10)
         }
-        if isManual {
-            Button { store.toggleHabitCheck(taskID: input.taskID, day: today) } label: { r }
-                .buttonStyle(.plain).help(progress >= 1 ? "Uncheck today" : "Check today")
-        } else {
-            r
-        }
+        Button { store.toggleHabitCheck(taskID: input.taskID, day: today) } label: { r }
+            .buttonStyle(.plain).help(progress >= 1 ? "Uncheck today" : "Check today")
     }
 
     // Mon...Sun of the current week.
     private var weekStrip: some View {
         let start = calendar.dateInterval(of: .weekOfYear, for: today)?.start ?? today
-        let isManual = input.habit.mode == .manual
         return HStack(spacing: 6) {
             ForEach(0..<7, id: \.self) { i in
                 let d = calendar.date(byAdding: .day, value: i, to: start) ?? start
                 let s = HabitEngine.status(for: d, habit: input.habit, taskID: input.taskID, focusLog: store.focusLog,
                                            checks: store.habitChecks, today: today, calendar: calendar)
-                let clickable = isManual && (s == .done || s == .missed || s == .pending)
+                let clickable = (s == .done || s == .missed || s == .pending)
                 VStack(spacing: 2) {
                     Text(String(HabitFormat.weekdayShort(calendar.component(.weekday, from: d), calendar: calendar).prefix(1)))
                         .font(.system(size: 8, design: .rounded).weight(.semibold)).foregroundStyle(Color.dsTertiary)

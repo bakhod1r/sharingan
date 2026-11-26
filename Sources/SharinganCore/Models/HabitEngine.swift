@@ -117,23 +117,23 @@ public enum HabitEngine {
 
         init(habit: TaskHabit, taskID: UUID, focusLog: [FocusLogEntry], checks: [HabitCheck], calendar: Calendar) {
             self.calendar = calendar
-            switch habit.mode {
-            case .pomodoro(let target):
+            checked = Set(checks.filter { $0.taskID == taskID }.map { calendar.startOfDay(for: $0.day) })
+            if case .pomodoro(let target) = habit.mode {
                 self.target = target
                 var m: [Date: Int] = [:]
                 for e in focusLog where e.taskID == taskID && e.subtaskID == nil {
                     m[calendar.startOfDay(for: e.day), default: 0] += e.count
                 }
-                pomodoro = m; checked = []
-            case .manual:
+                pomodoro = m
+            } else {
                 target = nil; pomodoro = [:]
-                checked = Set(checks.filter { $0.taskID == taskID }.map { calendar.startOfDay(for: $0.day) })
             }
         }
 
         func isDone(_ day: Date) -> Bool {
+            if checked.contains(day) { return true }
             if let target { return (pomodoro[day] ?? 0) >= target }
-            return checked.contains(day)
+            return false
         }
     }
 
@@ -397,11 +397,12 @@ public enum HabitEngine {
     public static func progress(on day: Date, habit: TaskHabit, taskID: UUID, focusLog: [FocusLogEntry],
                                 checks: [HabitCheck], calendar: Calendar) -> Double {
         let d = calendar.startOfDay(for: day)
+        if checks.contains(where: { $0.taskID == taskID && calendar.startOfDay(for: $0.day) == d }) { return 1 }
         switch habit.mode {
         case .pomodoro(let target):
             return min(1, Double(pomodoroCount(taskID: taskID, on: d, focusLog: focusLog, calendar: calendar)) / Double(max(target, 1)))
         case .manual:
-            return checks.contains { $0.taskID == taskID && calendar.startOfDay(for: $0.day) == d } ? 1 : 0
+            return 0
         }
     }
 
