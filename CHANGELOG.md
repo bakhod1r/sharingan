@@ -5,6 +5,40 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-11-26
+
+### Added
+- **Habit tracker.** Any task can be tracked as a habit (every day, chosen
+  weekdays or N times a week), completed by reaching a daily pomodoro target
+  or by a manual check. Each habit has a Sharingan eye that awakens as its
+  streak grows (1–3 tomoe, Mangekyō, Eternal, Rinnegan). New *Habits* section
+  and Dashboard tab with streaks, charts and a 12-week heatmap.
+- **Attention guard (camera).** During a focus session, looking away longer
+  than the grace period turns the screens red and pauses the timer; looking
+  back resumes it. Typing and looking down at the keyboard don't trip it.
+  Turn it on for every session or per task.
+- **Wrong-move warning (camera).** When an exercise step is done wrong the
+  break screen shows a red edge, an arrow toward the target and a message.
+- **Forced break (opt-in, camera).** The break isn't over until the exercises
+  are done; a wrong move repeats the step. Hold Esc for 3 s to leave.
+- **Sync** now covers custom projects, the session log and per-Mac pomodoro
+  counts.
+
+### Changed
+- **Gaze exercise eyes follow every step on all three faces.** Up and down
+  move the iris to the edge of the eye (the upper lid lifts on an up look),
+  left and right slide it to the side. A new direction glides back through
+  the centre first; no jumps. Pattern changes crossfade instead of popping,
+  the eyes match the instruction from the first frame, and the iris keeps one
+  size everywhere.
+- Settings switches and segmented controls use the glass style.
+
+### Fixed
+- Camera features never started in signed builds (missing camera
+  entitlement).
+- Count Up mode shows elapsed time everywhere; many timer, task, sync and
+  board fixes from the 1.14 review.
+
 ## [1.14.0] - 2026-11-25
 
 ### Added
