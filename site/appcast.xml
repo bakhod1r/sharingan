@@ -6,6 +6,31 @@
     <description>Sharingan updates</description>
     <language>en</language>
     <item>
+      <title>Sharingan 1.17.0</title>
+      <pubDate>Fri, 27 Nov 2026 06:10:28 +0000</pubDate>
+      <sparkle:version>549</sparkle:version>
+      <sparkle:shortVersionString>1.17.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+
+### Fixed
+- **iCloud sync now uses the Production CloudKit database.** Release builds
+  were talking to the Development (Sandbox) environment, which Apple can reset
+  and which isn't meant for shipped apps. On first launch of this version each
+  Mac resets its local sync bookkeeping once and re-uploads its data to
+  Production — nothing local is deleted. Update all your Macs together so they
+  see each other again.
+
+### Changed
+- **Every Settings control is now liquid glass.** Dropdowns (including the
+  iCloud retry interval), sliders and the remaining bordered buttons match the
+  glass switches and segmented pickers instead of rendering as plain system
+  controls.
+
+      ]]></description>
+      <enclosure url="https://github.com/bakhod1r/sharingan/releases/download/v1.17.0/Sharingan.dmg" length="20390159" type="application/octet-stream" sparkle:edSignature="ZGnmXWMcyAj5x39AkPW2zj6M1/nv59Onu92yHjLt/4l3zVv93dCurYAhU0clXGdlUQVqmHW3I4Y/+/uoX5CHAw=="/>
+    </item>
+    <item>
       <title>Sharingan 1.16.1</title>
       <pubDate>Thu, 26 Nov 2026 18:46:32 +0000</pubDate>
       <sparkle:version>547</sparkle:version>
