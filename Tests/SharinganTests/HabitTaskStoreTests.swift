@@ -27,14 +27,14 @@ struct HabitTaskStoreTests {
         #expect(s.habitTasks.isEmpty)
     }
 
-    @Test func toggleCheckPersistsForAnyModeButNeedsHabit() {
+    @Test func toggleCheckPersistsForManualAndBothButNeedsHabit() {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("habit-\(UUID().uuidString).sqlite")
         let s = store(url)
         s.add(title: "Read"); s.add(title: "Focus")
         let manual = s.tasks.first { $0.title == "Read" }!.id
         let pomo = s.tasks.first { $0.title == "Focus" }!.id
         s.setHabit(TaskHabit(schedule: .daily, mode: .manual, startDay: day(1)), for: manual)
-        s.setHabit(TaskHabit(schedule: .daily, mode: .pomodoro(target: 2), startDay: day(1)), for: pomo)
+        s.setHabit(TaskHabit(schedule: .daily, mode: .both(target: 2), startDay: day(1)), for: pomo)
         s.toggleHabitCheck(taskID: manual, day: day(5), calendar: cal)
         s.toggleHabitCheck(taskID: pomo, day: day(5), calendar: cal)
         #expect(Set(s.habitChecks) == [HabitCheck(day: day(5), taskID: manual), HabitCheck(day: day(5), taskID: pomo)])
@@ -46,6 +46,15 @@ struct HabitTaskStoreTests {
         s.add(title: "Plain")
         let plain = s.tasks.first { $0.title == "Plain" }!.id
         s.toggleHabitCheck(taskID: plain, day: day(5), calendar: cal)
+        #expect(s.habitChecks.isEmpty)
+    }
+
+    @Test func toggleCheckIsNoOpForPomodoroOnly() {
+        let s = store()
+        s.add(title: "Focus")
+        let id = s.tasks.first { $0.title == "Focus" }!.id
+        s.setHabit(TaskHabit(schedule: .daily, mode: .pomodoro(target: 2), startDay: day(1)), for: id)
+        s.toggleHabitCheck(taskID: id, day: day(5), calendar: cal)
         #expect(s.habitChecks.isEmpty)
     }
 

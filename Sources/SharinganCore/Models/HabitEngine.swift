@@ -112,13 +112,15 @@ public enum HabitEngine {
     private struct Lookup {
         let pomodoro: [Date: Int]
         let checked: Set<Date>
+        let allowsCheck: Bool
         let target: Int?
         let calendar: Calendar
 
         init(habit: TaskHabit, taskID: UUID, focusLog: [FocusLogEntry], checks: [HabitCheck], calendar: Calendar) {
             self.calendar = calendar
+            allowsCheck = habit.mode.allowsManualCheck
             checked = Set(checks.filter { $0.taskID == taskID }.map { calendar.startOfDay(for: $0.day) })
-            if case .pomodoro(let target) = habit.mode {
+            if let target = habit.mode.pomodoroTarget {
                 self.target = target
                 var m: [Date: Int] = [:]
                 for e in focusLog where e.taskID == taskID && e.subtaskID == nil {
@@ -131,7 +133,7 @@ public enum HabitEngine {
         }
 
         func isDone(_ day: Date) -> Bool {
-            if checked.contains(day) { return true }
+            if allowsCheck && checked.contains(day) { return true }
             if let target { return (pomodoro[day] ?? 0) >= target }
             return false
         }
@@ -393,17 +395,14 @@ public enum HabitEngine {
             .reduce(0) { $0 + $1.count }
     }
 
-    /// 0...1 progress of one day: pomodoro count / target, or manual tick.
+    /// 0...1 progress of one day: pomodoro count / target, or a manual tick when allowed.
     public static func progress(on day: Date, habit: TaskHabit, taskID: UUID, focusLog: [FocusLogEntry],
                                 checks: [HabitCheck], calendar: Calendar) -> Double {
         let d = calendar.startOfDay(for: day)
-        if checks.contains(where: { $0.taskID == taskID && calendar.startOfDay(for: $0.day) == d }) { return 1 }
-        switch habit.mode {
-        case .pomodoro(let target):
-            return min(1, Double(pomodoroCount(taskID: taskID, on: d, focusLog: focusLog, calendar: calendar)) / Double(max(target, 1)))
-        case .manual:
-            return 0
-        }
+        if habit.mode.allowsManualCheck,
+           checks.contains(where: { $0.taskID == taskID && calendar.startOfDay(for: $0.day) == d }) { return 1 }
+        guard let target = habit.mode.pomodoroTarget else { return 0 }
+        return min(1, Double(pomodoroCount(taskID: taskID, on: d, focusLog: focusLog, calendar: calendar)) / Double(max(target, 1)))
     }
 
     // MARK: Today

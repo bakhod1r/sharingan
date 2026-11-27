@@ -7,6 +7,8 @@ struct HabitEditorSection: View {
     var accent: Color
 
     private let calendar = Calendar.current
+    /// Last pomodoro target, so toggling Pomodoro off and on keeps it.
+    @State private var lastTarget = 1
 
     private enum Kind: String, CaseIterable, Identifiable {
         case daily = "Every day", days = "Specific days", perWeek = "Times per week"
@@ -19,14 +21,16 @@ struct HabitEditorSection: View {
             HStack {
                 Text("Track as a habit").font(.system(.callout, design: .rounded)).foregroundStyle(.white)
                 Spacer(minLength: 8)
-                Toggle("Track as a habit", isOn: Binding(
+                // Empty label: GlassSwitchStyle draws `configuration.label` itself
+                // and ignores `.labelsHidden()`, which doubled the text.
+                Toggle(isOn: Binding(
                     get: { habit != nil },
                     set: { on in
                         habit = on ? (habit ?? TaskHabit(schedule: .daily, mode: .manual,
                                                         startDay: calendar.startOfDay(for: Date()))) : nil
-                    }))
-                .toggleStyle(.glassSwitch(tint: .habitRed))
-                .labelsHidden()
+                    })) { EmptyView() }
+                .toggleStyle(.glassSwitch(tint: accent))
+                .accessibilityLabel("Track as a habit")
             }
 
             if let h = habit {
@@ -71,7 +75,7 @@ struct HabitEditorSection: View {
                             .font(.system(.caption, design: .rounded).weight(.bold))
                             .foregroundStyle(on ? .white : Color.dsSecondary)
                             .frame(width: 32, height: 28)
-                            .background(Capsule().fill(on ? Color.habitRed.opacity(0.85) : .white.opacity(0.04)))
+                            .background(Capsule().fill(on ? accent.opacity(0.85) : .white.opacity(0.04)))
                             .glassCapsule(strokeOpacity: on ? 0.35 : 0.15)
                     }
                     .buttonStyle(.plain)
@@ -85,23 +89,56 @@ struct HabitEditorSection: View {
         }
     }
 
+    /// Two independent chips; at least one stays on. Only Pomodoro -> `.pomodoro`,
+    /// only Manual -> `.manual`, both -> `.both`. The target survives toggling Manual.
     @ViewBuilder private func modeControls(_ h: TaskHabit) -> some View {
-        let isPomo: Bool = { if case .pomodoro = h.mode { return true } else { return false } }()
-        GlassSegmentedPicker(selection: Binding(
-            get: { isPomo },
-            set: { pomo in
-                guard pomo != isPomo else { return }
-                habit?.mode = pomo ? .pomodoro(target: 1) : .manual
-            }), options: [(true, "Pomodoro"), (false, "Manual check")])
+        let target = h.mode.pomodoroTarget
+        let pomoOn = target != nil
+        let manualOn = h.mode.allowsManualCheck
+        HStack(spacing: 8) {
+            modeChip("Pomodoro", on: pomoOn) {
+                guard !(pomoOn && !manualOn) else { return }   // last active chip stays on
+                if let t = target { lastTarget = t }
+                habit?.mode = pomoOn ? .manual : (manualOn ? .both(target: lastTarget) : .pomodoro(target: lastTarget))
+            }
+            modeChip("Manual check", on: manualOn) {
+                guard !(manualOn && !pomoOn) else { return }
+                if manualOn, let t = target { lastTarget = t; habit?.mode = .pomodoro(target: t) }
+                else if let t = target { habit?.mode = .both(target: t) }
+            }
+        }
 
-        if case .pomodoro(let t) = h.mode {
-            Stepper(value: Binding(get: { t }, set: { habit?.mode = .pomodoro(target: $0) }), in: 1...12) {
-                Text("Done at \(t) pomodoro\(t == 1 ? "" : "s") a day")
+        if let t = target {
+            Stepper(value: Binding(get: { t }, set: { n in
+                lastTarget = n
+                habit?.mode = manualOn ? .both(target: n) : .pomodoro(target: n)
+            }), in: 1...12) {
+                Text("Pomodoro target: \(t) a day")
                     .font(.system(.callout, design: .rounded)).foregroundStyle(.white)
             }
-        } else {
-            Text("You tick each day yourself.")
-                .font(.system(.caption, design: .rounded)).foregroundStyle(Color.dsTertiary)
         }
+        Text(modeCaption(pomo: pomoOn, manual: manualOn))
+            .font(.system(.caption, design: .rounded)).foregroundStyle(Color.dsTertiary)
+    }
+
+    private func modeCaption(pomo: Bool, manual: Bool) -> String {
+        switch (pomo, manual) {
+        case (true, true): return "Done when the pomodoro target is reached or you check it"
+        case (true, false): return "Done when the pomodoro target is reached"
+        default: return "You tick each day yourself."
+        }
+    }
+
+    private func modeChip(_ title: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(.caption, design: .rounded).weight(.bold))
+                .foregroundStyle(on ? .white : Color.dsSecondary)
+                .padding(.horizontal, 14).frame(height: 28)
+                .background(Capsule().fill(on ? accent.opacity(0.85) : .white.opacity(0.04)))
+                .glassCapsule(strokeOpacity: on ? 0.35 : 0.15)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 }

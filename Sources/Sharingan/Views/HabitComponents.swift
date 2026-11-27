@@ -1,10 +1,16 @@
 import SwiftUI
 import SharinganCore
 
-/// Sharingan red used across the habit UI (done cells, rings, bars).
-extension Color {
-    static let habitRed = Color(red: 0.90, green: 0.14, blue: 0.17)
-    static let habitRedDeep = Color(red: 0.55, green: 0.04, blue: 0.08)
+/// Habit chrome (rings, done cells, bars, heatmap) follows the app theme accent.
+/// Injected at the window / popover roots; the default only serves previews.
+private struct HabitAccentKey: EnvironmentKey {
+    static let defaultValue = Color(red: 0.90, green: 0.14, blue: 0.17)
+}
+extension EnvironmentValues {
+    var habitAccent: Color {
+        get { self[HabitAccentKey.self] }
+        set { self[HabitAccentKey.self] = newValue }
+    }
 }
 
 enum HabitFormat {
@@ -35,6 +41,7 @@ enum HabitFormat {
         switch habit.mode {
         case .pomodoro(let t): return "\(t) 🍅 a day"
         case .manual: return "manual"
+        case .both(let t): return "\(t) 🍅 or check"
         }
     }
 }
@@ -54,15 +61,18 @@ struct HabitEyeView: View {
 
 /// Progress ring around arbitrary content.
 struct HabitRing<Content: View>: View {
+    @Environment(\.habitAccent) private var accent
     var progress: Double
     var size: CGFloat
     var lineWidth: CGFloat = 3
+    /// Overrides the themed progress colour (e.g. green when done).
+    var color: Color? = nil
     @ViewBuilder var content: () -> Content
     var body: some View {
         ZStack {
             Circle().stroke(Color.dsFillStrong, lineWidth: lineWidth)
             Circle().trim(from: 0, to: max(0, min(1, progress)))
-                .stroke(Color.habitRed, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                .stroke(color ?? accent, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .animation(DS.Motion.standard, value: progress)
             content()
@@ -74,6 +84,7 @@ struct HabitRing<Content: View>: View {
 
 /// A done cell: red disc with a dark tomoe-dot core. Not done = hollow.
 struct HabitDayDot: View {
+    @Environment(\.habitAccent) private var accent
     enum Look { case done, missed, pending, dim, hidden }
     var look: Look
     var isToday = false
@@ -82,8 +93,8 @@ struct HabitDayDot: View {
         ZStack {
             switch look {
             case .done:
-                Circle().fill(Color.habitRed)
-                Circle().fill(Color.habitRedDeep).frame(width: size * 0.32, height: size * 0.32)
+                Circle().fill(accent)
+                Circle().fill(Color.black.opacity(0.45)).frame(width: size * 0.32, height: size * 0.32)
             case .missed:
                 Circle().fill(Color.dsFillStrong)
             case .pending:
@@ -110,6 +121,7 @@ struct HabitBarItem: Identifiable {
 
 /// Compact % bar chart (0...100).
 struct HabitBarChart: View {
+    @Environment(\.habitAccent) private var accent
     var items: [HabitBarItem]
     var height: CGFloat = 96
     var body: some View {
@@ -124,8 +136,10 @@ struct HabitBarChart: View {
                         RoundedRectangle(cornerRadius: 4, style: .continuous)
                             .fill(Color.dsFill)
                         RoundedRectangle(cornerRadius: 4, style: .continuous)
-                            .fill(LinearGradient(colors: [Color.habitRed, Color.habitRedDeep],
-                                                 startPoint: .top, endPoint: .bottom))
+                            .fill(accent)
+                            .overlay(LinearGradient(colors: [.clear, Color.black.opacity(0.45)],
+                                                    startPoint: .top, endPoint: .bottom)
+                                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous)))
                             .opacity(item.highlight ? 1 : 0.8)
                             .frame(height: max(item.value == nil ? 0 : 2, (height - 34) * CGFloat(item.value ?? 0)))
                     }
@@ -161,6 +175,7 @@ struct HabitCard<Content: View>: View {
 }
 
 struct HabitRangePicker: View {
+    @Environment(\.habitAccent) private var accent
     @Binding var days: Int
     var body: some View {
         HStack(spacing: 2) {
@@ -170,7 +185,7 @@ struct HabitRangePicker: View {
                         .font(.system(.caption, design: .rounded).weight(.bold))
                         .foregroundStyle(days == d ? .white : Color.dsSecondary)
                         .padding(.horizontal, 12).frame(height: 26)
-                        .background(Capsule().fill(days == d ? Color.habitRed.opacity(0.85) : Color.clear))
+                        .background(Capsule().fill(days == d ? accent.opacity(0.85) : Color.clear))
                         .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
@@ -277,6 +292,7 @@ struct HabitChartsRow: View {
 
 /// GitHub-style heatmap: 7 rows (weekdays) x `weeks` columns, red intensity.
 struct HabitHeatmap: View {
+    @Environment(\.habitAccent) private var accent
     var input: HabitInput
     var focusLog: [FocusLogEntry]
     var checks: [HabitCheck]
@@ -326,9 +342,9 @@ struct HabitHeatmap: View {
 
     private func fill(_ s: HabitDayStatus, _ p: Double) -> Color {
         switch s {
-        case .done: return Color.habitRed.opacity(0.95)
-        case .missed, .pending: return p > 0 ? Color.habitRed.opacity(0.25 + 0.4 * p) : Color.dsFillStrong
-        case .notScheduled: return p > 0 ? Color.habitRed.opacity(0.3) : Color.dsFill.opacity(0.6)
+        case .done: return accent.opacity(0.95)
+        case .missed, .pending: return p > 0 ? accent.opacity(0.25 + 0.4 * p) : Color.dsFillStrong
+        case .notScheduled: return p > 0 ? accent.opacity(0.3) : Color.dsFill.opacity(0.6)
         case .beforeStart: return Color.dsFill.opacity(0.3)
         case .future: return Color.clear
         }

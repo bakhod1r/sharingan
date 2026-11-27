@@ -840,10 +840,13 @@ if let outDir = HeadlessRender.outputDirectory(for: "--render-dev-preview") {
             store.add(title: "Read a book", category: "Personal")
             store.add(title: "Drink water", category: "Personal")
             store.add(title: "Meditate", category: "Personal")
+            store.add(title: "Prepare the quarterly planning review with the whole leadership team", category: "Personal")
             let read = store.tasks.first { $0.title == "Read a book" }!.id
             let water = store.tasks.first { $0.title == "Drink water" }!.id
             let med = store.tasks.first { $0.title == "Meditate" }!.id
-            store.setHabit(TaskHabit(schedule: .daily, mode: .pomodoro(target: 2), startDay: start), for: read)
+            let long = store.tasks.first { $0.title.hasPrefix("Prepare the quarterly") }!.id
+            store.setHabit(TaskHabit(schedule: .daily, mode: .both(target: 3), startDay: start), for: long)
+            store.setHabit(TaskHabit(schedule: .daily, mode: .both(target: 2), startDay: start), for: read)
             store.setHabit(TaskHabit(schedule: .daily, mode: .manual, startDay: start), for: water)
             store.setHabit(TaskHabit(schedule: .weekdays([2, 4, 6]), mode: .manual, startDay: start), for: med)
             for back in 1...40 {
@@ -851,6 +854,11 @@ if let outDir = HeadlessRender.outputDirectory(for: "--render-dev-preview") {
                 if back <= 16 || back % 3 != 0 { store.toggleHabitCheck(taskID: water, day: day) }
                 if back % 4 != 1 { store.toggleHabitCheck(taskID: med, day: day) }
             }
+            // Non-red theme so the habit chrome visibly follows the accent.
+            let savedTheme = timer.settings.theme
+            timer.settings.theme = .ocean
+            defer { timer.settings.theme = savedTheme }
+            let habitAccent = timer.settings.theme.accent
             store.incrementPomodoro(read)
             store.toggleHabitCheck(taskID: water, day: today)
             store.toggleHabitCheck(taskID: read, day: today)
@@ -860,20 +868,28 @@ if let outDir = HeadlessRender.outputDirectory(for: "--render-dev-preview") {
                         to: "\(outDir)/menubar-habits.png",
                         size: NSSize(width: 420, height: 820), settle: 0.8)
             writeHosted(HabitsView(timer: timer, initialExpanded: water)
+                            .environment(\.habitAccent, habitAccent)
                             .padding(24)
                             .background(Color(white: 0.10))
                             .environment(\.colorScheme, .dark),
                         to: "\(outDir)/habits.png",
                         size: NSSize(width: 980, height: 1300), settle: 0.8)
             writeHosted(AnalyticsHabitsView()
+                            .environment(\.habitAccent, habitAccent)
                             .padding(24)
                             .background(Color(white: 0.10))
                             .environment(\.colorScheme, .dark),
                         to: "\(outDir)/habits-dashboard.png",
                         size: NSSize(width: 980, height: 1100), settle: 0.8)
             writeHosted(TaskEditorView(task: store.tasks.first { $0.id == med }!, settings: timer.settings)
+                            .environment(\.habitAccent, habitAccent)
                             .environment(\.colorScheme, .dark),
                         to: "\(outDir)/habit-editor.png",
+                        size: NSSize(width: 460, height: 1100))
+            writeHosted(TaskEditorView(task: store.tasks.first { $0.id == read }!, settings: timer.settings)
+                            .environment(\.habitAccent, habitAccent)
+                            .environment(\.colorScheme, .dark),
+                        to: "\(outDir)/habit-editor-both.png",
                         size: NSSize(width: 460, height: 1100))
         }
         // The Notch HUD page, Advanced accordion down: the whole category, and

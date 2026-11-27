@@ -24,18 +24,25 @@ final class HabitTodayItemsTests: XCTestCase {
         let r = items([input(a, .daily, .manual, start: 1, "A"), input(b, .daily, .manual, start: 1, "B")], checks: [HabitCheck(day: today, taskID: b)])
         XCTAssertEqual(r.map(\.taskID), [a, b])
         XCTAssertFalse(r[0].isDone); XCTAssertEqual(r[0].progress, 0)
-        XCTAssertTrue(r[0].isManual); XCTAssertNil(r[0].pomodoroTarget); XCTAssertEqual(r[0].pomodoroCount, 0)
+        XCTAssertTrue(r[0].allowsCheck); XCTAssertNil(r[0].pomodoroTarget); XCTAssertEqual(r[0].pomodoroCount, 0)
         XCTAssertTrue(r[1].isDone); XCTAssertEqual(r[1].progress, 1); XCTAssertEqual(r[1].title, "B")
     }
 
-    func testPomodoroHabitCheckedTodayIsDone() {
+    func testBothHabitCheckedTodayIsDone() {
+        let a = UUID()
+        let r = items([input(a, .daily, .both(target: 2))], checks: [HabitCheck(day: today, taskID: a)])
+        XCTAssertEqual(r.count, 1)
+        XCTAssertTrue(r[0].isDone); XCTAssertTrue(r[0].isChecked)
+        XCTAssertTrue(r[0].allowsCheck); XCTAssertEqual(r[0].pomodoroTarget, 2)
+        XCTAssertEqual(r[0].progress, 1)
+        XCTAssertFalse(items([input(a)])[0].isChecked)
+    }
+
+    func testPomodoroOnlyCheckDoesNotCount() {
         let a = UUID()
         let r = items([input(a, .daily, .pomodoro(target: 2))], checks: [HabitCheck(day: today, taskID: a)])
         XCTAssertEqual(r.count, 1)
-        XCTAssertTrue(r[0].isDone); XCTAssertTrue(r[0].isChecked); XCTAssertFalse(r[0].isManual)
-        XCTAssertEqual(r[0].progress, 1)
-        let m = items([input(a)])
-        XCTAssertFalse(m[0].isChecked)
+        XCTAssertFalse(r[0].isDone); XCTAssertFalse(r[0].allowsCheck); XCTAssertEqual(r[0].progress, 0)
     }
 
     func testNotScheduledAndBeforeStartExcluded() {
@@ -49,7 +56,7 @@ final class HabitTodayItemsTests: XCTestCase {
         let r = items([input(a, .daily, .pomodoro(target: 2))], log: log)
         XCTAssertEqual(r.count, 1)
         XCTAssertEqual(r[0].progress, 0.5); XCTAssertEqual(r[0].pomodoroCount, 1)
-        XCTAssertEqual(r[0].pomodoroTarget, 2); XCTAssertFalse(r[0].isDone); XCTAssertFalse(r[0].isManual)
+        XCTAssertEqual(r[0].pomodoroTarget, 2); XCTAssertFalse(r[0].isDone); XCTAssertFalse(r[0].allowsCheck)
     }
 
     func testTimesPerWeekQuotaMetExcludedButDoneTodayIncluded() {

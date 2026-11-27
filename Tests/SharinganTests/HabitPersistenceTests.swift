@@ -23,6 +23,16 @@ final class HabitDatabaseTests: XCTestCase {
         XCTAssertNil(loaded.first { $0.title == "Plain" }?.habit)
     }
 
+    func testPomodoroOnlyStaysPomodoroOnlyAfterReloadAndLegacyRowReadsAsBoth() throws {
+        let path = try freshPath()
+        var t = TaskItem(title: "Run", category: "Work")
+        t.habit = TaskHabit(schedule: .daily, mode: .pomodoro(target: 2), startDay: habit.startDay)
+        do { try XCTUnwrap(TaskDatabase(path: path)).saveTasks([t]) }
+        XCTAssertEqual(try XCTUnwrap(TaskDatabase(path: path)).loadTasks().first?.habit?.mode, .pomodoro(target: 2))
+        let legacy = try JSONDecoder().decode(HabitCompletionMode.self, from: Data("\"pomodoro:2\"".utf8))
+        XCTAssertEqual(legacy, .both(target: 2))
+    }
+
     func testHabitOnlyChangeStillPersistsAndClears() throws {
         let path = try freshPath()
         let db = try XCTUnwrap(TaskDatabase(path: path))

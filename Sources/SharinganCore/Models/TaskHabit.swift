@@ -59,24 +59,50 @@ public enum HabitSchedule: Codable, Equatable, Hashable, Sendable {
 }
 
 /// What makes a habit day count as done.
-/// Persisted as "pomodoro:3" / "manual"; unknown strings degrade to `.manual`.
+/// Persisted as "pomo:3" (pomodoro only) / "both:3" / "manual".
+/// LEGACY: "pomodoro:N" was written before `.both` existed, when pomodoro habits
+/// also accepted manual checks, so it decodes as `.both(target: N)`. It is never
+/// written again (stored rows are not rewritten). Unknown strings degrade to `.manual`.
 public enum HabitCompletionMode: Codable, Equatable, Hashable, Sendable {
     /// Done automatically once the day's task-level focus count reaches `target`.
     case pomodoro(target: Int)
     /// The user ticks the day by hand.
     case manual
+    /// Done by a manual tick OR once the focus count reaches `target`.
+    case both(target: Int)
+
+    /// Pomodoro target when pomodoros count toward this habit.
+    public var pomodoroTarget: Int? {
+        switch self {
+        case .pomodoro(let t), .both(let t): return t
+        case .manual: return nil
+        }
+    }
+
+    /// Whether the user may tick a day by hand.
+    public var allowsManualCheck: Bool {
+        switch self {
+        case .manual, .both: return true
+        case .pomodoro: return false
+        }
+    }
 
     public var stringValue: String {
         switch self {
-        case .pomodoro(let t): return "pomodoro:\(t)"
+        case .pomodoro(let t): return "pomo:\(t)"
         case .manual: return "manual"
+        case .both(let t): return "both:\(t)"
         }
     }
 
     public init(string: String) {
         let parts = string.split(separator: ":", maxSplits: 1).map(String.init)
-        if parts.first == "pomodoro", parts.count == 2, let t = Int(parts[1]), t >= 1 {
+        if parts.first == "pomo", parts.count == 2, let t = Int(parts[1]), t >= 1 {
             self = .pomodoro(target: t)
+        } else if parts.first == "pomodoro", parts.count == 2, let t = Int(parts[1]), t >= 1 {
+            self = .both(target: t)
+        } else if parts.first == "both", parts.count == 2, let t = Int(parts[1]), t >= 1 {
+            self = .both(target: t)
         } else {
             self = .manual
         }

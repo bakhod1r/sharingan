@@ -4,6 +4,7 @@ import SharinganCore
 /// Dashboard ▸ Habits: the full habit report — KPIs, charts, an eyes strip and
 /// per-habit rows.
 struct AnalyticsHabitsView: View {
+    @Environment(\.habitAccent) private var accent
     @ObservedObject private var store = TaskStore.shared
     @State private var days = 30
     private let calendar = Calendar.current
@@ -30,7 +31,7 @@ struct AnalyticsHabitsView: View {
                                 VStack(spacing: 6) {
                                     HabitEyeView(stage: row.eye, diameter: 44)
                                     Text(row.title).font(.dsCaption).foregroundStyle(Color.dsPrimary).lineLimit(1)
-                                    Text(row.eye.awakened).font(.dsMicro).foregroundStyle(Color.habitRed)
+                                    Text(row.eye.awakened).font(.dsMicro).foregroundStyle(accent)
                                 }
                                 .frame(width: 96)
                             }
@@ -52,7 +53,7 @@ struct AnalyticsHabitsView: View {
                 GeometryReader { g in
                     ZStack(alignment: .leading) {
                         Capsule().fill(Color.dsFillStrong)
-                        Capsule().fill(Color.habitRed).frame(width: g.size.width * CGFloat(row.rate))
+                        Capsule().fill(accent).frame(width: g.size.width * CGFloat(row.rate))
                     }
                 }
                 .frame(height: 6)

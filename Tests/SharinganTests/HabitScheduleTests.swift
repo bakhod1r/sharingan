@@ -21,8 +21,25 @@ final class HabitScheduleTests: XCTestCase {
 
     func testModeCodecRoundTripAndFallback() {
         XCTAssertEqual(HabitCompletionMode(string: HabitCompletionMode.pomodoro(target: 4).stringValue), .pomodoro(target: 4))
+        XCTAssertEqual(HabitCompletionMode(string: HabitCompletionMode.both(target: 4).stringValue), .both(target: 4))
         XCTAssertEqual(HabitCompletionMode(string: "manual"), .manual)
         XCTAssertEqual(HabitCompletionMode(string: "pomodoro:0"), .manual)
+        XCTAssertEqual(HabitCompletionMode(string: "pomodoro:3"), .both(target: 3))   // legacy: accepted checks
+        XCTAssertEqual(HabitCompletionMode(string: "pomo:3"), .pomodoro(target: 3))
+        XCTAssertEqual(HabitCompletionMode.pomodoro(target: 3).stringValue, "pomo:3")
+        XCTAssertEqual(HabitCompletionMode(string: "pomo:0"), .manual)
+        XCTAssertEqual(HabitCompletionMode(string: "pomo:x"), .manual)
+        XCTAssertEqual(HabitCompletionMode(string: "both:3"), .both(target: 3))
+        XCTAssertEqual(HabitCompletionMode.both(target: 3).stringValue, "both:3")
+        XCTAssertEqual(HabitCompletionMode(string: "both:0"), .manual)
+        XCTAssertEqual(HabitCompletionMode(string: "both:x"), .manual)
+        XCTAssertEqual(HabitCompletionMode(string: "both"), .manual)
+        XCTAssertEqual(HabitCompletionMode.both(target: 2).pomodoroTarget, 2)
+        XCTAssertEqual(HabitCompletionMode.pomodoro(target: 4).pomodoroTarget, 4)
+        XCTAssertNil(HabitCompletionMode.manual.pomodoroTarget)
+        XCTAssertTrue(HabitCompletionMode.manual.allowsManualCheck)
+        XCTAssertTrue(HabitCompletionMode.both(target: 1).allowsManualCheck)
+        XCTAssertFalse(HabitCompletionMode.pomodoro(target: 1).allowsManualCheck)
         XCTAssertEqual(HabitCompletionMode(string: "???"), .manual)
     }
 

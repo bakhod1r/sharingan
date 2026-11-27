@@ -5,10 +5,11 @@ public struct HabitTodayItem: Equatable, Sendable, Identifiable {
     public var id: UUID { taskID }
     public let taskID: UUID
     public let title: String
-    public let isManual: Bool
+    /// The user may tick today by hand (manual / both).
+    public let allowsCheck: Bool
     public let progress: Double
     public let isDone: Bool
-    /// A manual check exists today (any mode).
+    /// A manual check row exists today (it only counts when `allowsCheck`).
     public let isChecked: Bool
     public let pomodoroCount: Int
     public let pomodoroTarget: Int?
@@ -29,10 +30,9 @@ extension HabitEngine {
                                      checks: checks, today: t, calendar: calendar) else { return nil }
             default: return nil
             }
-            var target: Int?
-            if case .pomodoro(let n) = h.habit.mode { target = n }
+            let target = h.habit.mode.pomodoroTarget
             return HabitTodayItem(
-                taskID: h.taskID, title: h.title, isManual: target == nil,
+                taskID: h.taskID, title: h.title, allowsCheck: h.habit.mode.allowsManualCheck,
                 progress: progress(on: t, habit: h.habit, taskID: h.taskID, focusLog: focusLog,
                                    checks: checks, calendar: calendar),
                 isDone: s == .done,

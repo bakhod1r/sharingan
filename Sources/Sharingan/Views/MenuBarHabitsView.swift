@@ -5,6 +5,7 @@ import SharinganCore
 /// manual one, start a pomodoro on a pomodoro one), then the habits that
 /// aren't due today, dimmed.
 struct MenuBarHabitsView: View {
+    @Environment(\.habitAccent) private var accent
     @ObservedObject var timer: PomodoroTimer
     @ObservedObject private var store = TaskStore.shared
 
@@ -40,27 +41,46 @@ struct MenuBarHabitsView: View {
 
     private func row(_ item: HabitTodayItem, input: HabitInput?) -> some View {
         HStack(spacing: DS.Space.md) {
-            Button { toggleCheck(item) } label: {
-                HabitRing(progress: item.progress, size: Self.ringSize, lineWidth: 3) { ringContent(item, input: input) }
+            let ring = HabitRing(progress: item.progress, size: Self.ringSize, lineWidth: 3,
+                                 color: item.isDone ? .green : nil) { ringContent(item, input: input) }
+            if item.allowsCheck {
+                Button { toggleCheck(item) } label: { ring }
+                    .buttonStyle(.pressableSubtle)
+                    .help(item.isChecked ? "Uncheck today" : "Check today")
+            } else {
+                ring
             }
-            .buttonStyle(.pressableSubtle)
-            .help(item.isChecked ? "Uncheck today" : "Check today")
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.title).font(.dsCallout).foregroundStyle(Color.dsPrimary).lineLimit(1)
                 Text(subtitle(item, input: input))
                     .font(.dsCaption).foregroundStyle(Color.dsSecondary).lineLimit(1)
             }
+            .layoutPriority(0)
             Spacer(minLength: 8)
-            Button { tap(item) } label: { actionLabel(item) }
-                .buttonStyle(.pressableSubtle)
-                .help(item.isManual ? (item.isChecked ? "Uncheck today" : "Check today")
-                                    : "Start a pomodoro on this habit")
+            HStack(spacing: 6) {
+                if item.pomodoroTarget != nil {
+                    Button { startFocus(item) } label: {
+                        Image(systemName: isActiveRunning(item) ? "pause.fill" : "play.fill")
+                            .font(.system(size: 11, weight: .black)).foregroundStyle(.white)
+                            .frame(width: 28, height: 28).background(Circle().fill(accent))
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.pressableSubtle)
+                    .help("Start a pomodoro on this habit")
+                }
+                if item.allowsCheck {
+                    Button { toggleCheck(item) } label: { checkLabel(item) }
+                        .buttonStyle(.pressableSubtle)
+                        .help(item.isChecked ? "Uncheck today" : "Check today")
+                }
+            }
+            .layoutPriority(1)
         }
         .padding(DS.Space.md)
         .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-            .fill(item.isDone ? Color.habitRed.opacity(0.14) : Color.dsFill))
+            .fill(item.isDone ? Color.green.opacity(0.14) : Color.dsFill))
         .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-            .strokeBorder(item.isDone ? Color.habitRed.opacity(0.45) : Color.dsHairline, lineWidth: 1))
+            .strokeBorder(item.isDone ? Color.green.opacity(0.45) : Color.dsHairline, lineWidth: 1))
     }
 
     private func restingRow(_ input: HabitInput) -> some View {
@@ -82,28 +102,30 @@ struct MenuBarHabitsView: View {
 
     @ViewBuilder private func ringContent(_ item: HabitTodayItem, input: HabitInput?) -> some View {
         if item.isDone {
-            HabitEyeView(stage: max(eyeStage(input), .tomoe1), diameter: Self.ringSize - 8)
+            HabitEyeView(stage: .tomoe3, diameter: Self.ringSize - 8)
         } else {
             Color.clear
         }
     }
 
-    private func eyeStage(_ input: HabitInput?) -> HabitEyeStage {
-        guard let input else { return .dormant }
-        return HabitEngine.eyeStage(habit: input.habit, taskID: input.taskID, focusLog: store.focusLog,
-                                    checks: store.habitChecks, today: today, calendar: calendar)
-    }
-
-    private func actionLabel(_ item: HabitTodayItem) -> some View {
-        let label: String = {
-            if item.isManual { return item.isDone ? "Done" : "Check" }
-            return isActiveRunning(item) ? "Pause" : "Focus"
-        }()
-        return Text(label)
-            .font(.dsMicro).foregroundStyle(.white)
-            .padding(.horizontal, 10).frame(height: 24)
-            .background(Capsule().fill(item.isDone ? Color.habitRed : Color.dsFillStrong))
-            .contentShape(Capsule())
+    private func checkLabel(_ item: HabitTodayItem) -> some View {
+        // "Done" reflects the habit being done today; a pomodoro-completed
+        // `.both` habit shows it too, and tapping still toggles the manual tick.
+        HStack(spacing: 4) {
+            if item.isDone { Image(systemName: "checkmark").font(.system(size: 9, weight: .black)) }
+            Text(item.isDone ? "Done" : "Check")
+        }
+        .font(.dsMicro).lineLimit(1).fixedSize()
+        .foregroundStyle(item.isDone ? Color.white : Color.green)
+        .padding(.horizontal, 10).frame(height: 28)
+        .background {
+            ZStack {
+                Capsule().fill(item.isDone ? Color.green : Color.green.opacity(0.18))
+                if !item.isDone { Capsule().strokeBorder(Color.green.opacity(0.5), lineWidth: 1).clipShape(Capsule()) }
+            }
+            .compositingGroup()
+        }
+        .contentShape(Capsule())
     }
 
     private func subtitle(_ item: HabitTodayItem, input: HabitInput?) -> String {
@@ -116,7 +138,7 @@ struct MenuBarHabitsView: View {
     private var emptyState: some View {
         VStack(spacing: 12) {
             Image(systemName: "flame").font(.system(size: 28, weight: .semibold))
-                .foregroundStyle(Color.habitRed.opacity(0.8))
+                .foregroundStyle(accent.opacity(0.8))
             Text("No habits yet — turn on Habit in any task")
                 .font(.dsCallout).foregroundStyle(Color.dsPrimary).multilineTextAlignment(.center)
             Button {
@@ -126,7 +148,7 @@ struct MenuBarHabitsView: View {
                 Text("Go to Tasks")
                     .font(.system(.callout, design: .rounded).weight(.bold)).foregroundStyle(.white)
                     .padding(.horizontal, 16).frame(height: 32)
-                    .background(Capsule().fill(Color.habitRed))
+                    .background(Capsule().fill(accent))
             }
             .buttonStyle(.pressableSubtle)
         }
@@ -148,8 +170,7 @@ struct MenuBarHabitsView: View {
         withAnimation(DS.Motion.standard) { store.toggleHabitCheck(taskID: item.taskID, day: today) }
     }
 
-    private func tap(_ item: HabitTodayItem) {
-        if item.isManual { toggleCheck(item); return }
+    private func startFocus(_ item: HabitTodayItem) {
         if isActiveRunning(item) { timer.toggle(); return }
         store.selectFocusTarget(item.taskID)
         timer.startFocusSession(kind: store.resolvedActiveKind)

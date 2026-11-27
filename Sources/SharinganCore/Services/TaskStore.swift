@@ -542,10 +542,11 @@ public final class TaskStore: ObservableObject {
         persist()
     }
 
-    /// Ticks / unticks a habit day (any mode). A pomodoro habit is also done
-    /// when its focus count reaches the target.
+    /// Ticks / unticks a habit day. No-op unless the habit allows a manual
+    /// check (manual / both); existing rows survive a mode change but only
+    /// count while the mode allows them.
     public func toggleHabitCheck(taskID: UUID, day: Date, calendar: Calendar = .current) {
-        guard tasks.first(where: { $0.id == taskID })?.habit != nil else { return }
+        guard tasks.first(where: { $0.id == taskID })?.habit?.mode.allowsManualCheck == true else { return }
         let d = calendar.startOfDay(for: day)
         let check = HabitCheck(day: d, taskID: taskID)
         if let i = habitChecks.firstIndex(of: check) {

@@ -39,19 +39,36 @@ final class HabitEngineTests: XCTestCase {
         XCTAssertEqual(st(10, h, log: [entry(10, count: 1)]), .pending)
     }
 
-    func testPomodoroHabitDoneByManualCheck() {
-        let h = habit(.daily, .pomodoro(target: 2))
+    func testBothHabitDoneByManualCheckOrTarget() {
+        let h = habit(.daily, .both(target: 2))
         XCTAssertEqual(st(5, h), .missed)
         XCTAssertEqual(st(5, h, checks: checks([5])), .done)
+        XCTAssertEqual(st(5, h, log: [entry(5, count: 2)]), .done)
+        XCTAssertEqual(st(5, h, log: [entry(5, count: 1)]), .missed)
         XCTAssertEqual(HabitEngine.progress(on: day(5), habit: h, taskID: id, focusLog: [], checks: checks([5]), calendar: cal), 1)
         XCTAssertEqual(HabitEngine.progress(on: day(5), habit: h, taskID: id, focusLog: [entry(5, count: 1)], checks: [], calendar: cal), 0.5)
         XCTAssertEqual(HabitEngine.progress(on: day(5), habit: h, taskID: id, focusLog: [], checks: [], calendar: cal), 0)
     }
 
-    func testPomodoroStreakCountsCheckedDays() {
-        let h = habit(.daily, .pomodoro(target: 2), start: 6)
+    func testPomodoroOnlyIgnoresChecks() {
+        let h = habit(.daily, .pomodoro(target: 2))
+        XCTAssertEqual(st(5, h, checks: checks([5])), .missed)
+        XCTAssertEqual(st(5, h, log: [entry(5, count: 2)], checks: checks([5])), .done)
+        XCTAssertEqual(HabitEngine.progress(on: day(5), habit: h, taskID: id, focusLog: [], checks: checks([5]), calendar: cal), 0)
+        XCTAssertEqual(HabitEngine.progress(on: day(5), habit: h, taskID: id, focusLog: [entry(5, count: 1)], checks: checks([5]), calendar: cal), 0.5)
+    }
+
+    func testManualIgnoresPomodoros() {
+        let h = habit(.daily, .manual)
+        XCTAssertEqual(st(5, h, log: [entry(5, count: 9)]), .missed)
+    }
+
+    func testBothStreakCountsCheckedDays() {
+        let h = habit(.daily, .both(target: 2), start: 6)
         XCTAssertEqual(cur(h, log: [entry(6, count: 2)], checks([7, 8, 9])), 4)
         XCTAssertEqual(cur(h, log: [], checks([7, 8, 9])), 3)
+        let p = habit(.daily, .pomodoro(target: 2), start: 6)
+        XCTAssertEqual(cur(p, log: [], checks([7, 8, 9])), 0)
     }
 
     func testManualChecksAndStatuses() {

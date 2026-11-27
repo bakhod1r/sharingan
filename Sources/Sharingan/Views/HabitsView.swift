@@ -4,6 +4,7 @@ import SharinganCore
 /// Sidebar ▸ Habits: range + KPIs, two chart cards, today's habits with an
 /// inline per-habit detail (one open at a time).
 struct HabitsView: View {
+    @Environment(\.habitAccent) private var accent
     @ObservedObject var timer: PomodoroTimer
     @ObservedObject private var store = TaskStore.shared
     @ObservedObject private var router = AppRouter.shared
@@ -63,7 +64,7 @@ struct HabitsView: View {
                 Text("Go to Tasks")
                     .font(.system(.callout, design: .rounded).weight(.bold)).foregroundStyle(.white)
                     .padding(.horizontal, 16).frame(height: 32)
-                    .background(Capsule().fill(Color.habitRed))
+                    .background(Capsule().fill(accent))
             }
             .buttonStyle(.plain)
         }
@@ -73,6 +74,7 @@ struct HabitsView: View {
 
 /// One habit row + its expandable detail.
 struct HabitRowView: View {
+    @Environment(\.habitAccent) private var accent
     let input: HabitInput
     @ObservedObject var timer: PomodoroTimer
     var expanded: Bool
@@ -99,23 +101,23 @@ struct HabitRowView: View {
                                             focusLog: store.focusLog, checks: store.habitChecks, calendar: calendar)
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: DS.Space.md) {
-                ring(stage: stage, progress: progress)
+                ring(stage: progress >= 1 ? .tomoe3 : stage, progress: progress)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(input.title).font(.dsCallout).foregroundStyle(Color.dsPrimary).lineLimit(1)
                     Text("\(input.habit.schedule.label) · \(HabitFormat.modeLabel(input.habit))")
                         .font(.dsCaption).foregroundStyle(Color.dsSecondary).lineLimit(1)
                     Text(HabitFormat.stageLine(eye: stage, streak: current, habit: input.habit))
-                        .font(.dsMicro).foregroundStyle(Color.habitRed).lineLimit(1)
+                        .font(.dsMicro).foregroundStyle(accent).lineLimit(1)
                 }
                 Spacer(minLength: 8)
                 weekStrip
-                if case .pomodoro(let target) = input.habit.mode {
+                if let target = input.habit.mode.pomodoroTarget {
                     let n = HabitEngine.pomodoroCount(taskID: input.taskID, on: today, focusLog: store.focusLog, calendar: calendar)
                     Text("🍅 \(n)/\(target)").font(.dsMicro).foregroundStyle(Color.dsSecondary)
                     Button { startFocus() } label: {
                         Image(systemName: store.activeTaskID == input.taskID && timer.isRunning ? "pause.fill" : "play.fill")
                             .font(.system(size: 11, weight: .black)).foregroundStyle(.white)
-                            .frame(width: 26, height: 26).background(Circle().fill(Color.habitRed))
+                            .frame(width: 26, height: 26).background(Circle().fill(accent))
                     }
                     .buttonStyle(.plain).help("Start a pomodoro on this task")
                 }
@@ -131,7 +133,7 @@ struct HabitRowView: View {
         }
         .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(Color.dsFill))
         .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-            .stroke(expanded ? Color.habitRed.opacity(0.5) : Color.dsHairline, lineWidth: 1))
+            .stroke(expanded ? accent.opacity(0.5) : Color.dsHairline, lineWidth: 1))
         .onChange(of: stage) { old, new in
             guard new > old else { return }
             withAnimation(DS.Motion.celebrate) { pulse = true }
@@ -143,13 +145,17 @@ struct HabitRowView: View {
 
     // Leading eye wrapped in today's progress ring; tap to check today (any mode).
     @ViewBuilder private func ring(stage: HabitEyeStage, progress: Double) -> some View {
-        let r = HabitRing(progress: progress, size: 46) {
+        let r = HabitRing(progress: progress, size: 46, color: progress >= 1 ? .green : nil) {
             HabitEyeView(stage: stage, diameter: 34)
                 .scaleEffect(pulse ? 1.3 : 1)
-                .shadow(color: Color.habitRed.opacity(pulse ? 0.9 : 0), radius: 10)
+                .shadow(color: accent.opacity(pulse ? 0.9 : 0), radius: 10)
         }
-        Button { store.toggleHabitCheck(taskID: input.taskID, day: today) } label: { r }
-            .buttonStyle(.plain).help(progress >= 1 ? "Uncheck today" : "Check today")
+        if input.habit.mode.allowsManualCheck {
+            Button { store.toggleHabitCheck(taskID: input.taskID, day: today) } label: { r }
+                .buttonStyle(.plain).help(progress >= 1 ? "Uncheck today" : "Check today")
+        } else {
+            r
+        }
     }
 
     // Mon...Sun of the current week.
@@ -160,7 +166,7 @@ struct HabitRowView: View {
                 let d = calendar.date(byAdding: .day, value: i, to: start) ?? start
                 let s = HabitEngine.status(for: d, habit: input.habit, taskID: input.taskID, focusLog: store.focusLog,
                                            checks: store.habitChecks, today: today, calendar: calendar)
-                let clickable = (s == .done || s == .missed || s == .pending)
+                let clickable = input.habit.mode.allowsManualCheck && (s == .done || s == .missed || s == .pending)
                 VStack(spacing: 2) {
                     Text(String(HabitFormat.weekdayShort(calendar.component(.weekday, from: d), calendar: calendar).prefix(1)))
                         .font(.system(size: 8, design: .rounded).weight(.semibold)).foregroundStyle(Color.dsTertiary)
