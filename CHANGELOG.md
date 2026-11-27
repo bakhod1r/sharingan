@@ -5,6 +5,21 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.17.1] - 2026-11-27
+
+### Changed
+- **Habits: Pomodoro, Manual check, or both.** In the task editor the two are
+  independent chips. With both on, a day is done when the pomodoro target is
+  reached *or* you check it. Existing pomodoro habits keep accepting checks.
+- **Habit colours follow your theme accent** instead of fixed red; the
+  Sharingan eye itself stays red.
+- **A habit done today shows the 3-tomoe Sharingan** in its ring.
+- **Menu bar Habits tab:** a ▶ button for pomodoro habits and a green
+  Check / Done button; done habits turn green.
+
+### Fixed
+- "Track as a habit" was shown twice in the task editor.
+
 ## [1.17.0] - 2026-11-27
 
 ### Fixed
