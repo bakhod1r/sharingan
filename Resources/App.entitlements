@@ -27,6 +27,11 @@
 	<array>
 		<string>iCloud.com.bakhod1r.sharingan</string>
 	</array>
+	<!-- Developer ID builds default to the Development (Sandbox) CloudKit
+	     environment unless this is set; the embedded profile grants only
+	     Production, so without it sync talks to the wrong, empty database. -->
+	<key>com.apple.developer.icloud-container-environment</key>
+	<string>Production</string>
 	<key>com.apple.developer.ubiquity-kvstore-identifier</key>
 	<string>89LCRZKZ48.com.bakhod1r.sharingan</string>
 	<!-- Hardened runtime (Developer ID / notarized builds) refuses to even

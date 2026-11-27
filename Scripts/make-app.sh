@@ -236,6 +236,18 @@ else
     "$APP" 2>/dev/null && echo "  ✓ ad-hoc signed" || echo "  ! codesign skipped"
 fi
 
+# The iCloud build must be sealed for the Production CloudKit environment —
+# without the key Developer ID builds silently talk to Sandbox.
+if [[ "$ENTITLEMENTS" == "$ROOT/Resources/App.entitlements" ]]; then
+  if codesign -d --entitlements :- "$APP" 2>/dev/null \
+      | grep -A1 "icloud-container-environment" | grep -q "Production"; then
+    echo "  ✓ CloudKit environment: Production"
+  else
+    echo "  ✗ app is not sealed with icloud-container-environment=Production" >&2
+    exit 1
+  fi
+fi
+
 # Fail loudly if the seal isn't strict-valid: this is exactly what Gatekeeper
 # checks on another Mac, so a failure here means "won't open there".
 if codesign --verify --deep --strict "$APP" 2>/dev/null; then

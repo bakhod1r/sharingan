@@ -5,6 +5,22 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/); versions
 
 ## [Unreleased]
 
+## [1.17.0] - 2026-11-27
+
+### Fixed
+- **iCloud sync now uses the Production CloudKit database.** Release builds
+  were talking to the Development (Sandbox) environment, which Apple can reset
+  and which isn't meant for shipped apps. On first launch of this version each
+  Mac resets its local sync bookkeeping once and re-uploads its data to
+  Production — nothing local is deleted. Update all your Macs together so they
+  see each other again.
+
+### Changed
+- **Every Settings control is now liquid glass.** Dropdowns (including the
+  iCloud retry interval), sliders and the remaining bordered buttons match the
+  glass switches and segmented pickers instead of rendering as plain system
+  controls.
+
 ## [1.16.1] - 2026-11-26
 
 ### Changed

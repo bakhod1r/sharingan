@@ -81,7 +81,7 @@ struct FaceEyeSettingsSection: View {
                 HStack {
                     Spacer()
                     Button("Shuffle") { shuffle() }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.glass)
                         .controlSize(.small)
                     Spacer()
                 }
@@ -126,10 +126,8 @@ struct FaceEyeSettingsSection: View {
         }
         row(settings.sharinganStyleRight == nil ? "Sharingan eye" : "Left eye") {
             SpinningIrisSwatch(style: settings.sharinganStyle)
-            Picker("", selection: $settings.sharinganStyle) {
-                ForEach(SharinganStyle.allCases) { Text($0.label).tag($0) }
-            }
-            .labelsHidden().pickerStyle(.menu).glassMenu().fixedSize()
+            GlassMenuPicker(selection: $settings.sharinganStyle,
+                            cases: SharinganStyle.allCases, label: { $0.label })
         }
         caption("Used everywhere the mark appears: break screen, desktop wallpaper, the menu-bar icon and the Dock icon.")
     }

@@ -63,18 +63,15 @@ struct SettingsSyncSection: View {
                             .font(.system(.body, design: .rounded))
                             .foregroundStyle(.white)
                         Spacer(minLength: 8)
-                        Picker("", selection: Binding(
-                            get: { retryMaxMinutes },
-                            set: { m in
-                                retryMaxMinutes = m
-                                engine.setRetryCapMinutes(m)
-                            })) {
-                            ForEach(retryOptions, id: \.self) { m in
-                                Text(m == 1 ? "1 minute" : "\(m) minutes").tag(m)
-                            }
-                        }
-                        .labelsHidden()
-                        .fixedSize()
+                        GlassMenuPicker(
+                            selection: Binding(
+                                get: { retryMaxMinutes },
+                                set: { m in
+                                    retryMaxMinutes = m
+                                    engine.setRetryCapMinutes(m)
+                                }),
+                            cases: retryOptions,
+                            label: { $0 == 1 ? "1 minute" : "\($0) minutes" })
                     }
                     .frame(minHeight: 24)
                     Text("How long, at most, to wait between retries when iCloud keeps rejecting a change. Shorter recovers faster; longer is gentler on battery and quota.")

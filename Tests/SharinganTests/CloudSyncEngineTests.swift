@@ -182,4 +182,55 @@ struct CloudSyncEngineTests {
         store.add(title: "a")
         #expect(fired == 1)
     }
+
+    // MARK: - CloudKit environment reset
+
+    @Test func environmentMappingFromEntitlement() {
+        #expect(CloudSyncEngine.cloudEnvironment(fromEntitlement: nil) == "development")
+        #expect(CloudSyncEngine.cloudEnvironment(fromEntitlement: "Development") == "development")
+        #expect(CloudSyncEngine.cloudEnvironment(fromEntitlement: "Production") == "production")
+        #expect(CloudSyncEngine.cloudEnvironment(fromEntitlement: "production") == "production")
+    }
+
+    @Test func resetNeededWhenMarkerMissingOrDifferent() {
+        #expect(CloudSyncEngine.needsEnvironmentReset(stored: nil, current: "production"))
+        #expect(CloudSyncEngine.needsEnvironmentReset(stored: "development", current: "production"))
+        #expect(!CloudSyncEngine.needsEnvironmentReset(stored: "production", current: "production"))
+    }
+
+    private func envFixture() -> (CloudSyncEngine, TaskDatabase, URL) {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("blink-env-\(UUID().uuidString).sqlite")
+        let engine = CloudSyncEngine(store: TaskStore(fileURL: url), databaseURL: url)
+        let probe = TaskDatabase(path: url.path)!
+        probe.upsertShadow(recordType: "Task",
+            entry: ShadowEntry(recordName: "r1", contentHash: "h", systemFields: Data([1])))
+        probe.setSyncStateValue("engineState", Data([9]))
+        return (engine, probe, url)
+    }
+
+    @Test func reconcileWithNoMarkerResetsAndWritesMarker() {
+        let (engine, probe, _) = envFixture()
+        engine.reconcileEnvironment(current: "production")
+        #expect(probe.loadShadow(recordType: "Task").isEmpty)
+        #expect(probe.syncStateValue("engineState") == nil)
+        #expect(probe.syncStateValue("cloudEnvironment") == Data("production".utf8))
+    }
+
+    @Test func reconcileWithSameMarkerLeavesStateUntouched() {
+        let (engine, probe, _) = envFixture()
+        probe.setSyncStateValue("cloudEnvironment", Data("production".utf8))
+        engine.reconcileEnvironment(current: "production")
+        #expect(probe.loadShadow(recordType: "Task").count == 1)
+        #expect(probe.syncStateValue("engineState") == Data([9]))
+    }
+
+    @Test func reconcileWithDifferentMarkerResets() {
+        let (engine, probe, _) = envFixture()
+        probe.setSyncStateValue("cloudEnvironment", Data("development".utf8))
+        engine.reconcileEnvironment(current: "production")
+        #expect(probe.loadShadow(recordType: "Task").isEmpty)
+        #expect(probe.syncStateValue("engineState") == nil)
+        #expect(probe.syncStateValue("cloudEnvironment") == Data("production".utf8))
+    }
 }

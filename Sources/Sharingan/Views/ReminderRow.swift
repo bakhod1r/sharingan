@@ -9,12 +9,8 @@ struct ReminderRow: View {
             HStack {
                 Image(systemName: item.kind.systemImage)
                     .foregroundStyle(.white.opacity(0.85))
-                Picker("Kind", selection: $item.kind) {
-                    ForEach(ReminderItem.Kind.allCases, id: \.self) { k in
-                        Text(k.label).tag(k)
-                    }
-                }
-                .pickerStyle(.menu).tint(.white)
+                GlassMenuPicker(selection: $item.kind,
+                                cases: ReminderItem.Kind.allCases, label: { $0.label })
                 Spacer()
                 Toggle("", isOn: $item.enabled).toggleStyle(.glassSwitch(tint: .green)).labelsHidden()
             }

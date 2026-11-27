@@ -54,25 +54,15 @@ struct SettingsView: View {
             Text("Sensitivity")
                 .font(.system(.body, design: .rounded))
             Spacer()
-            Picker("", selection: $settings.focusAttentionSensitivity) {
-                ForEach(AttentionSensitivity.allCases, id: \.self) { Text($0.label).tag($0) }
-            }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .glassMenu()
-            .fixedSize()
+            GlassMenuPicker(selection: $settings.focusAttentionSensitivity,
+                            cases: AttentionSensitivity.allCases, label: { $0.label })
         }
         HStack {
             Text("Look-away grace")
                 .font(.system(.body, design: .rounded))
             Spacer()
-            Picker("", selection: $settings.focusAttentionGrace) {
-                ForEach([1.0, 2.0, 4.0, 8.0], id: \.self) { Text("\(Int($0)) s").tag($0) }
-            }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .glassMenu()
-            .fixedSize()
+            GlassMenuPicker(selection: $settings.focusAttentionGrace,
+                            cases: [1.0, 2.0, 4.0, 8.0], label: { "\(Int($0)) s" })
         }
         ToggleRow(title: "Alert sound", isOn: $settings.focusAttentionSound)
         HStack {
@@ -82,7 +72,7 @@ struct SettingsView: View {
                     if let cal { t.settings.attentionCalibration = cal }
                 }
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.glass)
             Text(settings.attentionCalibration.map {
                 "Calibrated \($0.createdAt.formatted(date: .abbreviated, time: .shortened))"
             } ?? "Not calibrated")
@@ -101,7 +91,7 @@ struct SettingsView: View {
                         NSWorkspace.shared.open(url)
                     }
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.glass)
             }
         }
     }
@@ -425,7 +415,7 @@ struct SettingsView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Opacity: \(Int(settings.dockWidgetOpacity * 100))%")
                                 .font(.system(.caption, design: .rounded).weight(.medium))
-                            Slider(value: $settings.dockWidgetOpacity, in: 0.3...1.0)
+                            GlassSlider(value: $settings.dockWidgetOpacity, in: 0.3...1.0)
                         }
                     }
                 }
@@ -469,15 +459,8 @@ struct SettingsView: View {
                                 .font(.system(.body, design: .rounded))
                                 .foregroundStyle(.white)
                             Spacer()
-                            Picker("", selection: $settings.notchEars) {
-                                ForEach(NotchEarsMode.allCases) { mode in
-                                    Text(mode.label).tag(mode)
-                                }
-                            }
-                            .labelsHidden()
-                            .pickerStyle(.menu)
-                            .glassMenu()
-                            .fixedSize()
+                            GlassMenuPicker(selection: $settings.notchEars,
+                                            cases: NotchEarsMode.allCases, label: { $0.label })
                         }
                         Text("The ears are the strips beside the notch: the countdown on the left, the task on the right. They sit in the menu bar row, so they can cover your app's menus and status items — dropping one gives those pixels back, clicks included. The progress line stays either way.")
                             .font(.system(.caption2, design: .rounded))
@@ -503,28 +486,30 @@ struct SettingsView: View {
                 }
 
                 Section("Analytics") {
-                    Picker("App tracking", selection: $settings.appTrackingMode) {
-                        ForEach(AppTrackingMode.allCases) { m in
-                            Text(m.label).tag(m)
-                        }
+                    HStack(spacing: 12) {
+                        Text("App tracking")
+                            .font(.system(.body, design: .rounded))
+                            .foregroundStyle(.white)
+                        Spacer(minLength: 8)
+                        GlassMenuPicker(selection: $settings.appTrackingMode,
+                                        options: AppTrackingMode.allCases.map { ($0, $0.label) })
                     }
-                    .pickerStyle(.menu)
-                    .glassMenu()
+                    .frame(minHeight: 24)
                     Text("Records which app is frontmost during focus for the Analytics → Apps breakdown. App-level only — no window titles, no Accessibility permission, stored on your Mac. Turn off to record nothing.")
                         .font(.system(.caption2, design: .rounded))
                         .foregroundStyle(.white.opacity(0.6))
                 }
 
                 Section("Due reminders") {
-                    Picker("Due pre-reminder", selection: $preReminderMinutes) {
-                        Text("Off").tag(0)
-                        Text("5 min before").tag(5)
-                        Text("10 min before").tag(10)
-                        Text("30 min before").tag(30)
-                        Text("60 min before").tag(60)
+                    HStack(spacing: 12) {
+                        Text("Due pre-reminder")
+                            .font(.system(.body, design: .rounded))
+                            .foregroundStyle(.white)
+                        Spacer(minLength: 8)
+                        GlassMenuPicker(selection: $preReminderMinutes,
+                                        options: [(0, "Off"), (5, "5 min before"), (10, "10 min before"), (30, "30 min before"), (60, "60 min before")])
                     }
-                    .pickerStyle(.menu)
-                    .glassMenu()
+                    .frame(minHeight: 24)
                     Text("A “Due soon” notification ahead of each task's due time, on top of the one at the deadline itself.")
                         .font(.system(.caption2, design: .rounded))
                         .foregroundStyle(.white.opacity(0.6))
@@ -563,7 +548,7 @@ struct SettingsView: View {
                         Label(templateCopied ? "Copied!" : "Copy template",
                               systemImage: templateCopied ? "checkmark" : "doc.on.doc")
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.glass)
                 }
 
         case .breaks:
@@ -584,13 +569,15 @@ struct SettingsView: View {
                 Section("Break ambience") {
                     ToggleRow(title: "Ambience sound during break",
                               isOn: $settings.ambienceEnabled)
-                    Picker("Ambience", selection: $settings.ambienceSound) {
-                        ForEach(BreakAmbienceService.Ambience.allCases, id: \.rawValue) { a in
-                            Label(a.label, systemImage: a.systemImage).tag(a.rawValue)
-                        }
+                    HStack(spacing: 12) {
+                        Text("Ambience")
+                            .font(.system(.body, design: .rounded))
+                            .foregroundStyle(.white)
+                        Spacer(minLength: 8)
+                        GlassMenuPicker(selection: $settings.ambienceSound,
+                                        options: BreakAmbienceService.Ambience.allCases.map { ($0.rawValue, $0.label) })
                     }
-                    .pickerStyle(.menu)
-                    .glassMenu()
+                    .frame(minHeight: 24)
 
                     HStack(spacing: 8) {
                         Button("Preview") {
@@ -689,7 +676,7 @@ struct SettingsView: View {
                         Label("Preview break screen", systemImage: "eye.fill")
                             .font(.system(.callout, design: .rounded).weight(.medium))
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.glass)
                 }
 
                 Section("Camera & Vision") {
@@ -721,15 +708,8 @@ struct SettingsView: View {
                             .font(.system(.body, design: .rounded))
                         Spacer()
                         breakBackgroundSwatch(settings.breakBackgroundStyle)
-                        Picker("", selection: $settings.breakBackgroundStyle) {
-                            ForEach(BreakBackgroundStyle.allCases) { s in
-                                Text(s.label).tag(s)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .glassMenu()
-                        .fixedSize()
+                        GlassMenuPicker(selection: $settings.breakBackgroundStyle,
+                                        cases: BreakBackgroundStyle.allCases, label: { $0.label })
                     }
                     Text("One flat tone across the whole break screen. Graphite matches the design video; Slate is a touch lighter.")
                         .font(.system(.caption, design: .rounded))
@@ -743,7 +723,7 @@ struct SettingsView: View {
                         Label("Preview break screen", systemImage: "eye.fill")
                             .font(.system(.callout, design: .rounded).weight(.medium))
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.glass)
                 }
 
                 // Kept always-visible: this .onChange chain re-applies the
@@ -769,21 +749,25 @@ struct SettingsView: View {
 
         case .general:
                 Section("Appearance") {
-                    Picker("Theme", selection: $settings.theme) {
-                        ForEach(SharinganTheme.allCases, id: \.self) { theme in
-                            Text(theme.label).tag(theme)
-                        }
+                    HStack(spacing: 12) {
+                        Text("Theme")
+                            .font(.system(.body, design: .rounded))
+                            .foregroundStyle(.white)
+                        Spacer(minLength: 8)
+                        GlassMenuPicker(selection: $settings.theme,
+                                        options: SharinganTheme.allCases.map { ($0, $0.label) })
                     }
-                    .pickerStyle(.menu)
-                    .glassMenu()
+                    .frame(minHeight: 24)
 
-                    Picker("Text size", selection: $settings.textSize) {
-                        ForEach(TextSize.allCases) { size in
-                            Text(size.label).tag(size)
-                        }
+                    HStack(spacing: 12) {
+                        Text("Text size")
+                            .font(.system(.body, design: .rounded))
+                            .foregroundStyle(.white)
+                        Spacer(minLength: 8)
+                        GlassMenuPicker(selection: $settings.textSize,
+                                        options: TextSize.allCases.map { ($0, $0.label) })
                     }
-                    .pickerStyle(.menu)
-                    .glassMenu()
+                    .frame(minHeight: 24)
                     Text("Scales the app's reading text. The timer digits keep their size.")
                         .font(.system(.caption2, design: .rounded))
                         .foregroundStyle(.secondary)
@@ -817,13 +801,15 @@ struct SettingsView: View {
                 Section("Sound") {
                     ToggleRow(title: "Alarm sound enabled",
                               isOn: $settings.alarmSoundEnabled)
-                    Picker("Alarm sound", selection: $settings.alarmSound) {
-                        ForEach(AlarmSoundService.Sound.allCases, id: \.rawValue) { s in
-                            Text(s.label).tag(s.rawValue)
-                        }
+                    HStack(spacing: 12) {
+                        Text("Alarm sound")
+                            .font(.system(.body, design: .rounded))
+                            .foregroundStyle(.white)
+                        Spacer(minLength: 8)
+                        GlassMenuPicker(selection: $settings.alarmSound,
+                                        options: AlarmSoundService.Sound.allCases.map { ($0.rawValue, $0.label) })
                     }
-                    .pickerStyle(.menu)
-                    .glassMenu()
+                    .frame(minHeight: 24)
 
                 }
 
@@ -866,12 +852,12 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Voice rate: \(String(format: "%.2f", settings.ttsRate))")
                             .font(.system(.caption, design: .rounded).weight(.medium))
-                        Slider(value: $settings.ttsRate, in: 0...1)
+                        GlassSlider(value: $settings.ttsRate, in: 0...1)
                     }
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Voice pitch: \(String(format: "%.2f", settings.ttsPitch))")
                             .font(.system(.caption, design: .rounded).weight(.medium))
-                        Slider(value: $settings.ttsPitch, in: 0.5...1.5)
+                        GlassSlider(value: $settings.ttsPitch, in: 0.5...1.5)
                     }
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Global kalib pool")
@@ -935,13 +921,15 @@ struct SettingsView: View {
                     GlassSegmentedPicker(selection: $settings.timerMode,
                                          cases: TimerMode.allCases) { $0.label }
 
-                    Picker("Time format", selection: $settings.timeFormat) {
-                        ForEach(TimeDisplayFormat.allCases, id: \.self) { f in
-                            Text(f.label).tag(f)
-                        }
+                    HStack(spacing: 12) {
+                        Text("Time format")
+                            .font(.system(.body, design: .rounded))
+                            .foregroundStyle(.white)
+                        Spacer(minLength: 8)
+                        GlassMenuPicker(selection: $settings.timeFormat,
+                                        options: TimeDisplayFormat.allCases.map { ($0, $0.label) })
                     }
-                    .pickerStyle(.menu)
-                    .glassMenu()
+                    .frame(minHeight: 24)
 
                     ToggleRow(title: "Flash at 5 seconds left",
                               isOn: $settings.flashAtFiveSecLeft)
@@ -1066,7 +1054,7 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Dim level: \(settings.brightnessDimPercent)%")
                             .font(.system(.caption, design: .rounded).weight(.medium))
-                        Slider(value: Binding(
+                        GlassSlider(value: Binding(
                                 get: { Double(settings.brightnessDimPercent) },
                                 set: { settings.brightnessDimPercent = Int($0) }
                               ), in: 5...95)
@@ -1079,7 +1067,7 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Warmth: \(Int(settings.nightShiftBreakStrength * 100))%")
                             .font(.system(.caption, design: .rounded).weight(.medium))
-                        Slider(value: $settings.nightShiftBreakStrength, in: 0.1...1.0)
+                        GlassSlider(value: $settings.nightShiftBreakStrength, in: 0.1...1.0)
                     }
                     Text("Warms screen colors during breaks (uses Night Shift).")
                         .font(.system(.caption2, design: .rounded))
@@ -1139,7 +1127,7 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Step hold scale: \(String(format: "%.2f", settings.exerciseSettings.stepHoldScale))×")
                             .font(.system(.caption, design: .rounded).weight(.medium))
-                        Slider(value: $settings.exerciseSettings.stepHoldScale,
+                        GlassSlider(value: $settings.exerciseSettings.stepHoldScale,
                                in: 0.5...2.0)
 
                     }
@@ -1157,7 +1145,7 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Kalib interval: \(Int(settings.ttsSettings.kalibIntervalSeconds))s")
                             .font(.system(.caption, design: .rounded).weight(.medium))
-                        Slider(value: $settings.ttsSettings.kalibIntervalSeconds,
+                        GlassSlider(value: $settings.ttsSettings.kalibIntervalSeconds,
                                in: 0...60)
 
                     }
@@ -1198,17 +1186,11 @@ struct SettingsView: View {
                                 .font(.system(.body, design: .rounded))
                             Spacer()
                             SpinningIrisSwatch(style: right)
-                            Picker("", selection: Binding(
-                                get: { settings.sharinganStyleRight ?? settings.sharinganStyle },
-                                set: { settings.sharinganStyleRight = $0 })) {
-                                ForEach(SharinganStyle.allCases) { s in
-                                    Text(s.label).tag(s)
-                                }
-                            }
-                            .labelsHidden()
-                            .pickerStyle(.menu)
-                            .glassMenu()
-                            .fixedSize()
+                            GlassMenuPicker(
+                                selection: Binding(
+                                    get: { settings.sharinganStyleRight ?? settings.sharinganStyle },
+                                    set: { settings.sharinganStyleRight = $0 }),
+                                cases: SharinganStyle.allCases, label: { $0.label })
                         }
                     }
                 }
@@ -1253,15 +1235,8 @@ struct SettingsView: View {
                         Text("Sharingan spin")
                             .font(.system(.body, design: .rounded))
                         Spacer()
-                        Picker("", selection: $settings.wallpaperSpinTrigger) {
-                            ForEach(WallpaperSpinTrigger.allCases) { t in
-                                Text(t.label).tag(t)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .glassMenu()
-                        .fixedSize()
+                        GlassMenuPicker(selection: $settings.wallpaperSpinTrigger,
+                                        cases: WallpaperSpinTrigger.allCases, label: { $0.label })
                     }
 
                     if settings.wallpaperSpinTrigger != .off {
@@ -1279,14 +1254,14 @@ struct SettingsView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Idle delay: \(String(format: "%.1f", settings.wallpaperIdleDelay))s")
                                 .font(.system(.caption, design: .rounded).weight(.medium))
-                            Slider(value: $settings.wallpaperIdleDelay, in: 0.5...5, step: 0.5)
+                            GlassSlider(value: $settings.wallpaperIdleDelay, in: 0.5...5, step: 0.5)
                         }
                     }
 
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Close eyes after: \(Int(settings.wallpaperDozeSeconds))s of stillness")
                             .font(.system(.caption, design: .rounded).weight(.medium))
-                        Slider(value: $settings.wallpaperDozeSeconds, in: 10...300, step: 10)
+                        GlassSlider(value: $settings.wallpaperDozeSeconds, in: 10...300, step: 10)
                     }
                     Text("When the mouse hasn't moved for this long, the eyes doze off; they wake on the first move.")
                         .font(.system(.caption, design: .rounded))

@@ -71,6 +71,7 @@ public final class CloudSyncEngine: ObservableObject {
         static let engineState = "engineState"
         static let lastSynced = "lastSynced"
         static let subscriptionSaved = "subscriptionSaved"
+        static let cloudEnvironment = "cloudEnvironment"
     }
 
     /// `databaseURL`, when given (tests), points at an isolated SQLite file;
@@ -129,6 +130,9 @@ public final class CloudSyncEngine: ObservableObject {
             status = .unavailable("iCloud is unavailable in this build")
             return
         }
+        // Must precede the engineState read: state from another CloudKit
+        // environment (Sandbox vs Production) is meaningless here.
+        reconcileEnvironment(current: Self.currentCloudEnvironment)
         let container = CKContainer(identifier: Self.containerID)
         let ckDatabase = container.privateCloudDatabase
 
@@ -245,6 +249,43 @@ public final class CloudSyncEngine: ObservableObject {
         let wasRunning = engine != nil
         stop()
         if wasRunning { start() }
+    }
+
+    /// Local sync state (engine state, change tokens, shadow system fields)
+    /// describes ONE CloudKit environment's database. When the environment
+    /// differs from the one the state was recorded under — or nothing was
+    /// recorded, as on every pre-marker install, whose state is Sandbox state —
+    /// reset it exactly like an account change so the first run re-uploads
+    /// everything cleanly.
+    func reconcileEnvironment(current: String) {
+        let stored = database?.syncStateValue(StateKey.cloudEnvironment)
+            .flatMap { String(data: $0, encoding: .utf8) }
+        if Self.needsEnvironmentReset(stored: stored, current: current) {
+            database?.resetSyncState()
+            outbox.reset()
+            log.info("CloudKit environment changed (\(stored ?? "none", privacy: .public) -> \(current, privacy: .public)); sync state reset")
+        }
+        // After the reset: resetSyncState wipes sync_state.
+        database?.setSyncStateValue(StateKey.cloudEnvironment, Data(current.utf8))
+    }
+
+    nonisolated static func cloudEnvironment(fromEntitlement value: String?) -> String {
+        value?.lowercased() == "production" ? "production" : "development"
+    }
+
+    nonisolated static func needsEnvironmentReset(stored: String?, current: String) -> Bool {
+        stored != current
+    }
+
+    /// The environment this process is signed for. Absent entitlement means
+    /// Development (Sandbox) — the default for Developer ID builds.
+    static var currentCloudEnvironment: String {
+        var value: String?
+        if let task = SecTaskCreateFromSelf(nil) {
+            value = SecTaskCopyValueForEntitlement(
+                task, "com.apple.developer.icloud-container-environment" as CFString, nil) as? String
+        }
+        return cloudEnvironment(fromEntitlement: value)
     }
 
     // MARK: - Pure helpers (tested)

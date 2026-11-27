@@ -107,22 +107,146 @@ extension ButtonStyle where Self == GlassButtonStyle {
     static var glass: GlassButtonStyle { GlassButtonStyle() }
 }
 
-/// Dresses a `.pickerStyle(.menu)` dropdown in the same glass capsule as
-/// `GlassSegmentedPicker`/`.glass` buttons. AppKit still renders the actual
-/// pop-up menu (SwiftUI has no supported hook into that chrome), but the
-/// closed-state control — the part visible everywhere in Settings — now
-/// matches the rest of the liquid-glass surface instead of sitting there as
-/// a plain system control.
-struct GlassMenuStyle: ViewModifier {
-    func body(content: Content) -> some View {
-        content
-            .tint(.white)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
+/// Liquid-glass dropdown — replaces `.pickerStyle(.menu)` (+ the old
+/// `.glassMenu()` wrapper). A menu-style Picker always draws the AppKit
+/// NSPopUpButton bezel, so wrapping it in a capsule gave double chrome. Here the
+/// closed state is our own label (text + up/down chevron) in a glass capsule,
+/// and a borderless `Menu` supplies only the pop-up list.
+struct GlassMenuPicker<T: Hashable>: View {
+    @Binding var selection: T
+    let options: [(value: T, label: String)]
+
+    private var currentLabel: String {
+        options.first { $0.value == selection }?.label ?? ""
+    }
+
+    var body: some View {
+        Menu {
+            Picker("", selection: $selection) {
+                ForEach(options, id: \.value) { option in
+                    Text(option.label).tag(option.value)
+                }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        } label: {
+            HStack(spacing: 6) {
+                Text(currentLabel)
+                    .font(.system(.callout, design: .rounded).weight(.medium))
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+                    .opacity(0.7)
+            }
+            .foregroundStyle(.white.opacity(0.95))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 5)
             .glassCapsule()
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .accessibilityLabel(Text("Options"))
+        .accessibilityValue(Text(currentLabel))
     }
 }
 
-extension View {
-    func glassMenu() -> some View { modifier(GlassMenuStyle()) }
+extension GlassMenuPicker {
+    /// Sugar for CaseIterable-style lists with a label closure.
+    init(selection: Binding<T>, cases: [T], label: (T) -> String) {
+        self.init(selection: selection,
+                  options: cases.map { ($0, label($0)) })
+    }
+}
+
+/// Liquid-glass slider — replaces `Slider`, whose AppKit track/knob render as
+/// system blue on the dark-glass panels. Frosted capsule track, a tinted fill
+/// with a soft glow, and the same glossy knob as `GlassSwitchStyle`.
+struct GlassSlider: View {
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    var step: Double? = nil
+    var tint: Color = .accentColor
+
+    private let knob: CGFloat = 18
+
+    init(value: Binding<Double>, in range: ClosedRange<Double>,
+         step: Double? = nil, tint: Color = .accentColor) {
+        self._value = value
+        self.range = range
+        self.step = step
+        self.tint = tint
+    }
+
+    /// Int-backed convenience.
+    init(value: Binding<Int>, in range: ClosedRange<Int>,
+         step: Int = 1, tint: Color = .accentColor) {
+        self.init(value: Binding(get: { Double(value.wrappedValue) },
+                                 set: { value.wrappedValue = Int($0.rounded()) }),
+                  in: Double(range.lowerBound)...Double(range.upperBound),
+                  step: Double(step), tint: tint)
+    }
+
+    /// Float-backed convenience (TTS rate/pitch settings are Float).
+    init(value: Binding<Float>, in range: ClosedRange<Float>,
+         step: Float? = nil, tint: Color = .accentColor) {
+        self.init(value: Binding(get: { Double(value.wrappedValue) },
+                                 set: { value.wrappedValue = Float($0) }),
+                  in: Double(range.lowerBound)...Double(range.upperBound),
+                  step: step.map(Double.init), tint: tint)
+    }
+
+    private var fraction: Double {
+        let span = range.upperBound - range.lowerBound
+        guard span > 0 else { return 0 }
+        return min(max((value - range.lowerBound) / span, 0), 1)
+    }
+
+    private func snapped(_ raw: Double) -> Double {
+        var v = min(max(raw, range.lowerBound), range.upperBound)
+        if let step, step > 0 {
+            v = range.lowerBound + ((v - range.lowerBound) / step).rounded() * step
+            v = min(max(v, range.lowerBound), range.upperBound)
+        }
+        return v
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            let travel = max(geo.size.width - knob, 1)
+            let x = CGFloat(fraction) * travel
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(.white.opacity(0.08))
+                    .glassCapsule(strokeOpacity: 0.18)
+                    .frame(height: 6)
+                Capsule()
+                    .fill(tint.opacity(0.85))
+                    .frame(width: x + knob / 2, height: 6)
+                    .shadow(color: tint.opacity(0.45), radius: 5)
+                Circle()
+                    .fill(LinearGradient(colors: [.white, .white.opacity(0.78)],
+                                         startPoint: .top, endPoint: .bottom))
+                    .overlay(Circle().stroke(.white.opacity(0.6), lineWidth: 0.5))
+                    .shadow(color: .black.opacity(0.35), radius: 2, y: 1)
+                    .frame(width: knob, height: knob)
+                    .offset(x: x)
+            }
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0).onChanged { g in
+                    let f = Double((g.location.x - knob / 2) / travel)
+                    value = snapped(range.lowerBound + f * (range.upperBound - range.lowerBound))
+                }
+            )
+        }
+        .frame(height: 22)
+        .accessibilityRepresentation {
+            if let step {
+                Slider(value: $value, in: range, step: step)
+            } else {
+                Slider(value: $value, in: range)
+            }
+        }
+    }
 }
